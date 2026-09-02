@@ -9,6 +9,13 @@ on:
 permissions:
   contents: read
 
+# Pushing again to a branch makes the run already in flight pointless: what
+# matters is whether the tip is green. Cancelling it frees the runners for the
+# commit anyone is actually waiting on.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: test (${{ matrix.os }}, go ${{ matrix.go }})
