@@ -56,12 +56,10 @@ type Call struct {
 	// generated code. It comes from the _comment member of the arguments,
 	// which never reaches the server.
 	Comment string
-	// GoField is the name of the field this call's result takes in the
-	// generated result struct.
-	GoField string
-	// GoType is the name of the generated type for this call's response, empty
-	// when the shared runtime type is used instead.
-	GoType string
+	// Field is the name this call's result takes among the results, before any
+	// language has spelled it. A generator turns it into whatever an
+	// identifier looks like in the language it writes.
+	Field string
 }
 
 // AccountIDArgument is the argument every standard JMAP method takes to say
@@ -74,9 +72,9 @@ const AccountIDArgument = "accountId"
 type Param struct {
 	// Name is the parameter name as written in the query, without the "$".
 	Name string
-	// GoName is the name of the field it takes in the generated parameter
-	// struct.
-	GoName string
+	// Field is the name this parameter takes among the parameters, before any
+	// language has spelled it.
+	Field string
 	// Type is the type the parameter must have, taken from the argument it
 	// stands in for.
 	Type *spec.Type
@@ -91,13 +89,18 @@ type Param struct {
 	Weak bool
 }
 
-// GoType returns the Go type of the parameter. A parameter always carries a
-// value, so a nullable argument yields the underlying type rather than a
-// pointer: a query that means null can simply write null.
-func (p *Param) GoType(qualifier string) string {
+// ValueType returns the parameter's type with the null taken off. A parameter
+// always carries a value, so a nullable argument yields the underlying type: a
+// query that means null can simply write null.
+func (p *Param) ValueType() *spec.Type {
 	t := *p.Type
 	t.Nullable = false
-	return t.GoType(qualifier)
+	return &t
+}
+
+// GoType returns the Go type of the parameter.
+func (p *Param) GoType(qualifier string) string {
+	return p.ValueType().GoType(qualifier)
 }
 
 // Node is one value inside an argument object: a literal, a parameter, a back

@@ -74,16 +74,19 @@ func sameType(a, b *spec.Type) bool {
 	return x.String() == y.String()
 }
 
-// assignGoNames settles the Go identifiers the generated code will use, making
-// each one unique within the query.
-func assignGoNames(q *Query) {
+// assignFieldNames settles the name each parameter and each call's result goes
+// by, making them unique within the query. They are given here in the shape Go
+// uses, since that is a shape every generator can spell: a language that writes
+// its identifiers differently lowers the first letter or splits on the case,
+// and either way the uniqueness holds.
+func assignFieldNames(q *Query) {
 	taken := make(map[string]bool)
 	for _, p := range q.Params {
-		p.GoName = unique(taken, spec.ExportedName(p.Name))
+		p.Field = unique(taken, spec.ExportedName(p.Name))
 	}
 	fields := make(map[string]bool)
 	for _, call := range q.Calls {
-		call.GoField = unique(fields, call.Method.GoName())
+		call.Field = unique(fields, call.Method.TypeNamePrefix())
 	}
 }
 

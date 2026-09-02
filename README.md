@@ -28,7 +28,8 @@
   </a>
 </p>
 
-jmapc generates **type-safe Go code** from JMAP. Here's how it works:
+jmapc generates **type-safe code** from JMAP, in Go or TypeScript. Here's how
+it works:
 
 1. You write queries in JMAP.
 1. You run jmapc to generate code with type-safe interfaces to those queries.
@@ -88,7 +89,8 @@ go install github.com/linyows/jmapc/cmd/jmapc@latest
 ```
 
 Or take a binary from the [releases](https://github.com/linyows/jmapc/releases),
-for an environment with no Go toolchain.
+which is the way in for a TypeScript project, where there is no Go toolchain to
+run `go tool` with.
 
 ## Use
 
@@ -188,6 +190,37 @@ as `jmapc.ID` because that is what the pointer selects by.
 contacts, calendars, sharing and filtering: searching, syncing from a known state, sending,
 creating a contact card, moving one occurrence of a recurring meeting without
 touching the rest of the series.
+
+## TypeScript
+
+The same queries generate TypeScript:
+
+```
+jmapc generate -lang typescript -out src/jmapq
+```
+
+```typescript
+import { Client } from "./jmapq/client.js"
+import { listInboxEmails } from "./jmapq/listInboxEmails.js"
+
+const client = new Client("https://example.com/.well-known/jmap", { auth: token })
+
+const res = await listInboxEmails(client, { mailboxId: inbox, limit: 25 })
+for (const email of res.list) {
+  console.log(email.receivedAt, email.from?.[0].email, email.subject)
+}
+```
+
+The runtime comes with it — `client.ts` and `types.ts` are generated alongside
+the queries — so the output has **no dependencies**. What it asks of the
+platform is `fetch`.
+
+TypeScript says some things more precisely than Go can. A nullable property is
+a union rather than a pointer, so `subject` is `string | null`. A union of
+shapes stays a union: a filter is `FilterOperator | EmailFilterCondition | null`
+rather than the `any` Go falls back on. And the primitives that carry a format
+rather than a shape are named aliases of `string`, so an `Id` and a
+`TimeZoneId` cannot be swapped by accident.
 
 ## Writing a query
 
@@ -445,8 +478,12 @@ Or list them in `jmapc.json` under `"schemas"`.
 
 ```
 go test ./...        # everything, including the end-to-end tests
-go generate ./...    # regenerate the runtime types and the example client
+go generate ./...    # regenerate the runtime types and both example clients
 ```
+
+The example is generated twice, once per language, into `example/jmapq` and
+`example/ts`. CI runs `tsc --strict` over the second, since Go's tests cannot
+say whether TypeScript compiles.
 
 The generator is run from source here, not through `go tool`, because the
 repository is where it lives.

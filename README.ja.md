@@ -28,7 +28,7 @@
   </a>
 </p>
 
-jmapc は JMAP から**型安全な Go のコード**を生成します。
+jmapc は JMAP から**型安全なコード**を、Go または TypeScript で生成します。
 
 1. JMAP でクエリを書きます。
 1. jmapc を実行して、そのクエリに型安全なインターフェースを持つコードを生成します。
@@ -86,6 +86,8 @@ go install github.com/linyows/jmapc/cmd/jmapc@latest
 ```
 
 Go のツールチェインがない環境では、[リリース](https://github.com/linyows/jmapc/releases)からバイナリを取得してください。
+TypeScript のプロジェクトではこちらが入口になります。
+`go tool` を実行する Go がないからです。
 
 ## 使い方
 
@@ -182,6 +184,36 @@ for _, email := range res.List {
 
 [`example/queries`](example/queries) には、メール、連絡先、カレンダー、共有、フィルタにまたがる 25 個のクエリがあります。
 検索、既知の状態からの同期、送信、連絡先カードの作成、繰り返し予定のうち一回だけを他に触れずに動かす操作などです。
+
+## TypeScript
+
+同じクエリから TypeScript を生成できます。
+
+```
+jmapc generate -lang typescript -out src/jmapq
+```
+
+```typescript
+import { Client } from "./jmapq/client.js"
+import { listInboxEmails } from "./jmapq/listInboxEmails.js"
+
+const client = new Client("https://example.com/.well-known/jmap", { auth: token })
+
+const res = await listInboxEmails(client, { mailboxId: inbox, limit: 25 })
+for (const email of res.list) {
+  console.log(email.receivedAt, email.from?.[0].email, email.subject)
+}
+```
+
+ランタイムも一緒に生成されます。
+`client.ts` と `types.ts` がクエリと並んで出力されるので、生成物には**依存がありません**。
+プラットフォームに求めるのは `fetch` だけです。
+
+TypeScript のほうが正確に言えることもあります。
+null を取りうるプロパティはポインタではなく union なので、`subject` は `string | null` です。
+複数の形を取る値も union のままです。
+フィルタは `FilterOperator | EmailFilterCondition | null` であり、Go で `any` に落ちていたものが型として残ります。
+形ではなく書式を持つプリミティブは `string` の名前付き別名になるので、`Id` と `TimeZoneId` を取り違えることがありません。
 
 ## クエリの書き方
 
@@ -429,8 +461,12 @@ jmapc generate -schema schema/notes.json
 
 ```
 go test ./...        # エンドツーエンドのテストを含むすべて
-go generate ./...    # ランタイムの型とサンプルのクライアントを再生成する
+go generate ./...    # ランタイムの型と、両言語のサンプルクライアントを再生成する
 ```
+
+サンプルは言語ごとに二度生成され、`example/jmapq` と `example/ts` に出力されます。
+CI は後者に対して `tsc --strict` を実行します。
+TypeScript がコンパイルできるかどうかは、Go のテストでは分からないからです。
 
 ここでジェネレータをソースから実行しているのは、このリポジトリがジェネレータの居場所だからです。
 

@@ -189,11 +189,11 @@ func (s *Spec) reserveNames(sc *Schema) error {
 		if _, dup := s.Method(m.Name); dup {
 			return fmt.Errorf("the method %q already exists", m.Name)
 		}
-		goName := (&Method{Name: m.Name}).GoName()
-		if err := claim(goName+"Arguments", "the method "+m.Name); err != nil {
+		prefix := (&Method{Name: m.Name}).TypeNamePrefix()
+		if err := claim(prefix+"Arguments", "the method "+m.Name); err != nil {
 			return err
 		}
-		if err := claim(goName+"Response", "the method "+m.Name); err != nil {
+		if err := claim(prefix+"Response", "the method "+m.Name); err != nil {
 			return err
 		}
 	}
@@ -280,7 +280,7 @@ func (s *Spec) addSchemaMethod(sc *Schema, m *SchemaMethod) error {
 	if _, dup := s.Method(m.Name); dup {
 		return fmt.Errorf("the method %q is already defined", m.Name)
 	}
-	goName := (&Method{Name: m.Name}).GoName()
+	prefix := (&Method{Name: m.Name}).TypeNamePrefix()
 	args, err := schemaFields(m.Name, m.Arguments)
 	if err != nil {
 		return err
@@ -291,17 +291,17 @@ func (s *Spec) addSchemaMethod(sc *Schema, m *SchemaMethod) error {
 	}
 	capability := capabilityOr(m.Capability, sc.Capability)
 	argsType := s.AddObject(&Object{
-		Name:       goName + "Arguments",
+		Name:       prefix + "Arguments",
 		Capability: capability,
 		Kind:       KindArguments,
-		Doc:        goName + "Arguments holds the arguments of the " + m.Name + " method.",
+		Doc:        prefix + "Arguments holds the arguments of the " + m.Name + " method.",
 		Fields:     args,
 	})
 	respType := s.AddObject(&Object{
-		Name:       goName + "Response",
+		Name:       prefix + "Response",
 		Capability: capability,
 		Kind:       KindResponse,
-		Doc:        goName + "Response holds the response to the " + m.Name + " method.",
+		Doc:        prefix + "Response holds the response to the " + m.Name + " method.",
 		Fields:     resp,
 	})
 	doc := m.Doc
