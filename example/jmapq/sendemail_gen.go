@@ -13,6 +13,8 @@ import (
 // SendEmailParams holds the values SendEmail leaves open.
 type SendEmailParams struct {
 	// The id of the record this entry applies to.
+	//
+	// The mailboxes the email is in, as a set of ids mapped to true.
 	DraftsMailboxID jmapc.ID
 
 	// The addr-spec of the address.
@@ -30,7 +32,7 @@ type SendEmailParams struct {
 	// The id of the identity to send from.
 	IdentityID jmapc.ID
 
-	// The name of the property this patch applies to.
+	// The id of the record this entry applies to.
 	SentMailboxID jmapc.ID
 }
 

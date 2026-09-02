@@ -356,12 +356,13 @@ func unescapePointer(token string) string {
 
 // ResolvePatch resolves the JSON pointer that keys one member of a PatchObject
 // against the data type being patched, and reports the type each segment of the
-// pointer selects by, along with the type of the value at the end.
+// pointer selects by, along with the type of the value at the end and the
+// documentation of the property it belongs to.
 //
 // unknown marks the segments a parameter stands in for. A parameter in place of
 // a property name leaves everything past it unknowable, so resolution stops
 // there and the rest is Any.
-func (s *Spec) ResolvePatch(dataType string, segments []string, unknown []bool) (keyTypes []*Type, value *Type, err error) {
+func (s *Spec) ResolvePatch(dataType string, segments []string, unknown []bool) (keyTypes []*Type, value *Type, valueDoc string, err error) {
 	keyTypes = make([]*Type, len(segments))
 	cur := &Type{Name: dataType}
 	anyType := &Type{Name: Any}
@@ -372,6 +373,7 @@ func (s *Spec) ResolvePatch(dataType string, segments []string, unknown []bool) 
 		case cur.Name == Any || cur.IsUnion():
 			keyTypes[i] = anyType
 			cur = anyType
+			valueDoc = ""
 
 		case cur.IsArray():
 			keyTypes[i] = &Type{Name: UnsignedInt}
@@ -384,25 +386,27 @@ func (s *Spec) ResolvePatch(dataType string, segments []string, unknown []bool) 
 		case cur.IsObject():
 			o, ok := s.Object(cur.Name)
 			if !ok {
-				return nil, nil, fmt.Errorf("unknown type %q", cur.Name)
+				return nil, nil, "", fmt.Errorf("unknown type %q", cur.Name)
 			}
 			keyTypes[i] = &Type{Name: String}
 			if unknown[i] {
 				// A parameter stands where a property name belongs, so which
 				// property this is cannot be known here.
 				cur = anyType
+				valueDoc = ""
 				break
 			}
 			f, known := o.Field(seg)
 			if !known {
-				return nil, nil, fmt.Errorf("%s has no property %q (has %s)",
+				return nil, nil, "", fmt.Errorf("%s has no property %q (has %s)",
 					o.Name, seg, strings.Join(o.PropertyNames(), ", "))
 			}
 			cur = f.ParsedType()
+			valueDoc = f.Doc
 
 		default:
-			return nil, nil, fmt.Errorf("cannot look inside %s to reach %q", cur, seg)
+			return nil, nil, "", fmt.Errorf("cannot look inside %s to reach %q", cur, seg)
 		}
 	}
-	return keyTypes, cur, nil
+	return keyTypes, cur, valueDoc, nil
 }

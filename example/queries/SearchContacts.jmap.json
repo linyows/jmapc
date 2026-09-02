@@ -1,0 +1,35 @@
+{
+  "doc": "SearchContacts lists the address books and searches one of them in the same request, so a contact picker can be filled in with one round trip.",
+
+  "methodCalls": [
+    // Which address books exist. A picker needs this whether or not the
+    // search finds anything.
+    ["AddressBook/get", {
+      "ids": null,
+      "properties": ["id", "name", "isDefault"]
+    }, "books"],
+
+    // The cards matching the phrase, surname first.
+    ["ContactCard/query", {
+      "filter": {
+        "operator": "AND",
+        "conditions": [
+          {"inAddressBook": "{{addressBookId}}"},
+          {"text": "{{phrase}}"},
+          {"kind": "individual"}
+        ]
+      },
+      "sort": [
+        {"property": "name/surname"},
+        {"property": "name/given"}
+      ],
+      "limit": "{{limit}}"
+    }, "search"],
+
+    // Only the parts a list view shows. A card holds far more than this.
+    ["ContactCard/get", {
+      "#ids": {"resultOf": "search", "name": "ContactCard/query", "path": "/ids"},
+      "properties": ["id", "uid", "name", "emails", "phones", "organizations"]
+    }, "fetch"]
+  ]
+}

@@ -346,12 +346,19 @@ func (c *checker) primitive(t *spec.Type, raw json.RawMessage, where string) Nod
 	return &Literal{JSON: raw}
 }
 
-// keyDoc describes what a parameter standing in for a map key selects.
-func keyDoc(keyType *spec.Type) string {
+// keyDoc describes what a parameter standing in for a map key selects. The
+// context is the documentation of the property holding the map, which says
+// which map this is a key into; on its own, "the id of the record" could be a
+// key into anything.
+func keyDoc(keyType *spec.Type, context string) string {
+	lead := "The key this entry is stored under."
 	if keyType.Name == spec.IdType {
-		return "The id of the record this entry applies to."
+		lead = "The id of the record this entry applies to."
 	}
-	return "The key this entry is stored under."
+	if context == "" {
+		return lead
+	}
+	return lead + "\n\n" + context
 }
 
 // keySegments splits a member name into its literal and parameter parts, and
@@ -370,7 +377,7 @@ func (c *checker) keySegments(key string, keyType *spec.Type, where, doc string)
 		keyType = &spec.Type{Name: spec.String}
 		doc = "The name of the property this patch applies to."
 	} else {
-		doc = keyDoc(keyType)
+		doc = keyDoc(keyType, doc)
 	}
 	var segments []KeySegment
 	last := 0
@@ -535,13 +542,14 @@ func (c *checker) patchObject(members map[string]json.RawMessage, keys []string,
 
 		valueType := &spec.Type{Name: spec.Any}
 		var keyTypes []*spec.Type
+		var valueDoc string
 		if c.patchTarget != "" {
-			resolved, value, err := c.spec.ResolvePatch(c.patchTarget, segments, unknown)
+			resolved, value, doc, err := c.spec.ResolvePatch(c.patchTarget, segments, unknown)
 			if err != nil {
 				c.errorf(where+"."+key, "", "%v", err)
 				continue
 			}
-			keyTypes, valueType = resolved, value
+			keyTypes, valueType, valueDoc = resolved, value, doc
 		}
 
 		field.KeySegments = c.patchKeySegments(segments, keyTypes, where+"."+key)
@@ -549,7 +557,7 @@ func (c *checker) patchObject(members map[string]json.RawMessage, keys []string,
 		// is, whether or not the property itself may hold null.
 		removable := *valueType
 		removable.Nullable = true
-		field.Value = c.value(&removable, members[key], where+"."+key, "")
+		field.Value = c.value(&removable, members[key], where+"."+key, valueDoc)
 		out.Fields = append(out.Fields, field)
 	}
 	return out
@@ -577,14 +585,17 @@ func (c *checker) patchKeySegments(segments []string, keyTypes []*spec.Type, whe
 		if i < len(keyTypes) && keyTypes[i] != nil && keyTypes[i].Name != spec.Any {
 			segType, weak = keyTypes[i], false
 		}
+		segDoc := "The name of the property this patch applies to."
+		if !weak {
+			segDoc = keyDoc(segType, "")
+		}
 		last := 0
 		for _, m := range matches {
 			if m[0] > last {
 				out = append(out, KeySegment{Text: seg[last:m[0]]})
 			}
 			out = append(out, KeySegment{
-				Param: c.params.use(c, seg[m[2]:m[3]], segType, where,
-					"The name of the property this patch applies to.", weak),
+				Param: c.params.use(c, seg[m[2]:m[3]], segType, where, segDoc, weak),
 			})
 			last = m[1]
 		}

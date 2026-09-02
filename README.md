@@ -134,6 +134,10 @@ given it an id. The pointers in the patch are checked against `Email`, so
 `mailboxIds` misspelled is a build failure, and both mailbox parameters come out
 as `jmapc.ID` because that is what the pointer selects by.
 
+[`example/queries`](example/queries) holds nine of these, over mail and
+contacts: searching, syncing from a known state, sending, creating a contact
+card, and patching one property of one entry within a card.
+
 ## Writing a query
 
 A query file is a JMAP Request object, exactly as

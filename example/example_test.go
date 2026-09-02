@@ -44,6 +44,7 @@ func (s *stub) start() *httptest.Server {
 				jmapc.CapabilityCore:       map[string]any{"maxCallsInRequest": 16},
 				jmapc.CapabilityMail:       map[string]any{},
 				jmapc.CapabilitySubmission: map[string]any{},
+				jmapc.CapabilityContacts:   map[string]any{},
 			},
 			"accounts": map[string]any{
 				string(accountID): map[string]any{"name": "someone@example.com", "isPersonal": true},
@@ -51,6 +52,7 @@ func (s *stub) start() *httptest.Server {
 			"primaryAccounts": map[string]any{
 				jmapc.CapabilityMail:       string(accountID),
 				jmapc.CapabilitySubmission: string(accountID),
+				jmapc.CapabilityContacts:   string(accountID),
 			},
 			"username": "someone@example.com",
 			"apiUrl":   srv.URL + "/jmap/api/",
@@ -406,5 +408,169 @@ func TestSendEmail(t *testing.T) {
 
 	if got.Created["send"].UndoStatus != "final" {
 		t.Errorf("submission = %+v, want undoStatus final", got.Created["send"])
+	}
+}
+
+// TestSearchContacts covers a query against JMAP for Contacts, where a card is
+// a JSContact object rather than anything JMAP defines itself, and where one
+// request answers two unrelated questions at once.
+func TestSearchContacts(t *testing.T) {
+	s := &stub{t: t, response: `{
+	  "sessionState": "session-1",
+	  "methodResponses": [
+	    ["AddressBook/get", {"accountId": "acct1", "state": "b1", "notFound": [], "list": [
+	      {"id": "book1", "name": "Personal", "isDefault": true},
+	      {"id": "book2", "name": "Work", "isDefault": false}
+	    ]}, "books"],
+	    ["ContactCard/query", {"accountId": "acct1", "queryState": "q1",
+	                           "canCalculateChanges": true, "position": 0, "ids": ["card1"]}, "search"],
+	    ["ContactCard/get", {"accountId": "acct1", "state": "c1", "notFound": [], "list": [
+	      {"id": "card1", "uid": "urn:uuid:1234",
+	       "name": {"components": [
+	         {"kind": "given", "value": "Ada"},
+	         {"kind": "surname", "value": "Lovelace"}
+	       ], "isOrdered": true},
+	       "emails": {"work": {"address": "ada@example.com", "pref": 1}},
+	       "phones": {"mobile": {"number": "tel:+1-555-0100"}},
+	       "organizations": {"employer": {"name": "Analytical Engines"}}}
+	    ]}, "fetch"]
+	  ]
+	}`}
+
+	got, err := jmapq.SearchContacts(context.Background(), s.client(), jmapq.SearchContactsParams{
+		AddressBookID: "book2",
+		Phrase:        "lovelace",
+		Limit:         20,
+	})
+	if err != nil {
+		t.Fatalf("SearchContacts: %v", err)
+	}
+
+	// The sort names properties the specification allows sorting cards by.
+	_, search := s.call(t, "search")
+	sort := search["sort"].([]any)
+	if len(sort) != 2 {
+		t.Fatalf("sort has %d terms, want 2", len(sort))
+	}
+	if p := sort[0].(map[string]any)["property"]; p != "name/surname" {
+		t.Errorf("first sort term is %v, want name/surname", p)
+	}
+
+	// Three calls, three results, all decoded.
+	if len(got.AddressBookGet.List) != 2 {
+		t.Fatalf("got %d address books, want 2", len(got.AddressBookGet.List))
+	}
+	if got.AddressBookGet.List[0].Name != "Personal" || !got.AddressBookGet.List[0].IsDefault {
+		t.Errorf("first address book = %+v", got.AddressBookGet.List[0])
+	}
+	if len(got.ContactCardQuery.IDs) != 1 {
+		t.Fatalf("got %d matching cards, want 1", len(got.ContactCardQuery.IDs))
+	}
+
+	card := got.ContactCardGet.List[0]
+	if card.UID != "urn:uuid:1234" {
+		t.Errorf("uid = %q", card.UID)
+	}
+	// A JSContact name is a list of parts, not a string.
+	if len(card.Name.Components) != 2 {
+		t.Fatalf("name has %d components, want 2", len(card.Name.Components))
+	}
+	if card.Name.Components[1].Kind != "surname" || card.Name.Components[1].Value != "Lovelace" {
+		t.Errorf("second name component = %+v", card.Name.Components[1])
+	}
+	if addr := card.Emails["work"].Address; addr != "ada@example.com" {
+		t.Errorf("work email = %q", addr)
+	}
+	if org := card.Organizations["employer"].Name; org != "Analytical Engines" {
+		t.Errorf("organization = %q", org)
+	}
+}
+
+// TestCreateContact checks that the nested shape of a JSContact card survives
+// the trip through the generated code.
+func TestCreateContact(t *testing.T) {
+	s := &stub{t: t, response: `{
+	  "sessionState": "session-1",
+	  "methodResponses": [
+	    ["ContactCard/set", {"accountId": "acct1", "newState": "c2",
+	                         "created": {"card": {"id": "card9"}}}, "create"]
+	  ]
+	}`}
+
+	got, err := jmapq.CreateContact(context.Background(), s.client(), jmapq.CreateContactParams{
+		AddressBookID: "book1",
+		UID:           "urn:uuid:5678",
+		GivenName:     "Grace",
+		Surname:       "Hopper",
+		EmailAddress:  "grace@example.com",
+		PhoneNumber:   "tel:+1-555-0199",
+		Organization:  "Navy",
+	})
+	if err != nil {
+		t.Fatalf("CreateContact: %v", err)
+	}
+
+	_, args := s.call(t, "create")
+	card := args["create"].(map[string]any)["card"].(map[string]any)
+	if card["@type"] != "Card" || card["version"] != "1.0" {
+		t.Errorf("card = %v, want @type Card and version 1.0", card)
+	}
+	if books := card["addressBookIds"].(map[string]any); books["book1"] != true {
+		t.Errorf("addressBookIds = %v, want book1", books)
+	}
+	components := card["name"].(map[string]any)["components"].([]any)
+	if len(components) != 2 {
+		t.Fatalf("name has %d components, want 2", len(components))
+	}
+	if c := components[0].(map[string]any); c["kind"] != "given" || c["value"] != "Grace" {
+		t.Errorf("first component = %v", c)
+	}
+	email := card["emails"].(map[string]any)["work"].(map[string]any)
+	if email["address"] != "grace@example.com" || email["pref"] != float64(1) {
+		t.Errorf("email = %v", email)
+	}
+	phone := card["phones"].(map[string]any)["mobile"].(map[string]any)
+	if features := phone["features"].(map[string]any); features["mobile"] != true {
+		t.Errorf("phone features = %v", features)
+	}
+	if got.Created["card"].ID != "card9" {
+		t.Errorf("created card = %+v, want id card9", got.Created["card"])
+	}
+}
+
+// TestUpdateContactEmail checks a patch that reaches into a card, where the
+// pointer names an entry the caller chooses.
+func TestUpdateContactEmail(t *testing.T) {
+	s := &stub{t: t, response: `{
+	  "sessionState": "session-1",
+	  "methodResponses": [
+	    ["ContactCard/set", {"accountId": "acct1", "oldState": "c1", "newState": "c2",
+	                         "updated": {"card1": null}}, "update"]
+	  ]
+	}`}
+
+	got, err := jmapq.UpdateContactEmail(context.Background(), s.client(), jmapq.UpdateContactEmailParams{
+		CardID:   "card1",
+		EmailKey: "work",
+		Address:  "ada@example.org",
+	})
+	if err != nil {
+		t.Fatalf("UpdateContactEmail: %v", err)
+	}
+
+	_, args := s.call(t, "update")
+	patch := args["update"].(map[string]any)["card1"].(map[string]any)
+	if patch["emails/work/address"] != "ada@example.org" {
+		t.Errorf("patch = %v, want emails/work/address set", patch)
+	}
+	if patch["emails/work/pref"] != float64(1) {
+		t.Errorf("patch = %v, want emails/work/pref set to 1", patch)
+	}
+	// The rest of the card is untouched: a patch sends only what changed.
+	if len(patch) != 2 {
+		t.Errorf("patch holds %d members, want 2", len(patch))
+	}
+	if _, updated := got.Updated["card1"]; !updated {
+		t.Errorf("Updated = %v, want an entry for card1", got.Updated)
 	}
 }

@@ -13,6 +13,8 @@ import (
 // MarkEmailReadParams holds the values MarkEmailRead leaves open.
 type MarkEmailReadParams struct {
 	// The id of the record this entry applies to.
+	//
+	// A map of record id to the patch to apply to it.
 	EmailID jmapc.ID
 }
 
