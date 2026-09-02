@@ -176,6 +176,8 @@ Everything below is a compile-time failure rather than a server round trip:
 - `properties` names properties the type has
 - a `PatchObject` points at properties the record being patched actually has,
   and sets them to values of the right type
+- `sort` names properties the type can actually be sorted by, and supplies the
+  extra member a comparator like `hasKeyword` needs
 - ids, dates, and integers are well formed
 - the capabilities the request declares cover the methods it calls
 
@@ -198,7 +200,8 @@ Flags, or a `jmapc.json` beside your module:
 {
   "queries": "queries",
   "out": "internal/jmapq",
-  "package": "jmapq"
+  "package": "jmapq",
+  "schemas": ["schema/notes.json"]
 }
 ```
 
@@ -234,6 +237,75 @@ defer blob.Close()
 ```
 
 An upload larger than the server said it accepts fails before it is sent.
+
+## Push
+
+`Client.EventSource` opens the server's push endpoint. An event says which types
+in which accounts have moved on, not what changed, so the client follows up with
+a `/changes` call:
+
+```go
+stream, err := c.EventSource(ctx, &jmapc.EventSourceOptions{
+	Types: []string{"Email"},
+	Ping:  30 * time.Second,
+})
+defer stream.Close()
+
+for {
+	change, err := stream.Next()
+	if err != nil {
+		break // reconnect, passing stream.LastEventID()
+	}
+	if state, ok := change.StateOf(accountID, "Email"); ok {
+		// ... Email/changes since the state you hold
+		_ = state
+	}
+}
+```
+
+A stream is a connection, not a subscription that outlives the network. An error
+from `Next` means reconnect, and `LastEventID` is where to resume so nothing is
+missed in between.
+
+## Vendor extensions
+
+JMAP is meant to be extended: a server advertises a capability URI of its own,
+and with it come types and methods jmapc has never heard of. Describe them in a
+schema file and queries against them are checked exactly as ones against `Email`
+are — back references, property names, sort orders and all.
+
+```json
+{
+  "capability": "urn:example:params:jmap:notes",
+  "types": [
+    {
+      "name": "Note",
+      "doc": "Note is a scrap of text the user keeps.",
+      "properties": [
+        {"name": "id", "type": "Id", "serverSet": true, "immutable": true, "doc": "The id of the note."},
+        {"name": "title", "type": "String", "doc": "The note's title."}
+      ],
+      "methods": ["get", "changes", "set", "query"],
+      "sort": [{"name": "createdAt", "doc": "Sorts by when the note was created."}]
+    },
+    {
+      "name": "NoteFilterCondition",
+      "doc": "NoteFilterCondition is a condition a note must satisfy to match a Note/query.",
+      "properties": [{"name": "text", "type": "String", "doc": "Matches notes containing this text."}]
+    }
+  ]
+}
+```
+
+Naming the six standard methods is enough to get them: their arguments and
+responses follow the shapes RFC 8620 fixes. A method that does not follow one is
+declared outright, with its arguments and response spelled out.
+
+```
+jmapc generate -schema schema/notes.json
+```
+
+Or list them in `jmapc.json` under `"schemas"`.
 
 ## Coverage
 
