@@ -1,14 +1,21 @@
-# jmapc
+# jmapc: A JMAP Compiler
 
 [![Test](https://github.com/linyows/jmapc/actions/workflows/test.yml/badge.svg)](https://github.com/linyows/jmapc/actions/workflows/test.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/linyows/jmapc.svg)](https://pkg.go.dev/github.com/linyows/jmapc)
 
-Write the JMAP request. Get a typed Go client.
+jmapc generates **type-safe Go code** from JMAP. Here's how it works:
 
-`jmapc` is to JMAP what `sqlc` is to SQL: you write the query, it writes the
-client.
+1. You write queries in JMAP.
+1. You run jmapc to generate code with type-safe interfaces to those queries.
+1. You write application code that calls the generated code.
+
+Have a look at [the worked example](example/) to see it in action, and at
+[Why](#why) for the motivation behind jmapc.
 
 ## Why
+
+`jmapc` is to JMAP what [sqlc](https://sqlc.dev) is to SQL, and for much the
+same reason.
 
 JMAP is built around one idea. A request carries several method calls, and a
 call may refer to the result of an earlier one, so a chain of dependent
