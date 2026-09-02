@@ -1,0 +1,31 @@
+{
+  "doc": "SearchEmails finds emails matching a phrase in one of two mailboxes, and returns both the ids that matched and the emails themselves.",
+
+  "methodCalls": [
+    ["Email/query", {
+      "filter": {
+        "operator": "AND",
+        "conditions": [
+          {"text": "{{phrase}}"},
+          {
+            "operator": "OR",
+            "conditions": [
+              {"inMailbox": "{{firstMailboxId}}"},
+              {"inMailbox": "{{secondMailboxId}}"}
+            ]
+          },
+          {"hasAttachment": true}
+        ]
+      },
+      "sort": [{"property": "receivedAt", "isAscending": false}],
+      "collapseThreads": true,
+      "limit": 50,
+      "calculateTotal": true
+    }, "search"],
+
+    ["Email/get", {
+      "#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"},
+      "properties": ["id", "subject", "from", "receivedAt"]
+    }, "fetch"]
+  ]
+}

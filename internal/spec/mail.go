@@ -1,0 +1,369 @@
+package spec
+
+// registerMail adds the data types and methods of JMAP for Mail, RFC 8621.
+func registerMail(s *Spec) {
+	registerMailbox(s)
+	registerThread(s)
+	registerEmail(s)
+}
+
+func registerMailbox(s *Spec) {
+	s.AddObject(&Object{
+		Name:       "MailboxRights",
+		Capability: CapabilityMail,
+		Doc:        "MailboxRights says what the authenticated user may do with a mailbox.",
+		Fields: []*Field{
+			{Name: "mayReadItems", Type: "Boolean", Doc: "Whether the user may read the mailbox's emails."},
+			{Name: "mayAddItems", Type: "Boolean", Doc: "Whether the user may add emails to the mailbox."},
+			{Name: "mayRemoveItems", Type: "Boolean", Doc: "Whether the user may remove emails from the mailbox."},
+			{Name: "maySetSeen", Type: "Boolean", Doc: "Whether the user may change the $seen keyword on the mailbox's emails."},
+			{Name: "maySetKeywords", Type: "Boolean", Doc: "Whether the user may change keywords other than $seen."},
+			{Name: "mayCreateChild", Type: "Boolean", Doc: "Whether the user may create a child of this mailbox."},
+			{Name: "mayRename", Type: "Boolean", Doc: "Whether the user may rename or move the mailbox."},
+			{Name: "mayDelete", Type: "Boolean", Doc: "Whether the user may delete the mailbox."},
+			{Name: "maySubmit", Type: "Boolean", Doc: "Whether the user may submit the mailbox's emails for delivery."},
+		},
+	})
+
+	s.AddObject(&Object{
+		Name:       "Mailbox",
+		Capability: CapabilityMail,
+		Doc:        "Mailbox is a named set of emails, which is how JMAP models both folders and labels.",
+		Fields: []*Field{
+			{Name: "id", Type: "Id", ServerSet: true, Immutable: true, Doc: "The id of the mailbox."},
+			{Name: "name", Type: "String", Doc: "The user-visible name of the mailbox, unique among its siblings."},
+			{Name: "parentId", Type: "Id|null", Doc: "The id of the parent mailbox, or null if it is at the top level."},
+			{
+				Name:      "role",
+				Type:      "String|null",
+				Doc:       "The IANA-registered role of the mailbox, such as \"inbox\" or \"trash\", or null if it has none.",
+				ServerSet: false,
+			},
+			{Name: "sortOrder", Type: "UnsignedInt", Default: "0", Doc: "A hint for where to place the mailbox in a list of its siblings."},
+			{Name: "totalEmails", Type: "UnsignedInt", ServerSet: true, Doc: "The number of emails in the mailbox."},
+			{Name: "unreadEmails", Type: "UnsignedInt", ServerSet: true, Doc: "The number of emails in the mailbox without the $seen keyword."},
+			{Name: "totalThreads", Type: "UnsignedInt", ServerSet: true, Doc: "The number of threads with at least one email in the mailbox."},
+			{
+				Name:      "unreadThreads",
+				Type:      "UnsignedInt",
+				ServerSet: true,
+				Doc:       "The number of threads with at least one unread email in the mailbox.",
+			},
+			{Name: "myRights", Type: "MailboxRights", ServerSet: true, Doc: "What the authenticated user may do with the mailbox."},
+			{Name: "isSubscribed", Type: "Boolean", Doc: "Whether the user has subscribed to the mailbox."},
+		},
+	})
+
+	s.AddObject(&Object{
+		Name:       "MailboxFilterCondition",
+		Capability: CapabilityMail,
+		Doc:        "MailboxFilterCondition is a condition a mailbox must satisfy to match a Mailbox/query.",
+		Fields: []*Field{
+			{Name: "parentId", Type: "Id|null", Doc: "Matches mailboxes with this parent, or top-level mailboxes if null."},
+			{Name: "name", Type: "String", Doc: "Matches mailboxes whose name contains this string."},
+			{Name: "role", Type: "String|null", Doc: "Matches mailboxes with this role, or with no role if null."},
+			{Name: "hasAnyRole", Type: "Boolean", Doc: "Matches mailboxes according to whether they have any role at all."},
+			{Name: "isSubscribed", Type: "Boolean", Doc: "Matches mailboxes according to the user's subscription."},
+		},
+	})
+
+	s.RegisterStandard("Mailbox", CapabilityMail, StandardMethods{
+		Get: true, Changes: true, Set: true, Query: true, QueryChanges: true,
+	})
+	s.AppendArguments("Mailbox/set", &Field{
+		Name:    "onDestroyRemoveEmails",
+		Type:    "Boolean",
+		Default: "false",
+		Doc:     "Whether destroying a mailbox may also remove the emails it holds. If false, destroying a non-empty mailbox fails.",
+	})
+	sortAsTree := func() []*Field {
+		return []*Field{
+			{
+				Name:    "sortAsTree",
+				Type:    "Boolean",
+				Default: "false",
+				Doc:     "Whether to order the results so that each mailbox follows its parent.",
+			},
+			{
+				Name:    "filterAsTree",
+				Type:    "Boolean",
+				Default: "false",
+				Doc:     "Whether a mailbox matches only if all of its ancestors match too.",
+			},
+		}
+	}
+	s.AppendArguments("Mailbox/query", sortAsTree()...)
+	s.AppendArguments("Mailbox/queryChanges", sortAsTree()...)
+}
+
+func registerThread(s *Spec) {
+	s.AddObject(&Object{
+		Name:       "Thread",
+		Capability: CapabilityMail,
+		Doc:        "Thread is a set of emails the server considers to be one conversation.",
+		Fields: []*Field{
+			{Name: "id", Type: "Id", ServerSet: true, Immutable: true, Doc: "The id of the thread."},
+			{
+				Name:      "emailIds",
+				Type:      "Id[]",
+				ServerSet: true,
+				Doc:       "The ids of the emails in the thread, sorted by receivedAt and then by id.",
+			},
+		},
+	})
+	s.RegisterStandard("Thread", CapabilityMail, StandardMethods{Get: true, Changes: true})
+}
+
+func registerEmail(s *Spec) {
+	s.AddObject(&Object{
+		Name:       "EmailAddress",
+		Capability: CapabilityMail,
+		Doc:        "EmailAddress is one address from a header field such as From or To.",
+		Fields: []*Field{
+			{Name: "name", Type: "String|null", Doc: "The display name of the addressee, or null if the header gave none."},
+			{Name: "email", Type: "String", Doc: "The addr-spec of the address."},
+		},
+	})
+
+	s.AddObject(&Object{
+		Name:       "EmailAddressGroup",
+		Capability: CapabilityMail,
+		Doc:        "EmailAddressGroup is a named group of addresses from an address header field.",
+		Fields: []*Field{
+			{Name: "name", Type: "String|null", Doc: "The name of the group, or null for addresses outside any group."},
+			{Name: "addresses", Type: "EmailAddress[]", Doc: "The addresses in the group."},
+		},
+	})
+
+	s.AddObject(&Object{
+		Name:       "EmailHeader",
+		Capability: CapabilityMail,
+		Doc:        "EmailHeader is one header field of an email or body part, as it appeared in the message.",
+		Fields: []*Field{
+			{Name: "name", Type: "String", Doc: "The header field name, as written in the message."},
+			{
+				Name: "value",
+				Type: "String",
+				Doc:  "The header field value, still in its raw form apart from unfolding.",
+			},
+		},
+	})
+
+	s.AddObject(&Object{
+		Name:       "EmailBodyValue",
+		Capability: CapabilityMail,
+		Doc:        "EmailBodyValue is the decoded content of one body part.",
+		Fields: []*Field{
+			{Name: "value", Type: "String", Doc: "The decoded content of the body part."},
+			{
+				Name: "isEncodingProblem",
+				Type: "Boolean",
+				Doc:  "Whether the part could not be decoded cleanly, so that the value contains replacement characters.",
+			},
+			{
+				Name: "isTruncated",
+				Type: "Boolean",
+				Doc:  "Whether the value was cut short to satisfy maxBodyValueBytes.",
+			},
+		},
+	})
+
+	s.AddObject(&Object{
+		Name:       "EmailBodyPart",
+		Capability: CapabilityMail,
+		Doc:        "EmailBodyPart is one part of an email's MIME structure.",
+		Fields: []*Field{
+			{
+				Name: "partId",
+				Type: "String|null",
+				Doc:  "Identifies the part's content within the bodyValues map, or null if the part has no body of its own.",
+			},
+			{Name: "blobId", Type: "Id|null", Doc: "The id of the blob holding the raw content, or null for a multipart part."},
+			{Name: "size", Type: "UnsignedInt", Doc: "The size of the decoded content in octets."},
+			{Name: "headers", Type: "EmailHeader[]", Doc: "The header fields of this part."},
+			{Name: "name", Type: "String|null", Doc: "The filename the part should be saved as, if it names one."},
+			{Name: "type", Type: "String", Doc: "The media type of the part."},
+			{Name: "charset", Type: "String|null", Doc: "The character set of the part, for textual media types."},
+			{
+				Name: "disposition",
+				Type: "String|null",
+				Doc:  "The Content-Disposition of the part, such as \"inline\" or \"attachment\".",
+			},
+			{Name: "cid", Type: "String|null", Doc: "The Content-ID of the part, which inline images are referenced by."},
+			{Name: "language", Type: "String[]|null", Doc: "The languages of the part's content."},
+			{Name: "location", Type: "String|null", Doc: "The Content-Location of the part."},
+			{Name: "subParts", Type: "EmailBodyPart[]|null", Doc: "The parts of a multipart part, or null if this part is not multipart."},
+		},
+	})
+
+	s.AddObject(&Object{
+		Name:       "Email",
+		Capability: CapabilityMail,
+		Doc:        "Email is a single message, presented as structured data rather than as raw RFC 5322 text.",
+		Fields: []*Field{
+			{Name: "id", Type: "Id", ServerSet: true, Immutable: true, Doc: "The id of the email."},
+			{Name: "blobId", Type: "Id", ServerSet: true, Immutable: true, Doc: "The id of the blob holding the raw message."},
+			{Name: "threadId", Type: "Id", ServerSet: true, Immutable: true, Doc: "The id of the thread the email belongs to."},
+			{
+				Name: "mailboxIds",
+				Type: "Id[Boolean]",
+				Doc:  "The mailboxes the email is in, as a set of ids mapped to true.",
+			},
+			{
+				Name: "keywords",
+				Type: "String[Boolean]",
+				Doc:  "The keywords set on the email, such as \"$seen\" or \"$flagged\", mapped to true.",
+			},
+			{Name: "size", Type: "UnsignedInt", ServerSet: true, Immutable: true, Doc: "The size of the raw message in octets."},
+			{
+				Name:      "receivedAt",
+				Type:      "UTCDate",
+				Immutable: true,
+				Doc:       "When the email was received, which is what the mailbox sorts on by default.",
+			},
+			{
+				Name: "messageId",
+				Type: "String[]|null",
+				Doc:  "The Message-ID header field values, without the enclosing angle brackets.",
+			},
+			{Name: "inReplyTo", Type: "String[]|null", Doc: "The In-Reply-To header field values."},
+			{Name: "references", Type: "String[]|null", Doc: "The References header field values."},
+			{Name: "sender", Type: "EmailAddress[]|null", Doc: "The Sender header field value."},
+			{Name: "from", Type: "EmailAddress[]|null", Doc: "The From header field value."},
+			{Name: "to", Type: "EmailAddress[]|null", Doc: "The To header field value."},
+			{Name: "cc", Type: "EmailAddress[]|null", Doc: "The Cc header field value."},
+			{Name: "bcc", Type: "EmailAddress[]|null", Doc: "The Bcc header field value."},
+			{Name: "replyTo", Type: "EmailAddress[]|null", Doc: "The Reply-To header field value."},
+			{Name: "subject", Type: "String|null", Doc: "The Subject header field value."},
+			{Name: "sentAt", Type: "Date|null", Doc: "The Date header field value."},
+			{Name: "headers", Type: "EmailHeader[]", Doc: "Every header field of the message, in the order they appeared."},
+			{Name: "bodyStructure", Type: "EmailBodyPart", Doc: "The full MIME structure of the message body."},
+			{
+				Name: "bodyValues",
+				Type: "String[EmailBodyValue]",
+				Doc:  "The decoded content of the body parts that were fetched, keyed by partId.",
+			},
+			{
+				Name: "textBody",
+				Type: "EmailBodyPart[]",
+				Doc:  "The parts to display as the plain-text body of the message.",
+			},
+			{
+				Name: "htmlBody",
+				Type: "EmailBodyPart[]",
+				Doc:  "The parts to display as the HTML body of the message.",
+			},
+			{
+				Name: "attachments",
+				Type: "EmailBodyPart[]",
+				Doc:  "The parts to present as attachments rather than as body content.",
+			},
+			{
+				Name:      "hasAttachment",
+				Type:      "Boolean",
+				ServerSet: true,
+				Doc:       "Whether the message has at least one part the server considers an attachment.",
+			},
+			{
+				Name:      "preview",
+				Type:      "String",
+				ServerSet: true,
+				Doc:       "A short plain-text excerpt of the message body.",
+			},
+		},
+	})
+
+	s.AddObject(&Object{
+		Name:       "EmailFilterCondition",
+		Capability: CapabilityMail,
+		Doc:        "EmailFilterCondition is a condition an email must satisfy to match an Email/query.",
+		Fields: []*Field{
+			{Name: "inMailbox", Type: "Id", Doc: "Matches emails in this mailbox."},
+			{Name: "inMailboxOtherThan", Type: "Id[]", Doc: "Matches emails that are in at least one mailbox outside this set."},
+			{Name: "before", Type: "UTCDate", Doc: "Matches emails received before this time."},
+			{Name: "after", Type: "UTCDate", Doc: "Matches emails received at or after this time."},
+			{Name: "minSize", Type: "UnsignedInt", Doc: "Matches emails of at least this size in octets."},
+			{Name: "maxSize", Type: "UnsignedInt", Doc: "Matches emails smaller than this size in octets."},
+			{
+				Name: "allInThreadHaveKeyword",
+				Type: "String",
+				Doc:  "Matches emails whose thread has this keyword on every email.",
+			},
+			{
+				Name: "someInThreadHaveKeyword",
+				Type: "String",
+				Doc:  "Matches emails whose thread has this keyword on at least one email.",
+			},
+			{
+				Name: "noneInThreadHaveKeyword",
+				Type: "String",
+				Doc:  "Matches emails whose thread has this keyword on no email.",
+			},
+			{Name: "hasKeyword", Type: "String", Doc: "Matches emails with this keyword set."},
+			{Name: "notKeyword", Type: "String", Doc: "Matches emails without this keyword set."},
+			{Name: "hasAttachment", Type: "Boolean", Doc: "Matches emails according to whether they have an attachment."},
+			{
+				Name: "text",
+				Type: "String",
+				Doc:  "Matches emails where this text appears in the body, subject, or any address header field.",
+			},
+			{Name: "from", Type: "String", Doc: "Matches emails where this text appears in the From header field."},
+			{Name: "to", Type: "String", Doc: "Matches emails where this text appears in the To header field."},
+			{Name: "cc", Type: "String", Doc: "Matches emails where this text appears in the Cc header field."},
+			{Name: "bcc", Type: "String", Doc: "Matches emails where this text appears in the Bcc header field."},
+			{Name: "subject", Type: "String", Doc: "Matches emails where this text appears in the Subject header field."},
+			{Name: "body", Type: "String", Doc: "Matches emails where this text appears in the message body."},
+			{
+				Name: "header",
+				Type: "String[]",
+				Doc:  "Matches emails carrying the named header field, optionally with the given value: [name] or [name, value].",
+			},
+		},
+	})
+
+	s.RegisterStandard("Email", CapabilityMail, StandardMethods{
+		Get: true, Changes: true, Set: true, Copy: true, Query: true, QueryChanges: true,
+	})
+
+	s.AppendArguments("Email/get",
+		&Field{
+			Name: "bodyProperties",
+			Type: "String[]|null",
+			Doc:  "The properties to include for each EmailBodyPart returned.",
+		},
+		&Field{
+			Name:    "fetchTextBodyValues",
+			Type:    "Boolean",
+			Default: "false",
+			Doc:     "Whether to populate bodyValues for the parts listed in textBody.",
+		},
+		&Field{
+			Name:    "fetchHTMLBodyValues",
+			Type:    "Boolean",
+			Default: "false",
+			Doc:     "Whether to populate bodyValues for the parts listed in htmlBody.",
+		},
+		&Field{
+			Name:    "fetchAllBodyValues",
+			Type:    "Boolean",
+			Default: "false",
+			Doc:     "Whether to populate bodyValues for every textual body part.",
+		},
+		&Field{
+			Name: "maxBodyValueBytes",
+			Type: "UnsignedInt",
+			Doc:  "The maximum number of octets to return for each body value, truncating longer ones.",
+		},
+	)
+
+	collapseThreads := func() *Field {
+		return &Field{
+			Name:    "collapseThreads",
+			Type:    "Boolean",
+			Default: "false",
+			Doc:     "Whether to return only one email per thread, the one that sorts highest among those matching the filter.",
+		}
+	}
+	s.AppendArguments("Email/query", collapseThreads())
+	s.AppendArguments("Email/queryChanges", collapseThreads())
+}

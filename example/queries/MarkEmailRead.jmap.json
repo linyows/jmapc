@@ -1,0 +1,13 @@
+{
+  "doc": "MarkEmailRead sets the $seen keyword on one email.",
+
+  "methodCalls": [
+    ["Email/set", {
+      "update": {
+        "{{emailId}}": {"keywords/$seen": true}
+      }
+    }, "mark"]
+  ],
+
+  "returns": "mark"
+}

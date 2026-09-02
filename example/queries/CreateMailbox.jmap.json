@@ -1,0 +1,17 @@
+{
+  "doc": "CreateMailbox creates a top-level mailbox and subscribes to it.",
+
+  "methodCalls": [
+    ["Mailbox/set", {
+      "create": {
+        "new": {
+          "name": "{{name}}",
+          "parentId": null,
+          "isSubscribed": true
+        }
+      }
+    }, "create"]
+  ],
+
+  "returns": "create"
+}

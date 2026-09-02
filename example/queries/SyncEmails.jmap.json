@@ -1,0 +1,20 @@
+{
+  "doc": "SyncEmails fetches the emails that have been created since a known state, so a local cache can catch up without refetching everything.",
+
+  "methodCalls": [
+    ["Email/changes", {
+      "sinceState": "{{sinceState}}",
+      "maxChanges": 128
+    }, "changes"],
+
+    ["Email/get", {
+      "#ids": {"resultOf": "changes", "name": "Email/changes", "path": "/created"},
+      "properties": ["id", "threadId", "mailboxIds", "keywords", "subject", "receivedAt"]
+    }, "created"],
+
+    ["Email/get", {
+      "#ids": {"resultOf": "changes", "name": "Email/changes", "path": "/updated"},
+      "properties": ["id", "mailboxIds", "keywords"]
+    }, "updated"]
+  ]
+}
