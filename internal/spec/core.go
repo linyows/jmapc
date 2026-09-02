@@ -2,8 +2,10 @@ package spec
 
 // Capability URIs the catalogue knows about.
 const (
-	CapabilityCore = "urn:ietf:params:jmap:core"
-	CapabilityMail = "urn:ietf:params:jmap:mail"
+	CapabilityCore       = "urn:ietf:params:jmap:core"
+	CapabilityMail       = "urn:ietf:params:jmap:mail"
+	CapabilitySubmission = "urn:ietf:params:jmap:submission"
+	CapabilityVacation   = "urn:ietf:params:jmap:vacationresponse"
 )
 
 // registerCore adds the types RFC 8620 defines for every JMAP server: the
@@ -86,5 +88,76 @@ func registerCore(s *Spec) {
 		Capability: CapabilityCore,
 		Doc:        "PatchObject is a set of changes to apply to a record, keyed by JSON pointer into it.",
 		Fields:     nil,
+	})
+
+	registerEcho(s)
+	registerBlobCopy(s)
+}
+
+// registerEcho adds Core/echo, which returns its arguments unchanged and so is
+// the one method whose arguments the data model cannot describe.
+func registerEcho(s *Spec) {
+	args := s.AddObject(&Object{
+		Name:       "CoreEchoArguments",
+		Capability: CapabilityCore,
+		Kind:       KindArguments,
+		Doc:        "CoreEchoArguments holds the arguments of the Core/echo method, which may be anything at all.",
+	})
+	resp := s.AddObject(&Object{
+		Name:       "CoreEchoResponse",
+		Capability: CapabilityCore,
+		Kind:       KindResponse,
+		Doc:        "CoreEchoResponse holds the response to the Core/echo method, which is the arguments it was given.",
+	})
+	s.AddMethod(&Method{
+		Name:       "Core/echo",
+		Capability: CapabilityCore,
+		Doc:        "Returns its arguments unchanged, which is how a client checks that it can reach and authenticate with the server.",
+		Arguments:  args.Name,
+		Response:   resp.Name,
+	})
+}
+
+// registerBlobCopy adds Blob/copy, which moves raw blobs between accounts and
+// does not follow the shape of the standard /copy method.
+func registerBlobCopy(s *Spec) {
+	args := s.AddObject(&Object{
+		Name:       "BlobCopyArguments",
+		Capability: CapabilityCore,
+		Kind:       KindArguments,
+		Doc:        "BlobCopyArguments holds the arguments of the Blob/copy method.",
+		Fields: []*Field{
+			{Name: "fromAccountId", Type: "Id", Doc: "The id of the account to copy blobs from."},
+			accountIDField(),
+			{Name: "blobIds", Type: "Id[]", Doc: "The ids of the blobs to copy."},
+		},
+	})
+	resp := s.AddObject(&Object{
+		Name:       "BlobCopyResponse",
+		Capability: CapabilityCore,
+		Kind:       KindResponse,
+		Doc:        "BlobCopyResponse holds the response to the Blob/copy method.",
+		Fields: []*Field{
+			{Name: "fromAccountId", Type: "Id", Doc: "The id of the account the blobs were copied from."},
+			accountIDField(),
+			{
+				Name: "copied",
+				Type: "Id[Id]|null",
+				Doc:  "A map of the blob id in the source account to the id the blob has in the destination account.",
+			},
+			{
+				Name: "notCopied",
+				Type: "Id[SetError]|null",
+				Doc:  "A map of blob id to the reason it could not be copied.",
+			},
+		},
+	})
+	s.AddMethod(&Method{
+		Name:       "Blob/copy",
+		Capability: CapabilityCore,
+		Doc:        "Copies blobs from one account to another, which is how an attachment is reused without downloading and uploading it again.",
+		Arguments:  args.Name,
+		Response:   resp.Name,
+		DataType:   "Blob",
 	})
 }

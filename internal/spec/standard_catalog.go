@@ -7,5 +7,7 @@ func Standard() *Spec {
 	s := New()
 	registerCore(s)
 	registerMail(s)
+	registerSubmission(s)
+	registerVacation(s)
 	return s
 }

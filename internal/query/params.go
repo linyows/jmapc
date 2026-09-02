@@ -32,18 +32,28 @@ func (s *paramSet) rollback(mark int) {
 // use records a use of a parameter and returns it, creating it on first sight.
 // A parameter used in two places must mean the same type in both, because the
 // caller supplies it once.
-func (s *paramSet) use(c *checker, name string, t *spec.Type, where, doc string) *Param {
-	if p, seen := s.byName[name]; seen {
-		if !sameType(p.Type, t) {
-			c.errorf(where, "use a different parameter name for the second value",
-				"parameter %q is %s where it is first used, at %s, but %s here",
-				name, p.Type, p.Where, t)
-		}
+//
+// A weak use is one whose surroundings do not say what the parameter is, such as
+// a name embedded in a JSON pointer. It claims a type only until a use that does
+// know comes along.
+func (s *paramSet) use(c *checker, name string, t *spec.Type, where, doc string, weak bool) *Param {
+	p, seen := s.byName[name]
+	if !seen {
+		p = &Param{Name: name, Type: t, Where: where, Doc: doc, Weak: weak}
+		s.byName[name] = p
+		s.order = append(s.order, p)
 		return p
 	}
-	p := &Param{Name: name, Type: t, Where: where, Doc: doc}
-	s.byName[name] = p
-	s.order = append(s.order, p)
+	switch {
+	case weak:
+		// The use says nothing the parameter does not already know.
+	case p.Weak:
+		p.Type, p.Where, p.Doc, p.Weak = t, where, doc, false
+	case !sameType(p.Type, t):
+		c.errorf(where, "use a different parameter name for the second value",
+			"parameter %q is %s where it is first used, at %s, but %s here",
+			name, p.Type, p.Where, t)
+	}
 	return p
 }
 

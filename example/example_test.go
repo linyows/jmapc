@@ -41,16 +41,20 @@ func (s *stub) start() *httptest.Server {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
 			"capabilities": map[string]any{
-				jmapc.CapabilityCore: map[string]any{"maxCallsInRequest": 16},
-				jmapc.CapabilityMail: map[string]any{},
+				jmapc.CapabilityCore:       map[string]any{"maxCallsInRequest": 16},
+				jmapc.CapabilityMail:       map[string]any{},
+				jmapc.CapabilitySubmission: map[string]any{},
 			},
 			"accounts": map[string]any{
 				string(accountID): map[string]any{"name": "someone@example.com", "isPersonal": true},
 			},
-			"primaryAccounts": map[string]any{jmapc.CapabilityMail: string(accountID)},
-			"username":        "someone@example.com",
-			"apiUrl":          srv.URL + "/jmap/api/",
-			"state":           "session-1",
+			"primaryAccounts": map[string]any{
+				jmapc.CapabilityMail:       string(accountID),
+				jmapc.CapabilitySubmission: string(accountID),
+			},
+			"username": "someone@example.com",
+			"apiUrl":   srv.URL + "/jmap/api/",
+			"state":    "session-1",
 		})
 	})
 	mux.HandleFunc("/jmap/api/", func(w http.ResponseWriter, r *http.Request) {
@@ -331,5 +335,76 @@ func TestPreflightRejectsUnknownCapability(t *testing.T) {
 	}
 	if reqErr.Type != jmapc.ErrTypeUnknownCapability {
 		t.Errorf("error type = %q, want %q", reqErr.Type, jmapc.ErrTypeUnknownCapability)
+	}
+}
+
+// TestSendEmail covers the request JMAP exists for: writing a message,
+// submitting it, and filing it under Sent all in one go, with each step
+// referring to what the one before it created.
+func TestSendEmail(t *testing.T) {
+	s := &stub{t: t, response: `{
+	  "sessionState": "session-1",
+	  "methodResponses": [
+	    ["Email/set", {"accountId": "acct1", "newState": "s2",
+	                   "created": {"draft": {"id": "e9", "blobId": "b9", "threadId": "t9", "size": 412}}}, "write"],
+	    ["EmailSubmission/set", {"accountId": "acct1", "newState": "sub2",
+	                             "created": {"send": {"id": "sub9", "threadId": "t9",
+	                                                  "sendAt": "2024-05-01T09:00:00Z",
+	                                                  "undoStatus": "final"}}}, "send"]
+	  ]
+	}`}
+
+	got, err := jmapq.SendEmail(context.Background(), s.client(), jmapq.SendEmailParams{
+		DraftsMailboxID: "drafts",
+		SentMailboxID:   "sent",
+		IdentityID:      "id1",
+		FromAddress:     "me@example.com",
+		ToAddress:       "you@example.com",
+		Subject:         "Lunch",
+		Body:            "Thursday?",
+	})
+	if err != nil {
+		t.Fatalf("SendEmail: %v", err)
+	}
+
+	// The draft names the mailbox the caller chose, as a key rather than a
+	// value.
+	_, write := s.call(t, "write")
+	draft := write["create"].(map[string]any)["draft"].(map[string]any)
+	mailboxes := draft["mailboxIds"].(map[string]any)
+	if mailboxes["drafts"] != true {
+		t.Errorf("mailboxIds = %v, want the drafts mailbox", mailboxes)
+	}
+	if draft["subject"] != "Lunch" {
+		t.Errorf("subject = %v, want Lunch", draft["subject"])
+	}
+	body := draft["bodyValues"].(map[string]any)["text"].(map[string]any)
+	if body["value"] != "Thursday?" {
+		t.Errorf("body = %v, want Thursday?", body)
+	}
+
+	// The submission refers to the email by its creation id, which only works
+	// because both calls are in the same request.
+	_, send := s.call(t, "send")
+	submission := send["create"].(map[string]any)["send"].(map[string]any)
+	if submission["emailId"] != "#draft" {
+		t.Errorf("emailId = %v, want the creation id #draft", submission["emailId"])
+	}
+
+	// The patch applied on success moves the message between mailboxes, with
+	// both ids substituted into the JSON pointers.
+	patch := send["onSuccessUpdateEmail"].(map[string]any)["#send"].(map[string]any)
+	if v, present := patch["mailboxIds/drafts"]; !present || v != nil {
+		t.Errorf("patch removes drafts as %v (present %v), want an explicit null", v, present)
+	}
+	if patch["mailboxIds/sent"] != true {
+		t.Errorf("patch = %v, want the sent mailbox added", patch)
+	}
+	if v, present := patch["keywords/$draft"]; !present || v != nil {
+		t.Errorf("patch removes $draft as %v (present %v), want an explicit null", v, present)
+	}
+
+	if got.Created["send"].UndoStatus != "final" {
+		t.Errorf("submission = %+v, want undoStatus final", got.Created["send"])
 	}
 }

@@ -13,6 +13,47 @@ type AddedItem struct {
 	Index UnsignedInt `json:"index,omitzero"`
 }
 
+// Address is an SMTP envelope address, with the parameters to send alongside
+// it.
+//
+// A request using this type must declare urn:ietf:params:jmap:submission.
+type Address struct {
+	// The addr-spec of the address, with no display name and no angle brackets.
+	Email string `json:"email,omitzero"`
+
+	// The SMTP parameters to send with the address, keyed by parameter name,
+	// with null for one that takes no value.
+	Parameters map[string]*string `json:"parameters,omitzero"`
+}
+
+// BlobCopyArguments holds the arguments of the Blob/copy method.
+type BlobCopyArguments struct {
+	// The id of the account to copy blobs from.
+	FromAccountID ID `json:"fromAccountId,omitzero"`
+
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The ids of the blobs to copy.
+	BlobIDs []ID `json:"blobIds,omitzero"`
+}
+
+// BlobCopyResponse holds the response to the Blob/copy method.
+type BlobCopyResponse struct {
+	// The id of the account the blobs were copied from.
+	FromAccountID ID `json:"fromAccountId"`
+
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// A map of the blob id in the source account to the id the blob has in the
+	// destination account.
+	Copied map[ID]ID `json:"copied"`
+
+	// A map of blob id to the reason it could not be copied.
+	NotCopied map[ID]SetError `json:"notCopied"`
+}
+
 // Comparator is one term of the sort order applied by a /query call.
 type Comparator struct {
 	// The property of the record to compare.
@@ -25,6 +66,30 @@ type Comparator struct {
 
 	// The collation algorithm to compare strings with.
 	Collation *string `json:"collation,omitzero"`
+}
+
+// CoreEchoArguments holds the arguments of the Core/echo method, which may be
+// anything at all.
+type CoreEchoArguments struct {
+}
+
+// CoreEchoResponse holds the response to the Core/echo method, which is the
+// arguments it was given.
+type CoreEchoResponse struct {
+}
+
+// DeliveryStatus is what became of a message for one of its recipients.
+//
+// A request using this type must declare urn:ietf:params:jmap:submission.
+type DeliveryStatus struct {
+	// The SMTP reply the recipient's server gave, kept verbatim.
+	SMTPReply string `json:"smtpReply,omitzero"`
+
+	// How far the message got: "queued", "yes", "no", or "unknown".
+	Delivered string `json:"delivered,omitzero"`
+
+	// Whether the message was displayed to the recipient: "unknown" or "yes".
+	Displayed string `json:"displayed,omitzero"`
 }
 
 // Email is a single message, presented as structured data rather than as raw
@@ -438,6 +503,118 @@ type EmailHeader struct {
 	Value string `json:"value,omitzero"`
 }
 
+// EmailImport is one message to import, naming the blob holding it and where
+// it should land.
+//
+// A request using this type must declare urn:ietf:params:jmap:mail.
+type EmailImport struct {
+	// The id of the blob holding the raw RFC 5322 message.
+	BlobID ID `json:"blobId,omitzero"`
+
+	// The mailboxes to file the imported email in.
+	MailboxIDs map[ID]bool `json:"mailboxIds,omitzero"`
+
+	// The keywords to set on the imported email.
+	Keywords map[string]bool `json:"keywords,omitzero"`
+
+	// The time to record as the email's receivedAt, defaulting to when the
+	// import happens.
+	ReceivedAt UTCDate `json:"receivedAt,omitzero"`
+}
+
+// EmailImportArguments holds the arguments of the Email/import method.
+//
+// A request using this type must declare urn:ietf:params:jmap:mail.
+type EmailImportArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The state the emails are expected to be in. The call fails with a
+	// stateMismatch error if the server has moved on.
+	IfInState *string `json:"ifInState,omitzero"`
+
+	// The messages to import, keyed by creation id.
+	Emails map[ID]EmailImport `json:"emails,omitzero"`
+}
+
+// EmailImportResponse holds the response to the Email/import method.
+//
+// A request using this type must declare urn:ietf:params:jmap:mail.
+type EmailImportResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The state before the import.
+	OldState *string `json:"oldState"`
+
+	// The state after the import.
+	NewState string `json:"newState"`
+
+	// A map of creation id to the properties the server assigned to each
+	// imported email.
+	Created map[ID]Email `json:"created"`
+
+	// A map of creation id to the reason the message could not be imported.
+	NotCreated map[ID]SetError `json:"notCreated"`
+}
+
+// EmailParseArguments holds the arguments of the Email/parse method.
+//
+// A request using this type must declare urn:ietf:params:jmap:mail.
+type EmailParseArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The ids of the blobs to parse as messages.
+	BlobIDs []ID `json:"blobIds,omitzero"`
+
+	// The properties to include in each parsed email, or null for the default
+	// set.
+	Properties []string `json:"properties,omitzero"`
+
+	// The properties to include for each EmailBodyPart returned.
+	BodyProperties []string `json:"bodyProperties,omitzero"`
+
+	// Whether to populate bodyValues for the parts listed in textBody.
+	//
+	// The server assumes false when this property is omitted.
+	FetchTextBodyValues bool `json:"fetchTextBodyValues,omitzero"`
+
+	// Whether to populate bodyValues for the parts listed in htmlBody.
+	//
+	// The server assumes false when this property is omitted.
+	FetchHTMLBodyValues bool `json:"fetchHTMLBodyValues,omitzero"`
+
+	// Whether to populate bodyValues for every textual body part.
+	//
+	// The server assumes false when this property is omitted.
+	FetchAllBodyValues bool `json:"fetchAllBodyValues,omitzero"`
+
+	// The maximum number of octets to return for each body value, truncating
+	// longer ones.
+	MaxBodyValueBytes UnsignedInt `json:"maxBodyValueBytes,omitzero"`
+}
+
+// EmailParseResponse holds the response to the Email/parse method.
+//
+// A request using this type must declare urn:ietf:params:jmap:mail.
+type EmailParseResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// A map of blob id to the email parsed from it. The email has no id,
+	// mailboxIds, keywords, or receivedAt, because it is not a record in the
+	// account.
+	Parsed map[ID]Email `json:"parsed"`
+
+	// The ids of the blobs that exist but do not hold a message the server could
+	// parse.
+	NotParsable []ID `json:"notParsable"`
+
+	// The ids of the blobs that do not exist.
+	NotFound []ID `json:"notFound"`
+}
+
 // EmailQueryArguments holds the arguments of the Email/query method.
 //
 // A request using this type must declare urn:ietf:params:jmap:mail.
@@ -629,6 +806,375 @@ type EmailSetResponse struct {
 	NotDestroyed map[ID]SetError `json:"notDestroyed"`
 }
 
+// EmailSubmission is one attempt to send an email, and the record of what
+// happened to it.
+//
+// A request using this type must declare urn:ietf:params:jmap:submission.
+type EmailSubmission struct {
+	// The id of the submission.
+	//
+	// The server sets this property; it may not be set by the client.
+	ID ID `json:"id,omitzero"`
+
+	// The id of the identity to send from.
+	//
+	// This property may be set when the record is created, but not changed
+	// afterwards.
+	IdentityID ID `json:"identityId,omitzero"`
+
+	// The id of the email to send.
+	//
+	// This property may be set when the record is created, but not changed
+	// afterwards.
+	EmailID ID `json:"emailId,omitzero"`
+
+	// The id of the thread the sent email belongs to.
+	//
+	// The server sets this property; it may not be set by the client.
+	ThreadID ID `json:"threadId,omitzero"`
+
+	// The SMTP envelope to send with, or null to have the server derive one from
+	// the message's header fields.
+	//
+	// This property may be set when the record is created, but not changed
+	// afterwards.
+	Envelope *Envelope `json:"envelope,omitzero"`
+
+	// When the message was, or will be, released to the SMTP server.
+	//
+	// The server sets this property; it may not be set by the client.
+	SendAt UTCDate `json:"sendAt,omitzero"`
+
+	// Whether the submission can still be stopped: "pending", "final", or
+	// "canceled". Setting it to "canceled" is how a send is undone while it is
+	// still pending.
+	UndoStatus string `json:"undoStatus,omitzero"`
+
+	// What became of the message for each recipient, keyed by address, or null
+	// if the server does not track it.
+	//
+	// The server sets this property; it may not be set by the client.
+	DeliveryStatus map[string]DeliveryStatus `json:"deliveryStatus,omitzero"`
+
+	// The blob ids of the delivery status notifications received for this
+	// submission.
+	//
+	// The server sets this property; it may not be set by the client.
+	DsnBlobIDs []ID `json:"dsnBlobIds,omitzero"`
+
+	// The blob ids of the message disposition notifications received for this
+	// submission.
+	//
+	// The server sets this property; it may not be set by the client.
+	MdnBlobIDs []ID `json:"mdnBlobIds,omitzero"`
+}
+
+// EmailSubmissionChangesArguments holds the arguments of the
+// EmailSubmission/changes method.
+//
+// A request using this type must declare urn:ietf:params:jmap:submission.
+type EmailSubmissionChangesArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The state string the client already has, as returned by an earlier
+	// EmailSubmission/get or EmailSubmission/changes.
+	SinceState string `json:"sinceState,omitzero"`
+
+	// The maximum number of ids to return across the three change lists.
+	MaxChanges *UnsignedInt `json:"maxChanges,omitzero"`
+}
+
+// EmailSubmissionChangesResponse holds the response to the
+// EmailSubmission/changes method.
+//
+// A request using this type must declare urn:ietf:params:jmap:submission.
+type EmailSubmissionChangesResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The state the changes are calculated from.
+	OldState string `json:"oldState"`
+
+	// The state the client reaches by applying these changes.
+	NewState string `json:"newState"`
+
+	// Whether further changes remain, in which case the call should be repeated
+	// from newState.
+	HasMoreChanges bool `json:"hasMoreChanges"`
+
+	// The ids of records created since oldState.
+	Created []ID `json:"created"`
+
+	// The ids of records updated since oldState.
+	Updated []ID `json:"updated"`
+
+	// The ids of records destroyed since oldState.
+	Destroyed []ID `json:"destroyed"`
+}
+
+// EmailSubmissionFilterCondition is a condition a submission must satisfy to
+// match an EmailSubmission/query.
+//
+// A request using this type must declare urn:ietf:params:jmap:submission.
+type EmailSubmissionFilterCondition struct {
+	// Matches submissions sent from one of these identities.
+	IdentityIDs []ID `json:"identityIds,omitzero"`
+
+	// Matches submissions of one of these emails.
+	EmailIDs []ID `json:"emailIds,omitzero"`
+
+	// Matches submissions of an email in one of these threads.
+	ThreadIDs []ID `json:"threadIds,omitzero"`
+
+	// Matches submissions with this undo status.
+	UndoStatus string `json:"undoStatus,omitzero"`
+
+	// Matches submissions whose sendAt is before this time.
+	Before UTCDate `json:"before,omitzero"`
+
+	// Matches submissions whose sendAt is at or after this time.
+	After UTCDate `json:"after,omitzero"`
+}
+
+// EmailSubmissionGetArguments holds the arguments of the EmailSubmission/get
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:submission.
+type EmailSubmissionGetArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The ids of the records to fetch, or null to fetch all of them.
+	IDs []ID `json:"ids,omitzero"`
+
+	// The properties to include in each returned record, or null for all of
+	// them. The id property is always returned.
+	Properties []string `json:"properties,omitzero"`
+}
+
+// EmailSubmissionGetResponse holds the response to the EmailSubmission/get
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:submission.
+type EmailSubmissionGetResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// A string encoding the current state of the type on the server, for use
+	// with EmailSubmission/changes.
+	State string `json:"state"`
+
+	// The records that were found, in an undefined order.
+	List []EmailSubmission `json:"list"`
+
+	// The ids that were requested but do not exist.
+	NotFound []ID `json:"notFound"`
+}
+
+// EmailSubmissionQueryArguments holds the arguments of the
+// EmailSubmission/query method.
+//
+// A request using this type must declare urn:ietf:params:jmap:submission.
+type EmailSubmissionQueryArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The condition records must match to be included in the results.
+	Filter any `json:"filter,omitzero"`
+
+	// The comparators to sort the results by, in order of precedence.
+	Sort []Comparator `json:"sort,omitzero"`
+
+	// The zero-based index of the first result to return. A negative value
+	// counts back from the end.
+	//
+	// The server assumes 0 when this property is omitted.
+	Position Int `json:"position,omitzero"`
+
+	// The id of a record to position the returned window relative to, instead of
+	// using position.
+	Anchor *ID `json:"anchor,omitzero"`
+
+	// The offset from the anchor at which the returned window starts.
+	//
+	// The server assumes 0 when this property is omitted.
+	AnchorOffset Int `json:"anchorOffset,omitzero"`
+
+	// The maximum number of ids to return.
+	Limit *UnsignedInt `json:"limit,omitzero"`
+
+	// Whether the server should compute the total number of matching records.
+	//
+	// The server assumes false when this property is omitted.
+	CalculateTotal bool `json:"calculateTotal,omitzero"`
+}
+
+// EmailSubmissionQueryChangesArguments holds the arguments of the
+// EmailSubmission/queryChanges method.
+//
+// A request using this type must declare urn:ietf:params:jmap:submission.
+type EmailSubmissionQueryChangesArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The filter the original query used.
+	Filter any `json:"filter,omitzero"`
+
+	// The sort the original query used.
+	Sort []Comparator `json:"sort,omitzero"`
+
+	// The queryState the client already has, as returned by an earlier
+	// EmailSubmission/query.
+	SinceQueryState string `json:"sinceQueryState,omitzero"`
+
+	// The maximum number of changes to return.
+	MaxChanges *UnsignedInt `json:"maxChanges,omitzero"`
+
+	// The id of the last record in the client's cached window, beyond which
+	// changes may be omitted.
+	UpToID *ID `json:"upToId,omitzero"`
+
+	// Whether the server should compute the total number of matching records.
+	//
+	// The server assumes false when this property is omitted.
+	CalculateTotal bool `json:"calculateTotal,omitzero"`
+}
+
+// EmailSubmissionQueryChangesResponse holds the response to the
+// EmailSubmission/queryChanges method.
+//
+// A request using this type must declare urn:ietf:params:jmap:submission.
+type EmailSubmissionQueryChangesResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The query state the changes are calculated from.
+	OldQueryState string `json:"oldQueryState"`
+
+	// The query state the client reaches by applying these changes.
+	NewQueryState string `json:"newQueryState"`
+
+	// The total number of matching records, present only if calculateTotal was
+	// true.
+	Total UnsignedInt `json:"total"`
+
+	// The ids to remove from the cached result list.
+	Removed []ID `json:"removed"`
+
+	// The ids to add to the cached result list, each with the index to insert it
+	// at.
+	Added []AddedItem `json:"added"`
+}
+
+// EmailSubmissionQueryResponse holds the response to the
+// EmailSubmission/query method.
+//
+// A request using this type must declare urn:ietf:params:jmap:submission.
+type EmailSubmissionQueryResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// A string encoding the current state of the query on the server, for use
+	// with EmailSubmission/queryChanges.
+	QueryState string `json:"queryState"`
+
+	// Whether the server can calculate changes for this query.
+	CanCalculateChanges bool `json:"canCalculateChanges"`
+
+	// The zero-based index of the first returned id in the full result list.
+	Position UnsignedInt `json:"position"`
+
+	// The ids of the matching records, in sorted order.
+	IDs []ID `json:"ids"`
+
+	// The total number of matching records, present only if calculateTotal was
+	// true.
+	Total UnsignedInt `json:"total"`
+
+	// The limit the server applied, present only if it is lower than the one
+	// requested.
+	Limit UnsignedInt `json:"limit"`
+}
+
+// EmailSubmissionSetArguments holds the arguments of the EmailSubmission/set
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:submission.
+type EmailSubmissionSetArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The state the changes are expected to apply to. The call fails with a
+	// stateMismatch error if the server has moved on.
+	IfInState *string `json:"ifInState,omitzero"`
+
+	// A map of creation id to the record to create. A creation id may be
+	// referenced elsewhere in the same request as "#" followed by the id.
+	Create map[ID]EmailSubmission `json:"create,omitzero"`
+
+	// A map of record id to the patch to apply to it.
+	Update map[ID]PatchObject `json:"update,omitzero"`
+
+	// The ids of the records to destroy.
+	Destroy []ID `json:"destroy,omitzero"`
+
+	// Patches to apply to the emails of the submissions that succeed, keyed by
+	// the submission's id or creation id.
+	OnSuccessUpdateEmail map[ID]PatchObject `json:"onSuccessUpdateEmail,omitzero"`
+
+	// The ids or creation ids of the submissions whose emails should be
+	// destroyed once the submission succeeds.
+	OnSuccessDestroyEmail []ID `json:"onSuccessDestroyEmail,omitzero"`
+}
+
+// EmailSubmissionSetResponse holds the response to the EmailSubmission/set
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:submission.
+type EmailSubmissionSetResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The state before these changes were applied, if the server tracks it.
+	OldState *string `json:"oldState"`
+
+	// The state after these changes were applied.
+	NewState string `json:"newState"`
+
+	// A map of creation id to the properties the server assigned to each created
+	// record.
+	Created map[ID]*EmailSubmission `json:"created"`
+
+	// A map of record id to any properties the server changed beyond those the
+	// patch set.
+	Updated map[ID]*EmailSubmission `json:"updated"`
+
+	// The ids of the records that were destroyed.
+	Destroyed []ID `json:"destroyed"`
+
+	// A map of creation id to the reason the record could not be created.
+	NotCreated map[ID]SetError `json:"notCreated"`
+
+	// A map of record id to the reason the record could not be updated.
+	NotUpdated map[ID]SetError `json:"notUpdated"`
+
+	// A map of record id to the reason the record could not be destroyed.
+	NotDestroyed map[ID]SetError `json:"notDestroyed"`
+}
+
+// Envelope is the SMTP envelope of a submission: who the message is from and
+// who it goes to, which need not match the message's own header fields.
+//
+// A request using this type must declare urn:ietf:params:jmap:submission.
+type Envelope struct {
+	// The address to send the MAIL FROM command with, which is where bounces go.
+	MailFrom Address `json:"mailFrom,omitzero"`
+
+	// The addresses to send the message to, one RCPT TO command each.
+	RcptTo []Address `json:"rcptTo,omitzero"`
+}
+
 // FilterOperator is a boolean node combining the conditions of a /query
 // filter.
 type FilterOperator struct {
@@ -638,6 +1184,185 @@ type FilterOperator struct {
 	// The conditions to combine, each either a FilterOperator or a filter
 	// condition for the type being queried.
 	Conditions []any `json:"conditions,omitzero"`
+}
+
+// Identity is an address the user may send mail from, together with the
+// defaults to apply when they do.
+//
+// A request using this type must declare urn:ietf:params:jmap:submission.
+type Identity struct {
+	// The id of the identity.
+	//
+	// The server sets this property; it may not be set by the client.
+	ID ID `json:"id,omitzero"`
+
+	// The display name to put in the From header field alongside the address.
+	//
+	// The server assumes "" when this property is omitted.
+	Name *string `json:"name,omitzero"`
+
+	// The address to send from. It may end in "@domain" to stand for any address
+	// at that domain.
+	//
+	// This property may be set when the record is created, but not changed
+	// afterwards.
+	Email string `json:"email,omitzero"`
+
+	// The Reply-To header field to set by default.
+	ReplyTo []EmailAddress `json:"replyTo,omitzero"`
+
+	// The Bcc header field to set by default.
+	Bcc []EmailAddress `json:"bcc,omitzero"`
+
+	// The signature to append to the plain-text body of a message sent from this
+	// identity.
+	//
+	// The server assumes "" when this property is omitted.
+	TextSignature *string `json:"textSignature,omitzero"`
+
+	// The signature to append to the HTML body of a message sent from this
+	// identity.
+	//
+	// The server assumes "" when this property is omitted.
+	HTMLSignature *string `json:"htmlSignature,omitzero"`
+
+	// Whether the user may delete the identity, which is false for one the
+	// server maintains itself.
+	//
+	// The server sets this property; it may not be set by the client.
+	MayDelete bool `json:"mayDelete,omitzero"`
+}
+
+// IdentityChangesArguments holds the arguments of the Identity/changes
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:submission.
+type IdentityChangesArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The state string the client already has, as returned by an earlier
+	// Identity/get or Identity/changes.
+	SinceState string `json:"sinceState,omitzero"`
+
+	// The maximum number of ids to return across the three change lists.
+	MaxChanges *UnsignedInt `json:"maxChanges,omitzero"`
+}
+
+// IdentityChangesResponse holds the response to the Identity/changes method.
+//
+// A request using this type must declare urn:ietf:params:jmap:submission.
+type IdentityChangesResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The state the changes are calculated from.
+	OldState string `json:"oldState"`
+
+	// The state the client reaches by applying these changes.
+	NewState string `json:"newState"`
+
+	// Whether further changes remain, in which case the call should be repeated
+	// from newState.
+	HasMoreChanges bool `json:"hasMoreChanges"`
+
+	// The ids of records created since oldState.
+	Created []ID `json:"created"`
+
+	// The ids of records updated since oldState.
+	Updated []ID `json:"updated"`
+
+	// The ids of records destroyed since oldState.
+	Destroyed []ID `json:"destroyed"`
+}
+
+// IdentityGetArguments holds the arguments of the Identity/get method.
+//
+// A request using this type must declare urn:ietf:params:jmap:submission.
+type IdentityGetArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The ids of the records to fetch, or null to fetch all of them.
+	IDs []ID `json:"ids,omitzero"`
+
+	// The properties to include in each returned record, or null for all of
+	// them. The id property is always returned.
+	Properties []string `json:"properties,omitzero"`
+}
+
+// IdentityGetResponse holds the response to the Identity/get method.
+//
+// A request using this type must declare urn:ietf:params:jmap:submission.
+type IdentityGetResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// A string encoding the current state of the type on the server, for use
+	// with Identity/changes.
+	State string `json:"state"`
+
+	// The records that were found, in an undefined order.
+	List []Identity `json:"list"`
+
+	// The ids that were requested but do not exist.
+	NotFound []ID `json:"notFound"`
+}
+
+// IdentitySetArguments holds the arguments of the Identity/set method.
+//
+// A request using this type must declare urn:ietf:params:jmap:submission.
+type IdentitySetArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The state the changes are expected to apply to. The call fails with a
+	// stateMismatch error if the server has moved on.
+	IfInState *string `json:"ifInState,omitzero"`
+
+	// A map of creation id to the record to create. A creation id may be
+	// referenced elsewhere in the same request as "#" followed by the id.
+	Create map[ID]Identity `json:"create,omitzero"`
+
+	// A map of record id to the patch to apply to it.
+	Update map[ID]PatchObject `json:"update,omitzero"`
+
+	// The ids of the records to destroy.
+	Destroy []ID `json:"destroy,omitzero"`
+}
+
+// IdentitySetResponse holds the response to the Identity/set method.
+//
+// A request using this type must declare urn:ietf:params:jmap:submission.
+type IdentitySetResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The state before these changes were applied, if the server tracks it.
+	OldState *string `json:"oldState"`
+
+	// The state after these changes were applied.
+	NewState string `json:"newState"`
+
+	// A map of creation id to the properties the server assigned to each created
+	// record.
+	Created map[ID]*Identity `json:"created"`
+
+	// A map of record id to any properties the server changed beyond those the
+	// patch set.
+	Updated map[ID]*Identity `json:"updated"`
+
+	// The ids of the records that were destroyed.
+	Destroyed []ID `json:"destroyed"`
+
+	// A map of creation id to the reason the record could not be created.
+	NotCreated map[ID]SetError `json:"notCreated"`
+
+	// A map of record id to the reason the record could not be updated.
+	NotUpdated map[ID]SetError `json:"notUpdated"`
+
+	// A map of record id to the reason the record could not be destroyed.
+	NotDestroyed map[ID]SetError `json:"notDestroyed"`
 }
 
 // Mailbox is a named set of emails, which is how JMAP models both folders and
@@ -1027,6 +1752,53 @@ type MailboxSetResponse struct {
 	NotDestroyed map[ID]SetError `json:"notDestroyed"`
 }
 
+// SearchSnippet is the part of an email that matched a search, with the
+// matching words marked up for display.
+//
+// A request using this type must declare urn:ietf:params:jmap:mail.
+type SearchSnippet struct {
+	// The id of the email the snippet is from.
+	EmailID ID `json:"emailId,omitzero"`
+
+	// The email's subject with the matching words wrapped in <mark> tags, or
+	// null if nothing in it matched.
+	Subject *string `json:"subject,omitzero"`
+
+	// An extract of the email's body with the matching words wrapped in <mark>
+	// tags, or null if nothing in it matched.
+	Preview *string `json:"preview,omitzero"`
+}
+
+// SearchSnippetGetArguments holds the arguments of the SearchSnippet/get
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:mail.
+type SearchSnippetGetArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The filter the search used, which is what the snippets are cut around.
+	Filter any `json:"filter,omitzero"`
+
+	// The ids of the emails to return snippets for.
+	EmailIDs []ID `json:"emailIds,omitzero"`
+}
+
+// SearchSnippetGetResponse holds the response to the SearchSnippet/get
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:mail.
+type SearchSnippetGetResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The snippets that were generated, one per email that was found.
+	List []SearchSnippet `json:"list"`
+
+	// The ids that were requested but do not exist.
+	NotFound []ID `json:"notFound"`
+}
+
 // Thread is a set of emails the server considers to be one conversation.
 //
 // A request using this type must declare urn:ietf:params:jmap:mail.
@@ -1115,4 +1887,135 @@ type ThreadGetResponse struct {
 
 	// The ids that were requested but do not exist.
 	NotFound []ID `json:"notFound"`
+}
+
+// VacationResponse is the automatic reply the server sends on the user's
+// behalf while they are away. An account has exactly one, whose id is always
+// "singleton".
+//
+// A request using this type must declare
+// urn:ietf:params:jmap:vacationresponse.
+type VacationResponse struct {
+	// The id of the vacation response, which is always "singleton".
+	//
+	// The server sets this property; it may not be set by the client.
+	ID ID `json:"id,omitzero"`
+
+	// Whether the server is sending the response.
+	IsEnabled bool `json:"isEnabled,omitzero"`
+
+	// When to start sending the response, or null to start as soon as it is
+	// enabled.
+	FromDate *UTCDate `json:"fromDate,omitzero"`
+
+	// When to stop sending the response, or null to keep sending it until it is
+	// disabled.
+	ToDate *UTCDate `json:"toDate,omitzero"`
+
+	// The Subject header field of the response, or null to let the server choose
+	// one.
+	Subject *string `json:"subject,omitzero"`
+
+	// The plain-text body of the response.
+	TextBody *string `json:"textBody,omitzero"`
+
+	// The HTML body of the response.
+	HTMLBody *string `json:"htmlBody,omitzero"`
+}
+
+// VacationResponseGetArguments holds the arguments of the
+// VacationResponse/get method.
+//
+// A request using this type must declare
+// urn:ietf:params:jmap:vacationresponse.
+type VacationResponseGetArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The ids of the records to fetch, or null to fetch all of them.
+	IDs []ID `json:"ids,omitzero"`
+
+	// The properties to include in each returned record, or null for all of
+	// them. The id property is always returned.
+	Properties []string `json:"properties,omitzero"`
+}
+
+// VacationResponseGetResponse holds the response to the VacationResponse/get
+// method.
+//
+// A request using this type must declare
+// urn:ietf:params:jmap:vacationresponse.
+type VacationResponseGetResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// A string encoding the current state of the type on the server, for use
+	// with VacationResponse/changes.
+	State string `json:"state"`
+
+	// The records that were found, in an undefined order.
+	List []VacationResponse `json:"list"`
+
+	// The ids that were requested but do not exist.
+	NotFound []ID `json:"notFound"`
+}
+
+// VacationResponseSetArguments holds the arguments of the
+// VacationResponse/set method.
+//
+// A request using this type must declare
+// urn:ietf:params:jmap:vacationresponse.
+type VacationResponseSetArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The state the changes are expected to apply to. The call fails with a
+	// stateMismatch error if the server has moved on.
+	IfInState *string `json:"ifInState,omitzero"`
+
+	// A map of creation id to the record to create. A creation id may be
+	// referenced elsewhere in the same request as "#" followed by the id.
+	Create map[ID]VacationResponse `json:"create,omitzero"`
+
+	// A map of record id to the patch to apply to it.
+	Update map[ID]PatchObject `json:"update,omitzero"`
+
+	// The ids of the records to destroy.
+	Destroy []ID `json:"destroy,omitzero"`
+}
+
+// VacationResponseSetResponse holds the response to the VacationResponse/set
+// method.
+//
+// A request using this type must declare
+// urn:ietf:params:jmap:vacationresponse.
+type VacationResponseSetResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The state before these changes were applied, if the server tracks it.
+	OldState *string `json:"oldState"`
+
+	// The state after these changes were applied.
+	NewState string `json:"newState"`
+
+	// A map of creation id to the properties the server assigned to each created
+	// record.
+	Created map[ID]*VacationResponse `json:"created"`
+
+	// A map of record id to any properties the server changed beyond those the
+	// patch set.
+	Updated map[ID]*VacationResponse `json:"updated"`
+
+	// The ids of the records that were destroyed.
+	Destroyed []ID `json:"destroyed"`
+
+	// A map of creation id to the reason the record could not be created.
+	NotCreated map[ID]SetError `json:"notCreated"`
+
+	// A map of record id to the reason the record could not be updated.
+	NotUpdated map[ID]SetError `json:"notUpdated"`
+
+	// A map of record id to the reason the record could not be destroyed.
+	NotDestroyed map[ID]SetError `json:"notDestroyed"`
 }

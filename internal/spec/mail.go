@@ -5,6 +5,215 @@ func registerMail(s *Spec) {
 	registerMailbox(s)
 	registerThread(s)
 	registerEmail(s)
+	registerEmailImport(s)
+	registerEmailParse(s)
+	registerSearchSnippet(s)
+}
+
+// registerEmailImport adds Email/import, RFC 8621, Section 4.8. It creates
+// emails from blobs that already hold a complete message, which is not
+// something Email/set can do.
+func registerEmailImport(s *Spec) {
+	s.AddObject(&Object{
+		Name:       "EmailImport",
+		Capability: CapabilityMail,
+		Doc:        "EmailImport is one message to import, naming the blob holding it and where it should land.",
+		Fields: []*Field{
+			{Name: "blobId", Type: "Id", Doc: "The id of the blob holding the raw RFC 5322 message."},
+			{Name: "mailboxIds", Type: "Id[Boolean]", Doc: "The mailboxes to file the imported email in."},
+			{Name: "keywords", Type: "String[Boolean]", Doc: "The keywords to set on the imported email."},
+			{
+				Name: "receivedAt",
+				Type: "UTCDate",
+				Doc:  "The time to record as the email's receivedAt, defaulting to when the import happens.",
+			},
+		},
+	})
+	args := s.AddObject(&Object{
+		Name:       "EmailImportArguments",
+		Capability: CapabilityMail,
+		Kind:       KindArguments,
+		Doc:        "EmailImportArguments holds the arguments of the Email/import method.",
+		Fields: []*Field{
+			accountIDField(),
+			{
+				Name: "ifInState",
+				Type: "String|null",
+				Doc:  "The state the emails are expected to be in. The call fails with a stateMismatch error if the server has moved on.",
+			},
+			{
+				Name: "emails",
+				Type: "Id[EmailImport]",
+				Doc:  "The messages to import, keyed by creation id.",
+			},
+		},
+	})
+	resp := s.AddObject(&Object{
+		Name:       "EmailImportResponse",
+		Capability: CapabilityMail,
+		Kind:       KindResponse,
+		Doc:        "EmailImportResponse holds the response to the Email/import method.",
+		Fields: []*Field{
+			accountIDField(),
+			{Name: "oldState", Type: "String|null", Doc: "The state before the import."},
+			{Name: "newState", Type: "String", Doc: "The state after the import."},
+			{
+				Name: "created",
+				Type: "Id[Email]|null",
+				Doc:  "A map of creation id to the properties the server assigned to each imported email.",
+			},
+			{
+				Name: "notCreated",
+				Type: "Id[SetError]|null",
+				Doc:  "A map of creation id to the reason the message could not be imported.",
+			},
+		},
+	})
+	s.AddMethod(&Method{
+		Name:       "Email/import",
+		Capability: CapabilityMail,
+		Doc:        "Creates emails from blobs that already hold a complete RFC 5322 message, which is how mail is moved in from another system.",
+		Arguments:  args.Name,
+		Response:   resp.Name,
+		DataType:   "Email",
+	})
+}
+
+// registerEmailParse adds Email/parse, RFC 8621, Section 4.9. It reads a blob
+// as a message without filing it anywhere, which is how an attached message is
+// shown.
+func registerEmailParse(s *Spec) {
+	args := s.AddObject(&Object{
+		Name:       "EmailParseArguments",
+		Capability: CapabilityMail,
+		Kind:       KindArguments,
+		Doc:        "EmailParseArguments holds the arguments of the Email/parse method.",
+		Fields: []*Field{
+			accountIDField(),
+			{Name: "blobIds", Type: "Id[]", Doc: "The ids of the blobs to parse as messages."},
+			{
+				Name: "properties",
+				Type: "String[]|null",
+				Doc:  "The properties to include in each parsed email, or null for the default set.",
+			},
+			{
+				Name: "bodyProperties",
+				Type: "String[]|null",
+				Doc:  "The properties to include for each EmailBodyPart returned.",
+			},
+			{
+				Name:    "fetchTextBodyValues",
+				Type:    "Boolean",
+				Default: "false",
+				Doc:     "Whether to populate bodyValues for the parts listed in textBody.",
+			},
+			{
+				Name:    "fetchHTMLBodyValues",
+				Type:    "Boolean",
+				Default: "false",
+				Doc:     "Whether to populate bodyValues for the parts listed in htmlBody.",
+			},
+			{
+				Name:    "fetchAllBodyValues",
+				Type:    "Boolean",
+				Default: "false",
+				Doc:     "Whether to populate bodyValues for every textual body part.",
+			},
+			{
+				Name: "maxBodyValueBytes",
+				Type: "UnsignedInt",
+				Doc:  "The maximum number of octets to return for each body value, truncating longer ones.",
+			},
+		},
+	})
+	resp := s.AddObject(&Object{
+		Name:       "EmailParseResponse",
+		Capability: CapabilityMail,
+		Kind:       KindResponse,
+		Doc:        "EmailParseResponse holds the response to the Email/parse method.",
+		Fields: []*Field{
+			accountIDField(),
+			{
+				Name: "parsed",
+				Type: "Id[Email]|null",
+				Doc:  "A map of blob id to the email parsed from it. The email has no id, mailboxIds, keywords, or receivedAt, because it is not a record in the account.",
+			},
+			{
+				Name: "notParsable",
+				Type: "Id[]|null",
+				Doc:  "The ids of the blobs that exist but do not hold a message the server could parse.",
+			},
+			{Name: "notFound", Type: "Id[]|null", Doc: "The ids of the blobs that do not exist."},
+		},
+	})
+	s.AddMethod(&Method{
+		Name:               "Email/parse",
+		Capability:         CapabilityMail,
+		Doc:                "Reads blobs as RFC 5322 messages without filing them in the account, which is how a message sent as an attachment is displayed.",
+		Arguments:          args.Name,
+		Response:           resp.Name,
+		DataType:           "Email",
+		PropertiesArgument: "properties",
+	})
+}
+
+// registerSearchSnippet adds SearchSnippet/get, RFC 8621, Section 5. It takes a
+// filter rather than only ids, because a snippet only means anything in the
+// context of the search that produced it.
+func registerSearchSnippet(s *Spec) {
+	s.AddObject(&Object{
+		Name:       "SearchSnippet",
+		Capability: CapabilityMail,
+		Doc:        "SearchSnippet is the part of an email that matched a search, with the matching words marked up for display.",
+		Fields: []*Field{
+			{Name: "emailId", Type: "Id", Doc: "The id of the email the snippet is from."},
+			{
+				Name: "subject",
+				Type: "String|null",
+				Doc:  "The email's subject with the matching words wrapped in <mark> tags, or null if nothing in it matched.",
+			},
+			{
+				Name: "preview",
+				Type: "String|null",
+				Doc:  "An extract of the email's body with the matching words wrapped in <mark> tags, or null if nothing in it matched.",
+			},
+		},
+	})
+	args := s.AddObject(&Object{
+		Name:       "SearchSnippetGetArguments",
+		Capability: CapabilityMail,
+		Kind:       KindArguments,
+		Doc:        "SearchSnippetGetArguments holds the arguments of the SearchSnippet/get method.",
+		Fields: []*Field{
+			accountIDField(),
+			{
+				Name: "filter",
+				Type: queryFilterType("Email"),
+				Doc:  "The filter the search used, which is what the snippets are cut around.",
+			},
+			{Name: "emailIds", Type: "Id[]", Doc: "The ids of the emails to return snippets for."},
+		},
+	})
+	resp := s.AddObject(&Object{
+		Name:       "SearchSnippetGetResponse",
+		Capability: CapabilityMail,
+		Kind:       KindResponse,
+		Doc:        "SearchSnippetGetResponse holds the response to the SearchSnippet/get method.",
+		Fields: []*Field{
+			accountIDField(),
+			{Name: "list", Type: "SearchSnippet[]", Doc: "The snippets that were generated, one per email that was found."},
+			{Name: "notFound", Type: "Id[]|null", Doc: "The ids that were requested but do not exist."},
+		},
+	})
+	s.AddMethod(&Method{
+		Name:           "SearchSnippet/get",
+		Capability:     CapabilityMail,
+		Doc:            "Returns the parts of the given emails that matched a search, marked up for display.",
+		Arguments:      args.Name,
+		Response:       resp.Name,
+		DataType:       "SearchSnippet",
+		ResultProperty: "list",
+	})
 }
 
 func registerMailbox(s *Spec) {

@@ -255,3 +255,107 @@ func TestParseAcceptsCreationIDs(t *testing.T) {
       ]
     }`)
 }
+
+// TestPatchObjectIsChecked covers the members of a PatchObject, whose keys are
+// JSON pointers into the record being patched. Nothing in the type of a
+// PatchObject says what it patches, so the catalogue records that on the
+// argument carrying it; without that, a misspelled pointer would reach the
+// server as a property nothing reads.
+func TestPatchObjectIsChecked(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want string
+	}{{
+		name: "misspelled property",
+		src:  `{"methodCalls": [["Email/set", {"update": {"e1": {"mailboxIDs/m1": true}}}, "c0"]]}`,
+		want: `Email has no property "mailboxIDs"`,
+	}, {
+		name: "wrong value type",
+		src:  `{"methodCalls": [["Email/set", {"update": {"e1": {"keywords/$seen": "yes"}}}, "c0"]]}`,
+		want: `expected Boolean|null, found a string`,
+	}, {
+		name: "pointer into a scalar",
+		src:  `{"methodCalls": [["Email/set", {"update": {"e1": {"subject/x": "a"}}}, "c0"]]}`,
+		want: `cannot look inside String|null`,
+	}, {
+		name: "misspelled property in a submission side effect",
+		src: `{"methodCalls": [["EmailSubmission/set", {
+			"onSuccessUpdateEmail": {"#send": {"keywrds/$draft": null}}
+		}, "c0"]]}`,
+		want: `Email has no property "keywrds"`,
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseErr(t, tt.src)
+			if !strings.Contains(got, tt.want) {
+				t.Errorf("error was:\n%s\nwant it to mention: %s", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestPatchObjectAllowsRemoval checks that null is accepted anywhere in a patch,
+// because in a patch it means "remove this" rather than "set this to null".
+func TestPatchObjectAllowsRemoval(t *testing.T) {
+	parse(t, "Unfile"+Extension, `{"methodCalls": [
+	  ["Email/set", {"update": {"{{emailId}}": {
+	    "mailboxIds/{{fromMailboxId}}": null,
+	    "mailboxIds/{{toMailboxId}}": true,
+	    "keywords/$seen": null
+	  }}}, "c0"]
+	]}`)
+}
+
+// TestPatchPointerParametersAreTyped checks that a parameter standing in for a
+// segment of a patch pointer takes the type that segment selects by, so that it
+// agrees with the same parameter used elsewhere.
+func TestPatchPointerParametersAreTyped(t *testing.T) {
+	q := parse(t, "Refile"+Extension, `{"methodCalls": [
+	  ["Email/set", {
+	    "create": {"draft": {"mailboxIds": {"{{mailboxId}}": true}}},
+	    "update": {"e1": {"mailboxIds/{{mailboxId}}": true}}
+	  }, "c0"]
+	]}`)
+	if len(q.Params) != 1 {
+		t.Fatalf("got %d parameters, want 1", len(q.Params))
+	}
+	if got := q.Params[0].GoType("jmapc."); got != "jmapc.ID" {
+		t.Errorf("mailboxId is %s, want jmapc.ID", got)
+	}
+}
+
+// TestPatchPointerParameterAloneIsAString checks that a parameter naming a
+// property, where nothing says what that property is, still generates something
+// usable rather than failing.
+func TestPatchPointerParameterAloneIsAString(t *testing.T) {
+	q := parse(t, "SetKeyword"+Extension, `{"methodCalls": [
+	  ["Email/set", {"update": {"e1": {"keywords/{{keyword}}": true}}}, "c0"]
+	]}`)
+	if got := q.Params[0].GoType("jmapc."); got != "string" {
+		t.Errorf("keyword is %s, want string", got)
+	}
+}
+
+// TestEchoTakesAnyArguments checks that Core/echo accepts whatever it is given,
+// since its whole purpose is to hand it back.
+func TestEchoTakesAnyArguments(t *testing.T) {
+	parse(t, "Ping"+Extension, `{"methodCalls": [
+	  ["Core/echo", {"anything": [1, "two", {"three": true}], "value": "{{value}}"}, "c0"]
+	]}`)
+}
+
+// TestSubmissionQuery covers a query that spans two capabilities, checking that
+// both are declared.
+func TestSubmissionQuery(t *testing.T) {
+	q := parse(t, "Send"+Extension, `{"methodCalls": [
+	  ["Email/set", {"create": {"draft": {"subject": "{{subject}}"}}}, "write"],
+	  ["EmailSubmission/set", {"create": {"send": {
+	    "emailId": "#draft", "identityId": "{{identityId}}"
+	  }}}, "send"]
+	]}`)
+	want := "urn:ietf:params:jmap:core urn:ietf:params:jmap:mail urn:ietf:params:jmap:submission"
+	if got := strings.Join(q.Using, " "); got != want {
+		t.Errorf("Using = %q, want %q", got, want)
+	}
+}

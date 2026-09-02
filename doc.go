@@ -49,6 +49,13 @@
 //		Limit:     25,
 //	})
 //
+// # Blobs
+//
+// Attachments do not go through the API endpoint. [Client.Upload] and
+// [Client.Download] exchange them over plain HTTP at the URLs the session
+// advertises, and an upload larger than the server accepts fails before it is
+// sent.
+//
 // # Errors
 //
 // JMAP fails at two levels, and so does this package. A request-level failure,

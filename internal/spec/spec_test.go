@@ -209,3 +209,64 @@ func TestMethodGoName(t *testing.T) {
 		}
 	}
 }
+
+// TestStandardCatalogueCovers pins down which methods the catalogue knows, so
+// that one going missing is a test failure rather than a puzzling "unknown
+// method" from the generator.
+func TestStandardCatalogueCovers(t *testing.T) {
+	want := []string{
+		"Blob/copy",
+		"Core/echo",
+		"Email/changes", "Email/copy", "Email/get", "Email/import", "Email/parse",
+		"Email/query", "Email/queryChanges", "Email/set",
+		"EmailSubmission/changes", "EmailSubmission/get", "EmailSubmission/query",
+		"EmailSubmission/queryChanges", "EmailSubmission/set",
+		"Identity/changes", "Identity/get", "Identity/set",
+		"Mailbox/changes", "Mailbox/get", "Mailbox/query", "Mailbox/queryChanges", "Mailbox/set",
+		"SearchSnippet/get",
+		"Thread/changes", "Thread/get",
+		"VacationResponse/get", "VacationResponse/set",
+	}
+	got := Standard().MethodNames()
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("the catalogue holds:\n%s\n\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// TestCapabilitiesAreDeclared checks that each method is tied to the capability
+// a request has to declare in order to call it.
+func TestCapabilitiesAreDeclared(t *testing.T) {
+	s := Standard()
+	want := map[string]string{
+		"Core/echo":            CapabilityCore,
+		"Blob/copy":            CapabilityCore,
+		"Email/get":            CapabilityMail,
+		"SearchSnippet/get":    CapabilityMail,
+		"Identity/get":         CapabilitySubmission,
+		"EmailSubmission/set":  CapabilitySubmission,
+		"VacationResponse/set": CapabilityVacation,
+	}
+	for name, capability := range want {
+		m, ok := s.Method(name)
+		if !ok {
+			t.Errorf("method %q is not registered", name)
+			continue
+		}
+		if m.Capability != capability {
+			t.Errorf("%s needs %q, want %q", name, m.Capability, capability)
+		}
+	}
+}
+
+// TestEchoTakesAnything checks that Core/echo is registered with no declared
+// arguments, which is what lets a query pass it whatever it likes.
+func TestEchoTakesAnything(t *testing.T) {
+	s := Standard()
+	args, err := s.ArgumentsOf("Core/echo")
+	if err != nil {
+		t.Fatalf("Core/echo: %v", err)
+	}
+	if len(args.Fields) != 0 {
+		t.Errorf("Core/echo declares %d arguments, want none", len(args.Fields))
+	}
+}

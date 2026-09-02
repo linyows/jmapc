@@ -18,6 +18,12 @@ import (
 // leading "$", as in "$seen" and "$flagged".
 var paramPattern = regexp.MustCompile(`^\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}$`)
 
+// embeddedParamPattern finds a parameter anywhere within a member name. A value
+// has to be a parameter outright, because its type comes from the argument it
+// fills, but a name is text and may be built from pieces: a patch pointing at
+// "mailboxIds/{{mailboxId}}" names a property the caller chooses.
+var embeddedParamPattern = regexp.MustCompile(`\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}`)
+
 // value checks one JSON value against the type the JMAP data model says it must
 // have, and returns the node the generator will emit for it.
 func (c *checker) value(t *spec.Type, raw json.RawMessage, where, doc string) Node {
@@ -25,7 +31,7 @@ func (c *checker) value(t *spec.Type, raw json.RawMessage, where, doc string) No
 
 	if s, isString := stringValue(raw); isString {
 		if m := paramPattern.FindStringSubmatch(s); m != nil {
-			return &ParamRef{Param: c.params.use(c, m[1], t, where, doc)}
+			return &ParamRef{Param: c.params.use(c, m[1], t, where, doc, false)}
 		}
 		if strings.Contains(s, "{{") {
 			c.errorf(where, "write the whole value as {{name}}",
@@ -151,16 +157,13 @@ func (c *checker) mapValue(t *spec.Type, raw json.RawMessage, where, doc string)
 	}
 	out := &Object{Raw: raw}
 	for _, key := range keys {
-		field := ObjectField{Key: key}
-		if m := paramPattern.FindStringSubmatch(key); m != nil {
-			// The member name itself is left open, which is how a /set call
-			// updates or destroys whichever record the caller names.
-			keyType := t.Key
-			if keyType == nil {
-				keyType = &spec.Type{Name: spec.String}
-			}
-			field.KeyParam = c.params.use(c, m[1], keyType, where+"."+key, keyDoc(keyType))
-		} else if t.Key != nil && t.Key.Name == spec.IdType && !isCreationID(key) && !jmapc.ID(key).Valid() {
+		keyType := t.Key
+		if keyType == nil {
+			keyType = &spec.Type{Name: spec.String}
+		}
+		field := ObjectField{Key: key, KeySegments: c.keySegments(key, keyType, where, doc)}
+		if field.KeySegments == nil && keyType.Name == spec.IdType &&
+			!isCreationID(key) && !jmapc.ID(key).Valid() {
 			c.errorf(where+"."+key, "", "%q is not a valid id", key)
 		}
 		field.Value = c.value(t.Value, members[key], where+"."+key, doc)
@@ -182,16 +185,10 @@ func (c *checker) object(t *spec.Type, raw json.RawMessage, where string) Node {
 	}
 
 	// A PatchObject is keyed by JSON pointer rather than by property name, so
-	// its members cannot be checked against a fixed set.
+	// its members are resolved against the type being patched instead of
+	// against a fixed set of properties.
 	if len(o.Fields) == 0 {
-		out := &Object{Raw: raw}
-		for _, key := range keys {
-			out.Fields = append(out.Fields, ObjectField{
-				Key:   key,
-				Value: c.anyValue(members[key]),
-			})
-		}
-		return out
+		return c.patchObject(members, keys, raw, where)
 	}
 
 	out := &Object{Raw: raw}
@@ -320,6 +317,41 @@ func keyDoc(keyType *spec.Type) string {
 	return "The key this entry is stored under."
 }
 
+// keySegments splits a member name into its literal and parameter parts, and
+// returns nil when the name holds no parameter at all.
+//
+// A keyType of nil means the name itself says nothing about what the parameter
+// is, so it is recorded weakly: another use of the same parameter, somewhere
+// that does say, settles its type.
+func (c *checker) keySegments(key string, keyType *spec.Type, where, doc string) []KeySegment {
+	matches := embeddedParamPattern.FindAllStringSubmatchIndex(key, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+	weak := keyType == nil
+	if weak {
+		keyType = &spec.Type{Name: spec.String}
+		doc = "The name of the property this patch applies to."
+	} else {
+		doc = keyDoc(keyType)
+	}
+	var segments []KeySegment
+	last := 0
+	for _, m := range matches {
+		if m[0] > last {
+			segments = append(segments, KeySegment{Text: key[last:m[0]]})
+		}
+		segments = append(segments, KeySegment{
+			Param: c.params.use(c, key[m[2]:m[3]], keyType, where+"."+key, doc, weak),
+		})
+		last = m[1]
+	}
+	if last < len(key) {
+		segments = append(segments, KeySegment{Text: key[last:]})
+	}
+	return segments
+}
+
 // isCreationID reports whether s is a reference to a record created earlier in
 // the same request, which RFC 8620, Section 5.3, writes as "#" followed by the
 // creation id.
@@ -445,3 +477,101 @@ func stringValue(raw json.RawMessage) (string, bool) {
 
 // sortStrings sorts a slice of strings in place.
 func sortStrings(s []string) { sort.Strings(s) }
+
+// patchObject checks the members of a PatchObject: each key is a JSON pointer
+// into the record being patched, and each value is what that pointer should be
+// set to, or null to remove it.
+//
+// Without knowing what is being patched there is nothing to check, and a typo
+// like "mailboxIds/xxx" spelled "mailboxIDs/xxx" would go to the server as a
+// property nothing reads. The catalogue records the target on the argument that
+// carries the patch, and c.patchTarget carries it down to here.
+func (c *checker) patchObject(members map[string]json.RawMessage, keys []string, raw json.RawMessage, where string) Node {
+	out := &Object{Raw: raw}
+	for _, key := range keys {
+		field := ObjectField{Key: key}
+		segments := strings.Split(strings.TrimPrefix(key, "/"), "/")
+		unknown := make([]bool, len(segments))
+		for i, seg := range segments {
+			unknown[i] = embeddedParamPattern.MatchString(seg)
+		}
+
+		valueType := &spec.Type{Name: spec.Any}
+		var keyTypes []*spec.Type
+		if c.patchTarget != "" {
+			resolved, value, err := c.spec.ResolvePatch(c.patchTarget, segments, unknown)
+			if err != nil {
+				c.errorf(where+"."+key, "", "%v", err)
+				continue
+			}
+			keyTypes, valueType = resolved, value
+		}
+
+		field.KeySegments = c.patchKeySegments(segments, keyTypes, where+"."+key)
+		// null in a patch means "remove this", so it is allowed wherever a value
+		// is, whether or not the property itself may hold null.
+		removable := *valueType
+		removable.Nullable = true
+		field.Value = c.value(&removable, members[key], where+"."+key, "")
+		out.Fields = append(out.Fields, field)
+	}
+	return out
+}
+
+// patchKeySegments turns the segments of a patch pointer into the pieces the
+// generator joins back together, recording a parameter for each one a query
+// left open. A segment's type comes from what the pointer selects by at that
+// depth, so a parameter naming a mailbox in "mailboxIds/{{id}}" is an Id, the
+// same as it would be anywhere else.
+func (c *checker) patchKeySegments(segments []string, keyTypes []*spec.Type, where string) []KeySegment {
+	var out []KeySegment
+	var found bool
+	for i, seg := range segments {
+		if i > 0 {
+			out = append(out, KeySegment{Text: "/"})
+		}
+		matches := embeddedParamPattern.FindAllStringSubmatchIndex(seg, -1)
+		if len(matches) == 0 {
+			out = append(out, KeySegment{Text: seg})
+			continue
+		}
+		found = true
+		segType, weak := &spec.Type{Name: spec.String}, true
+		if i < len(keyTypes) && keyTypes[i] != nil && keyTypes[i].Name != spec.Any {
+			segType, weak = keyTypes[i], false
+		}
+		last := 0
+		for _, m := range matches {
+			if m[0] > last {
+				out = append(out, KeySegment{Text: seg[last:m[0]]})
+			}
+			out = append(out, KeySegment{
+				Param: c.params.use(c, seg[m[2]:m[3]], segType, where,
+					"The name of the property this patch applies to.", weak),
+			})
+			last = m[1]
+		}
+		if last < len(seg) {
+			out = append(out, KeySegment{Text: seg[last:]})
+		}
+	}
+	if !found {
+		return nil
+	}
+	return mergeTextSegments(out)
+}
+
+// mergeTextSegments joins the literal pieces that ended up next to each other,
+// so that a pointer emits as "mailboxIds/" + id rather than as three pieces
+// concatenated.
+func mergeTextSegments(segments []KeySegment) []KeySegment {
+	out := segments[:0]
+	for _, seg := range segments {
+		if seg.Param == nil && len(out) > 0 && out[len(out)-1].Param == nil {
+			out[len(out)-1].Text += seg.Text
+			continue
+		}
+		out = append(out, seg)
+	}
+	return out
+}

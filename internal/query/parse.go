@@ -139,6 +139,10 @@ type checker struct {
 	// the conditions nested inside a FilterOperator can be checked against the
 	// data type being queried instead of being waved through as Any.
 	filterUnion *spec.Type
+
+	// patchTarget names the data type that the PatchObjects being checked
+	// apply to, carried down from the argument that holds them.
+	patchTarget string
 }
 
 // errorf records a problem and returns it, so that a hint can be chained on.
@@ -241,9 +245,14 @@ func (c *checker) arguments(call *Call, argsType *spec.Object, raw json.RawMessa
 
 		field, known := argsType.Field(name)
 		if !known {
-			c.errorf(where+"."+key, hintFor(name, argsType.PropertyNames()),
-				"%s has no argument %q", call.Method.Name, name)
-			continue
+			if len(argsType.Fields) > 0 {
+				c.errorf(where+"."+key, hintFor(name, argsType.PropertyNames()),
+					"%s has no argument %q", call.Method.Name, name)
+				continue
+			}
+			// The method takes whatever it is given, as Core/echo does, so
+			// there is no declared type to check the value against.
+			field = &spec.Field{Name: name, Type: spec.Any}
 		}
 		if key != name {
 			ref := c.resultRef(call, field, members[key], where+"."+key)
@@ -252,7 +261,12 @@ func (c *checker) arguments(call *Call, argsType *spec.Object, raw json.RawMessa
 			}
 			continue
 		}
+		saved := c.patchTarget
+		if field.PatchTarget != "" {
+			c.patchTarget = field.PatchTarget
+		}
 		node := c.value(field.ParsedType(), members[key], where+"."+key, field.Doc)
+		c.patchTarget = saved
 		out.Fields = append(out.Fields, ObjectField{Key: key, Value: node})
 	}
 	return out

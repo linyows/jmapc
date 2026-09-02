@@ -182,9 +182,10 @@ func (s *Spec) registerSet(dataType, capability string) {
 				Doc:  "A map of creation id to the record to create. A creation id may be referenced elsewhere in the same request as \"#\" followed by the id.",
 			},
 			{
-				Name: "update",
-				Type: "Id[PatchObject]|null",
-				Doc:  "A map of record id to the patch to apply to it.",
+				Name:        "update",
+				Type:        "Id[PatchObject]|null",
+				PatchTarget: dataType,
+				Doc:         "A map of record id to the patch to apply to it.",
 			},
 			{
 				Name: "destroy",

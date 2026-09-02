@@ -90,6 +90,40 @@ for _, email := range res.List {
 asked for and nothing else. Ask for another property and the struct grows; ask
 for one that does not exist and the build fails, with a suggestion.
 
+### One request, several steps
+
+The example below is what JMAP is for. Writing a message, submitting it, and
+moving it out of Drafts are three operations that must not come apart, and here
+they are one request:
+
+```jsonc
+// queries/SendEmail.jmap.json
+{
+  "methodCalls": [
+    ["Email/set", {
+      "create": {"draft": { /* ... */ }}
+    }, "write"],
+
+    ["EmailSubmission/set", {
+      "create": {"send": {"emailId": "#draft", "identityId": "{{identityId}}"}},
+      "onSuccessUpdateEmail": {
+        "#send": {
+          "mailboxIds/{{draftsMailboxId}}": null,
+          "mailboxIds/{{sentMailboxId}}": true,
+          "keywords/$draft": null
+        }
+      }
+    }, "send"]
+  ],
+  "returns": "send"
+}
+```
+
+`#draft` refers to the message the first call creates, before the server has
+given it an id. The pointers in the patch are checked against `Email`, so
+`mailboxIds` misspelled is a build failure, and both mailbox parameters come out
+as `jmapc.ID` because that is what the pointer selects by.
+
 ## Writing a query
 
 A query file is a JMAP Request object, exactly as
@@ -140,6 +174,8 @@ Everything below is a compile-time failure rather than a server round trip:
 - filter conditions are checked against the type being queried, including the
   ones nested inside `AND`, `OR`, and `NOT` operators
 - `properties` names properties the type has
+- a `PatchObject` points at properties the record being patched actually has,
+  and sets them to values of the right type
 - ids, dates, and integers are well formed
 - the capabilities the request declares cover the methods it calls
 
@@ -180,13 +216,42 @@ can, so the response comes back alongside the error, and each error names the
 method and call id that failed rather than the bare `"error"` the wire format
 carries.
 
+## Blobs
+
+Attachments do not travel through the API endpoint. They are uploaded and
+downloaded over plain HTTP, at the URLs the session advertises, and the runtime
+handles both:
+
+```go
+info, err := c.Upload(ctx, accountID, "application/pdf", file)
+// info.BlobID now goes into an Email/set that attaches it.
+
+blob, err := c.Download(ctx, accountID, part.BlobID, &jmapc.DownloadOptions{
+	Name: *part.Name,
+	Type: part.Type,
+})
+defer blob.Close()
+```
+
+An upload larger than the server said it accepts fails before it is sent.
+
 ## Coverage
 
-The data model covers [RFC 8620](https://www.rfc-editor.org/rfc/rfc8620) (JMAP
-core) and the `Mailbox`, `Thread`, and `Email` types of
-[RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) (JMAP for Mail), with the
-standard `/get`, `/changes`, `/set`, `/copy`, `/query`, and `/queryChanges`
-methods.
+The data model covers:
+
+- **[RFC 8620](https://www.rfc-editor.org/rfc/rfc8620), JMAP core** — the six
+  standard methods (`/get`, `/changes`, `/set`, `/copy`, `/query`,
+  `/queryChanges`), plus `Core/echo` and `Blob/copy`.
+- **[RFC 8621](https://www.rfc-editor.org/rfc/rfc8621), JMAP for Mail** —
+  `Mailbox`, `Thread`, `Email`, and `SearchSnippet`, with `Email/import` and
+  `Email/parse`.
+- **Submission** — `Identity` and `EmailSubmission`, including the
+  `onSuccessUpdateEmail` side effect that files a message under Sent as part of
+  sending it.
+- **Vacation responses** — `VacationResponse`.
+
+That is 28 methods in all. `internal/spec` is a plain Go declaration of the
+data model, so adding a vendor type is a matter of registering it.
 
 The runtime types in `types_gen.go` are generated from the same catalogue the
 queries are checked against, so the two cannot drift apart.

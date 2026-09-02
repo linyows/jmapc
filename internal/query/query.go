@@ -73,6 +73,10 @@ type Param struct {
 	Where string
 	// Doc is the documentation of the argument the parameter stands in for.
 	Doc string
+	// Weak marks a parameter whose type came from a use that did not really
+	// know it, such as a name embedded in a JSON pointer. The first use that
+	// does know settles the type.
+	Weak bool
 }
 
 // GoType returns the Go type of the parameter. A parameter always carries a
@@ -119,11 +123,21 @@ type ObjectField struct {
 	// Key is the member name as written, including the leading "#" of a back
 	// reference.
 	Key string
-	// KeyParam is set when the member name itself is a parameter, which is how
-	// a /set call updates the record the caller names.
-	KeyParam *Param
+	// KeySegments is set when the member name is built from parameters, which
+	// is how a /set names the record to update, or how a patch points into a
+	// property keyed by id. It is nil when the name is a constant.
+	KeySegments []KeySegment
 	// Value is the member's value.
 	Value Node
+}
+
+// KeySegment is one piece of a member name: either literal text or a parameter
+// standing in for it.
+type KeySegment struct {
+	// Text is the literal text of the segment, empty for a parameter.
+	Text string
+	// Param is the parameter the segment stands for, nil for literal text.
+	Param *Param
 }
 
 // Array is a JSON array whose elements may depend on parameters.
@@ -162,7 +176,7 @@ func (*ResultRef) HasParam() bool {
 
 func (o *Object) HasParam() bool {
 	for _, f := range o.Fields {
-		if f.KeyParam != nil || f.Value.HasParam() {
+		if len(f.KeySegments) > 0 || f.Value.HasParam() {
 			return true
 		}
 	}

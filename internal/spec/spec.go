@@ -57,6 +57,10 @@ type Field struct {
 	// Default records the value the server assumes when the property is
 	// omitted from a method call's arguments.
 	Default string
+	// PatchTarget names the data type that the PatchObjects in this field
+	// apply to. The type of a PatchObject says nothing about what it patches,
+	// so without this a patch could not be checked at all.
+	PatchTarget string
 
 	parsed *Type
 }
@@ -303,4 +307,57 @@ func (s *Spec) walk(t *Type, tokens []string, path string) (*Type, error) {
 func unescapePointer(token string) string {
 	token = strings.ReplaceAll(token, "~1", "/")
 	return strings.ReplaceAll(token, "~0", "~")
+}
+
+// ResolvePatch resolves the JSON pointer that keys one member of a PatchObject
+// against the data type being patched, and reports the type each segment of the
+// pointer selects by, along with the type of the value at the end.
+//
+// unknown marks the segments a parameter stands in for. A parameter in place of
+// a property name leaves everything past it unknowable, so resolution stops
+// there and the rest is Any.
+func (s *Spec) ResolvePatch(dataType string, segments []string, unknown []bool) (keyTypes []*Type, value *Type, err error) {
+	keyTypes = make([]*Type, len(segments))
+	cur := &Type{Name: dataType}
+	anyType := &Type{Name: Any}
+
+	for i, seg := range segments {
+		seg = unescapePointer(seg)
+		switch {
+		case cur.Name == Any || cur.IsUnion():
+			keyTypes[i] = anyType
+			cur = anyType
+
+		case cur.IsArray():
+			keyTypes[i] = &Type{Name: UnsignedInt}
+			cur = cur.Elem
+
+		case cur.IsMap():
+			keyTypes[i] = cur.Key
+			cur = cur.Value
+
+		case cur.IsObject():
+			o, ok := s.Object(cur.Name)
+			if !ok {
+				return nil, nil, fmt.Errorf("unknown type %q", cur.Name)
+			}
+			keyTypes[i] = &Type{Name: String}
+			if unknown[i] {
+				// A parameter stands where a property name belongs, so which
+				// property this is cannot be known here.
+				cur = anyType
+				break
+			}
+			f, known := o.Field(seg)
+			if !known {
+				return nil, nil, fmt.Errorf("%s has no property %q (has %s)",
+					o.Name, seg, strings.Join(o.PropertyNames(), ", "))
+			}
+			cur = f.ParsedType()
+
+		default:
+			return nil, nil, fmt.Errorf("cannot look inside %s to reach %q", cur, seg)
+		}
+	}
+	return keyTypes, cur, nil
 }

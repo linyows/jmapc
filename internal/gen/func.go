@@ -189,17 +189,26 @@ func (g *QueryGenerator) expr(n query.Node, indent string) string {
 	return "nil"
 }
 
-// keyExpr renders an object member name, which is a constant unless the query
-// left the name itself open.
+// keyExpr renders an object member name. Most names are constants, but a query
+// may build one from parameters, as a patch does when it points at a property
+// keyed by an id the caller chooses.
 func (g *QueryGenerator) keyExpr(f query.ObjectField) string {
-	if f.KeyParam == nil {
+	if len(f.KeySegments) == 0 {
 		return strconv.Quote(f.Key)
 	}
-	name := "p." + f.KeyParam.GoName
-	if f.KeyParam.GoType(g.Qualifier) == "string" {
-		return name
+	parts := make([]string, 0, len(f.KeySegments))
+	for _, seg := range f.KeySegments {
+		if seg.Param == nil {
+			parts = append(parts, strconv.Quote(seg.Text))
+			continue
+		}
+		name := "p." + seg.Param.GoName
+		if seg.Param.GoType(g.Qualifier) != "string" {
+			name = "string(" + name + ")"
+		}
+		parts = append(parts, name)
 	}
-	return "string(" + name + ")"
+	return strings.Join(parts, " + ")
 }
 
 // literalExpr renders a JSON value the query stated outright. A scalar becomes
