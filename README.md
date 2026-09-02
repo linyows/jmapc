@@ -62,6 +62,9 @@ To put it on your PATH instead:
 go install github.com/linyows/jmapc/cmd/jmapc@latest
 ```
 
+Or take a binary from the [releases](https://github.com/linyows/jmapc/releases),
+for an environment with no Go toolchain.
+
 ## Use
 
 Write a query. The file name is the name of the function to generate.

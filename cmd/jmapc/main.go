@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strings"
 
@@ -20,6 +21,11 @@ import (
 
 // ConfigName is the file jmapc reads its settings from when one is present.
 const ConfigName = "jmapc.json"
+
+// version is stamped into a release build. Built any other way — go install,
+// go tool, go run — it stays empty, and the version the module system knows
+// about is used instead.
+var version string
 
 // Config holds the settings for a run, whether they came from the config file
 // or from the command line.
@@ -50,6 +56,7 @@ const usage = `jmapc generates a typed Go client from JMAP queries.
 Usage:
 	jmapc generate [flags]   check the queries and write the generated client
 	jmapc check [flags]      check the queries without writing anything
+	jmapc version            print the version
 
 Flags:
 	-config string    settings file to read (default ` + ConfigName + ` if present)
@@ -70,6 +77,9 @@ func run(args []string) error {
 	command := args[0]
 	switch command {
 	case "generate", "check":
+	case "version", "-version", "--version":
+		fmt.Println(versionString())
+		return nil
 	case "-h", "-help", "--help", "help":
 		fmt.Print(usage)
 		return nil
@@ -144,6 +154,19 @@ func run(args []string) error {
 		return nil
 	}
 	return write(cfg, catalogue, parsed)
+}
+
+// versionString returns the version to report. A release build has it stamped
+// in; anything else asks the module system, which knows it for a binary that
+// came from a module version and says "(devel)" for one built from a checkout.
+func versionString() string {
+	if version != "" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" {
+		return info.Main.Version
+	}
+	return "(devel)"
 }
 
 // loadCatalogue returns the JMAP data model, extended with any vendor schemas
