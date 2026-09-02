@@ -101,6 +101,14 @@ jobs:
         working-directory: example/ts
         run: npx --yes -p typescript@5 tsc --noEmit
 
+      # What the runtime does when it runs, which tsc cannot say: that the
+      # headers go out, that auth wins over them, that the session is cached.
+      - name: Run the generated client against a stub
+        working-directory: example/ts
+        run: |
+          npx --yes -p typescript@5 tsc -p tsconfig.node.json
+          node dist/check.js
+
   vulncheck:
     name: govulncheck
     runs-on: ubuntu-latest
