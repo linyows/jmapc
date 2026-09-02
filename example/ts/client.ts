@@ -103,6 +103,10 @@ export type Auth = string | ((headers: Headers) => void | Promise<void>)
 export interface ClientOptions {
   // How to authenticate.
   auth?: Auth
+  // Sent on every request, for what a server asks of its clients beyond
+  // authentication: a tenant, an API version, a trace id. Applied before auth,
+  // so auth has the last word on the headers it sets.
+  headers?: HeadersInit
   // Where to POST requests, if the session's apiUrl should not be used.
   apiUrl?: string
   // What to fetch with, for a runtime whose fetch is not the global one, or
@@ -207,6 +211,9 @@ export class Client {
   private async send(url: string, init: RequestInit): Promise<globalThis.Response> {
     const headers = new Headers(init.headers)
     headers.set("Accept", "application/json")
+    // forEach rather than iteration, which asks the caller's tsconfig for
+    // dom.iterable; the client should compile under a plain dom lib.
+    new Headers(this.options.headers).forEach((value, key) => headers.set(key, value))
     const auth = this.options.auth
     if (typeof auth === "string") {
       headers.set("Authorization", `Bearer ${auth}`)
