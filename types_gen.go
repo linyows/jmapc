@@ -6192,6 +6192,238 @@ type ShareNotificationSetResponse struct {
 	NotDestroyed map[ID]SetError `json:"notDestroyed"`
 }
 
+// SieveScript is one stored filtering script. An account may have several, of
+// which at most one is running.
+//
+// A request using this type must declare urn:ietf:params:jmap:sieve.
+type SieveScript struct {
+	// The id of the script.
+	//
+	// The server sets this property; it may not be set by the client.
+	ID ID `json:"id,omitzero"`
+
+	// The user-visible name of the script, which is unique within the account.
+	// Null asks the server to choose one.
+	Name *string `json:"name,omitzero"`
+
+	// The id of the blob holding the script's text, which is uploaded before the
+	// script refers to it.
+	BlobID ID `json:"blobId,omitzero"`
+
+	// Whether this is the script the server runs. At most one script in an
+	// account is active, and it is activated through the arguments of
+	// SieveScript/set rather than by setting this.
+	//
+	// The server sets this property; it may not be set by the client.
+	//
+	// The server assumes false when this property is omitted.
+	IsActive bool `json:"isActive,omitzero"`
+}
+
+// SieveScriptFilterCondition is a condition a script must satisfy to match a
+// SieveScript/query.
+//
+// A request using this type must declare urn:ietf:params:jmap:sieve.
+type SieveScriptFilterCondition struct {
+	// Matches scripts whose name contains this string.
+	Name string `json:"name,omitzero"`
+
+	// Matches scripts according to whether they are the one running.
+	IsActive bool `json:"isActive,omitzero"`
+}
+
+// SieveScriptGetArguments holds the arguments of the SieveScript/get method.
+//
+// A request using this type must declare urn:ietf:params:jmap:sieve.
+type SieveScriptGetArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The ids of the records to fetch, or null to fetch all of them.
+	IDs []ID `json:"ids,omitzero"`
+
+	// The properties to include in each returned record, or null for all of
+	// them. The id property is always returned.
+	Properties []string `json:"properties,omitzero"`
+}
+
+// SieveScriptGetResponse holds the response to the SieveScript/get method.
+//
+// A request using this type must declare urn:ietf:params:jmap:sieve.
+type SieveScriptGetResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// A string encoding the current state of the type on the server, for use
+	// with SieveScript/changes.
+	State string `json:"state"`
+
+	// The records that were found, in an undefined order.
+	List []SieveScript `json:"list"`
+
+	// The ids that were requested but do not exist.
+	NotFound []ID `json:"notFound"`
+}
+
+// SieveScriptQueryArguments holds the arguments of the SieveScript/query
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:sieve.
+type SieveScriptQueryArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The condition records must match to be included in the results.
+	Filter any `json:"filter,omitzero"`
+
+	// The comparators to sort the results by, in order of precedence.
+	Sort []Comparator `json:"sort,omitzero"`
+
+	// The zero-based index of the first result to return. A negative value
+	// counts back from the end.
+	//
+	// The server assumes 0 when this property is omitted.
+	Position Int `json:"position,omitzero"`
+
+	// The id of a record to position the returned window relative to, instead of
+	// using position.
+	Anchor *ID `json:"anchor,omitzero"`
+
+	// The offset from the anchor at which the returned window starts.
+	//
+	// The server assumes 0 when this property is omitted.
+	AnchorOffset Int `json:"anchorOffset,omitzero"`
+
+	// The maximum number of ids to return.
+	Limit *UnsignedInt `json:"limit,omitzero"`
+
+	// Whether the server should compute the total number of matching records.
+	//
+	// The server assumes false when this property is omitted.
+	CalculateTotal bool `json:"calculateTotal,omitzero"`
+}
+
+// SieveScriptQueryResponse holds the response to the SieveScript/query
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:sieve.
+type SieveScriptQueryResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// A string encoding the current state of the query on the server, for use
+	// with SieveScript/queryChanges.
+	QueryState string `json:"queryState"`
+
+	// Whether the server can calculate changes for this query.
+	CanCalculateChanges bool `json:"canCalculateChanges"`
+
+	// The zero-based index of the first returned id in the full result list.
+	Position UnsignedInt `json:"position"`
+
+	// The ids of the matching records, in sorted order.
+	IDs []ID `json:"ids"`
+
+	// The total number of matching records, present only if calculateTotal was
+	// true.
+	Total UnsignedInt `json:"total"`
+
+	// The limit the server applied, present only if it is lower than the one
+	// requested.
+	Limit UnsignedInt `json:"limit"`
+}
+
+// SieveScriptSetArguments holds the arguments of the SieveScript/set method.
+//
+// A request using this type must declare urn:ietf:params:jmap:sieve.
+type SieveScriptSetArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The state the changes are expected to apply to. The call fails with a
+	// stateMismatch error if the server has moved on.
+	IfInState *string `json:"ifInState,omitzero"`
+
+	// A map of creation id to the record to create. A creation id may be
+	// referenced elsewhere in the same request as "#" followed by the id.
+	Create map[ID]SieveScript `json:"create,omitzero"`
+
+	// A map of record id to the patch to apply to it.
+	Update map[ID]PatchObject `json:"update,omitzero"`
+
+	// The ids of the records to destroy.
+	Destroy []ID `json:"destroy,omitzero"`
+
+	// The id of the script to activate once the other changes succeed, which may
+	// be a creation id written as "#" followed by the name it was created under.
+	OnSuccessActivateScript *ID `json:"onSuccessActivateScript,omitzero"`
+
+	// Whether to stop running whichever script is active. Where both this and
+	// onSuccessActivateScript are given, the deactivation happens first.
+	//
+	// The server assumes false when this property is omitted.
+	OnSuccessDeactivateScript bool `json:"onSuccessDeactivateScript,omitzero"`
+}
+
+// SieveScriptSetResponse holds the response to the SieveScript/set method.
+//
+// A request using this type must declare urn:ietf:params:jmap:sieve.
+type SieveScriptSetResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The state before these changes were applied, if the server tracks it.
+	OldState *string `json:"oldState"`
+
+	// The state after these changes were applied.
+	NewState string `json:"newState"`
+
+	// A map of creation id to the properties the server assigned to each created
+	// record.
+	Created map[ID]*SieveScript `json:"created"`
+
+	// A map of record id to any properties the server changed beyond those the
+	// patch set.
+	Updated map[ID]*SieveScript `json:"updated"`
+
+	// The ids of the records that were destroyed.
+	Destroyed []ID `json:"destroyed"`
+
+	// A map of creation id to the reason the record could not be created.
+	NotCreated map[ID]SetError `json:"notCreated"`
+
+	// A map of record id to the reason the record could not be updated.
+	NotUpdated map[ID]SetError `json:"notUpdated"`
+
+	// A map of record id to the reason the record could not be destroyed.
+	NotDestroyed map[ID]SetError `json:"notDestroyed"`
+}
+
+// SieveScriptValidateArguments holds the arguments of the
+// SieveScript/validate method.
+//
+// A request using this type must declare urn:ietf:params:jmap:sieve.
+type SieveScriptValidateArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The id of the blob holding the script to check.
+	BlobID ID `json:"blobId,omitzero"`
+}
+
+// SieveScriptValidateResponse holds the response to the SieveScript/validate
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:sieve.
+type SieveScriptValidateResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// What is wrong with the script, as an invalidSieve error, or null if it is
+	// valid.
+	Error *SetError `json:"error"`
+}
+
 // Thread is a set of emails the server considers to be one conversation.
 //
 // A request using this type must declare urn:ietf:params:jmap:mail.

@@ -1,0 +1,15 @@
+{
+  "_doc": "CheckSieveScript reports whether a script would parse and whether the server supports what it asks for, without storing it. It is what an editor calls while the user is still typing.",
+
+  "methodCalls": [
+    ["Blob/upload", {
+      "create": {"draft": {"data": [{"data:asText": "{{script}}"}], "type": "application/sieve"}}
+    }, "upload"],
+
+    ["SieveScript/validate", {
+      "#blobId": {"resultOf": "upload", "name": "Blob/upload", "path": "/created/draft/id"}
+    }, "check"]
+  ],
+
+  "_returns": "check"
+}

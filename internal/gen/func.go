@@ -27,6 +27,7 @@ var capabilityConstants = map[string]string{
 	spec.CapabilitySMIMEVerify:     "CapabilitySMIMEVerify",
 	spec.CapabilityBlob:            "CapabilityBlob",
 	spec.CapabilityQuota:           "CapabilityQuota",
+	spec.CapabilitySieve:           "CapabilitySieve",
 }
 
 // writeFunc writes the function that sends the query and decodes its response.

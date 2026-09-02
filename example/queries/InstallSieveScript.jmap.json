@@ -1,0 +1,26 @@
+{
+  "_doc": "InstallSieveScript uploads a filtering script, stores it, and puts it into service, in one request. If the script does not parse, nothing is stored and whatever was running keeps running: the activation only happens once the rest of the call has succeeded.",
+
+  "methodCalls": [
+    ["Blob/upload", {
+      "_comment": "A script's text is a blob, not a property, so it goes up first. The blob extension lets that happen here rather than as a separate upload.",
+      "create": {
+        "text": {
+          "data": [{"data:asText": "{{script}}"}],
+          "type": "application/sieve"
+        }
+      }
+    }, "upload"],
+
+    ["SieveScript/set", {
+      "_comment": "Both onSuccess arguments refer to the script created here, before the server has given it an id. Deactivation happens first, so there is no moment with two active scripts.",
+      "create": {
+        "filter": {"name": "{{name}}", "blobId": "#text"}
+      },
+      "onSuccessDeactivateScript": true,
+      "onSuccessActivateScript": "#filter"
+    }, "install"]
+  ],
+
+  "_returns": "install"
+}
