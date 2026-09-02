@@ -225,7 +225,7 @@ rather than a shape are named aliases of `string`, so an `Id` and a
 ## Writing a query
 
 A query file is a JMAP Request object, exactly as
-[RFC 8620](https://www.rfc-editor.org/rfc/rfc8620) defines it, plus three
+[RFC 8620](https://www.rfc-editor.org/rfc/rfc8620) defines it, plus four
 members the generator reads and the server never sees.
 
 A member beginning with an underscore is one the generator reads; everything
@@ -252,9 +252,7 @@ say why a call is there, give its arguments a `_comment`:
 
 The generator lifts it into the generated code and leaves it out of the request,
 which it must: RFC 8620 requires a server to reject an argument it does not
-know. An underscore rather than a dot, because jmapc writes the path to a
-problem with dots — `methodCalls[0].arguments.filter` — and a member named
-`.comment` would read as part of one.
+know.
 
 ```go
 // Fetch them in the same request, so the ids never make a round trip.
