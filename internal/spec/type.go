@@ -18,6 +18,12 @@ const (
 	DateType    = "Date"
 	UTCDateType = "UTCDate"
 	Any         = "Any"
+
+	// The primitive types JSCalendar adds, RFC 8984, Section 1.4.
+	LocalDateTimeType  = "LocalDateTime"
+	DurationType       = "Duration"
+	SignedDurationType = "SignedDuration"
+	TimeZoneIDType     = "TimeZoneId"
 )
 
 // primitive records how a primitive JMAP type is spelled in Go. Named types
@@ -39,6 +45,11 @@ var primitives = map[string]primitive{
 	DateType:    {goName: "Date", qualified: true},
 	UTCDateType: {goName: "UTCDate", qualified: true},
 	Any:         {goName: "any"},
+
+	LocalDateTimeType:  {goName: "LocalDateTime", qualified: true},
+	DurationType:       {goName: "Duration", qualified: true},
+	SignedDurationType: {goName: "SignedDuration", qualified: true},
+	TimeZoneIDType:     {goName: "TimeZoneID", qualified: true},
 }
 
 // Type is a parsed JMAP type expression. The surface syntax follows the

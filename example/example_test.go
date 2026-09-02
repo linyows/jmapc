@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/linyows/jmapc"
 	"github.com/linyows/jmapc/example/jmapq"
@@ -45,6 +46,7 @@ func (s *stub) start() *httptest.Server {
 				jmapc.CapabilityMail:       map[string]any{},
 				jmapc.CapabilitySubmission: map[string]any{},
 				jmapc.CapabilityContacts:   map[string]any{},
+				jmapc.CapabilityCalendars:  map[string]any{},
 			},
 			"accounts": map[string]any{
 				string(accountID): map[string]any{"name": "someone@example.com", "isPersonal": true},
@@ -53,6 +55,7 @@ func (s *stub) start() *httptest.Server {
 				jmapc.CapabilityMail:       string(accountID),
 				jmapc.CapabilitySubmission: string(accountID),
 				jmapc.CapabilityContacts:   string(accountID),
+				jmapc.CapabilityCalendars:  string(accountID),
 			},
 			"username": "someone@example.com",
 			"apiUrl":   srv.URL + "/jmap/api/",
@@ -323,7 +326,7 @@ func TestPreflightRejectsUnknownCapability(t *testing.T) {
 	c := jmapc.New(srv.URL+"/.well-known/jmap", jmapc.WithBearerToken("token"))
 
 	_, err := c.Do(context.Background(), &jmapc.Request{
-		Using: []string{"urn:ietf:params:jmap:calendars"},
+		Using: []string{"urn:ietf:params:jmap:sieve"},
 	})
 	if err == nil {
 		t.Fatal("expected an error")
@@ -572,5 +575,173 @@ func TestUpdateContactEmail(t *testing.T) {
 	}
 	if _, updated := got.Updated["card1"]; !updated {
 		t.Errorf("Updated = %v, want an entry for card1", got.Updated)
+	}
+}
+
+// TestAgenda covers a calendar query that expands a recurring event into its
+// occurrences, which is what a day view asks for.
+func TestAgenda(t *testing.T) {
+	s := &stub{t: t, response: `{
+	  "sessionState": "session-1",
+	  "methodResponses": [
+	    ["CalendarEvent/query", {"accountId": "acct1", "queryState": "q1",
+	                             "canCalculateChanges": false, "position": 0,
+	                             "ids": ["ev1", "ev2"]}, "search"],
+	    ["CalendarEvent/get", {"accountId": "acct1", "state": "e1", "notFound": [], "list": [
+	      {"id": "ev1", "baseEventId": "series1", "title": "Standup",
+	       "start": "2024-05-06T09:00:00", "duration": "PT15M",
+	       "timeZone": "Europe/London", "status": "confirmed",
+	       "participants": {"me": {"email": "me@example.com", "roles": {"owner": true}}}},
+	      {"id": "ev2", "baseEventId": null, "title": "Review",
+	       "start": "2024-05-06T14:00:00", "duration": "PT1H",
+	       "timeZone": "Europe/London", "status": "tentative"}
+	    ]}, "fetch"]
+	  ]
+	}`}
+
+	got, err := jmapq.Agenda(context.Background(), s.client(), jmapq.AgendaParams{
+		CalendarID: "cal1",
+		From:       "2024-05-06T00:00:00",
+		Until:      "2024-05-07T00:00:00",
+		TimeZone:   "Europe/London",
+	})
+	if err != nil {
+		t.Fatalf("Agenda: %v", err)
+	}
+
+	_, search := s.call(t, "search")
+	if search["expandRecurrences"] != true {
+		t.Errorf("expandRecurrences = %v, want true", search["expandRecurrences"])
+	}
+	if search["timeZone"] != "Europe/London" {
+		t.Errorf("timeZone = %v", search["timeZone"])
+	}
+	_, fetch := s.call(t, "fetch")
+	if fetch["reduceParticipants"] != true {
+		t.Errorf("reduceParticipants = %v, want true", fetch["reduceParticipants"])
+	}
+
+	if len(got.List) != 2 {
+		t.Fatalf("got %d events, want 2", len(got.List))
+	}
+	first := got.List[0]
+	if first.Title != "Standup" {
+		t.Errorf("title = %q", first.Title)
+	}
+	// A JSCalendar time is local, and the zone is a property of its own.
+	if first.Start != "2024-05-06T09:00:00" {
+		t.Errorf("start = %q", first.Start)
+	}
+	if !first.Start.Valid() {
+		t.Errorf("start %q does not have the form of a LocalDateTime", first.Start)
+	}
+	if first.TimeZone == nil || *first.TimeZone != "Europe/London" {
+		t.Errorf("timeZone = %v", first.TimeZone)
+	}
+	d, err := first.Duration.ToTimeDuration()
+	if err != nil {
+		t.Fatalf("parsing the duration: %v", err)
+	}
+	if d != 15*time.Minute {
+		t.Errorf("duration = %v, want 15m", d)
+	}
+	// An occurrence of a recurring event says which series it came from.
+	if first.BaseEventID == nil || *first.BaseEventID != "series1" {
+		t.Errorf("baseEventId = %v, want series1", first.BaseEventID)
+	}
+	if got.List[1].BaseEventID != nil {
+		t.Errorf("a one-off event has baseEventId %v, want null", *got.List[1].BaseEventID)
+	}
+}
+
+// TestCreateEvent checks that the shape of a JSCalendar event survives the trip
+// out, including the negative offset that puts an alert before the event.
+func TestCreateEvent(t *testing.T) {
+	s := &stub{t: t, response: `{
+	  "sessionState": "session-1",
+	  "methodResponses": [
+	    ["CalendarEvent/set", {"accountId": "acct1", "newState": "e2",
+	                           "created": {"meeting": {"id": "ev9", "isOrigin": true}}}, "create"]
+	  ]
+	}`}
+
+	got, err := jmapq.CreateEvent(context.Background(), s.client(), jmapq.CreateEventParams{
+		CalendarID:       "cal1",
+		UID:              "urn:uuid:9999",
+		Title:            "Weekly sync",
+		Start:            "2024-05-06T09:00:00",
+		Duration:         "PT30M",
+		TimeZone:         "Europe/London",
+		OrganiserAddress: "me@example.com",
+		OrganiserSendTo:  "mailto:me@example.com",
+	})
+	if err != nil {
+		t.Fatalf("CreateEvent: %v", err)
+	}
+
+	_, args := s.call(t, "create")
+	event := args["create"].(map[string]any)["meeting"].(map[string]any)
+	if event["@type"] != "Event" || event["start"] != "2024-05-06T09:00:00" {
+		t.Errorf("event = %v", event)
+	}
+	if cals := event["calendarIds"].(map[string]any); cals["cal1"] != true {
+		t.Errorf("calendarIds = %v", cals)
+	}
+	rule := event["recurrenceRules"].([]any)[0].(map[string]any)
+	if rule["frequency"] != "weekly" {
+		t.Errorf("recurrence rule = %v", rule)
+	}
+	if day := rule["byDay"].([]any)[0].(map[string]any); day["day"] != "mo" {
+		t.Errorf("byDay = %v", day)
+	}
+	alert := event["alerts"].(map[string]any)["reminder"].(map[string]any)
+	trigger := alert["trigger"].(map[string]any)
+	if trigger["offset"] != "-PT15M" {
+		t.Errorf("trigger = %v, want an offset of -PT15M", trigger)
+	}
+	participant := event["participants"].(map[string]any)["organiser"].(map[string]any)
+	if roles := participant["roles"].(map[string]any); roles["owner"] != true {
+		t.Errorf("participant roles = %v", roles)
+	}
+	if !got.Created["meeting"].IsOrigin {
+		t.Errorf("created event = %+v, want isOrigin", got.Created["meeting"])
+	}
+}
+
+// TestRescheduleOccurrence checks a patch keyed by the start of the occurrence
+// it changes, which is how one instance of a series is moved.
+func TestRescheduleOccurrence(t *testing.T) {
+	s := &stub{t: t, response: `{
+	  "sessionState": "session-1",
+	  "methodResponses": [
+	    ["CalendarEvent/set", {"accountId": "acct1", "oldState": "e1", "newState": "e2",
+	                           "updated": {"series1": null}}, "reschedule"]
+	  ]
+	}`}
+
+	_, err := jmapq.RescheduleOccurrence(context.Background(), s.client(), jmapq.RescheduleOccurrenceParams{
+		EventID:    "series1",
+		Occurrence: "2024-05-06T09:00:00",
+		NewStart:   "2024-05-06T11:00:00",
+		NewTitle:   "Standup (moved)",
+	})
+	if err != nil {
+		t.Fatalf("RescheduleOccurrence: %v", err)
+	}
+
+	_, args := s.call(t, "reschedule")
+	if args["sendSchedulingMessages"] != true {
+		t.Errorf("sendSchedulingMessages = %v, want true", args["sendSchedulingMessages"])
+	}
+	patch := args["update"].(map[string]any)["series1"].(map[string]any)
+	if patch["recurrenceOverrides/2024-05-06T09:00:00/start"] != "2024-05-06T11:00:00" {
+		t.Errorf("patch = %v, want the occurrence's start moved", patch)
+	}
+	if patch["recurrenceOverrides/2024-05-06T09:00:00/title"] != "Standup (moved)" {
+		t.Errorf("patch = %v, want the occurrence's title changed", patch)
+	}
+	// The series itself is untouched: only the one occurrence moves.
+	if len(patch) != 2 {
+		t.Errorf("patch holds %d members, want 2", len(patch))
 	}
 }

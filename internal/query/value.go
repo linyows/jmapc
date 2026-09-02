@@ -3,6 +3,7 @@ package query
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -128,6 +129,15 @@ func (c *checker) rankUnion(t *spec.Type, raw json.RawMessage) []*spec.Type {
 		return score[members[i]] > score[members[j]]
 	})
 	return members
+}
+
+// propertyHint suggests what an unknown property in a path may have meant.
+func propertyHint(err error) string {
+	var unknown *spec.UnknownPropertyError
+	if !errors.As(err, &unknown) {
+		return ""
+	}
+	return hintFor(unknown.Property, unknown.Known)
 }
 
 // missingRequired reports whether an object type declares a property that the
@@ -340,6 +350,37 @@ func (c *checker) primitive(t *spec.Type, raw json.RawMessage, where string) Nod
 		if _, err := time.Parse(time.RFC3339, s); err != nil {
 			c.errorf(where, "a Date is written as 2006-01-02T15:04:05Z07:00", "%q is not a Date", s)
 		}
+	case spec.LocalDateTimeType:
+		s, ok := stringValue(raw)
+		if !ok {
+			return fail()
+		}
+		if !jmapc.LocalDateTime(s).Valid() {
+			c.errorf(where, "a LocalDateTime is written as 2006-01-02T15:04:05, with no time zone",
+				"%q is not a LocalDateTime", s)
+		}
+	case spec.DurationType:
+		s, ok := stringValue(raw)
+		if !ok {
+			return fail()
+		}
+		if !jmapc.Duration(s).Valid() {
+			c.errorf(where, "a Duration is written as PT1H30M or P1D, with no years or months",
+				"%q is not a Duration", s)
+		}
+	case spec.SignedDurationType:
+		s, ok := stringValue(raw)
+		if !ok {
+			return fail()
+		}
+		if !jmapc.SignedDuration(s).Valid() {
+			c.errorf(where, "a SignedDuration is a Duration, optionally prefixed with - or +",
+				"%q is not a SignedDuration", s)
+		}
+	case spec.TimeZoneIDType:
+		if _, ok := stringValue(raw); !ok {
+			return fail()
+		}
 	default:
 		c.errorf(where, "", "unknown type %q in the data model", t.Name)
 	}
@@ -546,7 +587,7 @@ func (c *checker) patchObject(members map[string]json.RawMessage, keys []string,
 		if c.patchTarget != "" {
 			resolved, value, doc, err := c.spec.ResolvePatch(c.patchTarget, segments, unknown)
 			if err != nil {
-				c.errorf(where+"."+key, "", "%v", err)
+				c.errorf(where+"."+key, propertyHint(err), "%v", err)
 				continue
 			}
 			keyTypes, valueType, valueDoc = resolved, value, doc

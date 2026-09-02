@@ -1,0 +1,17 @@
+{
+  "doc": "RescheduleOccurrence moves one occurrence of a recurring event without touching the rest of the series. The override is keyed by the start the recurrence rules gave that occurrence, and its value is a patch to the event.",
+
+  "methodCalls": [
+    ["CalendarEvent/set", {
+      "update": {
+        "{{eventId}}": {
+          "recurrenceOverrides/{{occurrence}}/start": "{{newStart}}",
+          "recurrenceOverrides/{{occurrence}}/title": "{{newTitle}}"
+        }
+      },
+      "sendSchedulingMessages": true
+    }, "reschedule"]
+  ],
+
+  "returns": "reschedule"
+}

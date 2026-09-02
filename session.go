@@ -14,6 +14,12 @@ const (
 	CapabilitySubmission = "urn:ietf:params:jmap:submission"
 	CapabilityVacation   = "urn:ietf:params:jmap:vacationresponse"
 	CapabilityContacts   = "urn:ietf:params:jmap:contacts"
+	CapabilityCalendars  = "urn:ietf:params:jmap:calendars"
+	// CapabilityCalendarsParse covers CalendarEvent/parse, which a server may
+	// support without supporting the rest of the calendar model.
+	CapabilityCalendarsParse = "urn:ietf:params:jmap:calendars:parse"
+	// CapabilityAvailability covers Principal/getAvailability.
+	CapabilityAvailability = "urn:ietf:params:jmap:principals:availability"
 )
 
 // Session is the Session object described in RFC 8620, Section 2. It tells the

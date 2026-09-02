@@ -516,3 +516,152 @@ func TestContactsChecks(t *testing.T) {
 		})
 	}
 }
+
+// TestCalendarsQuery covers a query against JMAP for Calendars, whose events
+// are JSCalendar objects and whose times are in kinds JMAP itself does not
+// have.
+func TestCalendarsQuery(t *testing.T) {
+	q := parse(t, "Agenda"+Extension, `{
+	  "methodCalls": [
+	    ["CalendarEvent/query", {
+	      "filter": {
+	        "operator": "AND",
+	        "conditions": [
+	          {"inCalendar": "{{calendarId}}"},
+	          {"after": "{{from}}"},
+	          {"before": "{{until}}"}
+	        ]
+	      },
+	      "sort": [{"property": "start"}],
+	      "expandRecurrences": true,
+	      "timeZone": "{{timeZone}}"
+	    }, "search"],
+	    ["CalendarEvent/get", {
+	      "#ids": {"resultOf": "search", "name": "CalendarEvent/query", "path": "/ids"},
+	      "properties": ["id", "title", "start", "duration", "participants"],
+	      "reduceParticipants": true
+	    }, "fetch"]
+	  ],
+	  "returns": "fetch"
+	}`)
+
+	want := map[string]string{
+		"calendarId": "jmapc.ID",
+		"from":       "jmapc.LocalDateTime",
+		"until":      "jmapc.LocalDateTime",
+		"timeZone":   "jmapc.TimeZoneID",
+	}
+	for _, p := range q.Params {
+		if got := p.GoType("jmapc."); got != want[p.Name] {
+			t.Errorf("parameter %q is %s, want %s", p.Name, got, want[p.Name])
+		}
+	}
+}
+
+// TestCalendarTimeTypes checks the types JSCalendar adds, which are easy to get
+// wrong by reaching for the ones JMAP already had.
+func TestCalendarTimeTypes(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want string
+	}{{
+		name: "local date-time with a zone",
+		src:  `{"methodCalls": [["CalendarEvent/set", {"create": {"e": {"start": "2024-05-01T09:00:00Z"}}}, "c0"]]}`,
+		want: `is not a LocalDateTime`,
+	}, {
+		name: "local date-time with a space",
+		src:  `{"methodCalls": [["CalendarEvent/set", {"create": {"e": {"start": "2024-05-01 09:00:00"}}}, "c0"]]}`,
+		want: `is not a LocalDateTime`,
+	}, {
+		name: "duration in months",
+		src:  `{"methodCalls": [["CalendarEvent/set", {"create": {"e": {"duration": "P1M"}}}, "c0"]]}`,
+		want: `is not a Duration`,
+	}, {
+		name: "duration in Go syntax",
+		src:  `{"methodCalls": [["CalendarEvent/set", {"create": {"e": {"duration": "90m"}}}, "c0"]]}`,
+		want: `is not a Duration`,
+	}, {
+		name: "signed duration on an alert",
+		src: `{"methodCalls": [["CalendarEvent/set", {"create": {"e": {
+			"alerts": {"a": {"trigger": {"@type": "OffsetTrigger", "offset": "15m"}}}
+		}}}, "c0"]]}`,
+		want: `is not a SignedDuration`,
+	}, {
+		name: "unsortable property",
+		src:  `{"methodCalls": [["CalendarEvent/query", {"sort": [{"property": "title"}]}, "c0"]]}`,
+		want: `CalendarEvent cannot be sorted by "title"`,
+	}, {
+		name: "misspelled event property",
+		src:  `{"methodCalls": [["CalendarEvent/get", {"properties": ["id", "titel"]}, "c0"]]}`,
+		want: `did you mean "title"?`,
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseErr(t, tt.src)
+			if !strings.Contains(got, tt.want) {
+				t.Errorf("error was:\n%s\nwant it to mention: %s", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestCalendarTimeTypesAccept checks the forms that should pass, including a
+// negative offset, which is how an alert says it fires beforehand.
+func TestCalendarTimeTypesAccept(t *testing.T) {
+	parse(t, "MakeEvent"+Extension, `{"methodCalls": [
+	  ["CalendarEvent/set", {"create": {"e": {
+	    "@type": "Event",
+	    "uid": "{{uid}}",
+	    "title": "{{title}}",
+	    "start": "2024-05-01T09:00:00",
+	    "duration": "PT1H30M",
+	    "timeZone": "Europe/London",
+	    "alerts": {
+	      "a": {"trigger": {"@type": "OffsetTrigger", "offset": "-PT15M"}},
+	      "b": {"trigger": {"@type": "AbsoluteTrigger", "when": "2024-05-01T07:00:00Z"}}
+	    },
+	    "recurrenceRules": [{"frequency": "weekly", "byDay": [{"day": "mo"}], "count": 10}]
+	  }}}, "c0"]
+	]}`)
+}
+
+// TestRecurrenceOverridesArePatches checks the overrides of a recurring event,
+// which are patches to the event keyed by the start of the occurrence they
+// change. Both halves are checked: the key is a local date-time, and the value
+// is a patch into the event.
+func TestRecurrenceOverridesArePatches(t *testing.T) {
+	parse(t, "MoveOccurrence"+Extension, `{"methodCalls": [
+	  ["CalendarEvent/set", {"update": {"{{eventId}}": {
+	    "recurrenceOverrides/2024-05-06T09:00:00/title": "Moved",
+	    "recurrenceOverrides/2024-05-13T09:00:00/excluded": true
+	  }}}, "c0"]
+	]}`)
+
+	got := parseErr(t, `{"methodCalls": [
+	  ["CalendarEvent/set", {"update": {"e1": {
+	    "recurrenceOverrides/2024-05-06T09:00:00/titel": "Moved"
+	  }}}, "c0"]
+	]}`)
+	if !strings.Contains(got, `did you mean "title"?`) {
+		t.Errorf("error was:\n%s\nwant it to suggest title", got)
+	}
+}
+
+// TestAvailability covers Principal/getAvailability, which belongs to a
+// capability of its own.
+func TestAvailability(t *testing.T) {
+	q := parse(t, "WhenFree"+Extension, `{
+	  "methodCalls": [["Principal/getAvailability", {
+	    "id": "{{principalId}}",
+	    "utcStart": "2024-05-01T00:00:00Z",
+	    "utcEnd": "2024-05-08T00:00:00Z",
+	    "showDetails": true,
+	    "eventProperties": ["title", "start", "duration"]
+	  }, "c0"]]
+	}`)
+	want := "urn:ietf:params:jmap:core urn:ietf:params:jmap:principals:availability"
+	if got := strings.Join(q.Using, " "); got != want {
+		t.Errorf("Using = %q, want %q", got, want)
+	}
+}

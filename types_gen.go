@@ -255,6 +255,1254 @@ type BlobCopyResponse struct {
 	NotCopied map[ID]SetError `json:"notCopied"`
 }
 
+// BusyPeriod is a stretch of time a principal is not free.
+//
+// A request using this type must declare
+// urn:ietf:params:jmap:principals:availability.
+type BusyPeriod struct {
+	// When the period starts.
+	UTCStart UTCDate `json:"utcStart,omitzero"`
+
+	// When the period ends.
+	UTCEnd UTCDate `json:"utcEnd,omitzero"`
+
+	// How busy: "confirmed", "tentative", or "unavailable".
+	//
+	// The server assumes "unavailable" when this property is omitted.
+	BusyStatus *string `json:"busyStatus,omitzero"`
+
+	// The event that makes the principal busy, for a caller allowed to see it.
+	Event *CalendarEvent `json:"event,omitzero"`
+}
+
+// Calendar is a named collection of events.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type Calendar struct {
+	// The id of the calendar.
+	//
+	// The server sets this property; it may not be set by the client.
+	ID ID `json:"id,omitzero"`
+
+	// The user-visible name of the calendar.
+	Name string `json:"name,omitzero"`
+
+	// A longer description of what the calendar holds.
+	Description *string `json:"description,omitzero"`
+
+	// A colour to show the calendar's events in, as a CSS colour value.
+	Color *string `json:"color,omitzero"`
+
+	// A hint for where to place the calendar in a list of them.
+	//
+	// The server assumes 0 when this property is omitted.
+	SortOrder UnsignedInt `json:"sortOrder,omitzero"`
+
+	// Whether the user has subscribed to the calendar.
+	IsSubscribed bool `json:"isSubscribed,omitzero"`
+
+	// Whether the calendar's events should be shown in a combined view.
+	//
+	// The server assumes true when this property is omitted.
+	IsVisible *bool `json:"isVisible,omitzero"`
+
+	// Whether this is the calendar an event goes into when the client does not
+	// say.
+	//
+	// The server sets this property; it may not be set by the client.
+	IsDefault bool `json:"isDefault,omitzero"`
+
+	// Whether the calendar's events count towards the user's availability:
+	// "all", "attending", or "none".
+	IncludeInAvailability string `json:"includeInAvailability,omitzero"`
+
+	// The alerts to apply to events in this calendar that have a time, for
+	// events that ask for the defaults.
+	DefaultAlertsWithTime map[ID]EventAlert `json:"defaultAlertsWithTime,omitzero"`
+
+	// The alerts to apply to whole-day events in this calendar, for events that
+	// ask for the defaults.
+	DefaultAlertsWithoutTime map[ID]EventAlert `json:"defaultAlertsWithoutTime,omitzero"`
+
+	// The time zone to show the calendar in, or null to use the user's own.
+	TimeZone *TimeZoneID `json:"timeZone,omitzero"`
+
+	// Who else the calendar is shared with, keyed by principal id, and what each
+	// may do.
+	ShareWith map[ID]CalendarRights `json:"shareWith,omitzero"`
+
+	// What the authenticated user may do with the calendar.
+	//
+	// The server sets this property; it may not be set by the client.
+	MyRights CalendarRights `json:"myRights,omitzero"`
+}
+
+// CalendarChangesArguments holds the arguments of the Calendar/changes
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarChangesArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The state string the client already has, as returned by an earlier
+	// Calendar/get or Calendar/changes.
+	SinceState string `json:"sinceState,omitzero"`
+
+	// The maximum number of ids to return across the three change lists.
+	MaxChanges *UnsignedInt `json:"maxChanges,omitzero"`
+}
+
+// CalendarChangesResponse holds the response to the Calendar/changes method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarChangesResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The state the changes are calculated from.
+	OldState string `json:"oldState"`
+
+	// The state the client reaches by applying these changes.
+	NewState string `json:"newState"`
+
+	// Whether further changes remain, in which case the call should be repeated
+	// from newState.
+	HasMoreChanges bool `json:"hasMoreChanges"`
+
+	// The ids of records created since oldState.
+	Created []ID `json:"created"`
+
+	// The ids of records updated since oldState.
+	Updated []ID `json:"updated"`
+
+	// The ids of records destroyed since oldState.
+	Destroyed []ID `json:"destroyed"`
+}
+
+// CalendarEvent is one event, or a recurring series of them. It is a
+// JSCalendar JSEvent, as defined by RFC 8984, with the properties JMAP adds
+// for storing it in an account.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarEvent struct {
+	// The id of the event.
+	//
+	// The server sets this property; it may not be set by the client.
+	ID ID `json:"id,omitzero"`
+
+	// For an occurrence returned by an expanded query, the id of the recurring
+	// event it belongs to.
+	//
+	// The server sets this property; it may not be set by the client.
+	BaseEventID *ID `json:"baseEventId,omitzero"`
+
+	// The calendars the event is in, as a set of ids mapped to true.
+	CalendarIDs map[ID]bool `json:"calendarIds,omitzero"`
+
+	// Whether the event is still being written. A draft is not scheduled and
+	// sends no invitations. It may be set to false, but not back to true.
+	//
+	// The server assumes false when this property is omitted.
+	IsDraft bool `json:"isDraft,omitzero"`
+
+	// Whether this server is the one that owns the event, as opposed to holding
+	// a copy of someone else's.
+	//
+	// The server sets this property; it may not be set by the client.
+	IsOrigin bool `json:"isOrigin,omitzero"`
+
+	// When the event starts, in UTC. It is derived from start and the time zone,
+	// and setting it moves the event.
+	UTCStart UTCDate `json:"utcStart,omitzero"`
+
+	// When the event ends, in UTC. It is derived from utcStart and the duration,
+	// and setting it changes the duration.
+	UTCEnd UTCDate `json:"utcEnd,omitzero"`
+
+	// Whether anyone who can see the event may add themselves as a participant.
+	//
+	// The server assumes false when this property is omitted.
+	MayInviteSelf bool `json:"mayInviteSelf,omitzero"`
+
+	// Whether a participant may invite others.
+	//
+	// The server assumes false when this property is omitted.
+	MayInviteOthers bool `json:"mayInviteOthers,omitzero"`
+
+	// Whether participants other than the owner should be hidden from each
+	// other.
+	//
+	// The server assumes false when this property is omitted.
+	HideAttendees bool `json:"hideAttendees,omitzero"`
+
+	// The type of this object, which is "Event".
+	Type string `json:"@type,omitzero"`
+
+	// A globally unique identifier for the event, shared by every copy of it.
+	UID string `json:"uid,omitzero"`
+
+	// Other events this one relates to, keyed by their uid.
+	RelatedTo map[string]EventRelation `json:"relatedTo,omitzero"`
+
+	// The software that last modified the event.
+	ProdID string `json:"prodId,omitzero"`
+
+	// When the event was created.
+	Created UTCDate `json:"created,omitzero"`
+
+	// When the event was last modified.
+	Updated UTCDate `json:"updated,omitzero"`
+
+	// How many times the event has been revised in a way participants should be
+	// told about.
+	//
+	// The server assumes 0 when this property is omitted.
+	Sequence UnsignedInt `json:"sequence,omitzero"`
+
+	// The scheduling method this copy of the event was delivered with, such as
+	// "request" or "reply".
+	Method string `json:"method,omitzero"`
+
+	// A short summary of the event.
+	//
+	// The server assumes "" when this property is omitted.
+	Title *string `json:"title,omitzero"`
+
+	// A longer description of the event.
+	//
+	// The server assumes "" when this property is omitted.
+	Description *string `json:"description,omitzero"`
+
+	// The media type of the description.
+	//
+	// The server assumes "text/plain" when this property is omitted.
+	DescriptionContentType *string `json:"descriptionContentType,omitzero"`
+
+	// Whether the event should be shown as taking a whole day rather than at a
+	// particular time.
+	//
+	// The server assumes false when this property is omitted.
+	ShowWithoutTime bool `json:"showWithoutTime,omitzero"`
+
+	// Where the event happens, keyed by an id local to the event.
+	Locations map[ID]EventLocation `json:"locations,omitzero"`
+
+	// Where the event happens online, keyed by an id local to the event.
+	VirtualLocations map[ID]EventVirtualLocation `json:"virtualLocations,omitzero"`
+
+	// Resources associated with the event, keyed by an id local to the event.
+	Links map[ID]EventLink `json:"links,omitzero"`
+
+	// The language the event's text is written in, as an RFC 5646 tag.
+	Locale string `json:"locale,omitzero"`
+
+	// Free-text keywords on the event, mapped to true.
+	Keywords map[string]bool `json:"keywords,omitzero"`
+
+	// The URIs of categories the event belongs to, mapped to true.
+	Categories map[string]bool `json:"categories,omitzero"`
+
+	// A colour to show the event in, as a CSS colour value.
+	Color string `json:"color,omitzero"`
+
+	// For one occurrence of a recurring event, the start the recurrence rules
+	// gave it.
+	RecurrenceID LocalDateTime `json:"recurrenceId,omitzero"`
+
+	// The time zone the recurrenceId is in.
+	//
+	// The server assumes null when this property is omitted.
+	RecurrenceIDTimeZone *TimeZoneID `json:"recurrenceIdTimeZone,omitzero"`
+
+	// How the event repeats.
+	RecurrenceRules []EventRecurrenceRule `json:"recurrenceRules,omitzero"`
+
+	// Occurrences to leave out of what the recurrence rules generate.
+	ExcludedRecurrenceRules []EventRecurrenceRule `json:"excludedRecurrenceRules,omitzero"`
+
+	// Changes to particular occurrences, keyed by the start the rules gave them.
+	// A patch that sets excluded to true removes the occurrence.
+	RecurrenceOverrides map[LocalDateTime]PatchObject `json:"recurrenceOverrides,omitzero"`
+
+	// Whether this occurrence has been removed from the series.
+	//
+	// The server assumes false when this property is omitted.
+	Excluded bool `json:"excluded,omitzero"`
+
+	// How important the event is, from 1 (highest) to 9 (lowest), with 0 meaning
+	// undefined.
+	//
+	// The server assumes 0 when this property is omitted.
+	Priority Int `json:"priority,omitzero"`
+
+	// Whether the event makes the user unavailable: "free" or "busy".
+	//
+	// The server assumes "busy" when this property is omitted.
+	FreeBusyStatus *string `json:"freeBusyStatus,omitzero"`
+
+	// How much of the event others may see: "public", "private", or "secret".
+	//
+	// The server assumes "public" when this property is omitted.
+	Privacy *string `json:"privacy,omitzero"`
+
+	// Where to send replies, keyed by method, such as "imip" mapped to a mailto:
+	// URI.
+	ReplyTo map[string]string `json:"replyTo,omitzero"`
+
+	// The address of whoever sent this copy of the event.
+	SentBy string `json:"sentBy,omitzero"`
+
+	// Who is taking part, keyed by an id local to the event.
+	Participants map[ID]EventParticipant `json:"participants,omitzero"`
+
+	// The status of the last scheduling request, as an iCalendar REQUEST-STATUS
+	// value.
+	RequestStatus string `json:"requestStatus,omitzero"`
+
+	// Whether to use the calendar's default alerts instead of the ones on the
+	// event.
+	//
+	// The server assumes false when this property is omitted.
+	UseDefaultAlerts bool `json:"useDefaultAlerts,omitzero"`
+
+	// The reminders for this event, keyed by an id local to the event.
+	Alerts map[ID]EventAlert `json:"alerts,omitzero"`
+
+	// Translations of the event's text, keyed by language tag. Each is a patch
+	// to apply to the event to render it in that language.
+	Localizations map[string]PatchObject `json:"localizations,omitzero"`
+
+	// The time zone the start is in. Null means the event is floating, and
+	// happens at that local time wherever the user is.
+	//
+	// The server assumes null when this property is omitted.
+	TimeZone *TimeZoneID `json:"timeZone,omitzero"`
+
+	// Time zones the event defines itself, for zones the IANA database does not
+	// have, keyed by an id beginning with "/".
+	TimeZones map[TimeZoneID]EventTimeZone `json:"timeZones,omitzero"`
+
+	// When the event starts, in the event's own time zone.
+	Start LocalDateTime `json:"start,omitzero"`
+
+	// How long the event lasts.
+	//
+	// The server assumes "PT0S" when this property is omitted.
+	Duration *Duration `json:"duration,omitzero"`
+
+	// Whether the event is going ahead: "confirmed", "cancelled", or
+	// "tentative".
+	//
+	// The server assumes "confirmed" when this property is omitted.
+	Status *string `json:"status,omitzero"`
+}
+
+// CalendarEventChangesArguments holds the arguments of the
+// CalendarEvent/changes method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarEventChangesArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The state string the client already has, as returned by an earlier
+	// CalendarEvent/get or CalendarEvent/changes.
+	SinceState string `json:"sinceState,omitzero"`
+
+	// The maximum number of ids to return across the three change lists.
+	MaxChanges *UnsignedInt `json:"maxChanges,omitzero"`
+}
+
+// CalendarEventChangesResponse holds the response to the
+// CalendarEvent/changes method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarEventChangesResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The state the changes are calculated from.
+	OldState string `json:"oldState"`
+
+	// The state the client reaches by applying these changes.
+	NewState string `json:"newState"`
+
+	// Whether further changes remain, in which case the call should be repeated
+	// from newState.
+	HasMoreChanges bool `json:"hasMoreChanges"`
+
+	// The ids of records created since oldState.
+	Created []ID `json:"created"`
+
+	// The ids of records updated since oldState.
+	Updated []ID `json:"updated"`
+
+	// The ids of records destroyed since oldState.
+	Destroyed []ID `json:"destroyed"`
+}
+
+// CalendarEventCopyArguments holds the arguments of the CalendarEvent/copy
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarEventCopyArguments struct {
+	// The id of the account to copy records from.
+	FromAccountID ID `json:"fromAccountId,omitzero"`
+
+	// The state the source account is expected to be in.
+	IfFromInState *string `json:"ifFromInState,omitzero"`
+
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The state the destination account is expected to be in.
+	IfInState *string `json:"ifInState,omitzero"`
+
+	// A map of creation id to the record to copy, each of which must have an id
+	// property naming the record in the source account.
+	Create map[ID]CalendarEvent `json:"create,omitzero"`
+
+	// Whether to destroy the originals once the copy succeeds.
+	//
+	// The server assumes false when this property is omitted.
+	OnSuccessDestroyOriginal bool `json:"onSuccessDestroyOriginal,omitzero"`
+
+	// The state the source account must be in for the originals to be destroyed.
+	DestroyFromIfInState *string `json:"destroyFromIfInState,omitzero"`
+}
+
+// CalendarEventCopyResponse holds the response to the CalendarEvent/copy
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarEventCopyResponse struct {
+	// The id of the account the records were copied from.
+	FromAccountID ID `json:"fromAccountId"`
+
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The state of the destination account before the copy.
+	OldState *string `json:"oldState"`
+
+	// The state of the destination account after the copy.
+	NewState string `json:"newState"`
+
+	// A map of creation id to the record created in the destination account.
+	Created map[ID]CalendarEvent `json:"created"`
+
+	// A map of creation id to the reason the record could not be copied.
+	NotCreated map[ID]SetError `json:"notCreated"`
+}
+
+// CalendarEventFilterCondition is a condition an event must satisfy to match
+// a CalendarEvent/query.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarEventFilterCondition struct {
+	// Matches events in this calendar.
+	InCalendar *ID `json:"inCalendar,omitzero"`
+
+	// Matches events that end at or after this time.
+	After *LocalDateTime `json:"after,omitzero"`
+
+	// Matches events that start before this time.
+	Before *LocalDateTime `json:"before,omitzero"`
+
+	// Matches events where this text appears in the title, description,
+	// location, or a participant.
+	Text *string `json:"text,omitzero"`
+
+	// Matches events where this text appears in the title.
+	Title *string `json:"title,omitzero"`
+
+	// Matches events where this text appears in the description.
+	Description *string `json:"description,omitzero"`
+
+	// Matches events where this text appears in a location.
+	Location *string `json:"location,omitzero"`
+
+	// Matches events with an owner at this address.
+	Owner *string `json:"owner,omitzero"`
+
+	// Matches events with an attendee at this address.
+	Attendee *string `json:"attendee,omitzero"`
+
+	// Matches the event with this uid.
+	UID string `json:"uid,omitzero"`
+}
+
+// CalendarEventGetArguments holds the arguments of the CalendarEvent/get
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarEventGetArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The ids of the records to fetch, or null to fetch all of them.
+	IDs []ID `json:"ids,omitzero"`
+
+	// The properties to include in each returned record, or null for all of
+	// them. The id property is always returned.
+	Properties []string `json:"properties,omitzero"`
+
+	// Leave out the overrides for occurrences starting at or after this time, so
+	// that a client showing one month need not fetch every exception to a long
+	// series.
+	RecurrenceOverridesBefore *UTCDate `json:"recurrenceOverridesBefore,omitzero"`
+
+	// Leave out the overrides for occurrences starting before this time.
+	RecurrenceOverridesAfter *UTCDate `json:"recurrenceOverridesAfter,omitzero"`
+
+	// Return only the participants the user is likely to care about: themselves,
+	// the owners, and whoever replied.
+	//
+	// The server assumes false when this property is omitted.
+	ReduceParticipants bool `json:"reduceParticipants,omitzero"`
+
+	// The time zone to interpret the recurrence override bounds in.
+	//
+	// The server assumes "Etc/UTC" when this property is omitted.
+	TimeZone *TimeZoneID `json:"timeZone,omitzero"`
+}
+
+// CalendarEventGetResponse holds the response to the CalendarEvent/get
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarEventGetResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// A string encoding the current state of the type on the server, for use
+	// with CalendarEvent/changes.
+	State string `json:"state"`
+
+	// The records that were found, in an undefined order.
+	List []CalendarEvent `json:"list"`
+
+	// The ids that were requested but do not exist.
+	NotFound []ID `json:"notFound"`
+}
+
+// CalendarEventNotification records a change someone else made to an event
+// the user has a stake in, so that a client can show what happened while it
+// was away.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarEventNotification struct {
+	// The id of the notification.
+	//
+	// The server sets this property; it may not be set by the client.
+	ID ID `json:"id,omitzero"`
+
+	// When the change was made.
+	//
+	// The server sets this property; it may not be set by the client.
+	Created UTCDate `json:"created,omitzero"`
+
+	// Who made the change.
+	//
+	// The server sets this property; it may not be set by the client.
+	ChangedBy CalendarPerson `json:"changedBy,omitzero"`
+
+	// A comment they sent with the change.
+	Comment *string `json:"comment,omitzero"`
+
+	// What happened: "created", "updated", or "destroyed".
+	Type string `json:"type,omitzero"`
+
+	// The id of the event that changed.
+	CalendarEventID ID `json:"calendarEventId,omitzero"`
+
+	// Whether the event was a draft at the time, for a creation or an update.
+	IsDraft bool `json:"isDraft,omitzero"`
+
+	// The event as it was after the change, or as it was before being destroyed.
+	Event CalendarEvent `json:"event,omitzero"`
+
+	// What changed, for an update.
+	EventPatch PatchObject `json:"eventPatch,omitzero"`
+}
+
+// CalendarEventNotificationChangesArguments holds the arguments of the
+// CalendarEventNotification/changes method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarEventNotificationChangesArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The state string the client already has, as returned by an earlier
+	// CalendarEventNotification/get or CalendarEventNotification/changes.
+	SinceState string `json:"sinceState,omitzero"`
+
+	// The maximum number of ids to return across the three change lists.
+	MaxChanges *UnsignedInt `json:"maxChanges,omitzero"`
+}
+
+// CalendarEventNotificationChangesResponse holds the response to the
+// CalendarEventNotification/changes method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarEventNotificationChangesResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The state the changes are calculated from.
+	OldState string `json:"oldState"`
+
+	// The state the client reaches by applying these changes.
+	NewState string `json:"newState"`
+
+	// Whether further changes remain, in which case the call should be repeated
+	// from newState.
+	HasMoreChanges bool `json:"hasMoreChanges"`
+
+	// The ids of records created since oldState.
+	Created []ID `json:"created"`
+
+	// The ids of records updated since oldState.
+	Updated []ID `json:"updated"`
+
+	// The ids of records destroyed since oldState.
+	Destroyed []ID `json:"destroyed"`
+}
+
+// CalendarEventNotificationFilterCondition is a condition a notification must
+// satisfy to match a CalendarEventNotification/query.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarEventNotificationFilterCondition struct {
+	// Matches notifications created at or after this time.
+	After *UTCDate `json:"after,omitzero"`
+
+	// Matches notifications created before this time.
+	Before *UTCDate `json:"before,omitzero"`
+
+	// Matches notifications of this type.
+	Type string `json:"type,omitzero"`
+
+	// Matches notifications about one of these events.
+	CalendarEventIDs []ID `json:"calendarEventIds,omitzero"`
+}
+
+// CalendarEventNotificationGetArguments holds the arguments of the
+// CalendarEventNotification/get method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarEventNotificationGetArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The ids of the records to fetch, or null to fetch all of them.
+	IDs []ID `json:"ids,omitzero"`
+
+	// The properties to include in each returned record, or null for all of
+	// them. The id property is always returned.
+	Properties []string `json:"properties,omitzero"`
+}
+
+// CalendarEventNotificationGetResponse holds the response to the
+// CalendarEventNotification/get method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarEventNotificationGetResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// A string encoding the current state of the type on the server, for use
+	// with CalendarEventNotification/changes.
+	State string `json:"state"`
+
+	// The records that were found, in an undefined order.
+	List []CalendarEventNotification `json:"list"`
+
+	// The ids that were requested but do not exist.
+	NotFound []ID `json:"notFound"`
+}
+
+// CalendarEventNotificationQueryArguments holds the arguments of the
+// CalendarEventNotification/query method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarEventNotificationQueryArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The condition records must match to be included in the results.
+	Filter any `json:"filter,omitzero"`
+
+	// The comparators to sort the results by, in order of precedence.
+	Sort []Comparator `json:"sort,omitzero"`
+
+	// The zero-based index of the first result to return. A negative value
+	// counts back from the end.
+	//
+	// The server assumes 0 when this property is omitted.
+	Position Int `json:"position,omitzero"`
+
+	// The id of a record to position the returned window relative to, instead of
+	// using position.
+	Anchor *ID `json:"anchor,omitzero"`
+
+	// The offset from the anchor at which the returned window starts.
+	//
+	// The server assumes 0 when this property is omitted.
+	AnchorOffset Int `json:"anchorOffset,omitzero"`
+
+	// The maximum number of ids to return.
+	Limit *UnsignedInt `json:"limit,omitzero"`
+
+	// Whether the server should compute the total number of matching records.
+	//
+	// The server assumes false when this property is omitted.
+	CalculateTotal bool `json:"calculateTotal,omitzero"`
+}
+
+// CalendarEventNotificationQueryChangesArguments holds the arguments of the
+// CalendarEventNotification/queryChanges method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarEventNotificationQueryChangesArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The filter the original query used.
+	Filter any `json:"filter,omitzero"`
+
+	// The sort the original query used.
+	Sort []Comparator `json:"sort,omitzero"`
+
+	// The queryState the client already has, as returned by an earlier
+	// CalendarEventNotification/query.
+	SinceQueryState string `json:"sinceQueryState,omitzero"`
+
+	// The maximum number of changes to return.
+	MaxChanges *UnsignedInt `json:"maxChanges,omitzero"`
+
+	// The id of the last record in the client's cached window, beyond which
+	// changes may be omitted.
+	UpToID *ID `json:"upToId,omitzero"`
+
+	// Whether the server should compute the total number of matching records.
+	//
+	// The server assumes false when this property is omitted.
+	CalculateTotal bool `json:"calculateTotal,omitzero"`
+}
+
+// CalendarEventNotificationQueryChangesResponse holds the response to the
+// CalendarEventNotification/queryChanges method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarEventNotificationQueryChangesResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The query state the changes are calculated from.
+	OldQueryState string `json:"oldQueryState"`
+
+	// The query state the client reaches by applying these changes.
+	NewQueryState string `json:"newQueryState"`
+
+	// The total number of matching records, present only if calculateTotal was
+	// true.
+	Total UnsignedInt `json:"total"`
+
+	// The ids to remove from the cached result list.
+	Removed []ID `json:"removed"`
+
+	// The ids to add to the cached result list, each with the index to insert it
+	// at.
+	Added []AddedItem `json:"added"`
+}
+
+// CalendarEventNotificationQueryResponse holds the response to the
+// CalendarEventNotification/query method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarEventNotificationQueryResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// A string encoding the current state of the query on the server, for use
+	// with CalendarEventNotification/queryChanges.
+	QueryState string `json:"queryState"`
+
+	// Whether the server can calculate changes for this query.
+	CanCalculateChanges bool `json:"canCalculateChanges"`
+
+	// The zero-based index of the first returned id in the full result list.
+	Position UnsignedInt `json:"position"`
+
+	// The ids of the matching records, in sorted order.
+	IDs []ID `json:"ids"`
+
+	// The total number of matching records, present only if calculateTotal was
+	// true.
+	Total UnsignedInt `json:"total"`
+
+	// The limit the server applied, present only if it is lower than the one
+	// requested.
+	Limit UnsignedInt `json:"limit"`
+}
+
+// CalendarEventNotificationSetArguments holds the arguments of the
+// CalendarEventNotification/set method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarEventNotificationSetArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The state the changes are expected to apply to. The call fails with a
+	// stateMismatch error if the server has moved on.
+	IfInState *string `json:"ifInState,omitzero"`
+
+	// A map of creation id to the record to create. A creation id may be
+	// referenced elsewhere in the same request as "#" followed by the id.
+	Create map[ID]CalendarEventNotification `json:"create,omitzero"`
+
+	// A map of record id to the patch to apply to it.
+	Update map[ID]PatchObject `json:"update,omitzero"`
+
+	// The ids of the records to destroy.
+	Destroy []ID `json:"destroy,omitzero"`
+}
+
+// CalendarEventNotificationSetResponse holds the response to the
+// CalendarEventNotification/set method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarEventNotificationSetResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The state before these changes were applied, if the server tracks it.
+	OldState *string `json:"oldState"`
+
+	// The state after these changes were applied.
+	NewState string `json:"newState"`
+
+	// A map of creation id to the properties the server assigned to each created
+	// record.
+	Created map[ID]*CalendarEventNotification `json:"created"`
+
+	// A map of record id to any properties the server changed beyond those the
+	// patch set.
+	Updated map[ID]*CalendarEventNotification `json:"updated"`
+
+	// The ids of the records that were destroyed.
+	Destroyed []ID `json:"destroyed"`
+
+	// A map of creation id to the reason the record could not be created.
+	NotCreated map[ID]SetError `json:"notCreated"`
+
+	// A map of record id to the reason the record could not be updated.
+	NotUpdated map[ID]SetError `json:"notUpdated"`
+
+	// A map of record id to the reason the record could not be destroyed.
+	NotDestroyed map[ID]SetError `json:"notDestroyed"`
+}
+
+// CalendarEventParseArguments holds the arguments of the CalendarEvent/parse
+// method.
+//
+// A request using this type must declare
+// urn:ietf:params:jmap:calendars:parse.
+type CalendarEventParseArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The ids of the blobs to parse as iCalendar files.
+	BlobIDs []ID `json:"blobIds,omitzero"`
+
+	// The properties to include in each parsed event, or null for all of them.
+	Properties []string `json:"properties,omitzero"`
+}
+
+// CalendarEventParseResponse holds the response to the CalendarEvent/parse
+// method.
+//
+// A request using this type must declare
+// urn:ietf:params:jmap:calendars:parse.
+type CalendarEventParseResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The events found in each blob, keyed by blob id. A file may hold more than
+	// one event.
+	Parsed map[ID][]CalendarEvent `json:"parsed"`
+
+	// The ids of the blobs that do not hold an iCalendar file the server could
+	// read.
+	NotParsable []ID `json:"notParsable"`
+
+	// The ids of the blobs that do not exist.
+	NotFound []ID `json:"notFound"`
+}
+
+// CalendarEventQueryArguments holds the arguments of the CalendarEvent/query
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarEventQueryArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The condition records must match to be included in the results.
+	Filter any `json:"filter,omitzero"`
+
+	// The comparators to sort the results by, in order of precedence.
+	Sort []Comparator `json:"sort,omitzero"`
+
+	// The zero-based index of the first result to return. A negative value
+	// counts back from the end.
+	//
+	// The server assumes 0 when this property is omitted.
+	Position Int `json:"position,omitzero"`
+
+	// The id of a record to position the returned window relative to, instead of
+	// using position.
+	Anchor *ID `json:"anchor,omitzero"`
+
+	// The offset from the anchor at which the returned window starts.
+	//
+	// The server assumes 0 when this property is omitted.
+	AnchorOffset Int `json:"anchorOffset,omitzero"`
+
+	// The maximum number of ids to return.
+	Limit *UnsignedInt `json:"limit,omitzero"`
+
+	// Whether the server should compute the total number of matching records.
+	//
+	// The server assumes false when this property is omitted.
+	CalculateTotal bool `json:"calculateTotal,omitzero"`
+
+	// Whether to return one id per occurrence of a recurring event rather than
+	// one for the series. The filter must then be limited in time, and the
+	// results cannot be sorted by uid.
+	//
+	// The server assumes false when this property is omitted.
+	ExpandRecurrences bool `json:"expandRecurrences,omitzero"`
+
+	// The time zone to interpret a floating event's times in when expanding
+	// recurrences.
+	TimeZone TimeZoneID `json:"timeZone,omitzero"`
+}
+
+// CalendarEventQueryChangesArguments holds the arguments of the
+// CalendarEvent/queryChanges method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarEventQueryChangesArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The filter the original query used.
+	Filter any `json:"filter,omitzero"`
+
+	// The sort the original query used.
+	Sort []Comparator `json:"sort,omitzero"`
+
+	// The queryState the client already has, as returned by an earlier
+	// CalendarEvent/query.
+	SinceQueryState string `json:"sinceQueryState,omitzero"`
+
+	// The maximum number of changes to return.
+	MaxChanges *UnsignedInt `json:"maxChanges,omitzero"`
+
+	// The id of the last record in the client's cached window, beyond which
+	// changes may be omitted.
+	UpToID *ID `json:"upToId,omitzero"`
+
+	// Whether the server should compute the total number of matching records.
+	//
+	// The server assumes false when this property is omitted.
+	CalculateTotal bool `json:"calculateTotal,omitzero"`
+
+	// Whether to return one id per occurrence of a recurring event rather than
+	// one for the series. The filter must then be limited in time, and the
+	// results cannot be sorted by uid.
+	//
+	// The server assumes false when this property is omitted.
+	ExpandRecurrences bool `json:"expandRecurrences,omitzero"`
+
+	// The time zone to interpret a floating event's times in when expanding
+	// recurrences.
+	TimeZone TimeZoneID `json:"timeZone,omitzero"`
+}
+
+// CalendarEventQueryChangesResponse holds the response to the
+// CalendarEvent/queryChanges method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarEventQueryChangesResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The query state the changes are calculated from.
+	OldQueryState string `json:"oldQueryState"`
+
+	// The query state the client reaches by applying these changes.
+	NewQueryState string `json:"newQueryState"`
+
+	// The total number of matching records, present only if calculateTotal was
+	// true.
+	Total UnsignedInt `json:"total"`
+
+	// The ids to remove from the cached result list.
+	Removed []ID `json:"removed"`
+
+	// The ids to add to the cached result list, each with the index to insert it
+	// at.
+	Added []AddedItem `json:"added"`
+}
+
+// CalendarEventQueryResponse holds the response to the CalendarEvent/query
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarEventQueryResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// A string encoding the current state of the query on the server, for use
+	// with CalendarEvent/queryChanges.
+	QueryState string `json:"queryState"`
+
+	// Whether the server can calculate changes for this query.
+	CanCalculateChanges bool `json:"canCalculateChanges"`
+
+	// The zero-based index of the first returned id in the full result list.
+	Position UnsignedInt `json:"position"`
+
+	// The ids of the matching records, in sorted order.
+	IDs []ID `json:"ids"`
+
+	// The total number of matching records, present only if calculateTotal was
+	// true.
+	Total UnsignedInt `json:"total"`
+
+	// The limit the server applied, present only if it is lower than the one
+	// requested.
+	Limit UnsignedInt `json:"limit"`
+}
+
+// CalendarEventSetArguments holds the arguments of the CalendarEvent/set
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarEventSetArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The state the changes are expected to apply to. The call fails with a
+	// stateMismatch error if the server has moved on.
+	IfInState *string `json:"ifInState,omitzero"`
+
+	// A map of creation id to the record to create. A creation id may be
+	// referenced elsewhere in the same request as "#" followed by the id.
+	Create map[ID]CalendarEvent `json:"create,omitzero"`
+
+	// A map of record id to the patch to apply to it.
+	Update map[ID]PatchObject `json:"update,omitzero"`
+
+	// The ids of the records to destroy.
+	Destroy []ID `json:"destroy,omitzero"`
+
+	// Whether the server should send invitations and replies for the changes
+	// this call makes.
+	//
+	// The server assumes false when this property is omitted.
+	SendSchedulingMessages bool `json:"sendSchedulingMessages,omitzero"`
+}
+
+// CalendarEventSetResponse holds the response to the CalendarEvent/set
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarEventSetResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The state before these changes were applied, if the server tracks it.
+	OldState *string `json:"oldState"`
+
+	// The state after these changes were applied.
+	NewState string `json:"newState"`
+
+	// A map of creation id to the properties the server assigned to each created
+	// record.
+	Created map[ID]*CalendarEvent `json:"created"`
+
+	// A map of record id to any properties the server changed beyond those the
+	// patch set.
+	Updated map[ID]*CalendarEvent `json:"updated"`
+
+	// The ids of the records that were destroyed.
+	Destroyed []ID `json:"destroyed"`
+
+	// A map of creation id to the reason the record could not be created.
+	NotCreated map[ID]SetError `json:"notCreated"`
+
+	// A map of record id to the reason the record could not be updated.
+	NotUpdated map[ID]SetError `json:"notUpdated"`
+
+	// A map of record id to the reason the record could not be destroyed.
+	NotDestroyed map[ID]SetError `json:"notDestroyed"`
+}
+
+// CalendarGetArguments holds the arguments of the Calendar/get method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarGetArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The ids of the records to fetch, or null to fetch all of them.
+	IDs []ID `json:"ids,omitzero"`
+
+	// The properties to include in each returned record, or null for all of
+	// them. The id property is always returned.
+	Properties []string `json:"properties,omitzero"`
+}
+
+// CalendarGetResponse holds the response to the Calendar/get method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarGetResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// A string encoding the current state of the type on the server, for use
+	// with Calendar/changes.
+	State string `json:"state"`
+
+	// The records that were found, in an undefined order.
+	List []Calendar `json:"list"`
+
+	// The ids that were requested but do not exist.
+	NotFound []ID `json:"notFound"`
+}
+
+// CalendarPerson identifies whoever made a change to an event. The
+// specification calls it Person; the name is qualified here because it is far
+// too general to claim on its own.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarPerson struct {
+	// The name of the person who made the change.
+	Name string `json:"name,omitzero"`
+
+	// Their email address.
+	Email *string `json:"email,omitzero"`
+
+	// Their principal id, for someone the server knows.
+	PrincipalID *ID `json:"principalId,omitzero"`
+
+	// The calendar address they acted as.
+	CalendarAddress *string `json:"calendarAddress,omitzero"`
+}
+
+// CalendarRights says what the authenticated user may do with a calendar.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarRights struct {
+	// Whether the user may see when the calendar is busy, without seeing what
+	// for.
+	MayReadFreeBusy bool `json:"mayReadFreeBusy,omitzero"`
+
+	// Whether the user may read the events themselves.
+	MayReadItems bool `json:"mayReadItems,omitzero"`
+
+	// Whether the user may modify any event in the calendar.
+	MayWriteAll bool `json:"mayWriteAll,omitzero"`
+
+	// Whether the user may modify the events they own.
+	MayWriteOwn bool `json:"mayWriteOwn,omitzero"`
+
+	// Whether the user may change the properties that are private to them, such
+	// as alerts and colour.
+	MayUpdatePrivate bool `json:"mayUpdatePrivate,omitzero"`
+
+	// Whether the user may reply to invitations in the calendar.
+	MayRSVP bool `json:"mayRSVP,omitzero"`
+
+	// Whether the user may change who else the calendar is shared with.
+	MayShare bool `json:"mayShare,omitzero"`
+
+	// Whether the user may delete the calendar itself.
+	MayDelete bool `json:"mayDelete,omitzero"`
+}
+
+// CalendarSetArguments holds the arguments of the Calendar/set method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarSetArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The state the changes are expected to apply to. The call fails with a
+	// stateMismatch error if the server has moved on.
+	IfInState *string `json:"ifInState,omitzero"`
+
+	// A map of creation id to the record to create. A creation id may be
+	// referenced elsewhere in the same request as "#" followed by the id.
+	Create map[ID]Calendar `json:"create,omitzero"`
+
+	// A map of record id to the patch to apply to it.
+	Update map[ID]PatchObject `json:"update,omitzero"`
+
+	// The ids of the records to destroy.
+	Destroy []ID `json:"destroy,omitzero"`
+
+	// Whether destroying a calendar may also destroy the events in it. If false,
+	// destroying one that is not empty fails.
+	//
+	// The server assumes false when this property is omitted.
+	OnDestroyRemoveEvents bool `json:"onDestroyRemoveEvents,omitzero"`
+
+	// The id of the calendar to make the default once the other changes succeed.
+	OnSuccessSetIsDefault *ID `json:"onSuccessSetIsDefault,omitzero"`
+}
+
+// CalendarSetResponse holds the response to the Calendar/set method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type CalendarSetResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The state before these changes were applied, if the server tracks it.
+	OldState *string `json:"oldState"`
+
+	// The state after these changes were applied.
+	NewState string `json:"newState"`
+
+	// A map of creation id to the properties the server assigned to each created
+	// record.
+	Created map[ID]*Calendar `json:"created"`
+
+	// A map of record id to any properties the server changed beyond those the
+	// patch set.
+	Updated map[ID]*Calendar `json:"updated"`
+
+	// The ids of the records that were destroyed.
+	Destroyed []ID `json:"destroyed"`
+
+	// A map of creation id to the reason the record could not be created.
+	NotCreated map[ID]SetError `json:"notCreated"`
+
+	// A map of record id to the reason the record could not be updated.
+	NotUpdated map[ID]SetError `json:"notUpdated"`
+
+	// A map of record id to the reason the record could not be destroyed.
+	NotDestroyed map[ID]SetError `json:"notDestroyed"`
+}
+
 // Comparator is one term of the sort order applied by a /query call.
 type Comparator struct {
 	// The property of the record to compare.
@@ -2524,6 +3772,399 @@ type Envelope struct {
 	RcptTo []Address `json:"rcptTo,omitzero"`
 }
 
+// EventAbsoluteTrigger fires an alert at a fixed time, whatever the event
+// does. RFC 8984 calls it AbsoluteTrigger.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type EventAbsoluteTrigger struct {
+	// The type of this object, which is "AbsoluteTrigger".
+	Type string `json:"@type,omitzero"`
+
+	// When to fire the alert.
+	When UTCDate `json:"when,omitzero"`
+}
+
+// EventAlert is a reminder attached to an event. RFC 8984 calls it Alert.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type EventAlert struct {
+	// The type of this object, which is "Alert".
+	Type string `json:"@type,omitzero"`
+
+	// When to fire the alert, either relative to the event or at a fixed time. A
+	// trigger of a kind this catalogue does not know is left as it was written.
+	Trigger any `json:"trigger,omitzero"`
+
+	// When the user dismissed the alert.
+	Acknowledged UTCDate `json:"acknowledged,omitzero"`
+
+	// Other alerts this one relates to, keyed by their uid.
+	RelatedTo map[string]EventRelation `json:"relatedTo,omitzero"`
+
+	// What to do when the alert fires: "display" or "email".
+	//
+	// The server assumes "display" when this property is omitted.
+	Action *string `json:"action,omitzero"`
+}
+
+// EventLink is an external resource associated with an event, such as an
+// agenda or a conference recording. RFC 8984 calls it Link.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type EventLink struct {
+	// The type of this object, which is "Link".
+	Type string `json:"@type,omitzero"`
+
+	// The URI of the resource.
+	Href string `json:"href,omitzero"`
+
+	// The Content-ID of the resource, for one carried alongside the event.
+	Cid string `json:"cid,omitzero"`
+
+	// The media type of the resource.
+	ContentType string `json:"contentType,omitzero"`
+
+	// The size of the resource in octets.
+	Size UnsignedInt `json:"size,omitzero"`
+
+	// How the resource relates to the event, as an IANA-registered link relation
+	// such as "describedby" or "enclosure".
+	Rel string `json:"rel,omitzero"`
+
+	// How to display the resource, for one that is an image: "badge", "graphic",
+	// "fullsize", or "thumbnail".
+	Display string `json:"display,omitzero"`
+
+	// A human-readable description of the resource.
+	Title string `json:"title,omitzero"`
+}
+
+// EventLocation is a physical place an event happens at. RFC 8984 calls it
+// Location.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type EventLocation struct {
+	// The type of this object, which is "Location".
+	Type string `json:"@type,omitzero"`
+
+	// The name of the location.
+	Name string `json:"name,omitzero"`
+
+	// Directions or other detail about the location.
+	Description string `json:"description,omitzero"`
+
+	// What sort of place this is, mapped to true, using the values registered
+	// for RFC 4589.
+	LocationTypes map[string]bool `json:"locationTypes,omitzero"`
+
+	// What part of the event happens here: "start" or "end".
+	RelativeTo string `json:"relativeTo,omitzero"`
+
+	// The time zone of the location, where it differs from the event's own.
+	TimeZone TimeZoneID `json:"timeZone,omitzero"`
+
+	// The location as a geo: URI, as defined by RFC 5870.
+	Coordinates string `json:"coordinates,omitzero"`
+
+	// Resources about the location, keyed by an id local to the event.
+	Links map[ID]EventLink `json:"links,omitzero"`
+}
+
+// EventNDay names a day of the week within a recurrence, optionally counting
+// from the start or end of the period. RFC 8984 calls it NDay.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type EventNDay struct {
+	// The type of this object, which is "NDay".
+	Type string `json:"@type,omitzero"`
+
+	// The day of the week: "mo", "tu", "we", "th", "fr", "sa", or "su".
+	Day string `json:"day,omitzero"`
+
+	// Which occurrence of that day within the period, counting back from the end
+	// when negative. Absent means every one.
+	NthOfPeriod Int `json:"nthOfPeriod,omitzero"`
+}
+
+// EventOffsetTrigger fires an alert a set time before or after the event. RFC
+// 8984 calls it OffsetTrigger.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type EventOffsetTrigger struct {
+	// The type of this object, which is "OffsetTrigger".
+	Type string `json:"@type,omitzero"`
+
+	// How long before or after the reference point to fire, negative for before.
+	Offset SignedDuration `json:"offset,omitzero"`
+
+	// What the offset is measured from: "start" or "end".
+	//
+	// The server assumes "start" when this property is omitted.
+	RelativeTo *string `json:"relativeTo,omitzero"`
+}
+
+// EventParticipant is someone or something taking part in an event. RFC 8984
+// calls it Participant.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type EventParticipant struct {
+	// The type of this object, which is "Participant".
+	Type string `json:"@type,omitzero"`
+
+	// The participant's name.
+	Name string `json:"name,omitzero"`
+
+	// The participant's email address.
+	Email string `json:"email,omitzero"`
+
+	// A note about the participant.
+	Description string `json:"description,omitzero"`
+
+	// Where to send scheduling messages, keyed by method, such as "imip" mapped
+	// to a mailto: URI.
+	SendTo map[string]string `json:"sendTo,omitzero"`
+
+	// What the participant is: "individual", "group", "location", or "resource".
+	Kind string `json:"kind,omitzero"`
+
+	// What the participant is there for, mapped to true: "owner", "attendee",
+	// "optional", "informational", "chair", or "contact".
+	Roles map[string]bool `json:"roles,omitzero"`
+
+	// The id, within the event's locations, of where the participant will be.
+	LocationID ID `json:"locationId,omitzero"`
+
+	// The language to send scheduling messages in, as an RFC 5646 tag.
+	Language string `json:"language,omitzero"`
+
+	// Whether the participant is coming: "needs-action", "accepted", "declined",
+	// "tentative", or "delegated".
+	//
+	// The server assumes "needs-action" when this property is omitted.
+	ParticipationStatus *string `json:"participationStatus,omitzero"`
+
+	// A note the participant sent with their reply.
+	ParticipationComment string `json:"participationComment,omitzero"`
+
+	// Whether the participant is expected to reply.
+	//
+	// The server assumes false when this property is omitted.
+	ExpectReply bool `json:"expectReply,omitzero"`
+
+	// Who sends the scheduling messages: "server", "client", or "none".
+	//
+	// The server assumes "server" when this property is omitted.
+	ScheduleAgent *string `json:"scheduleAgent,omitzero"`
+
+	// Whether to send a scheduling message even though nothing the participant
+	// cares about has changed.
+	//
+	// The server assumes false when this property is omitted.
+	ScheduleForceSend bool `json:"scheduleForceSend,omitzero"`
+
+	// The sequence number of the last scheduling message sent to this
+	// participant.
+	//
+	// The server assumes 0 when this property is omitted.
+	ScheduleSequence UnsignedInt `json:"scheduleSequence,omitzero"`
+
+	// The status codes returned by the last scheduling attempt.
+	ScheduleStatus []string `json:"scheduleStatus,omitzero"`
+
+	// When the participant's own copy of the event was last updated.
+	ScheduleUpdated UTCDate `json:"scheduleUpdated,omitzero"`
+
+	// The address of whoever acted on the participant's behalf.
+	SentBy string `json:"sentBy,omitzero"`
+
+	// The id, within the event's participants, of whoever invited this one.
+	InvitedBy ID `json:"invitedBy,omitzero"`
+
+	// The participants this one has delegated to, mapped to true.
+	DelegatedTo map[ID]bool `json:"delegatedTo,omitzero"`
+
+	// The participants who delegated to this one, mapped to true.
+	DelegatedFrom map[ID]bool `json:"delegatedFrom,omitzero"`
+
+	// The group participants this one belongs to, mapped to true.
+	MemberOf map[ID]bool `json:"memberOf,omitzero"`
+
+	// Resources about the participant, keyed by an id local to the event.
+	Links map[ID]EventLink `json:"links,omitzero"`
+}
+
+// EventRecurrenceRule says how an event repeats. RFC 8984 calls it
+// RecurrenceRule.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type EventRecurrenceRule struct {
+	// The type of this object, which is "RecurrenceRule".
+	Type string `json:"@type,omitzero"`
+
+	// How often the event repeats: "yearly", "monthly", "weekly", "daily",
+	// "hourly", "minutely", or "secondly".
+	Frequency string `json:"frequency,omitzero"`
+
+	// How many periods to skip between occurrences, so 2 with a weekly frequency
+	// means every other week.
+	//
+	// The server assumes 1 when this property is omitted.
+	Interval *UnsignedInt `json:"interval,omitzero"`
+
+	// The calendar system the rule is expressed in, named as in CLDR.
+	//
+	// The server assumes "gregorian" when this property is omitted.
+	Rscale *string `json:"rscale,omitzero"`
+
+	// What to do when a rule lands on a date that does not exist, such as the
+	// 31st of a short month: "omit", "backward", or "forward".
+	//
+	// The server assumes "omit" when this property is omitted.
+	Skip *string `json:"skip,omitzero"`
+
+	// Which day a week starts on, which decides where weekly intervals fall.
+	//
+	// The server assumes "mo" when this property is omitted.
+	FirstDayOfWeek *string `json:"firstDayOfWeek,omitzero"`
+
+	// The days of the week the event falls on.
+	ByDay []EventNDay `json:"byDay,omitzero"`
+
+	// The days of the month, counting back from the end when negative.
+	ByMonthDay []Int `json:"byMonthDay,omitzero"`
+
+	// The months, as "1" through "12", with an "L" suffix for a leap month.
+	ByMonth []string `json:"byMonth,omitzero"`
+
+	// The days of the year, counting back from the end when negative.
+	ByYearDay []Int `json:"byYearDay,omitzero"`
+
+	// The weeks of the year, counting back from the end when negative.
+	ByWeekNo []Int `json:"byWeekNo,omitzero"`
+
+	// The hours of the day.
+	ByHour []UnsignedInt `json:"byHour,omitzero"`
+
+	// The minutes of the hour.
+	ByMinute []UnsignedInt `json:"byMinute,omitzero"`
+
+	// The seconds of the minute.
+	BySecond []UnsignedInt `json:"bySecond,omitzero"`
+
+	// Which of the occurrences the rest of the rule generates to keep, counting
+	// back from the end when negative.
+	BySetPosition []Int `json:"bySetPosition,omitzero"`
+
+	// How many occurrences to generate. It cannot be given together with until.
+	Count UnsignedInt `json:"count,omitzero"`
+
+	// The last date-time an occurrence may start at. It cannot be given together
+	// with count.
+	Until LocalDateTime `json:"until,omitzero"`
+}
+
+// EventRelation says how another object is related to this one. RFC 8984
+// calls it Relation.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type EventRelation struct {
+	// The type of this object, which is "Relation".
+	Type string `json:"@type,omitzero"`
+
+	// The kinds of relation, mapped to true: "first", "next", "child", or
+	// "parent". An empty object means the objects are related in a way this does
+	// not name.
+	//
+	// The server assumes an empty object when this property is omitted.
+	Relation map[string]bool `json:"relation,omitzero"`
+}
+
+// EventTimeZone is a time zone the event defines itself, for a zone the IANA
+// database does not have. RFC 8984 calls it TimeZone.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type EventTimeZone struct {
+	// The type of this object, which is "TimeZone".
+	Type string `json:"@type,omitzero"`
+
+	// The identifier of the zone within the event, which begins with "/".
+	TzID string `json:"tzId,omitzero"`
+
+	// When the definition was last updated.
+	Updated UTCDate `json:"updated,omitzero"`
+
+	// Where the authoritative definition of the zone is published.
+	URL string `json:"url,omitzero"`
+
+	// The point beyond which the rules given here are not known to hold.
+	ValidUntil UTCDate `json:"validUntil,omitzero"`
+
+	// Other names for this zone, mapped to true.
+	Aliases map[string]bool `json:"aliases,omitzero"`
+
+	// The rules for standard time.
+	Standard []EventTimeZoneRule `json:"standard,omitzero"`
+
+	// The rules for daylight saving time.
+	Daylight []EventTimeZoneRule `json:"daylight,omitzero"`
+}
+
+// EventTimeZoneRule is one rule of a custom time zone: when an offset starts
+// to apply, and what it is. RFC 8984 calls it TimeZoneRule.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type EventTimeZoneRule struct {
+	// The type of this object, which is "TimeZoneRule".
+	Type string `json:"@type,omitzero"`
+
+	// When this rule first applies, in local time.
+	Start LocalDateTime `json:"start,omitzero"`
+
+	// The UTC offset before the rule applies, such as "+0100".
+	OffsetFrom string `json:"offsetFrom,omitzero"`
+
+	// The UTC offset once the rule applies.
+	OffsetTo string `json:"offsetTo,omitzero"`
+
+	// How the rule repeats.
+	RecurrenceRules []EventRecurrenceRule `json:"recurrenceRules,omitzero"`
+
+	// Changes to particular occurrences of the rule, keyed by the start of the
+	// occurrence.
+	RecurrenceOverrides map[LocalDateTime]PatchObject `json:"recurrenceOverrides,omitzero"`
+
+	// The names of the zone while this rule applies, such as "GMT", mapped to
+	// true.
+	Names map[string]bool `json:"names,omitzero"`
+
+	// Comments about the rule.
+	Comments []string `json:"comments,omitzero"`
+}
+
+// EventVirtualLocation is somewhere online an event happens, such as a video
+// call. RFC 8984 calls it VirtualLocation.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type EventVirtualLocation struct {
+	// The type of this object, which is "VirtualLocation".
+	Type string `json:"@type,omitzero"`
+
+	// The name of the virtual location.
+	//
+	// The server assumes "" when this property is omitted.
+	Name *string `json:"name,omitzero"`
+
+	// Instructions for joining, or other detail.
+	Description string `json:"description,omitzero"`
+
+	// The URI to join at, such as a tel: or https: address.
+	URI string `json:"uri,omitzero"`
+
+	// What the location supports, mapped to true: "audio", "chat", "feed",
+	// "moderator", "phone", "screen", or "video".
+	Features map[string]bool `json:"features,omitzero"`
+}
+
 // FilterOperator is a boolean node combining the conditions of a /query
 // filter.
 type FilterOperator struct {
@@ -3099,6 +4740,208 @@ type MailboxSetResponse struct {
 
 	// A map of record id to the reason the record could not be destroyed.
 	NotDestroyed map[ID]SetError `json:"notDestroyed"`
+}
+
+// ParticipantIdentity is an address the user takes part in events as, which
+// is how the server knows which participant in an event is them.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type ParticipantIdentity struct {
+	// The id of the identity.
+	//
+	// The server sets this property; it may not be set by the client.
+	ID ID `json:"id,omitzero"`
+
+	// The name to send with scheduling messages.
+	//
+	// The server assumes "" when this property is omitted.
+	Name *string `json:"name,omitzero"`
+
+	// The address that identifies the user in an event's participants.
+	CalendarAddress string `json:"calendarAddress,omitzero"`
+
+	// Where the user receives scheduling messages, keyed by method.
+	SendTo map[string]string `json:"sendTo,omitzero"`
+
+	// Whether this is the identity used when the client does not say.
+	//
+	// The server sets this property; it may not be set by the client.
+	IsDefault bool `json:"isDefault,omitzero"`
+}
+
+// ParticipantIdentityChangesArguments holds the arguments of the
+// ParticipantIdentity/changes method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type ParticipantIdentityChangesArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The state string the client already has, as returned by an earlier
+	// ParticipantIdentity/get or ParticipantIdentity/changes.
+	SinceState string `json:"sinceState,omitzero"`
+
+	// The maximum number of ids to return across the three change lists.
+	MaxChanges *UnsignedInt `json:"maxChanges,omitzero"`
+}
+
+// ParticipantIdentityChangesResponse holds the response to the
+// ParticipantIdentity/changes method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type ParticipantIdentityChangesResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The state the changes are calculated from.
+	OldState string `json:"oldState"`
+
+	// The state the client reaches by applying these changes.
+	NewState string `json:"newState"`
+
+	// Whether further changes remain, in which case the call should be repeated
+	// from newState.
+	HasMoreChanges bool `json:"hasMoreChanges"`
+
+	// The ids of records created since oldState.
+	Created []ID `json:"created"`
+
+	// The ids of records updated since oldState.
+	Updated []ID `json:"updated"`
+
+	// The ids of records destroyed since oldState.
+	Destroyed []ID `json:"destroyed"`
+}
+
+// ParticipantIdentityGetArguments holds the arguments of the
+// ParticipantIdentity/get method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type ParticipantIdentityGetArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The ids of the records to fetch, or null to fetch all of them.
+	IDs []ID `json:"ids,omitzero"`
+
+	// The properties to include in each returned record, or null for all of
+	// them. The id property is always returned.
+	Properties []string `json:"properties,omitzero"`
+}
+
+// ParticipantIdentityGetResponse holds the response to the
+// ParticipantIdentity/get method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type ParticipantIdentityGetResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// A string encoding the current state of the type on the server, for use
+	// with ParticipantIdentity/changes.
+	State string `json:"state"`
+
+	// The records that were found, in an undefined order.
+	List []ParticipantIdentity `json:"list"`
+
+	// The ids that were requested but do not exist.
+	NotFound []ID `json:"notFound"`
+}
+
+// ParticipantIdentitySetArguments holds the arguments of the
+// ParticipantIdentity/set method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type ParticipantIdentitySetArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The state the changes are expected to apply to. The call fails with a
+	// stateMismatch error if the server has moved on.
+	IfInState *string `json:"ifInState,omitzero"`
+
+	// A map of creation id to the record to create. A creation id may be
+	// referenced elsewhere in the same request as "#" followed by the id.
+	Create map[ID]ParticipantIdentity `json:"create,omitzero"`
+
+	// A map of record id to the patch to apply to it.
+	Update map[ID]PatchObject `json:"update,omitzero"`
+
+	// The ids of the records to destroy.
+	Destroy []ID `json:"destroy,omitzero"`
+}
+
+// ParticipantIdentitySetResponse holds the response to the
+// ParticipantIdentity/set method.
+//
+// A request using this type must declare urn:ietf:params:jmap:calendars.
+type ParticipantIdentitySetResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The state before these changes were applied, if the server tracks it.
+	OldState *string `json:"oldState"`
+
+	// The state after these changes were applied.
+	NewState string `json:"newState"`
+
+	// A map of creation id to the properties the server assigned to each created
+	// record.
+	Created map[ID]*ParticipantIdentity `json:"created"`
+
+	// A map of record id to any properties the server changed beyond those the
+	// patch set.
+	Updated map[ID]*ParticipantIdentity `json:"updated"`
+
+	// The ids of the records that were destroyed.
+	Destroyed []ID `json:"destroyed"`
+
+	// A map of creation id to the reason the record could not be created.
+	NotCreated map[ID]SetError `json:"notCreated"`
+
+	// A map of record id to the reason the record could not be updated.
+	NotUpdated map[ID]SetError `json:"notUpdated"`
+
+	// A map of record id to the reason the record could not be destroyed.
+	NotDestroyed map[ID]SetError `json:"notDestroyed"`
+}
+
+// PrincipalGetAvailabilityArguments holds the arguments of the
+// Principal/getAvailability method.
+//
+// A request using this type must declare
+// urn:ietf:params:jmap:principals:availability.
+type PrincipalGetAvailabilityArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The id of the principal whose availability is wanted.
+	ID ID `json:"id,omitzero"`
+
+	// The start of the period to report on.
+	UTCStart UTCDate `json:"utcStart,omitzero"`
+
+	// The end of the period to report on.
+	UTCEnd UTCDate `json:"utcEnd,omitzero"`
+
+	// Whether to include the events themselves, for a caller allowed to see
+	// them.
+	//
+	// The server assumes false when this property is omitted.
+	ShowDetails bool `json:"showDetails,omitzero"`
+
+	// The properties to include in each event returned, or null for all of them.
+	EventProperties []string `json:"eventProperties,omitzero"`
+}
+
+// PrincipalGetAvailabilityResponse holds the response to the
+// Principal/getAvailability method.
+//
+// A request using this type must declare
+// urn:ietf:params:jmap:principals:availability.
+type PrincipalGetAvailabilityResponse struct {
+	// The periods the principal is busy in, merged and in no particular order.
+	List []BusyPeriod `json:"list"`
 }
 
 // SearchSnippet is the part of an email that matched a search, with the

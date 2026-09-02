@@ -50,6 +50,9 @@ var capabilityAliases = map[string]string{
 	"submission":       "urn:ietf:params:jmap:submission",
 	"vacationresponse": "urn:ietf:params:jmap:vacationresponse",
 	"contacts":         spec.CapabilityContacts,
+	"calendars":        spec.CapabilityCalendars,
+	"calendars:parse":  spec.CapabilityCalendarsParse,
+	"availability":     spec.CapabilityAvailability,
 }
 
 // QueryName returns the name a query file gives its query, which is the file
@@ -312,7 +315,7 @@ func (c *checker) resultRef(call *Call, field *spec.Field, raw json.RawMessage, 
 
 	got, err := c.spec.ResolvePath(from.Method.Name, ref.Path)
 	if err != nil {
-		c.errorf(where+".path", "", "%v", err)
+		c.errorf(where+".path", propertyHint(err), "%v", err)
 		return nil
 	}
 	want := field.ParsedType()

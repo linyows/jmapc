@@ -10,5 +10,6 @@ func Standard() *Spec {
 	registerSubmission(s)
 	registerVacation(s)
 	registerContacts(s)
+	registerCalendars(s)
 	return s
 }

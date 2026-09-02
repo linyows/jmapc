@@ -1,0 +1,43 @@
+{
+  "doc": "CreateEvent puts a weekly meeting in a calendar, with a reminder a quarter of an hour beforehand. An event's time is local, and the time zone is a property of its own, so that the meeting stays at nine when the clocks change.",
+
+  "methodCalls": [
+    ["CalendarEvent/set", {
+      "create": {
+        "meeting": {
+          "@type": "Event",
+          "uid": "{{uid}}",
+          "calendarIds": {"{{calendarId}}": true},
+          "title": "{{title}}",
+
+          "start": "{{start}}",
+          "duration": "{{duration}}",
+          "timeZone": "{{timeZone}}",
+
+          "recurrenceRules": [{
+            "frequency": "weekly",
+            "byDay": [{"day": "mo"}]
+          }],
+
+          "alerts": {
+            "reminder": {
+              "trigger": {"@type": "OffsetTrigger", "offset": "-PT15M"},
+              "action": "display"
+            }
+          },
+
+          "participants": {
+            "organiser": {
+              "email": "{{organiserAddress}}",
+              "roles": {"owner": true, "attendee": true},
+              "participationStatus": "accepted",
+              "sendTo": {"imip": "{{organiserSendTo}}"}
+            }
+          }
+        }
+      }
+    }, "create"]
+  ],
+
+  "returns": "create"
+}

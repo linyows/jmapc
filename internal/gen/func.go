@@ -19,6 +19,9 @@ var capabilityConstants = map[string]string{
 	"urn:ietf:params:jmap:submission":       "CapabilitySubmission",
 	"urn:ietf:params:jmap:vacationresponse": "CapabilityVacation",
 	spec.CapabilityContacts:                 "CapabilityContacts",
+	spec.CapabilityCalendars:                "CapabilityCalendars",
+	spec.CapabilityCalendarsParse:           "CapabilityCalendarsParse",
+	spec.CapabilityAvailability:             "CapabilityAvailability",
 }
 
 // writeFunc writes the function that sends the query and decodes its response.
