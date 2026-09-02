@@ -13,5 +13,6 @@ func Standard() *Spec {
 	registerCalendars(s)
 	registerSharing(s)
 	registerQuota(s)
+	registerSieve(s)
 	return s
 }

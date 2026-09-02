@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -51,6 +52,7 @@ func (s *stub) start() *httptest.Server {
 				jmapc.CapabilitySMIMEVerify: map[string]any{},
 				jmapc.CapabilityBlob:        map[string]any{},
 				jmapc.CapabilityQuota:       map[string]any{},
+				jmapc.CapabilitySieve:       map[string]any{"implementation": "stub 1.0"},
 			},
 			"accounts": map[string]any{
 				string(accountID): map[string]any{"name": "someone@example.com", "isPersonal": true},
@@ -63,6 +65,7 @@ func (s *stub) start() *httptest.Server {
 				jmapc.CapabilityPrincipals: string(accountID),
 				jmapc.CapabilityBlob:       string(accountID),
 				jmapc.CapabilityQuota:      string(accountID),
+				jmapc.CapabilitySieve:      string(accountID),
 			},
 			"username": "someone@example.com",
 			"apiUrl":   srv.URL + "/jmap/api/",
@@ -333,7 +336,9 @@ func TestPreflightRejectsUnknownCapability(t *testing.T) {
 	c := jmapc.New(srv.URL+"/.well-known/jmap", jmapc.WithBearerToken("token"))
 
 	_, err := c.Do(context.Background(), &jmapc.Request{
-		Using: []string{"urn:ietf:params:jmap:sieve"},
+		// Deliberately not a real capability: naming one that jmapc might
+		// support later would make this test fail the day it does.
+		Using: []string{"urn:example:params:jmap:nonesuch"},
 	})
 	if err == nil {
 		t.Fatal("expected an error")
@@ -1063,5 +1068,100 @@ func TestMailQuota(t *testing.T) {
 	// A soft limit is optional, and this server does not set one.
 	if q.SoftLimit != nil {
 		t.Errorf("softLimit = %v, want nil", *q.SoftLimit)
+	}
+}
+
+// TestInstallSieveScript covers JMAP for Sieve Scripts together with the blob
+// extension. A script's text is a blob rather than a property, so installing
+// one means uploading and storing; doing both in one request is what keeps a
+// script that fails to parse from ever being activated.
+func TestInstallSieveScript(t *testing.T) {
+	s := &stub{t: t, response: `{
+	  "sessionState": "session-1",
+	  "methodResponses": [
+	    ["Blob/upload", {"accountId": "acct1",
+	                     "created": {"text": {"id": "blob7", "type": "application/sieve", "size": 42}}}, "upload"],
+	    ["SieveScript/set", {"accountId": "acct1", "newState": "v2",
+	                         "created": {"filter": {"id": "script9", "isActive": true}}}, "install"]
+	  ]
+	}`}
+
+	got, err := jmapq.InstallSieveScript(context.Background(), s.client(), jmapq.InstallSieveScriptParams{
+		Name:   "vacation",
+		Script: `require "vacation"; vacation :days 7 "Away until Monday.";`,
+	})
+	if err != nil {
+		t.Fatalf("InstallSieveScript: %v", err)
+	}
+
+	_, upload := s.call(t, "upload")
+	text := upload["create"].(map[string]any)["text"].(map[string]any)
+	if ty := text["type"]; ty != "application/sieve" {
+		t.Errorf("blob type = %v", ty)
+	}
+
+	_, install := s.call(t, "install")
+	script := install["create"].(map[string]any)["filter"].(map[string]any)
+	// The script refers to the blob by its creation id: the upload happened in
+	// this same request, so no id has come back to the client.
+	if script["blobId"] != "#text" {
+		t.Errorf("blobId = %v, want the creation id #text", script["blobId"])
+	}
+	// Activation refers to the script the same way, and deactivation is asked
+	// for first so that there is no moment with two active scripts.
+	if install["onSuccessActivateScript"] != "#filter" {
+		t.Errorf("onSuccessActivateScript = %v", install["onSuccessActivateScript"])
+	}
+	if install["onSuccessDeactivateScript"] != true {
+		t.Errorf("onSuccessDeactivateScript = %v", install["onSuccessDeactivateScript"])
+	}
+
+	if !got.Created["filter"].IsActive {
+		t.Errorf("installed script = %+v, want it active", got.Created["filter"])
+	}
+}
+
+// TestCheckSieveScript covers validation, which reports what is wrong with a
+// script without storing it.
+func TestCheckSieveScript(t *testing.T) {
+	s := &stub{t: t, response: `{
+	  "sessionState": "session-1",
+	  "methodResponses": [
+	    ["Blob/upload", {"accountId": "acct1",
+	                     "created": {"draft": {"id": "blob8", "type": "application/sieve", "size": 9}}}, "upload"],
+	    ["SieveScript/validate", {"accountId": "acct1", "error": {
+	      "type": "invalidSieve",
+	      "description": "line 1: unknown command 'keeep'"
+	    }}, "check"]
+	  ]
+	}`}
+
+	got, err := jmapq.CheckSieveScript(context.Background(), s.client(), jmapq.CheckSieveScriptParams{
+		Script: "keeep;",
+	})
+	if err != nil {
+		t.Fatalf("CheckSieveScript: %v", err)
+	}
+
+	// The blob id comes from the upload in the same request, by back reference.
+	_, check := s.call(t, "check")
+	ref, ok := check["#blobId"].(map[string]any)
+	if !ok {
+		t.Fatalf("#blobId = %v, want a result reference", check["#blobId"])
+	}
+	if ref["path"] != "/created/draft/id" {
+		t.Errorf("#blobId reads %v, want the created blob's id", ref["path"])
+	}
+
+	// A script that does not parse is reported rather than stored, and the
+	// method itself succeeds: being wrong about Sieve is not a JMAP error.
+	if got.Error == nil {
+		t.Fatal("expected an error describing the script")
+	}
+	if got.Error.Type != "invalidSieve" {
+		t.Errorf("error type = %q, want invalidSieve", got.Error.Type)
+	}
+	if !strings.Contains(got.Error.Description, "keeep") {
+		t.Errorf("description = %q", got.Error.Description)
 	}
 }

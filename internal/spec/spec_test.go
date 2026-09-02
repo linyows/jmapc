@@ -243,6 +243,7 @@ func TestStandardCatalogueCovers(t *testing.T) {
 		"SearchSnippet/get",
 		"ShareNotification/changes", "ShareNotification/get", "ShareNotification/query",
 		"ShareNotification/queryChanges", "ShareNotification/set",
+		"SieveScript/get", "SieveScript/query", "SieveScript/set", "SieveScript/validate",
 		"Thread/changes", "Thread/get",
 		"VacationResponse/get", "VacationResponse/set",
 	}
