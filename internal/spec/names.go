@@ -20,6 +20,7 @@ var initialisms = map[string]string{
 	"id":    "ID",
 	"imap":  "IMAP",
 	"json":  "JSON",
+	"mdn":   "MDN",
 	"mime":  "MIME",
 	"rfc":   "RFC",
 	"smime": "SMIME",

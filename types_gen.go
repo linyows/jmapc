@@ -3711,7 +3711,7 @@ type EmailSubmission struct {
 	// submission.
 	//
 	// The server sets this property; it may not be set by the client.
-	MdnBlobIDs []ID `json:"mdnBlobIds,omitzero"`
+	MDNBlobIDs []ID `json:"mdnBlobIds,omitzero"`
 }
 
 // EmailSubmissionChangesArguments holds the arguments of the
@@ -4602,6 +4602,150 @@ type IdentitySetResponse struct {
 
 	// A map of record id to the reason the record could not be destroyed.
 	NotDestroyed map[ID]SetError `json:"notDestroyed"`
+}
+
+// MDN is a message disposition notification: a receipt saying what became of
+// a message the user received. Sending one is a courtesy the recipient
+// decides on, not something the sender can require.
+//
+// A request using this type must declare urn:ietf:params:jmap:mdn.
+type MDN struct {
+	// The id of the email this is about. It is required when sending, and may be
+	// null in one that was parsed, where the message it refers to may not be in
+	// the account.
+	ForEmailID *ID `json:"forEmailId,omitzero"`
+
+	// The Subject header field for the notification itself.
+	Subject *string `json:"subject,omitzero"`
+
+	// A human-readable explanation, which the notification carries alongside the
+	// machine-readable part.
+	TextBody *string `json:"textBody,omitzero"`
+
+	// Whether to send the original message back with the notification.
+	//
+	// The server assumes false when this property is omitted.
+	IncludeOriginalMessage bool `json:"includeOriginalMessage,omitzero"`
+
+	// The name of the software that produced the notification.
+	ReportingUA *string `json:"reportingUA,omitzero"`
+
+	// What became of the message.
+	Disposition MDNDisposition `json:"disposition,omitzero"`
+
+	// The gateway that translated the notification, for one that crossed from
+	// another mail system.
+	//
+	// The server sets this property; it may not be set by the client.
+	MDNGateway *string `json:"mdnGateway,omitzero"`
+
+	// The address the original message was addressed to, which may differ from
+	// where it ended up.
+	//
+	// The server sets this property; it may not be set by the client.
+	OriginalRecipient *string `json:"originalRecipient,omitzero"`
+
+	// The address the notification is sent on behalf of. The server fills it in
+	// from the identity when it is not given.
+	FinalRecipient *string `json:"finalRecipient,omitzero"`
+
+	// The Message-ID of the message this is about.
+	//
+	// The server sets this property; it may not be set by the client.
+	OriginalMessageID *string `json:"originalMessageId,omitzero"`
+
+	// What went wrong, for a notification whose disposition reports a failure.
+	//
+	// The server sets this property; it may not be set by the client.
+	Error []string `json:"error,omitzero"`
+
+	// Fields beyond those the specification defines, keyed by field name.
+	ExtensionFields map[string]string `json:"extensionFields,omitzero"`
+}
+
+// MDNDisposition says what became of the message and how much of that the
+// user chose. RFC 9007 calls it Disposition; the name is qualified here
+// because it is too general to claim on its own.
+//
+// A request using this type must declare urn:ietf:params:jmap:mdn.
+type MDNDisposition struct {
+	// Whether the user did this themselves or the client did it for them:
+	// "manual-action" or "automatic-action".
+	ActionMode string `json:"actionMode,omitzero"`
+
+	// Whether the user chose to send the notification: "mdn-sent-manually" if
+	// they were asked, "mdn-sent-automatically" if the client sent it without
+	// asking.
+	SendingMode string `json:"sendingMode,omitzero"`
+
+	// What happened to the message: "deleted" without being read, "dispatched"
+	// onwards, "displayed" to the user, or "processed" in some way the other
+	// three do not cover.
+	Type string `json:"type,omitzero"`
+}
+
+// MDNParseArguments holds the arguments of the MDN/parse method.
+//
+// A request using this type must declare urn:ietf:params:jmap:mdn.
+type MDNParseArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The ids of the blobs to read as notifications.
+	BlobIDs []ID `json:"blobIds,omitzero"`
+}
+
+// MDNParseResponse holds the response to the MDN/parse method.
+//
+// A request using this type must declare urn:ietf:params:jmap:mdn.
+type MDNParseResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The notification found in each blob, keyed by blob id.
+	Parsed map[ID]MDN `json:"parsed"`
+
+	// The ids of the blobs that do not hold a notification the server could
+	// read.
+	NotParsable []ID `json:"notParsable"`
+
+	// The ids of the blobs that do not exist.
+	NotFound []ID `json:"notFound"`
+}
+
+// MDNSendArguments holds the arguments of the MDN/send method.
+//
+// A request using this type must declare urn:ietf:params:jmap:mdn.
+type MDNSendArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The identity to send from, which decides both the sender and the address
+	// the notification is issued for.
+	IdentityID ID `json:"identityId,omitzero"`
+
+	// The notifications to send, keyed by creation id.
+	Send map[ID]MDN `json:"send,omitzero"`
+
+	// Patches to apply to the emails of the notifications that were sent, keyed
+	// by creation id. This is where the $mdnsent keyword is set, so that a
+	// receipt is not sent for the same message twice.
+	OnSuccessUpdateEmail map[ID]PatchObject `json:"onSuccessUpdateEmail,omitzero"`
+}
+
+// MDNSendResponse holds the response to the MDN/send method.
+//
+// A request using this type must declare urn:ietf:params:jmap:mdn.
+type MDNSendResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The notifications that were sent, with the properties the server filled
+	// in, keyed by creation id.
+	Sent map[ID]MDN `json:"sent"`
+
+	// A map of creation id to the reason the notification could not be sent.
+	NotSent map[ID]SetError `json:"notSent"`
 }
 
 // Mailbox is a named set of emails, which is how JMAP models both folders and

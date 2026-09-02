@@ -235,6 +235,7 @@ func TestStandardCatalogueCovers(t *testing.T) {
 		"EmailSubmission/changes", "EmailSubmission/get", "EmailSubmission/query",
 		"EmailSubmission/queryChanges", "EmailSubmission/set",
 		"Identity/changes", "Identity/get", "Identity/set",
+		"MDN/parse", "MDN/send",
 		"Mailbox/changes", "Mailbox/get", "Mailbox/query", "Mailbox/queryChanges", "Mailbox/set",
 		"ParticipantIdentity/changes", "ParticipantIdentity/get", "ParticipantIdentity/set",
 		"Principal/changes", "Principal/get", "Principal/getAvailability",

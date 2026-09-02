@@ -82,6 +82,7 @@ var capabilityAliases = map[string]string{
 	"blob":             spec.CapabilityBlob,
 	"quota":            spec.CapabilityQuota,
 	"sieve":            spec.CapabilitySieve,
+	"mdn":              spec.CapabilityMDN,
 }
 
 // QueryName returns the name a query file gives its query, which is the file

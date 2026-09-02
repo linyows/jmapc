@@ -1,0 +1,27 @@
+{
+  "_doc": "SendReadReceipt tells the sender of a message that it was displayed, and marks the message so that the receipt is not sent again. Sending one is the recipient's choice: nothing in a message can require it.",
+
+  "methodCalls": [
+    ["MDN/send", {
+      "_comment": "The disposition says both what became of the message and how much of that the user chose. Here they read it and were asked whether to send the receipt.",
+      "identityId": "{{identityId}}",
+      "send": {
+        "receipt": {
+          "forEmailId": "{{emailId}}",
+          "subject": "{{subject}}",
+          "textBody": "{{body}}",
+          "disposition": {
+            "actionMode": "manual-action",
+            "sendingMode": "mdn-sent-manually",
+            "type": "displayed"
+          }
+        }
+      },
+      "onSuccessUpdateEmail": {
+        "#receipt": {"keywords/$mdnsent": true}
+      }
+    }, "send"]
+  ],
+
+  "_returns": "send"
+}

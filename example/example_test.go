@@ -53,6 +53,7 @@ func (s *stub) start() *httptest.Server {
 				jmapc.CapabilityBlob:        map[string]any{},
 				jmapc.CapabilityQuota:       map[string]any{},
 				jmapc.CapabilitySieve:       map[string]any{"implementation": "stub 1.0"},
+				jmapc.CapabilityMDN:         map[string]any{},
 			},
 			"accounts": map[string]any{
 				string(accountID): map[string]any{"name": "someone@example.com", "isPersonal": true},
@@ -66,6 +67,7 @@ func (s *stub) start() *httptest.Server {
 				jmapc.CapabilityBlob:       string(accountID),
 				jmapc.CapabilityQuota:      string(accountID),
 				jmapc.CapabilitySieve:      string(accountID),
+				jmapc.CapabilityMDN:        string(accountID),
 			},
 			"username": "someone@example.com",
 			"apiUrl":   srv.URL + "/jmap/api/",
@@ -1163,5 +1165,60 @@ func TestCheckSieveScript(t *testing.T) {
 	}
 	if !strings.Contains(got.Error.Description, "keeep") {
 		t.Errorf("description = %q", got.Error.Description)
+	}
+}
+
+// TestSendReadReceipt covers message disposition notifications. Sending one is
+// the recipient's choice — nothing in a message can require it — and the point
+// of the patch applied on success is that it is not sent twice.
+func TestSendReadReceipt(t *testing.T) {
+	s := &stub{t: t, response: `{
+	  "sessionState": "session-1",
+	  "methodResponses": [
+	    ["MDN/send", {"accountId": "acct1", "sent": {"receipt": {
+	      "forEmailId": "e1",
+	      "originalMessageId": "<abc@example.com>",
+	      "finalRecipient": "rfc822; me@example.com",
+	      "disposition": {"actionMode": "manual-action", "sendingMode": "mdn-sent-manually", "type": "displayed"}
+	    }}}, "send"]
+	  ]
+	}`}
+
+	got, err := jmapq.SendReadReceipt(context.Background(), s.client(), jmapq.SendReadReceiptParams{
+		IdentityID: "id1",
+		EmailID:    "e1",
+		Subject:    "Read: Lunch",
+		Body:       "Your message was displayed.",
+	})
+	if err != nil {
+		t.Fatalf("SendReadReceipt: %v", err)
+	}
+
+	_, args := s.call(t, "send")
+	receipt := args["send"].(map[string]any)["receipt"].(map[string]any)
+	if receipt["forEmailId"] != "e1" {
+		t.Errorf("forEmailId = %v", receipt["forEmailId"])
+	}
+	disposition := receipt["disposition"].(map[string]any)
+	if disposition["type"] != "displayed" {
+		t.Errorf("disposition type = %v, want displayed", disposition["type"])
+	}
+	// The mode says the user was asked, rather than the client deciding for
+	// them, which is a distinction the recipient's software is expected to
+	// report honestly.
+	if disposition["sendingMode"] != "mdn-sent-manually" {
+		t.Errorf("sendingMode = %v", disposition["sendingMode"])
+	}
+
+	// The keyword goes on the email, not on the notification, so that asking
+	// again finds it already sent.
+	patch := args["onSuccessUpdateEmail"].(map[string]any)["#receipt"].(map[string]any)
+	if patch["keywords/$mdnsent"] != true {
+		t.Errorf("patch = %v, want the $mdnsent keyword set", patch)
+	}
+
+	sent := got.Sent["receipt"]
+	if sent.OriginalMessageID == nil || *sent.OriginalMessageID != "<abc@example.com>" {
+		t.Errorf("originalMessageId = %v", sent.OriginalMessageID)
 	}
 }

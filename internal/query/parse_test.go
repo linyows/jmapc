@@ -1170,3 +1170,85 @@ func TestSieveChecks(t *testing.T) {
 		})
 	}
 }
+
+// TestMDN covers message disposition notifications. An MDN is not stored: it is
+// a message the server composes and sends, so there is no /get and no /set.
+func TestMDN(t *testing.T) {
+	q := parse(t, "SendReadReceipt"+Extension, `{
+	  "methodCalls": [
+	    ["MDN/send", {
+	      "identityId": "{{identityId}}",
+	      "send": {
+	        "receipt": {
+	          "forEmailId": "{{emailId}}",
+	          "subject": "{{subject}}",
+	          "disposition": {
+	            "actionMode": "manual-action",
+	            "sendingMode": "mdn-sent-manually",
+	            "type": "displayed"
+	          }
+	        }
+	      },
+	      "onSuccessUpdateEmail": {"#receipt": {"keywords/$mdnsent": true}}
+	    }, "send"]
+	  ],
+	  "_returns": "send"
+	}`)
+	want := "urn:ietf:params:jmap:core urn:ietf:params:jmap:mdn"
+	if got := strings.Join(q.Using, " "); got != want {
+		t.Errorf("Using = %q, want %q", got, want)
+	}
+}
+
+func TestMDNChecks(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want string
+	}{{
+		name: "no get method",
+		src:  `{"methodCalls": [["MDN/get", {"ids": ["m1"]}, "c0"]]}`,
+		want: `unknown method "MDN/get"`,
+	}, {
+		name: "disposition type",
+		src: `{"methodCalls": [["MDN/send", {"send": {"r": {
+			"disposition": {"actionMode": "manual-action", "sendingMode": "mdn-sent-manually", "type": "read"}
+		}}}, "c0"]]}`,
+		want: `"read" is not one of the values this property takes (deleted, dispatched, displayed, processed)`,
+	}, {
+		name: "sending mode",
+		src: `{"methodCalls": [["MDN/send", {"send": {"r": {
+			"disposition": {"sendingMode": "automatic"}
+		}}}, "c0"]]}`,
+		want: `"automatic" is not one of the values this property takes`,
+	}, {
+		name: "misspelled property",
+		src:  `{"methodCalls": [["MDN/send", {"send": {"r": {"forEmailID": "e1"}}}, "c0"]]}`,
+		want: `did you mean "forEmailId"?`,
+	}, {
+		// The patch applied on success goes to the Email, not to the MDN, so
+		// it is checked against Email's properties.
+		name: "patch is against the email",
+		src: `{"methodCalls": [["MDN/send", {
+			"onSuccessUpdateEmail": {"#r": {"keywrds/$mdnsent": true}}
+		}, "c0"]]}`,
+		want: `Email has no property "keywrds"`,
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseErr(t, tt.src)
+			if !strings.Contains(got, tt.want) {
+				t.Errorf("error was:\n%s\nwant it to mention: %s", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestMDNParse covers reading a notification that arrived as a message, which
+// is how a client tells the user what became of something they sent.
+func TestMDNParse(t *testing.T) {
+	parse(t, "ReadReceipt"+Extension, `{"methodCalls": [
+	  ["Email/get", {"ids": ["{{emailId}}"], "properties": ["id", "attachments"]}, "c0"],
+	  ["MDN/parse", {"blobIds": ["{{blobId}}"]}, "c1"]
+	]}`)
+}
