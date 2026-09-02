@@ -407,3 +407,51 @@ func TestHeaderProperties(t *testing.T) {
 		}
 	}
 }
+
+// TestTSType covers the TypeScript rendering of the type expressions, which
+// differs from Go in two ways worth pinning down: null is a union member rather
+// than a pointer, and a union of shapes stays a union rather than collapsing to
+// the language's any.
+func TestTSType(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"String", "string"},
+		{"String|null", "string | null"},
+		{"Id", "Id"},
+		{"Id[]", "Id[]"},
+		{"Id[]|null", "Id[] | null"},
+		{"Id[Boolean]", "{ [key: Id]: boolean }"},
+		{"String[EmailBodyValue]", "{ [key: string]: EmailBodyValue }"},
+		{"UnsignedInt", "number"},
+		{"UTCDate|null", "UTCDate | null"},
+		{"EmailAddress[]|null", "EmailAddress[] | null"},
+		{"FilterOperator|EmailFilterCondition|null", "FilterOperator | EmailFilterCondition | null"},
+		{"(Date|null)[]", "(Date | null)[]"},
+		{"(String[]|null)[]", "(string[] | null)[]"},
+		{"Id[Email|null]|null", "{ [key: Id]: Email | null } | null"},
+		{"Any", "unknown"},
+	}
+	for _, tt := range tests {
+		got := MustParseType(tt.in).TSType()
+		if got != tt.want {
+			t.Errorf("%q.TSType() = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+// TestTSNeedsQuoting covers the member names that cannot be written bare, which
+// JMAP has more of than most data models: header field properties, the @type
+// discriminator, and the data forms of a blob.
+func TestTSNeedsQuoting(t *testing.T) {
+	bare := []string{"id", "receivedAt", "mailboxIds", "isEnabled", "_comment"}
+	quoted := []string{"@type", "header:List-Id:asText", "data:asText", "name/given", "digest:sha-256"}
+	for _, name := range bare {
+		if TSNeedsQuoting(name) {
+			t.Errorf("%q needs quoting, want bare", name)
+		}
+	}
+	for _, name := range quoted {
+		if !TSNeedsQuoting(name) {
+			t.Errorf("%q is written bare, want quoted", name)
+		}
+	}
+}

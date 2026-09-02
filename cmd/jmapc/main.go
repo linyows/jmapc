@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/linyows/jmapc/internal/gen"
+	"github.com/linyows/jmapc/internal/gen/ts"
 	"github.com/linyows/jmapc/internal/query"
 	"github.com/linyows/jmapc/internal/spec"
 )
@@ -34,8 +35,12 @@ type Config struct {
 	Queries string `json:"queries"`
 	// Out is the directory the generated Go is written to.
 	Out string `json:"out"`
+	// Lang is the language to generate, "go" or "typescript". It defaults to
+	// Go.
+	Lang string `json:"lang"`
 	// Package is the name of the generated package, defaulting to the base
-	// name of the output directory.
+	// name of the output directory. It has no meaning for TypeScript, where a
+	// module is a file.
 	Package string `json:"package"`
 	// Schemas are files describing the types and methods a server offers
 	// beyond the specifications jmapc knows, which queries may then use.
@@ -62,7 +67,8 @@ Flags:
 	-config string    settings file to read (default ` + ConfigName + ` if present)
 	-queries string   directory holding the query files (default "queries")
 	-out string       directory to write the generated client to (default "jmapq")
-	-package string   name of the generated package (default: the name of -out)
+	-lang string      language to generate: go or typescript (default go)
+	-package string   name of the generated package, for Go (default: the name of -out)
 	-schema string    schema file describing a vendor extension; repeatable
 
 A query file is named after the function to generate, as in
@@ -93,6 +99,7 @@ func run(args []string) error {
 		configPath = fs.String("config", "", "settings file to read")
 		queries    = fs.String("queries", "", "directory holding the query files")
 		out        = fs.String("out", "", "directory to write the generated client to")
+		lang       = fs.String("lang", "", "language to generate: go or typescript")
 		pkg        = fs.String("package", "", "name of the generated package")
 		schemas    stringList
 	)
@@ -112,6 +119,9 @@ func run(args []string) error {
 	if *out != "" {
 		cfg.Out = *out
 	}
+	if *lang != "" {
+		cfg.Lang = *lang
+	}
 	if *pkg != "" {
 		cfg.Package = *pkg
 	}
@@ -119,6 +129,9 @@ func run(args []string) error {
 		cfg.Schemas = append(cfg.Schemas, schemas...)
 	}
 	cfg.applyDefaults()
+	if err := cfg.check(); err != nil {
+		return err
+	}
 
 	catalogue, err := loadCatalogue(cfg.Schemas)
 	if err != nil {
@@ -197,13 +210,7 @@ func (l *stringList) Set(v string) error {
 
 // write generates the client and puts it on disk.
 func write(cfg *Config, catalogue *spec.Spec, queries []*query.Query) error {
-	g := &gen.QueryGenerator{
-		Spec:      catalogue,
-		Package:   cfg.Package,
-		Qualifier: "jmapc.",
-		Queries:   queries,
-	}
-	files, err := g.Generate()
+	files, err := generate(cfg, catalogue, queries)
 	if err != nil {
 		return err
 	}
@@ -223,6 +230,40 @@ func write(cfg *Config, catalogue *spec.Spec, queries []*query.Query) error {
 		fmt.Println(path)
 	}
 	return nil
+}
+
+// generate produces the files for the configured language. TypeScript takes
+// the runtime with it: there is no package to depend on, so the client and the
+// data types are written alongside the queries.
+func generate(cfg *Config, catalogue *spec.Spec, queries []*query.Query) (map[string][]byte, error) {
+	if cfg.Lang == LangTypeScript {
+		files, err := (&ts.QueryGenerator{Spec: catalogue, Queries: queries}).Generate()
+		if err != nil {
+			return nil, err
+		}
+		types, err := (&ts.TypeGenerator{
+			Spec: catalogue,
+			// PatchObject is written by hand in the runtime, being a shape
+			// rather than a record.
+			Skip: map[string]bool{"PatchObject": true},
+		}).Generate()
+		if err != nil {
+			return nil, err
+		}
+		client, err := (&ts.ClientGenerator{}).Generate()
+		if err != nil {
+			return nil, err
+		}
+		files["types.ts"] = types
+		files["client.ts"] = client
+		return files, nil
+	}
+	return (&gen.QueryGenerator{
+		Spec:      catalogue,
+		Package:   cfg.Package,
+		Qualifier: "jmapc.",
+		Queries:   queries,
+	}).Generate()
 }
 
 // loadConfig reads the settings file, treating a missing default file as an
@@ -248,6 +289,12 @@ func loadConfig(path string) (*Config, error) {
 	return &cfg, nil
 }
 
+// Languages jmapc can generate.
+const (
+	LangGo         = "go"
+	LangTypeScript = "typescript"
+)
+
 // applyDefaults fills in the settings that were not given.
 func (c *Config) applyDefaults() {
 	if c.Queries == "" {
@@ -256,9 +303,21 @@ func (c *Config) applyDefaults() {
 	if c.Out == "" {
 		c.Out = "jmapq"
 	}
+	if c.Lang == "" {
+		c.Lang = LangGo
+	}
 	if c.Package == "" {
 		c.Package = filepath.Base(c.Out)
 	}
+}
+
+// check reports a setting that cannot be acted on.
+func (c *Config) check() error {
+	switch c.Lang {
+	case LangGo, LangTypeScript:
+		return nil
+	}
+	return fmt.Errorf("cannot generate %q; the languages are %s and %s", c.Lang, LangGo, LangTypeScript)
 }
 
 // findQueries returns the query files under dir, in a stable order.
