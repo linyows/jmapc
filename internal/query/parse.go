@@ -151,6 +151,11 @@ type checker struct {
 	// sortTarget names the data type whose sortable properties a Comparator
 	// being checked may name, carried down the same way.
 	sortTarget string
+
+	// enum holds the values the property being checked may take, for one whose
+	// specification fixes them. It travels with the property so that it reaches
+	// the elements of an array and the keys of a set.
+	enum []string
 }
 
 // errorf records a problem and returns it, so that a hint can be chained on.
@@ -269,15 +274,16 @@ func (c *checker) arguments(call *Call, argsType *spec.Object, raw json.RawMessa
 			}
 			continue
 		}
-		savedPatch, savedSort := c.patchTarget, c.sortTarget
+		savedPatch, savedSort, savedEnum := c.patchTarget, c.sortTarget, c.enum
 		if field.PatchTarget != "" {
 			c.patchTarget = field.PatchTarget
 		}
 		if field.SortTarget != "" {
 			c.sortTarget = field.SortTarget
 		}
+		c.enum = field.Enum
 		node := c.value(field.ParsedType(), members[key], where+"."+key, field.Doc)
-		c.patchTarget, c.sortTarget = savedPatch, savedSort
+		c.patchTarget, c.sortTarget, c.enum = savedPatch, savedSort, savedEnum
 		out.Fields = append(out.Fields, ObjectField{Key: key, Value: node})
 	}
 	return out

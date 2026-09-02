@@ -46,15 +46,16 @@ type SchemaType struct {
 
 // SchemaField is one property of a type, or one argument of a method.
 type SchemaField struct {
-	Name        string `json:"name"`
-	Type        string `json:"type"`
-	Doc         string `json:"doc"`
-	Required    bool   `json:"required"`
-	ServerSet   bool   `json:"serverSet"`
-	Immutable   bool   `json:"immutable"`
-	Default     string `json:"default"`
-	PatchTarget string `json:"patchTarget"`
-	SortTarget  string `json:"sortTarget"`
+	Name        string   `json:"name"`
+	Type        string   `json:"type"`
+	Doc         string   `json:"doc"`
+	Required    bool     `json:"required"`
+	Enum        []string `json:"enum"`
+	ServerSet   bool     `json:"serverSet"`
+	Immutable   bool     `json:"immutable"`
+	Default     string   `json:"default"`
+	PatchTarget string   `json:"patchTarget"`
+	SortTarget  string   `json:"sortTarget"`
 }
 
 // SchemaSort is one sortable property of a type.
@@ -338,6 +339,7 @@ func schemaFields(where string, in []*SchemaField) ([]*Field, error) {
 			Type:        f.Type,
 			Doc:         f.Doc,
 			Required:    f.Required,
+			Enum:        f.Enum,
 			ServerSet:   f.ServerSet,
 			Immutable:   f.Immutable,
 			Default:     f.Default,

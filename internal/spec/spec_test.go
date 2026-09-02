@@ -282,3 +282,40 @@ func TestEchoTakesAnything(t *testing.T) {
 		t.Errorf("Core/echo declares %d arguments, want none", len(args.Fields))
 	}
 }
+
+// TestEnumValuesAppearInDocs checks that every value a property is allowed to
+// take is also named in that property's documentation. The two are written
+// separately — one for the checker, one for the reader — and nothing else would
+// notice them drifting apart.
+func TestEnumValuesAppearInDocs(t *testing.T) {
+	s := Standard()
+	for _, o := range s.Objects() {
+		for _, f := range o.Fields {
+			for _, value := range f.Enum {
+				if !strings.Contains(f.Doc, `"`+value+`"`) {
+					t.Errorf("%s.%s allows %q, but its documentation does not mention it:\n\t%s",
+						o.Name, f.Name, value, f.Doc)
+				}
+			}
+		}
+	}
+}
+
+// TestEnumsAreOnStringProperties checks that a fixed set of values is only
+// attached where it can be checked: a string, or a set keyed by strings.
+func TestEnumsAreOnStringProperties(t *testing.T) {
+	s := Standard()
+	for _, o := range s.Objects() {
+		for _, f := range o.Fields {
+			if len(f.Enum) == 0 {
+				continue
+			}
+			ty := f.ParsedType()
+			ok := ty.Name == String || (ty.IsMap() && ty.Key != nil && ty.Key.Name == String)
+			if !ok {
+				t.Errorf("%s.%s has a fixed set of values but is a %s, where nothing would check them",
+					o.Name, f.Name, f.Type)
+			}
+		}
+	}
+}

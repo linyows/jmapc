@@ -43,6 +43,7 @@ func registerJSCalendar(s *Spec) {
 			{
 				Name: "display",
 				Type: "String",
+				Enum: []string{"badge", "graphic", "fullsize", "thumbnail"},
 				Doc:  "How to display the resource, for one that is an image: \"badge\", \"graphic\", \"fullsize\", or \"thumbnail\".",
 			},
 			{Name: "title", Type: "String", Doc: "A human-readable description of the resource."},
@@ -65,6 +66,7 @@ func registerJSCalendar(s *Spec) {
 			{
 				Name: "relativeTo",
 				Type: "String",
+				Enum: []string{"start", "end"},
 				Doc:  "What part of the event happens here: \"start\" or \"end\".",
 			},
 			{
@@ -89,6 +91,7 @@ func registerJSCalendar(s *Spec) {
 			{
 				Name: "features",
 				Type: "String[Boolean]",
+				Enum: []string{"audio", "chat", "feed", "moderator", "phone", "screen", "video"},
 				Doc:  "What the location supports, mapped to true: \"audio\", \"chat\", \"feed\", \"moderator\", \"phone\", \"screen\", or \"video\".",
 			},
 		},
@@ -111,12 +114,14 @@ func registerJSCalendar(s *Spec) {
 			{
 				Name: "kind",
 				Type: "String",
+				Enum: []string{"individual", "group", "location", "resource"},
 				Doc:  "What the participant is: \"individual\", \"group\", \"location\", or \"resource\".",
 			},
 			{
 				Name:     "roles",
 				Type:     "String[Boolean]",
 				Required: true,
+				Enum:     []string{"owner", "attendee", "optional", "informational", "chair", "contact"},
 				Doc:      "What the participant is there for, mapped to true: \"owner\", \"attendee\", \"optional\", \"informational\", \"chair\", or \"contact\".",
 			},
 			{Name: "locationId", Type: "Id", Doc: "The id, within the event's locations, of where the participant will be."},
@@ -125,6 +130,7 @@ func registerJSCalendar(s *Spec) {
 				Name:    "participationStatus",
 				Type:    "String",
 				Default: "\"needs-action\"",
+				Enum:    []string{"needs-action", "accepted", "declined", "tentative", "delegated"},
 				Doc:     "Whether the participant is coming: \"needs-action\", \"accepted\", \"declined\", \"tentative\", or \"delegated\".",
 			},
 			{Name: "participationComment", Type: "String", Doc: "A note the participant sent with their reply."},
@@ -138,6 +144,7 @@ func registerJSCalendar(s *Spec) {
 				Name:    "scheduleAgent",
 				Type:    "String",
 				Default: "\"server\"",
+				Enum:    []string{"server", "client", "none"},
 				Doc:     "Who sends the scheduling messages: \"server\", \"client\", or \"none\".",
 			},
 			{
@@ -179,6 +186,7 @@ func registerJSCalendar(s *Spec) {
 				Name:    "relativeTo",
 				Type:    "String",
 				Default: "\"start\"",
+				Enum:    []string{"start", "end"},
 				Doc:     "What the offset is measured from: \"start\" or \"end\".",
 			},
 		},
@@ -211,6 +219,7 @@ func registerJSCalendar(s *Spec) {
 				Name:    "action",
 				Type:    "String",
 				Default: "\"display\"",
+				Enum:    []string{"display", "email"},
 				Doc:     "What to do when the alert fires: \"display\" or \"email\".",
 			},
 		},
@@ -225,6 +234,7 @@ func registerJSCalendar(s *Spec) {
 			{
 				Name: "day",
 				Type: "String",
+				Enum: []string{"mo", "tu", "we", "th", "fr", "sa", "su"},
 				Doc:  "The day of the week: \"mo\", \"tu\", \"we\", \"th\", \"fr\", \"sa\", or \"su\".",
 			},
 			{
@@ -245,7 +255,9 @@ func registerJSCalendar(s *Spec) {
 				Name:     "frequency",
 				Type:     "String",
 				Required: true,
-				Doc:      "How often the event repeats: \"yearly\", \"monthly\", \"weekly\", \"daily\", \"hourly\", \"minutely\", or \"secondly\".",
+				Enum: []string{"yearly", "monthly", "weekly", "daily",
+					"hourly", "minutely", "secondly"},
+				Doc: "How often the event repeats: \"yearly\", \"monthly\", \"weekly\", \"daily\", \"hourly\", \"minutely\", or \"secondly\".",
 			},
 			{
 				Name:    "interval",
@@ -263,13 +275,15 @@ func registerJSCalendar(s *Spec) {
 				Name:    "skip",
 				Type:    "String",
 				Default: "\"omit\"",
+				Enum:    []string{"omit", "backward", "forward"},
 				Doc:     "What to do when a rule lands on a date that does not exist, such as the 31st of a short month: \"omit\", \"backward\", or \"forward\".",
 			},
 			{
 				Name:    "firstDayOfWeek",
 				Type:    "String",
 				Default: "\"mo\"",
-				Doc:     "Which day a week starts on, which decides where weekly intervals fall.",
+				Enum:    []string{"mo", "tu", "we", "th", "fr", "sa", "su"},
+				Doc:     "Which day a week starts on, which decides where weekly intervals fall: \"mo\", \"tu\", \"we\", \"th\", \"fr\", \"sa\", or \"su\".",
 			},
 			{Name: "byDay", Type: "EventNDay[]", Doc: "The days of the week the event falls on."},
 			{Name: "byMonthDay", Type: "Int[]", Doc: "The days of the month, counting back from the end when negative."},

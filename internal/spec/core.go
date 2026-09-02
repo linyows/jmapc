@@ -27,6 +27,7 @@ func registerCore(s *Spec) {
 				Name:     "operator",
 				Type:     "String",
 				Required: true,
+				Enum:     []string{"AND", "OR", "NOT"},
 				Doc:      "How to combine the conditions: \"AND\", \"OR\", or \"NOT\".",
 			},
 			{

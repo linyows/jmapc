@@ -231,6 +231,8 @@ Everything below is a compile-time failure rather than a server round trip:
   and sets them to values of the right type
 - `sort` names properties the type can actually be sorted by, and supplies the
   extra member a comparator like `hasKeyword` needs
+- a property whose specification fixes the values it may take is given one of
+  them, whether it is a string or the keys of a set like a participant's `roles`
 - ids, dates, and integers are well formed
 - the capabilities the request declares cover the methods it calls
 
@@ -473,10 +475,11 @@ works, and is what makes [sending a message](#one-request-several-steps)
 possible. Carrying `createdIds` from one request into the next, as RFC 8620
 allows, is not something a query can express.
 
-**Enumerated values are not checked.** A property such as an event's `status` or
-a participant's `roles` takes one of a fixed set of strings, and the catalogue
-records those in the documentation but does not enforce them. A frequency of
-`"forthnightly"` reaches the server.
+**Open sets are not checked, deliberately.** Where a specification fixes the
+values a property takes, jmapc checks them. Where it leaves the set open — a
+mailbox `role`, an email keyword, a `Content-Disposition` — it does not, because
+rejecting a value the server would have accepted is worse than letting a typo
+through.
 
 **No `Blob/upload`.** Blobs are uploaded over the endpoint the session
 advertises, which is the RFC 8620 way and is implemented. The newer

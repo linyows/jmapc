@@ -60,6 +60,7 @@ func registerCalendar(s *Spec) {
 			{
 				Name: "includeInAvailability",
 				Type: "String",
+				Enum: []string{"all", "attending", "none"},
 				Doc:  "Whether the calendar's events count towards the user's availability: \"all\", \"attending\", or \"none\".",
 			},
 			{
@@ -243,12 +244,14 @@ func registerCalendarEvent(s *Spec) {
 				Name:    "freeBusyStatus",
 				Type:    "String",
 				Default: "\"busy\"",
+				Enum:    []string{"free", "busy"},
 				Doc:     "Whether the event makes the user unavailable: \"free\" or \"busy\".",
 			},
 			{
 				Name:    "privacy",
 				Type:    "String",
 				Default: "\"public\"",
+				Enum:    []string{"public", "private", "secret"},
 				Doc:     "How much of the event others may see: \"public\", \"private\", or \"secret\".",
 			},
 			{
@@ -297,6 +300,7 @@ func registerCalendarEvent(s *Spec) {
 				Name:    "status",
 				Type:    "String",
 				Default: "\"confirmed\"",
+				Enum:    []string{"confirmed", "cancelled", "tentative"},
 				Doc:     "Whether the event is going ahead: \"confirmed\", \"cancelled\", or \"tentative\".",
 			},
 		},
@@ -452,6 +456,7 @@ func registerCalendarEventNotification(s *Spec) {
 			{
 				Name: "type",
 				Type: "String",
+				Enum: []string{"created", "updated", "destroyed"},
 				Doc:  "What happened: \"created\", \"updated\", or \"destroyed\".",
 			},
 			{Name: "calendarEventId", Type: "Id", Doc: "The id of the event that changed."},
@@ -530,6 +535,7 @@ func registerAvailability(s *Spec) {
 				Name:    "busyStatus",
 				Type:    "String",
 				Default: "\"unavailable\"",
+				Enum:    []string{"confirmed", "tentative", "unavailable"},
 				Doc:     "How busy: \"confirmed\", \"tentative\", or \"unavailable\".",
 			},
 			{

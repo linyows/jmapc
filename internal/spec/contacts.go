@@ -97,6 +97,7 @@ func registerContactCard(s *Spec) {
 			{
 				Name: "kind",
 				Type: "String",
+				Enum: []string{"individual", "group", "org", "location", "device", "application"},
 				Doc:  "What the card describes: \"individual\", \"group\", \"org\", \"location\", \"device\", or \"application\". Absent means \"individual\".",
 			},
 			{Name: "language", Type: "String", Doc: "The language the card's text is written in, as an RFC 5646 tag."},

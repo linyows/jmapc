@@ -91,11 +91,13 @@ func registerEmailSubmission(s *Spec) {
 			{
 				Name: "delivered",
 				Type: "String",
+				Enum: []string{"queued", "yes", "no", "unknown"},
 				Doc:  "How far the message got: \"queued\", \"yes\", \"no\", or \"unknown\".",
 			},
 			{
 				Name: "displayed",
 				Type: "String",
+				Enum: []string{"unknown", "yes"},
 				Doc:  "Whether the message was displayed to the recipient: \"unknown\" or \"yes\".",
 			},
 		},
@@ -132,6 +134,7 @@ func registerEmailSubmission(s *Spec) {
 			{
 				Name: "undoStatus",
 				Type: "String",
+				Enum: []string{"pending", "final", "canceled"},
 				Doc:  "Whether the submission can still be stopped: \"pending\", \"final\", or \"canceled\". Setting it to \"canceled\" is how a send is undone while it is still pending.",
 			},
 			{

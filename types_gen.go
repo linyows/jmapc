@@ -4022,7 +4022,8 @@ type EventRecurrenceRule struct {
 	// The server assumes "omit" when this property is omitted.
 	Skip *string `json:"skip,omitzero"`
 
-	// Which day a week starts on, which decides where weekly intervals fall.
+	// Which day a week starts on, which decides where weekly intervals fall:
+	// "mo", "tu", "we", "th", "fr", "sa", or "su".
 	//
 	// The server assumes "mo" when this property is omitted.
 	FirstDayOfWeek *string `json:"firstDayOfWeek,omitzero"`
