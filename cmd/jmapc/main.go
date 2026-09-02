@@ -31,6 +31,9 @@ type Config struct {
 	// Package is the name of the generated package, defaulting to the base
 	// name of the output directory.
 	Package string `json:"package"`
+	// Schemas are files describing the types and methods a server offers
+	// beyond the specifications jmapc knows, which queries may then use.
+	Schemas []string `json:"schemas"`
 }
 
 func main() {
@@ -53,6 +56,7 @@ Flags:
 	-queries string   directory holding the query files (default "queries")
 	-out string       directory to write the generated client to (default "jmapq")
 	-package string   name of the generated package (default: the name of -out)
+	-schema string    schema file describing a vendor extension; repeatable
 
 A query file is named after the function to generate, as in
 ListInboxEmails` + query.Extension + `, and holds a JMAP request.
@@ -80,7 +84,9 @@ func run(args []string) error {
 		queries    = fs.String("queries", "", "directory holding the query files")
 		out        = fs.String("out", "", "directory to write the generated client to")
 		pkg        = fs.String("package", "", "name of the generated package")
+		schemas    stringList
 	)
+	fs.Var(&schemas, "schema", "schema file describing a vendor extension; repeatable")
 	fs.Usage = func() { fmt.Fprint(os.Stderr, usage) }
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
@@ -99,7 +105,15 @@ func run(args []string) error {
 	if *pkg != "" {
 		cfg.Package = *pkg
 	}
+	if len(schemas) > 0 {
+		cfg.Schemas = append(cfg.Schemas, schemas...)
+	}
 	cfg.applyDefaults()
+
+	catalogue, err := loadCatalogue(cfg.Schemas)
+	if err != nil {
+		return err
+	}
 
 	queryFiles, err := findQueries(cfg.Queries)
 	if err != nil {
@@ -109,7 +123,7 @@ func run(args []string) error {
 		return fmt.Errorf("no %s files under %s", query.Extension, cfg.Queries)
 	}
 
-	parser := query.NewParser(spec.Standard())
+	parser := query.NewParser(catalogue)
 	parsed := make([]*query.Query, 0, len(queryFiles))
 	var failures int
 	for _, path := range queryFiles {
@@ -129,13 +143,39 @@ func run(args []string) error {
 		fmt.Printf("checked %s\n", plural(len(parsed), "query", "queries"))
 		return nil
 	}
-	return write(cfg, parsed)
+	return write(cfg, catalogue, parsed)
+}
+
+// loadCatalogue returns the JMAP data model, extended with any vendor schemas
+// the configuration names.
+func loadCatalogue(schemas []string) (*spec.Spec, error) {
+	catalogue := spec.Standard()
+	for _, path := range schemas {
+		sc, err := spec.LoadSchema(path)
+		if err != nil {
+			return nil, err
+		}
+		if err := catalogue.Extend(sc); err != nil {
+			return nil, fmt.Errorf("%s: %w", path, err)
+		}
+	}
+	return catalogue, nil
+}
+
+// stringList collects a flag given more than once.
+type stringList []string
+
+func (l *stringList) String() string { return strings.Join(*l, ", ") }
+
+func (l *stringList) Set(v string) error {
+	*l = append(*l, v)
+	return nil
 }
 
 // write generates the client and puts it on disk.
-func write(cfg *Config, queries []*query.Query) error {
+func write(cfg *Config, catalogue *spec.Spec, queries []*query.Query) error {
 	g := &gen.QueryGenerator{
-		Spec:      spec.Standard(),
+		Spec:      catalogue,
 		Package:   cfg.Package,
 		Qualifier: "jmapc.",
 		Queries:   queries,
