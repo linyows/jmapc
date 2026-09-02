@@ -172,7 +172,7 @@ given it an id. The pointers in the patch are checked against `Email`, so
 `mailboxIds` misspelled is a build failure, and both mailbox parameters come out
 as `jmapc.ID` because that is what the pointer selects by.
 
-[`example/queries`](example/queries) holds seventeen of these, over mail,
+[`example/queries`](example/queries) holds eighteen of these, over mail,
 contacts, calendars and sharing: searching, syncing from a known state, sending,
 creating a contact card, moving one occurrence of a recurring meeting without
 touching the rest of the series.
@@ -408,8 +408,8 @@ stands on each.
 | `urn:ietf:params:jmap:principals:owner` | [RFC 9670](https://www.rfc-editor.org/rfc/rfc9670) | Yes |
 | `urn:ietf:params:jmap:smimeverify` | [RFC 9219](https://www.rfc-editor.org/rfc/rfc9219) | Yes |
 | `urn:ietf:params:jmap:blob` | [RFC 9404](https://www.rfc-editor.org/rfc/rfc9404) | Yes |
+| `urn:ietf:params:jmap:quota` | [RFC 9425](https://www.rfc-editor.org/rfc/rfc9425) | Yes |
 | `urn:ietf:params:jmap:mdn` | [RFC 9007](https://www.rfc-editor.org/rfc/rfc9007) | No |
-| `urn:ietf:params:jmap:quota` | [RFC 9425](https://www.rfc-editor.org/rfc/rfc9425) | No |
 | `urn:ietf:params:jmap:sieve` | [RFC 9661](https://www.rfc-editor.org/rfc/rfc9661) | No |
 | `urn:ietf:params:jmap:webpush-vapid` | [RFC 9749](https://www.rfc-editor.org/rfc/rfc9749) | No |
 
@@ -441,7 +441,7 @@ declarative — no Go to write.
 
 ### Methods
 
-69 methods, all of them checked and generated the same way.
+73 methods, all of them checked and generated the same way.
 
 | Type | Methods |
 |---|---|
@@ -460,6 +460,7 @@ declarative — no Go to write.
 | `ParticipantIdentity` | `get` `changes` `set` |
 | `Principal` | `get` `changes` `set` `query` `queryChanges` `getAvailability` |
 | `ShareNotification` | `get` `changes` `set` `query` `queryChanges` |
+| `Quota` | `get` `changes` `query` `queryChanges` |
 | `Blob` | `copy` `upload` `get` `lookup` |
 | `Core` | `echo` |
 

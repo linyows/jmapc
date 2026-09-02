@@ -12,5 +12,6 @@ func Standard() *Spec {
 	registerContacts(s)
 	registerCalendars(s)
 	registerSharing(s)
+	registerQuota(s)
 	return s
 }

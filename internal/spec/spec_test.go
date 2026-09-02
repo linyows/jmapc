@@ -239,6 +239,7 @@ func TestStandardCatalogueCovers(t *testing.T) {
 		"ParticipantIdentity/changes", "ParticipantIdentity/get", "ParticipantIdentity/set",
 		"Principal/changes", "Principal/get", "Principal/getAvailability",
 		"Principal/query", "Principal/queryChanges", "Principal/set",
+		"Quota/changes", "Quota/get", "Quota/query", "Quota/queryChanges",
 		"SearchSnippet/get",
 		"ShareNotification/changes", "ShareNotification/get", "ShareNotification/query",
 		"ShareNotification/queryChanges", "ShareNotification/set",
