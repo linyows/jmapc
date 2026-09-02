@@ -194,7 +194,7 @@ func TestUnexportedName(t *testing.T) {
 	}
 }
 
-func TestMethodGoName(t *testing.T) {
+func TestMethodTypeNamePrefix(t *testing.T) {
 	s := Standard()
 	tests := []struct{ method, want string }{
 		{"Email/get", "EmailGet"},
@@ -207,8 +207,8 @@ func TestMethodGoName(t *testing.T) {
 			t.Errorf("method %q is not registered", tt.method)
 			continue
 		}
-		if got := m.GoName(); got != tt.want {
-			t.Errorf("%q GoName = %q, want %q", tt.method, got, tt.want)
+		if got := m.TypeNamePrefix(); got != tt.want {
+			t.Errorf("%q TypeNamePrefix = %q, want %q", tt.method, got, tt.want)
 		}
 	}
 }

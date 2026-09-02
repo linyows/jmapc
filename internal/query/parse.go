@@ -165,7 +165,7 @@ func (p *Parser) Parse(path string, src []byte) (*Query, error) {
 		}
 		q.Returns = call
 	}
-	assignGoNames(q)
+	assignFieldNames(q)
 
 	if len(c.errs) > 0 {
 		return nil, c.errs

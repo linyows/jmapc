@@ -64,7 +64,7 @@ func TestParse(t *testing.T) {
 		t.Errorf("Using = %q, want %q", got, want)
 	}
 
-	wantParams := []struct{ name, goName, goType string }{
+	wantParams := []struct{ name, field, goType string }{
 		{"accountId", "AccountID", "jmapc.ID"},
 		{"mailboxId", "MailboxID", "jmapc.ID"},
 		{"limit", "Limit", "jmapc.UnsignedInt"},
@@ -74,9 +74,9 @@ func TestParse(t *testing.T) {
 	}
 	for i, want := range wantParams {
 		p := q.Params[i]
-		if p.Name != want.name || p.GoName != want.goName || p.GoType("jmapc.") != want.goType {
+		if p.Name != want.name || p.Field != want.field || p.GoType("jmapc.") != want.goType {
 			t.Errorf("parameter %d = %s %s %s, want %s %s %s",
-				i, p.Name, p.GoName, p.GoType("jmapc."), want.name, want.goName, want.goType)
+				i, p.Name, p.Field, p.GoType("jmapc."), want.name, want.field, want.goType)
 		}
 	}
 
@@ -88,8 +88,8 @@ func TestParse(t *testing.T) {
 	if got, want := strings.Join(get.Properties, ","), "id,subject,from,receivedAt"; got != want {
 		t.Errorf("properties = %q, want %q", got, want)
 	}
-	if get.GoField != "EmailGet" {
-		t.Errorf("GoField = %q, want %q", get.GoField, "EmailGet")
+	if get.Field != "EmailGet" {
+		t.Errorf("GoField = %q, want %q", get.Field, "EmailGet")
 	}
 	ref, ok := get.Args.Find("#ids")
 	if !ok {

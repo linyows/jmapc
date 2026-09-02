@@ -109,7 +109,7 @@ func (g *QueryGenerator) plan() ([]*plan, error) {
 			// generated too, since its own fields change to refer to it.
 			if c.Properties != nil || c.NestedProperties != nil {
 				info.recordType = unique(taken, q.Name+spec.ExportedName(c.Method.DataType))
-				info.responseType = unique(taken, q.Name+c.GoField+"Response")
+				info.responseType = unique(taken, q.Name+c.Field+"Response")
 			} else {
 				info.responseType = g.Qualifier + spec.ExportedName(c.Method.Response)
 			}
@@ -236,7 +236,7 @@ func (g *QueryGenerator) writeParams(buf *bytes.Buffer, p *plan) {
 			buf.WriteString("\n")
 		}
 		writeComment(buf, "\t", param.Doc)
-		fmt.Fprintf(buf, "\t%s %s\n", param.GoName, param.GoType(g.Qualifier))
+		fmt.Fprintf(buf, "\t%s %s\n", param.Field, param.GoType(g.Qualifier))
 	}
 	buf.WriteString("}\n\n")
 }
@@ -439,7 +439,7 @@ func (g *QueryGenerator) writeResultType(buf *bytes.Buffer, p *plan) {
 			buf.WriteString("\n")
 		}
 		writeComment(buf, "\t", fmt.Sprintf("The response to the %s call, made as %q.", c.Method.Name, c.ID))
-		fmt.Fprintf(buf, "\t%s %s\n", c.GoField, p.calls[c].responseType)
+		fmt.Fprintf(buf, "\t%s %s\n", c.Field, p.calls[c].responseType)
 	}
 	if p.q.CreatedIDs {
 		buf.WriteString("\n")

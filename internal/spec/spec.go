@@ -184,9 +184,10 @@ type Method struct {
 	NestedType string
 }
 
-// GoName returns the method name as a Go identifier fragment: "Email/get"
-// becomes "EmailGet".
-func (m *Method) GoName() string {
+// TypeNamePrefix returns the method name with its slash removed, so that
+// "Email/get" becomes "EmailGet". Generated declarations for a method's
+// arguments and response are named after it, in any language.
+func (m *Method) TypeNamePrefix() string {
 	parts := strings.Split(m.Name, "/")
 	for i, p := range parts {
 		parts[i] = exportedName(p)

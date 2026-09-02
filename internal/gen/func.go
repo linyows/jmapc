@@ -55,7 +55,7 @@ func (g *QueryGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
 		fmt.Fprintf(buf, "\tif err := resp.Decode(%q, &out); err != nil {\n\t\treturn nil, err\n\t}\n", p.q.Returns.ID)
 	} else {
 		for _, c := range p.q.Calls {
-			fmt.Fprintf(buf, "\tif err := resp.Decode(%q, &out.%s); err != nil {\n\t\treturn nil, err\n\t}\n", c.ID, c.GoField)
+			fmt.Fprintf(buf, "\tif err := resp.Decode(%q, &out.%s); err != nil {\n\t\treturn nil, err\n\t}\n", c.ID, c.Field)
 		}
 	}
 	if p.q.CreatedIDs {
@@ -185,7 +185,7 @@ func (g *QueryGenerator) expr(n query.Node, indent string) string {
 			g.Qualifier, v.Ref.ResultOf, v.Ref.Name, v.Ref.Path)
 
 	case *query.ParamRef:
-		return "p." + v.Param.GoName
+		return "p." + v.Param.Field
 
 	case *query.Literal:
 		return literalExpr(v.JSON)
@@ -230,7 +230,7 @@ func (g *QueryGenerator) keyExpr(f query.ObjectField) string {
 			parts = append(parts, strconv.Quote(seg.Text))
 			continue
 		}
-		name := "p." + seg.Param.GoName
+		name := "p." + seg.Param.Field
 		if seg.Param.GoType(g.Qualifier) != "string" {
 			name = "string(" + name + ")"
 		}
