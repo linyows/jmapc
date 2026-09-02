@@ -1056,3 +1056,75 @@ func TestQuotaChangesReportsUpdatedProperties(t *testing.T) {
 	  }, "c1"]
 	]}`)
 }
+
+// TestSieveScript covers JMAP for Sieve Scripts. A script's text is a blob
+// rather than a property, so installing one takes an upload and a store, and
+// the blob extension lets both happen in one request.
+func TestSieveScript(t *testing.T) {
+	q := parse(t, "InstallScript"+Extension, `{
+	  "methodCalls": [
+	    ["Blob/upload", {
+	      "create": {"text": {"data": [{"data:asText": "{{script}}"}], "type": "application/sieve"}}
+	    }, "upload"],
+	    ["SieveScript/set", {
+	      "create": {"filter": {"name": "{{name}}", "blobId": "#text"}},
+	      "onSuccessDeactivateScript": true,
+	      "onSuccessActivateScript": "#filter"
+	    }, "install"]
+	  ],
+	  "returns": "install"
+	}`)
+	want := "urn:ietf:params:jmap:core urn:ietf:params:jmap:blob urn:ietf:params:jmap:sieve"
+	if got := strings.Join(q.Using, " "); got != want {
+		t.Errorf("Using = %q, want %q", got, want)
+	}
+}
+
+// TestSieveValidateTakesABlob checks the method that parses a script without
+// storing it, whose only input is a blob the caller uploaded first.
+func TestSieveValidateTakesABlob(t *testing.T) {
+	parse(t, "CheckScript"+Extension, `{"methodCalls": [
+	  ["Blob/upload", {"create": {"draft": {"data": [{"data:asText": "{{script}}"}]}}}, "upload"],
+	  ["SieveScript/validate", {
+	    "#blobId": {"resultOf": "upload", "name": "Blob/upload", "path": "/created/draft/id"}
+	  }, "check"]
+	]}`)
+}
+
+func TestSieveChecks(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want string
+	}{{
+		name: "no changes method",
+		src:  `{"methodCalls": [["SieveScript/changes", {"sinceState": "s"}, "c0"]]}`,
+		want: `unknown method "SieveScript/changes"`,
+	}, {
+		name: "misspelled property",
+		src:  `{"methodCalls": [["SieveScript/get", {"properties": ["id", "isActiv"]}, "c0"]]}`,
+		want: `did you mean "isActive"?`,
+	}, {
+		name: "unsortable property",
+		src:  `{"methodCalls": [["SieveScript/query", {"sort": [{"property": "blobId"}]}, "c0"]]}`,
+		want: `SieveScript cannot be sorted by "blobId"`,
+	}, {
+		name: "activation takes an id, not a name",
+		src: `{"methodCalls": [["SieveScript/set", {
+			"onSuccessActivateScript": {"name": "vacation"}
+		}, "c0"]]}`,
+		want: `expected Id|null, found an object`,
+	}, {
+		name: "validate needs a blob",
+		src:  `{"methodCalls": [["SieveScript/validate", {"script": "keep;"}, "c0"]]}`,
+		want: `SieveScript/validate has no argument "script"`,
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseErr(t, tt.src)
+			if !strings.Contains(got, tt.want) {
+				t.Errorf("error was:\n%s\nwant it to mention: %s", got, tt.want)
+			}
+		})
+	}
+}
