@@ -3,3 +3,4 @@
 package example
 
 //go:generate go run ../cmd/jmapc generate -queries queries -out jmapq -package jmapq
+//go:generate go run ../cmd/jmapc generate -queries queries -out ts -lang typescript

@@ -86,6 +86,21 @@ jobs:
           go mod tidy
           git diff --exit-code
 
+  # The TypeScript jmapc generates has to compile, which Go's tests cannot say.
+  typescript:
+    name: typescript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: tsc --strict over the generated client
+        working-directory: example/ts
+        run: npx --yes -p typescript@5 tsc --noEmit
+
   vulncheck:
     name: govulncheck
     runs-on: ubuntu-latest
