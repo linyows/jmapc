@@ -1,0 +1,36 @@
+{
+  "doc": "Agenda lists what is happening in a window of time, expanding recurring events so that each occurrence comes back as its own entry.",
+
+  "methodCalls": [
+    ["CalendarEvent/query", {
+      "filter": {
+        "operator": "AND",
+        "conditions": [
+          {"inCalendar": "{{calendarId}}"},
+          {"after": "{{from}}"},
+          {"before": "{{until}}"}
+        ]
+      },
+      "sort": [{"property": "start"}],
+
+      // Without this a weekly meeting is one event; with it, one entry per
+      // occurrence, which is what a day view needs.
+      "expandRecurrences": true,
+      "timeZone": "{{timeZone}}"
+    }, "search"],
+
+    ["CalendarEvent/get", {
+      "#ids": {"resultOf": "search", "name": "CalendarEvent/query", "path": "/ids"},
+      "properties": [
+        "id", "baseEventId", "title", "start", "duration", "timeZone",
+        "status", "locations", "participants"
+      ],
+
+      // A meeting with two hundred people has two hundred participants, and a
+      // list view needs none of them but the organiser and the user.
+      "reduceParticipants": true
+    }, "fetch"]
+  ],
+
+  "returns": "fetch"
+}

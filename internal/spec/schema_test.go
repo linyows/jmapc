@@ -185,9 +185,9 @@ func TestExtendErrors(t *testing.T) {
 	}, {
 		name: "reference to a type nothing defines",
 		src: `{"capability": "urn:x:y", "types": [
-			{"name": "Note", "properties": [{"name": "author", "type": "Person"}]}
+			{"name": "Note", "properties": [{"name": "author", "type": "Nonesuch"}]}
 		]}`,
-		want: `refers to the type "Person", which nothing defines`,
+		want: `refers to the type "Nonesuch", which nothing defines`,
 	}, {
 		name: "arguments for a method the type does not have",
 		src: `{"capability": "urn:x:y", "types": [

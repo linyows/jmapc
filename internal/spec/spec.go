@@ -277,6 +277,22 @@ func (s *Spec) ResponseOf(method string) (*Object, error) {
 	return o, nil
 }
 
+// UnknownPropertyError says that a path named a property its type does not
+// have. It carries the alternatives so that the caller can suggest one, which a
+// formatted string could not.
+type UnknownPropertyError struct {
+	// TypeName is the type the property was looked for on.
+	TypeName string
+	// Property is the name that was not found.
+	Property string
+	// Known is every property that type does have, sorted.
+	Known []string
+}
+
+func (e *UnknownPropertyError) Error() string {
+	return fmt.Sprintf("%s has no property %q", e.TypeName, e.Property)
+}
+
 // ResolvePath walks a JMAP result reference pointer, as defined in RFC 8620,
 // Section 3.7, over the response type of a method and reports the type of the
 // value it selects. This is what lets a back reference be checked against the
@@ -343,7 +359,7 @@ func (s *Spec) walk(t *Type, tokens []string, path string) (*Type, error) {
 	}
 	f, ok := o.Field(token)
 	if !ok {
-		return nil, fmt.Errorf("path %q: %s has no property %q (has %s)", path, o.Name, token, strings.Join(o.PropertyNames(), ", "))
+		return nil, &UnknownPropertyError{TypeName: o.Name, Property: token, Known: o.PropertyNames()}
 	}
 	return s.walk(f.ParsedType(), rest, path)
 }
@@ -367,8 +383,20 @@ func (s *Spec) ResolvePatch(dataType string, segments []string, unknown []bool) 
 	cur := &Type{Name: dataType}
 	anyType := &Type{Name: Any}
 
+	// nested is what a PatchObject reached through the pointer applies to. A
+	// PatchObject has no properties of its own, so without this the pointer
+	// would run out of type the moment it entered one, and the overrides of a
+	// recurring event — patches to the event, keyed by occurrence — could not
+	// be checked past their key.
+	var nested string
+
 	for i, seg := range segments {
 		seg = unescapePointer(seg)
+		if cur.IsObject() && nested != "" {
+			if o, ok := s.Object(cur.Name); ok && len(o.Fields) == 0 {
+				cur, nested = &Type{Name: nested}, ""
+			}
+		}
 		switch {
 		case cur.Name == Any || cur.IsUnion():
 			keyTypes[i] = anyType
@@ -398,11 +426,13 @@ func (s *Spec) ResolvePatch(dataType string, segments []string, unknown []bool) 
 			}
 			f, known := o.Field(seg)
 			if !known {
-				return nil, nil, "", fmt.Errorf("%s has no property %q (has %s)",
-					o.Name, seg, strings.Join(o.PropertyNames(), ", "))
+				return nil, nil, "", &UnknownPropertyError{
+					TypeName: o.Name, Property: seg, Known: o.PropertyNames(),
+				}
 			}
 			cur = f.ParsedType()
 			valueDoc = f.Doc
+			nested = f.PatchTarget
 
 		default:
 			return nil, nil, "", fmt.Errorf("cannot look inside %s to reach %q", cur, seg)

@@ -134,9 +134,10 @@ given it an id. The pointers in the patch are checked against `Email`, so
 `mailboxIds` misspelled is a build failure, and both mailbox parameters come out
 as `jmapc.ID` because that is what the pointer selects by.
 
-[`example/queries`](example/queries) holds nine of these, over mail and
-contacts: searching, syncing from a known state, sending, creating a contact
-card, and patching one property of one entry within a card.
+[`example/queries`](example/queries) holds twelve of these, over mail, contacts
+and calendars: searching, syncing from a known state, sending, creating a
+contact card, moving one occurrence of a recurring meeting without touching the
+rest of the series.
 
 ## Writing a query
 
@@ -353,6 +354,8 @@ stands on each.
 | `urn:ietf:params:jmap:submission` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | Yes |
 | `urn:ietf:params:jmap:vacationresponse` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | Yes |
 | `urn:ietf:params:jmap:contacts` | [RFC 9610](https://www.rfc-editor.org/rfc/rfc9610) | Yes |
+| `urn:ietf:params:jmap:calendars` | [draft-ietf-jmap-calendars](https://datatracker.ietf.org/doc/draft-ietf-jmap-calendars/) | Yes |
+| `urn:ietf:params:jmap:principals:availability` | [draft-ietf-jmap-calendars](https://datatracker.ietf.org/doc/draft-ietf-jmap-calendars/) | Yes |
 | `urn:ietf:params:jmap:mdn` | [RFC 9007](https://www.rfc-editor.org/rfc/rfc9007) | No |
 | `urn:ietf:params:jmap:smimeverify` | [RFC 9219](https://www.rfc-editor.org/rfc/rfc9219) | No |
 | `urn:ietf:params:jmap:blob` | [RFC 9404](https://www.rfc-editor.org/rfc/rfc9404) | No |
@@ -360,14 +363,21 @@ stands on each.
 | `urn:ietf:params:jmap:sieve` | [RFC 9661](https://www.rfc-editor.org/rfc/rfc9661) | No |
 | `urn:ietf:params:jmap:principals` | [RFC 9670](https://www.rfc-editor.org/rfc/rfc9670) | No |
 | `urn:ietf:params:jmap:webpush-vapid` | [RFC 9749](https://www.rfc-editor.org/rfc/rfc9749) | No |
-| `urn:ietf:params:jmap:calendars` | draft | No |
 
-Contact cards are [JSContact](https://www.rfc-editor.org/rfc/rfc9553) objects,
-not something JMAP defines itself, and JSContact names several types — `Name`,
-`Address`, `EmailAddress`, `Media` — that JMAP also names. Those carry a
-`Contact` prefix here, so `jmapc.ContactEmailAddress` is an address on a card
-and `jmapc.EmailAddress` is one in a header field. Each type's documentation
-gives the name the specification uses.
+Two of these store objects from specifications of their own: a contact card is
+a [JSContact](https://www.rfc-editor.org/rfc/rfc9553) Card, and a calendar event
+is a [JSCalendar](https://www.rfc-editor.org/rfc/rfc8984) JSEvent. Both name
+types that JMAP also names, and each other's too — there are three different
+`Link` types between them. So those carry a prefix: `ContactEmailAddress` is an
+address on a card, `EmailAddress` is one in a header field, and `EventLink` is a
+resource attached to a meeting. Each type's documentation gives the name its
+specification uses.
+
+JSCalendar also brings time types JMAP does not have. An event's `start` is a
+`LocalDateTime` with no zone, and its `duration` is an ISO 8601 `Duration`,
+because "P1D" across a daylight saving change is not always 24 hours. Both are
+checked in a query, so a `start` written with a `Z` on the end, or a duration
+written as `90m`, fails to build.
 
 A capability that is not built in is not out of reach: describe its types in a
 [schema file](#vendor-extensions) and queries against them are checked like any
@@ -376,7 +386,7 @@ declarative — no Go to write.
 
 ### Methods
 
-37 methods, all of them checked and generated the same way.
+56 methods, all of them checked and generated the same way.
 
 | Type | Methods |
 |---|---|
@@ -389,6 +399,11 @@ declarative — no Go to write.
 | `VacationResponse` | `get` `set` |
 | `AddressBook` | `get` `changes` `set` |
 | `ContactCard` | `get` `changes` `set` `copy` `query` `queryChanges` |
+| `Calendar` | `get` `changes` `set` |
+| `CalendarEvent` | `get` `changes` `set` `copy` `query` `queryChanges` `parse` |
+| `CalendarEventNotification` | `get` `changes` `set` `query` `queryChanges` |
+| `ParticipantIdentity` | `get` `changes` `set` |
+| `Principal` | `getAvailability` |
 | `Blob` | `copy` |
 | `Core` | `echo` |
 
@@ -416,6 +431,11 @@ decode.
 works, and is what makes [sending a message](#one-request-several-steps)
 possible. Carrying `createdIds` from one request into the next, as RFC 8620
 allows, is not something a query can express.
+
+**Enumerated values are not checked.** A property such as an event's `status` or
+a participant's `roles` takes one of a fixed set of strings, and the catalogue
+records those in the documentation but does not enforce them. A frequency of
+`"forthnightly"` reaches the server.
 
 **No `Blob/upload`.** Blobs are uploaded over the endpoint the session
 advertises, which is the RFC 8620 way and is implemented. The newer
