@@ -122,9 +122,17 @@ func compare(t *testing.T, path string, got []byte, regenerate string) {
 func firstDifference(want, got string) string {
 	wantLines, gotLines := strings.Split(want, "\n"), strings.Split(got, "\n")
 	for i := 0; i < len(wantLines) && i < len(gotLines); i++ {
-		if wantLines[i] != gotLines[i] {
-			return "first difference at line " + strconv.Itoa(i+1) + ":\n\ton disk:   " + wantLines[i] + "\n\tgenerated: " + gotLines[i]
+		if wantLines[i] == gotLines[i] {
+			continue
 		}
+		onDisk, generated := wantLines[i], gotLines[i]
+		if strings.TrimSpace(onDisk) == strings.TrimSpace(generated) {
+			// The lines differ only in whitespace, which printed plainly would
+			// look identical and send the reader looking in the wrong place.
+			onDisk, generated = strconv.Quote(onDisk), strconv.Quote(generated)
+		}
+		return "first difference at line " + strconv.Itoa(i+1) +
+			":\n\ton disk:   " + onDisk + "\n\tgenerated: " + generated
 	}
 	return "the files differ in length: on disk has " + strconv.Itoa(len(wantLines)) + " lines, generated has " + strconv.Itoa(len(gotLines))
 }

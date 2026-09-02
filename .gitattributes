@@ -1,0 +1,5 @@
+# Go source is written with LF, and the generated files are compared byte for
+# byte against what the generator produces. A checkout that rewrites the working
+# tree with CRLF, as Git does by default on Windows, would make that comparison
+# fail for a reason that has nothing to do with the code.
+* text=auto eol=lf
