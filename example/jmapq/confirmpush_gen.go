@@ -63,5 +63,15 @@ func ConfirmPush(ctx context.Context, c *jmapc.Client, p ConfirmPushParams) (*jm
 	if err := resp.Decode("confirm", &out); err != nil {
 		return nil, err
 	}
+
+	var failures jmapc.SetErrors
+	failures.Collect("PushSubscription/set", "confirm", map[string]map[jmapc.ID]jmapc.SetError{
+		"notCreated":   out.NotCreated,
+		"notUpdated":   out.NotUpdated,
+		"notDestroyed": out.NotDestroyed,
+	})
+	if err := failures.Err(); err != nil {
+		return &out, err
+	}
 	return &out, nil
 }

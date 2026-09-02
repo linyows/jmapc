@@ -463,3 +463,47 @@ func (s *Spec) ResolvePatch(dataType string, segments []string, unknown []bool) 
 	}
 	return keyTypes, cur, target, nil
 }
+
+// SetErrorTypeName is the type a /set response uses to report why it could not
+// act on one record.
+const SetErrorTypeName = "SetError"
+
+// SetErrorFields names the response properties of a method that report
+// per-record failures: notCreated, notUpdated, notDestroyed, notCopied, and
+// whatever a vendor extension calls its own. A /set answers 200 while
+// refusing individual records, so a caller that reads only the transport
+// error sees success where there was none.
+//
+// The properties are found by their type rather than their name, so a schema
+// that declares one is checked as the standard methods are.
+func (s *Spec) SetErrorFields(method string) []string {
+	resp, err := s.ResponseOf(method)
+	if err != nil {
+		return nil
+	}
+	var names []string
+	for _, f := range resp.Fields {
+		t, err := ParseType(f.Type)
+		if err != nil {
+			continue
+		}
+		if reportsSetErrors(t) {
+			names = append(names, f.Name)
+		}
+	}
+	return names
+}
+
+// reportsSetErrors reports whether a type is a map of SetError, allowing for
+// the null the specifications write it with.
+func reportsSetErrors(t *Type) bool {
+	if t == nil {
+		return false
+	}
+	for _, alt := range t.Union {
+		if reportsSetErrors(alt) {
+			return true
+		}
+	}
+	return t.IsMap() && t.Value != nil && t.Value.Name == SetErrorTypeName
+}

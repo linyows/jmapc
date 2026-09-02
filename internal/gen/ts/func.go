@@ -32,7 +32,16 @@ func (g *QueryGenerator) writeImports(buf *bytes.Buffer, p *plan) {
 	// emits ES modules: Node resolves it against the compiled output, and a
 	// bundler resolves it against the source either way. Without it the module
 	// compiles and then fails to load.
-	buf.WriteString("import { type Client, type Request, decode } from \"./client.js\"\n")
+	// Types first, then values, rather than sorted: the reader is looking for
+	// what the module uses, not for a name in a list.
+	runtime := []string{"type Client", "type Request"}
+	values := []string{"decode"}
+	if len(g.setErrorChecks(p)) > 0 {
+		runtime = append(runtime, "type SetFailure")
+		values = append(values, "SetErrors", "collectSetErrors")
+	}
+	runtime = append(runtime, values...)
+	fmt.Fprintf(buf, "import { %s } from \"./client.js\"\n", strings.Join(runtime, ", "))
 
 	names := map[string]bool{}
 	for _, param := range p.q.Params {

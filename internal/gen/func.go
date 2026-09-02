@@ -61,8 +61,66 @@ func (g *QueryGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
 	if p.q.CreatedIDs {
 		buf.WriteString("\tout.CreatedIDs = resp.CreatedIDs\n")
 	}
+	g.writeSetErrorChecks(buf, p)
 	buf.WriteString("\treturn &out, nil\n")
 	buf.WriteString("}\n")
+}
+
+// writeSetErrorChecks writes the code that reports the records the server
+// refused. A /set answers 200 and lists what it would not create, update, or
+// destroy, so nothing above this notices; the response is returned along with
+// the error, since the rest of it did happen.
+//
+// A call the query does not return is decoded here anyway, for its refusals
+// alone. Otherwise naming one call in "_returns" would quietly stop the others
+// from being checked.
+func (g *QueryGenerator) writeSetErrorChecks(buf *bytes.Buffer, p *plan) {
+	type check struct {
+		call   *query.Call
+		prefix string
+		decode string // the type to decode into first, empty where out holds it
+		fields []string
+	}
+	var checks []check
+	for _, c := range p.q.Calls {
+		fields := g.Spec.SetErrorFields(c.Method.Name)
+		if len(fields) == 0 {
+			continue
+		}
+		ch := check{call: c, fields: fields, prefix: "out."}
+		switch {
+		case p.q.Returns == nil:
+			ch.prefix = "out." + c.Field + "."
+		case c != p.q.Returns:
+			ch.decode = p.calls[c].responseType
+			ch.prefix = "" // named below, once the variable exists
+		}
+		checks = append(checks, ch)
+	}
+	if len(checks) == 0 {
+		return
+	}
+	buf.WriteString("\n")
+	for i := range checks {
+		if checks[i].decode == "" {
+			continue
+		}
+		name := fmt.Sprintf("refused%d", i)
+		fmt.Fprintf(buf, "\tvar %s %s\n", name, checks[i].decode)
+		fmt.Fprintf(buf, "\tif err := resp.Decode(%q, &%s); err != nil {\n\t\treturn nil, err\n\t}\n",
+			checks[i].call.ID, name)
+		checks[i].prefix = name + "."
+	}
+	fmt.Fprintf(buf, "\tvar failures %sSetErrors\n", g.Qualifier)
+	for _, ch := range checks {
+		fmt.Fprintf(buf, "\tfailures.Collect(%q, %q, map[string]map[%[3]sID]%[3]sSetError{\n",
+			ch.call.Method.Name, ch.call.ID, g.Qualifier)
+		for _, name := range ch.fields {
+			fmt.Fprintf(buf, "\t\t%q: %s%s,\n", name, ch.prefix, spec.ExportedName(name))
+		}
+		buf.WriteString("\t})\n")
+	}
+	buf.WriteString("\tif err := failures.Err(); err != nil {\n\t\treturn &out, err\n\t}\n")
 }
 
 // writeFuncDoc writes the generated function's documentation, using what the

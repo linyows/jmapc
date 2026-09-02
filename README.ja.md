@@ -358,6 +358,37 @@ RFC 8620 §3.6.1 の problem type を持ちます。
 JMAP は実行できる呼び出しを実行するので、レスポンスはエラーと一緒に返ります。
 各エラーは、ワイヤフォーマットが運ぶ `"error"` ではなく、失敗したメソッド名と呼び出し id を報告します。
 
+第三の水準があり、見落とされるのはこれです。
+`/set` は**エラーを含まない 200** を返しながら、処理を拒んだレコードを列挙します。
+
+```json
+["Email/set", {"notCreated": {"draft": {"type": "invalidProperties",
+                                        "properties": ["subject"]}}}, "write"]
+```
+
+転送水準のエラーだけを見ると、何も起きていないのに成功に見えます。
+生成コードがこれを検査するので、拒否されたレコードは `*jmapc.SetErrors` になります。
+
+```go
+res, err := jmapq.SendEmail(ctx, c, params)
+if err != nil {
+    var refused *jmapc.SetErrors
+    if errors.As(err, &refused) {
+        for _, f := range refused.Failures {
+            log.Printf("%s: %v", f.Key, f.Err) // draft: invalidProperties [subject]
+        }
+    }
+    return err
+}
+```
+
+`res` はエラーと一緒に返ります。
+サーバが実際に実行した部分は起きているからです。
+クエリが `_returns` で名指ししていない呼び出しも検査されます。
+一つの呼び出しを名指ししたことで、他が見られなくなるべきではないからです。
+
+TypeScript では同じ失敗が `SetErrors` の throw になり、レスポンスは `err.result` に載ります。
+
 ## Blob
 
 添付ファイルは API エンドポイントを通りません。

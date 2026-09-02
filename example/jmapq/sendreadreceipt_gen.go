@@ -79,5 +79,13 @@ func SendReadReceipt(ctx context.Context, c *jmapc.Client, p SendReadReceiptPara
 	if err := resp.Decode("send", &out); err != nil {
 		return nil, err
 	}
+
+	var failures jmapc.SetErrors
+	failures.Collect("MDN/send", "send", map[string]map[jmapc.ID]jmapc.SetError{
+		"notSent": out.NotSent,
+	})
+	if err := failures.Err(); err != nil {
+		return &out, err
+	}
 	return &out, nil
 }

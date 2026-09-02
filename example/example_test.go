@@ -7,6 +7,7 @@ package example
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -1424,5 +1425,75 @@ func TestFileIntoNewMailbox(t *testing.T) {
 	}
 	if got.CreatedIDs["earlier"] != "mbx1" {
 		t.Errorf("createdIds = %v, want the carried id kept", got.CreatedIDs)
+	}
+}
+
+// TestSendEmailReportsRefusedRecords checks the failure a server reports
+// without failing the request: HTTP 200, a method response with no error in
+// it, and a record the server would not create. Reading only the transport
+// error sees success where there was none, so the generated code looks.
+func TestSendEmailReportsRefusedRecords(t *testing.T) {
+	s := &stub{t: t, response: `{
+	  "sessionState": "session-1",
+	  "methodResponses": [
+	    ["Email/set", {"accountId": "acct1", "newState": "s2",
+	                   "notCreated": {"draft": {"type": "invalidProperties",
+	                                            "properties": ["subject"],
+	                                            "description": "too long"}}}, "write"],
+	    ["EmailSubmission/set", {"accountId": "acct1", "newState": "sub2",
+	                             "notCreated": {"send": {"type": "invalidEmail"}}}, "send"]
+	  ]
+	}`}
+
+	got, err := jmapq.SendEmail(context.Background(), s.client(), jmapq.SendEmailParams{
+		DraftsMailboxID: "drafts",
+		SentMailboxID:   "sent",
+		IdentityID:      "id1",
+		FromAddress:     "me@example.com",
+		ToAddress:       "you@example.com",
+		Subject:         "Lunch",
+		Body:            "Thursday?",
+	})
+	if err == nil {
+		t.Fatal("SendEmail returned no error for two refused records")
+	}
+
+	// The response is returned with the error, since the part of the request
+	// the server did carry out still happened.
+	if got == nil {
+		t.Fatal("SendEmail returned no response alongside the error")
+	}
+
+	var failures *jmapc.SetErrors
+	if !errors.As(err, &failures) {
+		t.Fatalf("error is %T, want *jmapc.SetErrors", err)
+	}
+	if len(failures.Failures) != 2 {
+		t.Fatalf("got %d failures, want 2: %v", len(failures.Failures), failures)
+	}
+
+	// The call the query does not return is checked too. Naming one call in
+	// "_returns" should not stop the others from being looked at.
+	first := failures.Failures[0]
+	if first.Method != "Email/set" || first.CallID != "write" {
+		t.Errorf("first failure is from %s/%s, want Email/set/write", first.Method, first.CallID)
+	}
+	if first.Kind != "notCreated" || first.Key != "draft" {
+		t.Errorf("first failure is %s[%s], want notCreated[draft]", first.Kind, first.Key)
+	}
+	if first.Err.Type != "invalidProperties" {
+		t.Errorf("first failure is %q, want invalidProperties", first.Err.Type)
+	}
+
+	// The message says what the caller needs to know without unwrapping.
+	want := `Email/set could not create "draft": invalidProperties [subject]: too long (and 1 more)`
+	if failures.Error() != want {
+		t.Errorf("error message is %q, want %q", failures.Error(), want)
+	}
+
+	// Each failure is reachable on its own, so a caller can look for one.
+	var one jmapc.SetFailure
+	if !errors.As(err, &one) {
+		t.Error("errors.As does not reach an individual failure")
 	}
 }

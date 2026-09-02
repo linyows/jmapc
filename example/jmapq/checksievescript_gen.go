@@ -71,5 +71,17 @@ func CheckSieveScript(ctx context.Context, c *jmapc.Client, p CheckSieveScriptPa
 	if err := resp.Decode("check", &out); err != nil {
 		return nil, err
 	}
+
+	var refused0 jmapc.BlobUploadResponse
+	if err := resp.Decode("upload", &refused0); err != nil {
+		return nil, err
+	}
+	var failures jmapc.SetErrors
+	failures.Collect("Blob/upload", "upload", map[string]map[jmapc.ID]jmapc.SetError{
+		"notCreated": refused0.NotCreated,
+	})
+	if err := failures.Err(); err != nil {
+		return &out, err
+	}
 	return &out, nil
 }

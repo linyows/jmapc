@@ -56,5 +56,15 @@ func MarkEmailRead(ctx context.Context, c *jmapc.Client, p MarkEmailReadParams) 
 	if err := resp.Decode("mark", &out); err != nil {
 		return nil, err
 	}
+
+	var failures jmapc.SetErrors
+	failures.Collect("Email/set", "mark", map[string]map[jmapc.ID]jmapc.SetError{
+		"notCreated":   out.NotCreated,
+		"notUpdated":   out.NotUpdated,
+		"notDestroyed": out.NotDestroyed,
+	})
+	if err := failures.Err(); err != nil {
+		return &out, err
+	}
 	return &out, nil
 }

@@ -373,6 +373,37 @@ can, so the response comes back alongside the error, and each error names the
 method and call id that failed rather than the bare `"error"` the wire format
 carries.
 
+There is a third level, and it is the one that gets missed. A `/set` answers
+**200 with no error in it** and lists the records it would not act on:
+
+```json
+["Email/set", {"notCreated": {"draft": {"type": "invalidProperties",
+                                        "properties": ["subject"]}}}, "write"]
+```
+
+Read only the transport error and this is a success where nothing happened.
+Generated code checks it, so a refused record is a `*jmapc.SetErrors`:
+
+```go
+res, err := jmapq.SendEmail(ctx, c, params)
+if err != nil {
+    var refused *jmapc.SetErrors
+    if errors.As(err, &refused) {
+        for _, f := range refused.Failures {
+            log.Printf("%s: %v", f.Key, f.Err) // draft: invalidProperties [subject]
+        }
+    }
+    return err
+}
+```
+
+`res` is returned alongside the error, since the part of the request the server
+did carry out still happened. Calls the query does not name in `_returns` are
+checked too — naming one call should not stop the others from being looked at.
+
+In TypeScript the same failure is a thrown `SetErrors`, with the response on
+`err.result`.
+
 ## Blobs
 
 Attachments do not travel through the API endpoint. They are uploaded and

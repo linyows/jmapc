@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 )
 
@@ -164,4 +165,101 @@ func (e *SetError) Error() string {
 		fmt.Fprintf(&b, ": %s", e.Description)
 	}
 	return b.String()
+}
+
+// SetFailure is one record a /set would not act on, and what the server said
+// about it.
+type SetFailure struct {
+	// Method is the method call that refused the record, such as "Email/set".
+	Method string
+	// CallID is the id of that call within the request.
+	CallID string
+	// Kind is the response property the failure was reported in, such as
+	// "notCreated".
+	Kind string
+	// Key is the creation id or record id the failure is filed under.
+	Key ID
+	// Err is what the server said.
+	Err SetError
+}
+
+func (f SetFailure) Error() string {
+	return fmt.Sprintf("%s could not %s %q: %s", f.Method, setVerb(f.Kind), f.Key, f.Err.Error())
+}
+
+// setVerb turns the name of a response property into the verb it denies, so
+// that an error reads as prose rather than as a field name.
+func setVerb(kind string) string {
+	switch kind {
+	case "notCreated":
+		return "create"
+	case "notUpdated":
+		return "update"
+	case "notDestroyed":
+		return "destroy"
+	case "notCopied":
+		return "copy"
+	}
+	return strings.TrimPrefix(kind, "not")
+}
+
+// SetErrors reports the records a request could not act on. A /set answers 200
+// and lists what it refused, so a caller that reads only the transport error
+// sees success where there was none; generated code collects those refusals
+// and returns them here, alongside the part of the response that did succeed.
+//
+// Use errors.As to reach it, and Failures to see which records failed and why.
+type SetErrors struct {
+	Failures []SetFailure
+}
+
+// Collect records the failures a method call reported, keyed by the response
+// property they arrived in. It is called by generated code.
+func (e *SetErrors) Collect(method, callID string, groups map[string]map[ID]SetError) {
+	kinds := make([]string, 0, len(groups))
+	for kind := range groups {
+		kinds = append(kinds, kind)
+	}
+	sort.Strings(kinds)
+	for _, kind := range kinds {
+		keys := make([]ID, 0, len(groups[kind]))
+		for key := range groups[kind] {
+			keys = append(keys, key)
+		}
+		sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+		for _, key := range keys {
+			e.Failures = append(e.Failures, SetFailure{
+				Method: method, CallID: callID, Kind: kind, Key: key, Err: groups[kind][key],
+			})
+		}
+	}
+}
+
+// Err returns e where anything failed and nil where nothing did, so that
+// generated code can collect first and decide afterwards.
+func (e *SetErrors) Err() error {
+	if len(e.Failures) == 0 {
+		return nil
+	}
+	return e
+}
+
+func (e *SetErrors) Error() string {
+	switch len(e.Failures) {
+	case 0:
+		return "no records failed"
+	case 1:
+		return e.Failures[0].Error()
+	}
+	return fmt.Sprintf("%s (and %d more)", e.Failures[0].Error(), len(e.Failures)-1)
+}
+
+// Unwrap reports the failures as errors, so that errors.Is and errors.As reach
+// each of them.
+func (e *SetErrors) Unwrap() []error {
+	errs := make([]error, len(e.Failures))
+	for i, f := range e.Failures {
+		errs[i] = f
+	}
+	return errs
 }

@@ -37,11 +37,18 @@ func (g *QueryGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
 	g.writeRequest(buf, p)
 
 	buf.WriteString("  const res = await client.request(req)\n\n")
+	// Where nothing can be refused there is nothing to hold the response for,
+	// so the value is returned as it is decoded.
+	checks := g.setErrorChecks(p)
+	bind := "return "
+	if len(checks) > 0 {
+		bind = "const out = "
+	}
 	if p.q.Returns != nil {
-		fmt.Fprintf(buf, "  return decode<%s>(req, res, %s)\n",
-			p.returnType, strconv.Quote(p.q.Returns.ID))
+		fmt.Fprintf(buf, "  %sdecode<%s>(req, res, %s)\n",
+			bind, p.returnType, strconv.Quote(p.q.Returns.ID))
 	} else {
-		fmt.Fprintf(buf, "  return {\n")
+		fmt.Fprintf(buf, "  %s{\n", bind)
 		for _, c := range p.q.Calls {
 			fmt.Fprintf(buf, "    %s: decode<%s>(req, res, %s),\n",
 				tsMemberName(c.Field), p.calls[c].responseType, strconv.Quote(c.ID))
@@ -51,7 +58,71 @@ func (g *QueryGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
 		}
 		buf.WriteString("  }\n")
 	}
+	if len(checks) > 0 {
+		g.writeSetErrorChecks(buf, checks)
+		buf.WriteString("  return out\n")
+	}
 	buf.WriteString("}\n")
+}
+
+// setErrorCheck is one method call whose response reports records the server
+// refused.
+type setErrorCheck struct {
+	call   *query.Call
+	object string // the expression holding the response
+	decode string // the type to decode it from, empty where out holds it
+	fields []string
+}
+
+// setErrorChecks finds the calls whose responses report per-record failures.
+// A call the query does not return is decoded for its refusals alone, since
+// otherwise naming one call in "_returns" would quietly stop the others from
+// being checked.
+func (g *QueryGenerator) setErrorChecks(p *plan) []setErrorCheck {
+	var checks []setErrorCheck
+	for i, c := range p.q.Calls {
+		fields := g.Spec.SetErrorFields(c.Method.Name)
+		if len(fields) == 0 {
+			continue
+		}
+		ch := setErrorCheck{call: c, fields: fields, object: "out"}
+		switch {
+		case p.q.Returns == nil:
+			ch.object = "out." + tsMemberName(c.Field)
+		case c != p.q.Returns:
+			ch.object = fmt.Sprintf("refused%d", i)
+			ch.decode = p.calls[c].responseType
+		}
+		checks = append(checks, ch)
+	}
+	return checks
+}
+
+// writeSetErrorChecks writes the code that throws where the server refused a
+// record. The response is carried on the error, since the rest of it happened.
+func (g *QueryGenerator) writeSetErrorChecks(buf *bytes.Buffer, checks []setErrorCheck) {
+	if len(checks) == 0 {
+		return
+	}
+	buf.WriteString("\n")
+	for _, ch := range checks {
+		if ch.decode == "" {
+			continue
+		}
+		fmt.Fprintf(buf, "  const %s = decode<%s>(req, res, %s)\n",
+			ch.object, ch.decode, strconv.Quote(ch.call.ID))
+	}
+	buf.WriteString("  const failures: SetFailure[] = []\n")
+	for _, ch := range checks {
+		fmt.Fprintf(buf, "  collectSetErrors(%s, %s, {\n",
+			strconv.Quote(ch.call.Method.Name), strconv.Quote(ch.call.ID))
+		for _, name := range ch.fields {
+			fmt.Fprintf(buf, "    %s: %s.%s,\n", name, ch.object, tsMemberName(name))
+		}
+		buf.WriteString("  }, failures)\n")
+	}
+	buf.WriteString("  if (failures.length > 0) throw new SetErrors(failures, out)\n")
+	buf.WriteString("\n")
 }
 
 // writeFuncDoc writes the function's documentation.

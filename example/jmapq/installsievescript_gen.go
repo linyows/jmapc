@@ -88,5 +88,22 @@ func InstallSieveScript(ctx context.Context, c *jmapc.Client, p InstallSieveScri
 	if err := resp.Decode("install", &out); err != nil {
 		return nil, err
 	}
+
+	var refused0 jmapc.BlobUploadResponse
+	if err := resp.Decode("upload", &refused0); err != nil {
+		return nil, err
+	}
+	var failures jmapc.SetErrors
+	failures.Collect("Blob/upload", "upload", map[string]map[jmapc.ID]jmapc.SetError{
+		"notCreated": refused0.NotCreated,
+	})
+	failures.Collect("SieveScript/set", "install", map[string]map[jmapc.ID]jmapc.SetError{
+		"notCreated":   out.NotCreated,
+		"notUpdated":   out.NotUpdated,
+		"notDestroyed": out.NotDestroyed,
+	})
+	if err := failures.Err(); err != nil {
+		return &out, err
+	}
 	return &out, nil
 }
