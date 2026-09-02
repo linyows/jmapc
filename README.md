@@ -1,5 +1,8 @@
 # jmapc
 
+[![CI](https://github.com/linyows/jmapc/actions/workflows/ci.yml/badge.svg)](https://github.com/linyows/jmapc/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/linyows/jmapc.svg)](https://pkg.go.dev/github.com/linyows/jmapc)
+
 Write the JMAP request. Get a typed Go client.
 
 `jmapc` is to JMAP what `sqlc` is to SQL: you write the query, it writes the
@@ -306,6 +309,18 @@ jmapc generate -schema schema/notes.json
 ```
 
 Or list them in `jmapc.json` under `"schemas"`.
+
+## Working on jmapc
+
+```
+go test ./...        # everything, including the end-to-end tests
+go generate ./...    # regenerate the runtime types and the example client
+```
+
+The runtime types and the example client are committed, and a test compares
+them against what the catalogue produces now, so a change to the data model
+that was not regenerated fails the build rather than going unnoticed. CI runs
+the same checks, plus gofmt, go vet, and govulncheck.
 
 ## Coverage
 

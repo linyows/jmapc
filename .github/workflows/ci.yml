@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# The workflow only reads the repository; nothing it runs needs to write back.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (${{ matrix.os }}, go ${{ matrix.go }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # One platform failing should not hide what the others would have said.
+      fail-fast: false
+      matrix:
+        include:
+          # The oldest Go the module claims to support, and the newest.
+          - {os: ubuntu-latest, go: "1.25.x"}
+          - {os: ubuntu-latest, go: "stable"}
+          # jmapc is a library, and generation walks the filesystem, so the
+          # other platforms are worth a run of their own.
+          - {os: macos-latest, go: "stable"}
+          - {os: windows-latest, go: "stable"}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          # The module has no dependencies, so there is no go.sum for the
+          # cache to key on.
+          cache-dependency-path: go.mod
+
+      - name: Build
+        run: go build ./...
+
+      - name: Test
+        run: go test -race ./...
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache-dependency-path: go.mod
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt'd:"
+            echo "$unformatted"
+            echo
+            gofmt -d $unformatted
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      # The runtime types and the example client are generated from the
+      # catalogue. Regenerating them here catches a change to the data model
+      # that was made without regenerating what depends on it.
+      - name: go generate leaves no changes
+        run: |
+          go generate ./...
+          git diff --exit-code
+
+      - name: go mod tidy leaves no changes
+        run: |
+          go mod tidy
+          git diff --exit-code
+
+  vulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache-dependency-path: go.mod
+
+      # The module has no dependencies, so this is watching the standard
+      # library, and it fails when the Go release in use has a known problem
+      # in code jmapc actually reaches.
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...

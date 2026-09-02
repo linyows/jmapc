@@ -1,0 +1,10 @@
+# The module has no Go dependencies, so the only thing here to keep current is
+# the set of actions the workflow uses.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: ci

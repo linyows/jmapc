@@ -128,3 +128,31 @@ func firstDifference(want, got string) string {
 	}
 	return "the files differ in length: on disk has " + strconv.Itoa(len(wantLines)) + " lines, generated has " + strconv.Itoa(len(gotLines))
 }
+
+// TestGeneratedSourcePathIsPortable checks that the path a generated file
+// records is spelled the same however the host spells paths. Without this,
+// regenerating on Windows would rewrite the first line of every file, and the
+// check that the committed client is up to date would fail on one platform and
+// pass on another.
+func TestGeneratedSourcePathIsPortable(t *testing.T) {
+	queries := parseExample(t)
+	for _, q := range queries {
+		q.Path = strings.ReplaceAll(q.Path, "/", `\`)
+	}
+	g := &QueryGenerator{
+		Spec:      spec.Standard(),
+		Package:   "jmapq",
+		Qualifier: "jmapc.",
+		Queries:   queries,
+	}
+	files, err := g.Generate()
+	if err != nil {
+		t.Fatalf("generating: %v", err)
+	}
+	for name, src := range files {
+		header := strings.SplitN(string(src), "\n", 3)[1]
+		if strings.Contains(header, `\`) {
+			t.Errorf("%s records its source as %q, want forward slashes", name, header)
+		}
+	}
+}
