@@ -1,6 +1,13 @@
 <p align="right">English | <a href="https://github.com/linyows/jmapc/blob/main/README.ja.md">日本語</a></p>
 
-<h1 align="center">jmapc</h1>
+<p align="center">
+  <br><br><br>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://github.com/linyows/jmapc/blob/main/misc/jmapc-dark-bg.svg?raw=true">
+    <img alt="jmapc" src="https://github.com/linyows/jmapc/blob/main/misc/jmapc.svg?raw=true" width="280">
+  </picture>
+  <br><br><br>
+</p>
 
 <p align="center">
   <strong>jmapc</strong> is a JMAP compiler: you write the query, it writes the client.
