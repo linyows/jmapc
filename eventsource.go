@@ -34,6 +34,23 @@ func (s *StateChange) StateOf(accountID ID, typeName string) (string, bool) {
 	return state, ok
 }
 
+// PushVerification is what the server posts to a push subscription's URL as
+// soon as it is created, before it will send anything else. The client writes
+// the code back with a PushSubscription/set, which is what proves it controls
+// the URL: without that step a subscription could be pointed at a third party
+// and used to flood them.
+//
+// It arrives at the URL the client registered, not through the API, which is
+// why it is here rather than in the generated types.
+type PushVerification struct {
+	// Type is the object type, always "PushVerification".
+	Type string `json:"@type"`
+	// PushSubscriptionID is the id of the subscription that was created.
+	PushSubscriptionID ID `json:"pushSubscriptionId"`
+	// VerificationCode is the code to write back to that subscription.
+	VerificationCode string `json:"verificationCode"`
+}
+
 // EventSourceOptions say what to ask the push endpoint for.
 type EventSourceOptions struct {
 	// Types are the object types to be told about, such as "Email". Leave it

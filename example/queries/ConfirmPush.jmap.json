@@ -1,0 +1,16 @@
+{
+  "_doc": "ConfirmPush writes back the code the server pushed to the subscription's URL. Until this happens the server sends nothing else, which is what keeps a subscription from being pointed at a third party and used to flood them.",
+
+  "methodCalls": [
+    ["PushSubscription/set", {
+      "update": {
+        "{{subscriptionId}}": {
+          "verificationCode": "{{verificationCode}}",
+          "expires": "{{expires}}"
+        }
+      }
+    }, "confirm"]
+  ],
+
+  "_returns": "confirm"
+}
