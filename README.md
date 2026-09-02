@@ -444,7 +444,7 @@ stands on each.
 | `urn:ietf:params:jmap:quota` | [RFC 9425](https://www.rfc-editor.org/rfc/rfc9425) | Yes |
 | `urn:ietf:params:jmap:sieve` | [RFC 9661](https://www.rfc-editor.org/rfc/rfc9661) | Yes |
 | `urn:ietf:params:jmap:mdn` | [RFC 9007](https://www.rfc-editor.org/rfc/rfc9007) | Yes |
-| `urn:ietf:params:jmap:webpush-vapid` | [RFC 9749](https://www.rfc-editor.org/rfc/rfc9749) | No |
+| `urn:ietf:params:jmap:webpush-vapid` | [RFC 9749](https://www.rfc-editor.org/rfc/rfc9749) | Yes |
 
 Two of these store objects from specifications of their own: a contact card is
 a [JSContact](https://www.rfc-editor.org/rfc/rfc9553) Card, and a calendar event
@@ -466,6 +466,18 @@ properties to `Email` and nothing else, so a query needs it without any method
 name saying so. jmapc works out which capabilities the properties a query
 touches belong to, and declares them: ask for `smimeStatus` and
 `urn:ietf:params:jmap:smimeverify` appears in `using` on its own.
+
+Some bring neither types nor methods, only something to tell the client. VAPID
+is one: what it has to say is a key. Those are read from the session, and
+`Session.Capability` reads any of them, including one jmapc has never heard of.
+
+```go
+vapid, err := session.WebPushVAPID()
+// vapid.ApplicationServerKey goes to the push service when subscribing there.
+
+var limits struct{ MaxSizeScript int `json:"maxSizeScript"` }
+err = session.Accounts[accountID].Capability(jmapc.CapabilitySieve, &limits)
+```
 
 A capability that is not built in is not out of reach: describe its types in a
 [schema file](#vendor-extensions) and queries against them are checked like any
