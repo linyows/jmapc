@@ -87,21 +87,20 @@ for an environment with no Go toolchain.
 
 Write a query. The file name is the name of the function to generate.
 
-```jsonc
-// queries/ListInboxEmails.jmap.json
+```json
 {
   "doc": "ListInboxEmails returns the newest emails in one mailbox.",
 
   "methodCalls": [
-    // Find the ids of the matching emails.
     ["Email/query", {
+      "jmapcComment": "Find the ids of the matching emails.",
       "filter": {"inMailbox": "{{mailboxId}}"},
       "sort": [{"property": "receivedAt", "isAscending": false}],
       "limit": "{{limit}}"
     }, "search"],
 
-    // Fetch them in the same request, so the ids never make a round trip.
     ["Email/get", {
+      "jmapcComment": "Fetch them in the same request, so the ids never make a round trip.",
       "#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"},
       "properties": ["id", "subject", "from", "receivedAt"]
     }, "fetch"]
@@ -110,6 +109,8 @@ Write a query. The file name is the name of the function to generate.
   "returns": "fetch"
 }
 ```
+
+(`queries/ListInboxEmails.jmap.json`)
 
 Generate:
 
@@ -144,8 +145,7 @@ The example below is what JMAP is for. Writing a message, submitting it, and
 moving it out of Drafts are three operations that must not come apart, and here
 they are one request:
 
-```jsonc
-// queries/SendEmail.jmap.json
+```json
 {
   "methodCalls": [
     ["Email/set", {
@@ -190,8 +190,27 @@ members the generator reads and the server never sees.
 | `doc` | The generated function's documentation. Optional. |
 | `returns` | The call whose response the function returns. Optional: without it, every response is returned. |
 
-Comments are allowed, though JSON has none: a query is source code and deserves
-annotating.
+An argument object may also carry a `jmapcComment`, which the generator reads
+and the server never sees.
+
+A query file is plain JSON, so `jq` reads it and an editor understands it. To
+say why a call is there, give its arguments a `jmapcComment`:
+
+```json
+["Email/get", {
+  "jmapcComment": "Fetch them in the same request, so the ids never make a round trip.",
+  "#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"}
+}, "fetch"]
+```
+
+The generator lifts it into the generated code and leaves it out of the request,
+which it must: RFC 8620 requires a server to reject an argument it does not
+know.
+
+```go
+// Fetch them in the same request, so the ids never make a round trip.
+{Name: "Email/get", CallID: "fetch", Args: map[string]any{
+```
 
 ### Parameters
 

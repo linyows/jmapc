@@ -2,15 +2,14 @@
   "doc": "SearchContacts lists the address books and searches one of them in the same request, so a contact picker can be filled in with one round trip.",
 
   "methodCalls": [
-    // Which address books exist. A picker needs this whether or not the
-    // search finds anything.
     ["AddressBook/get", {
+      "jmapcComment": "Which address books exist. A picker needs this whether or not the search finds anything.",
       "ids": null,
       "properties": ["id", "name", "isDefault"]
     }, "books"],
 
-    // The cards matching the phrase, surname first.
     ["ContactCard/query", {
+      "jmapcComment": "The cards matching the phrase, surname first.",
       "filter": {
         "operator": "AND",
         "conditions": [
@@ -26,8 +25,8 @@
       "limit": "{{limit}}"
     }, "search"],
 
-    // Only the parts a list view shows. A card holds far more than this.
     ["ContactCard/get", {
+      "jmapcComment": "Only the parts a list view shows. A card holds far more than this.",
       "#ids": {"resultOf": "search", "name": "ContactCard/query", "path": "/ids"},
       "properties": ["id", "uid", "name", "emails", "phones", "organizations"]
     }, "fetch"]

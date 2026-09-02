@@ -146,6 +146,9 @@ func (g *QueryGenerator) writeRequest(buf *bytes.Buffer, p *plan) {
 
 // writeInvocation writes one method call of the request.
 func (g *QueryGenerator) writeInvocation(buf *bytes.Buffer, p *plan, c *query.Call) {
+	if c.Comment != "" {
+		writeComment(buf, "\t\t\t", c.Comment)
+	}
 	fmt.Fprintf(buf, "\t\t\t{Name: %q, CallID: %q, Args: map[string]any{\n", c.Method.Name, c.ID)
 	if expr := p.calls[c].accountIDExpr; expr != "" {
 		fmt.Fprintf(buf, "\t\t\t\t%q: %s,\n", query.AccountIDArgument, expr)

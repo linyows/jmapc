@@ -130,11 +130,14 @@ func SearchContacts(ctx context.Context, c *jmapc.Client, p SearchContactsParams
 	req := &jmapc.Request{
 		Using: []string{jmapc.CapabilityCore, jmapc.CapabilityContacts},
 		MethodCalls: []jmapc.Invocation{
+			// Which address books exist. A picker needs this whether or not the search
+			// finds anything.
 			{Name: "AddressBook/get", CallID: "books", Args: map[string]any{
 				"accountId":  contactsAccountID,
 				"ids":        nil,
 				"properties": json.RawMessage(`["id","name","isDefault"]`),
 			}},
+			// The cards matching the phrase, surname first.
 			{Name: "ContactCard/query", CallID: "search", Args: map[string]any{
 				"accountId": contactsAccountID,
 				"filter": map[string]any{
@@ -152,6 +155,7 @@ func SearchContacts(ctx context.Context, c *jmapc.Client, p SearchContactsParams
 				"sort":  json.RawMessage(`[{"property":"name/surname"},{"property":"name/given"}]`),
 				"limit": p.Limit,
 			}},
+			// Only the parts a list view shows. A card holds far more than this.
 			{Name: "ContactCard/get", CallID: "fetch", Args: map[string]any{
 				"accountId":  contactsAccountID,
 				"#ids":       jmapc.ResultReference{ResultOf: "search", Name: "ContactCard/query", Path: "/ids"},

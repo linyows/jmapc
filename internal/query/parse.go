@@ -16,6 +16,16 @@ import (
 // Extension is the suffix that marks a file as a JMAP query.
 const Extension = ".jmap.json"
 
+// CommentArgument is the member a query may put in an argument object to
+// explain what the call is for. It is not a JMAP argument: the generator reads
+// it, carries it into the generated code as a comment, and leaves it out of the
+// request. It has to be left out, because RFC 8620 requires a server to reject
+// an argument it does not know.
+//
+// The name is qualified because this is the one place where something jmapc
+// reads sits among the arguments that go to the server.
+const CommentArgument = "jmapcComment"
+
 // Parser reads query files and checks them against a catalogue.
 type Parser struct {
 	// Spec is the catalogue the queries are checked against.
@@ -92,7 +102,7 @@ func (p *Parser) Parse(path string, src []byte) (*Query, error) {
 	}
 
 	var f fileSyntax
-	dec := json.NewDecoder(bytes.NewReader(stripComments(src)))
+	dec := json.NewDecoder(bytes.NewReader(src))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&f); err != nil {
 		return nil, ErrorList{{File: path, Msg: syntaxMessage(err)}}
@@ -265,6 +275,16 @@ func (c *checker) arguments(call *Call, argsType *spec.Object, raw json.RawMessa
 			continue
 		}
 		seen[name] = key
+
+		if name == CommentArgument {
+			comment, ok := stringValue(members[key])
+			if !ok {
+				c.errorf(where+"."+key, "", "%s must be a string", CommentArgument)
+				continue
+			}
+			call.Comment = comment
+			continue
+		}
 
 		field, known := argsType.Field(name)
 		if !known {

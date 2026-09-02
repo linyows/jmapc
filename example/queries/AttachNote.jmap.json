@@ -11,9 +11,8 @@
       }
     }, "upload"],
 
-    // "#note" is the blob the call above creates, before the server has given
-    // it an id.
     ["Email/set", {
+      "jmapcComment": "\"#note\" is the blob the call above creates, before the server has given it an id.",
       "create": {
         "draft": {
           "mailboxIds": {"{{draftsMailboxId}}": true},

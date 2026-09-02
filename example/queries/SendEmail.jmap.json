@@ -2,9 +2,8 @@
   "doc": "SendEmail writes a message, hands it to the submission server, and files it under Sent once the send succeeds — all in one request, so the draft can never be left behind in Drafts by a call that failed halfway.",
 
   "methodCalls": [
-    // Create the message. The creation id "draft" names it for the rest of
-    // the request, before the server has assigned it a real one.
     ["Email/set", {
+      "jmapcComment": "Create the message. The creation id \"draft\" names it for the rest of the request, before the server has assigned it a real one.",
       "create": {
         "draft": {
           "mailboxIds": {"{{draftsMailboxId}}": true},
@@ -18,10 +17,8 @@
       }
     }, "write"],
 
-    // Submit it for delivery, referring to the email by its creation id.
-    // On success, move it out of Drafts and into Sent and drop the $draft
-    // keyword, which the submission server does as part of the same call.
     ["EmailSubmission/set", {
+      "jmapcComment": "Submit it for delivery, referring to the email by its creation id. On success, move it out of Drafts and into Sent and drop the $draft keyword, which the submission server does as part of the same call.",
       "create": {
         "send": {
           "emailId": "#draft",

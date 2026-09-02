@@ -63,6 +63,8 @@ func SendEmail(ctx context.Context, c *jmapc.Client, p SendEmailParams) (*jmapc.
 	req := &jmapc.Request{
 		Using: []string{jmapc.CapabilityCore, jmapc.CapabilityMail, jmapc.CapabilitySubmission},
 		MethodCalls: []jmapc.Invocation{
+			// Create the message. The creation id "draft" names it for the rest of the
+			// request, before the server has assigned it a real one.
 			{Name: "Email/set", CallID: "write", Args: map[string]any{
 				"accountId": mailAccountID,
 				"create": map[string]any{
@@ -91,6 +93,9 @@ func SendEmail(ctx context.Context, c *jmapc.Client, p SendEmailParams) (*jmapc.
 					},
 				},
 			}},
+			// Submit it for delivery, referring to the email by its creation id. On
+			// success, move it out of Drafts and into Sent and drop the $draft
+			// keyword, which the submission server does as part of the same call.
 			{Name: "EmailSubmission/set", CallID: "send", Args: map[string]any{
 				"accountId": submissionAccountID,
 				"create": map[string]any{

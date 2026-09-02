@@ -85,21 +85,20 @@ Go のツールチェインがない環境では、[リリース](https://github
 クエリを書きます。
 ファイル名が、生成される関数の名前になります。
 
-```jsonc
-// queries/ListInboxEmails.jmap.json
+```json
 {
   "doc": "ListInboxEmails returns the newest emails in one mailbox.",
 
   "methodCalls": [
-    // 該当するメールの id を探す。
     ["Email/query", {
+      "jmapcComment": "該当するメールの id を探す。",
       "filter": {"inMailbox": "{{mailboxId}}"},
       "sort": [{"property": "receivedAt", "isAscending": false}],
       "limit": "{{limit}}"
     }, "search"],
 
-    // 同じリクエストで取得する。id が往復することはない。
     ["Email/get", {
+      "jmapcComment": "同じリクエストで取得する。id が往復することはない。",
       "#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"},
       "properties": ["id", "subject", "from", "receivedAt"]
     }, "fetch"]
@@ -108,6 +107,8 @@ Go のツールチェインがない環境では、[リリース](https://github
   "returns": "fetch"
 }
 ```
+
+(`queries/ListInboxEmails.jmap.json`)
 
 生成します。
 
@@ -141,8 +142,7 @@ for _, email := range res.List {
 メッセージを作り、送信し、下書きから移す。
 この三つは途中で分断されてはならない操作であり、ここでは一つのリクエストになっています。
 
-```jsonc
-// queries/SendEmail.jmap.json
+```json
 {
   "methodCalls": [
     ["Email/set", {
@@ -184,8 +184,28 @@ for _, email := range res.List {
 | `doc` | 生成される関数のドキュメントです。省略できます。 |
 | `returns` | どの呼び出しのレスポンスを関数の戻り値にするかを指定します。省略すると全てのレスポンスが返ります。 |
 
-JSON にコメントはありませんが、クエリファイルでは書けます。
-クエリはソースコードであり、注釈を付ける価値があるからです。
+引数オブジェクトには `jmapcComment` も置けます。
+ジェネレータが読み、サーバには届きません。
+
+クエリファイルは素の JSON です。
+`jq` で読めますし、エディタも理解します。
+呼び出しの意図を書くには、その引数に `jmapcComment` を置きます。
+
+```json
+["Email/get", {
+  "jmapcComment": "同じリクエストで取得する。id が往復することはない。",
+  "#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"}
+}, "fetch"]
+```
+
+ジェネレータはこれを生成コードのコメントに移し、リクエストからは除きます。
+除かなければなりません。
+RFC 8620 は、知らない引数をサーバが拒否することを求めているからです。
+
+```go
+// 同じリクエストで取得する。id が往復することはない。
+{Name: "Email/get", CallID: "fetch", Args: map[string]any{
+```
 
 ### パラメータ
 
