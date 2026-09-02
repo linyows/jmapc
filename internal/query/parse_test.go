@@ -1328,3 +1328,100 @@ func TestPushSubscriptionChecks(t *testing.T) {
 		})
 	}
 }
+
+// TestHeaderFieldProperties covers the properties naming one header field of a
+// message. They are not members of the Email type — a message may carry any
+// field at all — but the form asked for decides the type, so they are checked
+// and typed rather than waved through.
+func TestHeaderFieldProperties(t *testing.T) {
+	parse(t, "Headers"+Extension, `{"methodCalls": [
+	  ["Email/get", {"ids": ["e1"], "properties": [
+	    "id",
+	    "header:List-Id",
+	    "header:List-Id:asText",
+	    "header:From:asAddresses",
+	    "header:To:asGroupedAddresses",
+	    "header:Message-ID:asMessageIds",
+	    "header:Delivery-Date:asDate",
+	    "header:List-Post:asURLs",
+	    "header:Received:all",
+	    "header:Resent-To:asAddresses:all"
+	  ]}, "c0"]
+	]}`)
+
+	tests := []struct{ src, want string }{{
+		`{"methodCalls": [["Email/get", {"properties": ["header:Subject:asWords"]}, "c0"]]}`,
+		"asks for the asWords form",
+	}, {
+		`{"methodCalls": [["Email/get", {"properties": ["header:"]}, "c0"]]}`,
+		"names no header field",
+	}, {
+		`{"methodCalls": [["Email/get", {"properties": ["header:Subject:asText:all:more"]}, "c0"]]}`,
+		"more suffixes than the form and :all",
+	}}
+	for _, tt := range tests {
+		if got := parseErr(t, tt.src); !strings.Contains(got, tt.want) {
+			t.Errorf("error was:\n%s\nwant it to mention: %s", got, tt.want)
+		}
+	}
+}
+
+// TestBodyProperties covers the argument that narrows the body parts rather
+// than the records. It reaches places properties cannot: a part's sub-parts,
+// and their sub-parts, all the way down.
+func TestBodyProperties(t *testing.T) {
+	q := parse(t, "Bodies"+Extension, `{"methodCalls": [
+	  ["Email/get", {
+	    "ids": ["e1"],
+	    "properties": ["id", "bodyStructure", "textBody"],
+	    "bodyProperties": ["partId", "type", "size", "subParts"]
+	  }, "c0"]
+	]}`)
+	if got, want := strings.Join(q.Calls[0].NestedProperties, ","), "partId,type,size,subParts"; got != want {
+		t.Errorf("bodyProperties = %q, want %q", got, want)
+	}
+
+	if got := parseErr(t, `{"methodCalls": [
+	  ["Email/get", {"bodyProperties": ["partId", "siz"]}, "c0"]
+	]}`); !strings.Contains(got, `EmailBodyPart has no property "siz"`) {
+		t.Errorf("error was:\n%s", got)
+	}
+
+	// Email/parse narrows body parts the same way.
+	parse(t, "Parsed"+Extension, `{"methodCalls": [
+	  ["Email/parse", {"blobIds": ["b1"], "bodyProperties": ["partId", "type"]}, "c0"]
+	]}`)
+}
+
+// TestCreatedIDsCarry covers a query that takes the creation ids of an earlier
+// request and reports its own. RFC 8620 has this for proxies, which split one
+// request across several servers and need the references to still resolve.
+func TestCreatedIDsCarry(t *testing.T) {
+	q := parse(t, "CreateAndFile"+Extension, `{
+	  "_createdIds": true,
+	  "methodCalls": [
+	    ["Mailbox/set", {"create": {"box": {"name": "{{name}}", "parentId": null}}}, "make"],
+	    ["Email/set", {"update": {"{{emailId}}": {"mailboxIds/#box": true}}}, "file"]
+	  ]
+	}`)
+	if !q.CreatedIDs {
+		t.Error("the query does not carry creation ids")
+	}
+
+	// The ids belong to the request rather than to any one call, so there is
+	// nowhere to put them in a query that returns a single response.
+	got := parseErr(t, `{
+	  "_createdIds": true,
+	  "_returns": "c0",
+	  "methodCalls": [["Mailbox/get", {}, "c0"]]
+	}`)
+	if !strings.Contains(got, "returns every response") {
+		t.Errorf("error was:\n%s", got)
+	}
+
+	// A query that says nothing about them carries none.
+	plain := parse(t, "Plain"+Extension, `{"methodCalls": [["Mailbox/get", {}, "c0"]]}`)
+	if plain.CreatedIDs {
+		t.Error("a query that did not ask for creation ids carries them")
+	}
+}

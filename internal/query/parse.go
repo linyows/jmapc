@@ -3,6 +3,7 @@ package query
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -31,6 +32,9 @@ const (
 	DocMember = "_doc"
 	// ReturnsMember names the call whose response the function returns.
 	ReturnsMember = "_returns"
+	// CreatedIDsMember asks for the creation ids of a request to be carried in
+	// and out, so that one request can go on from where another left off.
+	CreatedIDsMember = "_createdIds"
 	// CommentArgument explains what a call is for. It sits in that call's
 	// arguments, and the generator strips it before the request goes out:
 	// RFC 8620 requires a server to reject an argument it does not know.
@@ -58,6 +62,9 @@ type fileSyntax struct {
 	// Returns names the call whose result the generated function returns. It
 	// may be left out, in which case every result is returned.
 	Returns string `json:"_returns"`
+	// CreatedIDs asks the generated function to take the creation ids of an
+	// earlier request and to report its own.
+	CreatedIDs bool `json:"_createdIds"`
 	// Using lists the capabilities the request declares, as RFC 8620 defines
 	// it. It may be left out, in which case it is derived from the methods
 	// called.
@@ -131,7 +138,7 @@ func (p *Parser) Parse(path string, src []byte) (*Query, error) {
 		byID:   make(map[string]*Call),
 		used:   make(map[string]bool),
 	}
-	q := &Query{Name: name, Path: path, Doc: f.Doc}
+	q := &Query{Name: name, Path: path, Doc: f.Doc, CreatedIDs: f.CreatedIDs}
 
 	if len(f.MethodCalls) == 0 {
 		c.errorf("methodCalls", "", "the query makes no method calls")
@@ -145,6 +152,11 @@ func (p *Parser) Parse(path string, src []byte) (*Query, error) {
 
 	q.Using = c.resolveUsing(f.Using, q.Calls)
 	q.Params = c.params.all()
+	if f.Returns != "" && f.CreatedIDs {
+		c.errorf(ReturnsMember, "",
+			"a query carrying %s returns every response, since the creation ids belong to the request rather than to any one call",
+			CreatedIDsMember)
+	}
 	if f.Returns != "" {
 		call, ok := c.byID[f.Returns]
 		if !ok {
@@ -262,6 +274,7 @@ func (c *checker) methodCall(raw json.RawMessage, where string) *Call {
 	}
 	call.Args = c.arguments(call, args, parts[1], where+".arguments")
 	call.Properties = c.properties(call, where+".arguments")
+	call.NestedProperties = c.nestedProperties(call, where+".arguments")
 	return call
 }
 
@@ -412,13 +425,73 @@ func (c *checker) properties(call *Call, where string) []string {
 			return nil
 		}
 		selected, known := dataType.Field(name)
-		if !known && !isDynamicProperty(name) {
-			c.errorf(fmt.Sprintf("%s.%s[%d]", where, call.Method.PropertiesArgument, i),
-				hintFor(name, dataType.PropertyNames()),
-				"%s has no property %q", dataType.Name, name)
-			continue
+		if !known {
+			where := fmt.Sprintf("%s.%s[%d]", where, call.Method.PropertiesArgument, i)
+			header, err := spec.ParseHeaderProperty(name)
+			switch {
+			case err != nil:
+				var badForm *spec.HeaderPropertyError
+				hint := ""
+				if errors.As(err, &badForm) && len(badForm.Forms) > 0 {
+					hint = hintFor(badForm.Property, badForm.Forms)
+					if hint == "" {
+						hint = "the parsed forms are " + strings.Join(badForm.Forms, ", ")
+					}
+				}
+				c.errorf(where, hint, "%v", err)
+				continue
+			case header != nil:
+				// A property naming one header field of the message. Its type
+				// comes from the form asked for, so it is not a member of the
+				// data type and cannot be checked against one.
+			case !isDynamicProperty(name):
+				c.errorf(where, hintFor(name, dataType.PropertyNames()),
+					"%s has no property %q", dataType.Name, name)
+				continue
+			}
 		}
 		c.useCapability(selected)
+		props = append(props, name)
+	}
+	return props
+}
+
+// nestedProperties extracts the property names selected for a type nested
+// inside the records, and checks each one against that type. bodyProperties is
+// the only such argument: it narrows the body parts of an Email rather than the
+// Email itself.
+func (c *checker) nestedProperties(call *Call, where string) []string {
+	if call.Method.NestedPropertiesArgument == "" || call.Args == nil {
+		return nil
+	}
+	node, ok := call.Args.Find(call.Method.NestedPropertiesArgument)
+	if !ok {
+		return nil
+	}
+	arr, ok := node.(*Array)
+	if !ok {
+		return nil
+	}
+	nested, ok := c.spec.Object(call.Method.NestedType)
+	if !ok {
+		return nil
+	}
+	var props []string
+	for i, item := range arr.Items {
+		lit, ok := item.(*Literal)
+		if !ok {
+			return nil
+		}
+		var name string
+		if err := json.Unmarshal(lit.JSON, &name); err != nil {
+			return nil
+		}
+		if _, known := nested.Field(name); !known {
+			c.errorf(fmt.Sprintf("%s.%s[%d]", where, call.Method.NestedPropertiesArgument, i),
+				hintFor(name, nested.PropertyNames()),
+				"%s has no property %q", nested.Name, name)
+			continue
+		}
 		props = append(props, name)
 	}
 	return props

@@ -39,6 +39,9 @@ func (g *QueryGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
 	if p.paramsType != "" {
 		sig += fmt.Sprintf(", p %s", p.paramsType)
 	}
+	if p.q.CreatedIDs {
+		sig += fmt.Sprintf(", createdIDs map[%[1]sID]%[1]sID", g.Qualifier)
+	}
 	fmt.Fprintf(buf, "%s) (*%s, error) {\n", sig, p.returnType)
 
 	g.writeSessionLookups(buf, p)
@@ -54,6 +57,9 @@ func (g *QueryGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
 		for _, c := range p.q.Calls {
 			fmt.Fprintf(buf, "\tif err := resp.Decode(%q, &out.%s); err != nil {\n\t\treturn nil, err\n\t}\n", c.ID, c.GoField)
 		}
+	}
+	if p.q.CreatedIDs {
+		buf.WriteString("\tout.CreatedIDs = resp.CreatedIDs\n")
 	}
 	buf.WriteString("\treturn &out, nil\n")
 	buf.WriteString("}\n")
@@ -77,6 +83,10 @@ func (g *QueryGenerator) writeFuncDoc(buf *bytes.Buffer, p *plan) {
 	}
 	if len(p.sessionCapabilities) > 0 {
 		doc += "\n\nThe query does not say which account to use, so the primary account of the session is used, which costs a session lookup on first use."
+	}
+	if p.q.CreatedIDs {
+		doc += "\n\nIt takes the creation ids of an earlier request and reports its own, so that a reference to something created there still resolves here. " +
+			"Pass nil where there is no earlier request."
 	}
 	writeComment(buf, "", doc)
 }
@@ -143,7 +153,11 @@ func (g *QueryGenerator) writeRequest(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		g.writeInvocation(buf, p, c)
 	}
-	buf.WriteString("\t\t},\n\t}\n\n")
+	buf.WriteString("\t\t},\n")
+	if p.q.CreatedIDs {
+		buf.WriteString("\t\tCreatedIDs: createdIDs,\n")
+	}
+	buf.WriteString("\t}\n\n")
 }
 
 // writeInvocation writes one method call of the request.

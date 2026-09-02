@@ -33,6 +33,10 @@ type call struct {
 	// recordType names the generated record type, empty when the call fetches
 	// whole records and the runtime type is used.
 	recordType string
+	// nestedType names the generated type for the records' nested type, as
+	// bodyProperties gives an Email's body parts, empty when that is not
+	// narrowed either.
+	nestedType string
 	// accountIDExpr is the Go expression for the accountId argument the query
 	// left out, empty when the query supplies one.
 	accountIDExpr string
@@ -101,11 +105,16 @@ func (g *QueryGenerator) plan() ([]*plan, error) {
 		}
 		for _, c := range q.Calls {
 			info := &call{}
-			if c.Properties != nil {
+			// Narrowing the nested type means the record type has to be
+			// generated too, since its own fields change to refer to it.
+			if c.Properties != nil || c.NestedProperties != nil {
 				info.recordType = unique(taken, q.Name+spec.ExportedName(c.Method.DataType))
 				info.responseType = unique(taken, q.Name+c.GoField+"Response")
 			} else {
 				info.responseType = g.Qualifier + spec.ExportedName(c.Method.Response)
+			}
+			if c.NestedProperties != nil {
+				info.nestedType = unique(taken, q.Name+spec.ExportedName(c.Method.NestedType))
 			}
 			p.calls[c] = info
 		}
@@ -244,14 +253,25 @@ func (g *QueryGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 		if !ok {
 			continue
 		}
+		if info.nestedType != "" {
+			g.writeNestedType(buf, p, c, info)
+		}
+
 		writeComment(buf, "", fmt.Sprintf("%s holds the properties of %s that the %s call in %s asks for.",
 			info.recordType, dataType.Name, c.Method.Name, p.q.Name))
 		fmt.Fprintf(buf, "type %s struct {\n", info.recordType)
-		for i, name := range recordProperties(c.Properties) {
+		properties := c.Properties
+		if properties == nil {
+			// Only the nested type was narrowed, so the record keeps all of
+			// its own properties and only the ones referring to the nested
+			// type change.
+			properties = dataType.PropertyNames()
+		}
+		for i, name := range recordProperties(properties) {
 			if i > 0 {
 				buf.WriteString("\n")
 			}
-			g.writeRecordField(buf, dataType, name)
+			g.writeRecordField(buf, dataType, name, info.nestedType, c.Method.NestedType)
 		}
 		buf.WriteString("}\n\n")
 	}
@@ -276,18 +296,87 @@ func contains(list []string, want string) bool {
 	return false
 }
 
-// writeRecordField writes one field of a generated record type.
-func (g *QueryGenerator) writeRecordField(buf *bytes.Buffer, dataType *spec.Object, name string) {
+// writeNestedType writes the struct for a type nested inside the records, whose
+// properties a separate argument narrows. Its own reference to itself — the
+// sub-parts of a body part — points at the generated type rather than the
+// runtime one, so a whole tree of parts carries only what was asked for.
+func (g *QueryGenerator) writeNestedType(buf *bytes.Buffer, p *plan, c *query.Call, info *call) {
+	nested, ok := g.Spec.Object(c.Method.NestedType)
+	if !ok {
+		return
+	}
+	writeComment(buf, "", fmt.Sprintf("%s holds the properties of %s that the %s call in %s asks for.",
+		info.nestedType, nested.Name, c.Method.Name, p.q.Name))
+	fmt.Fprintf(buf, "type %s struct {\n", info.nestedType)
+	for i, name := range c.NestedProperties {
+		if i > 0 {
+			buf.WriteString("\n")
+		}
+		g.writeRecordField(buf, nested, name, info.nestedType, c.Method.NestedType)
+	}
+	buf.WriteString("}\n\n")
+}
+
+// writeRecordField writes one field of a generated record type. Where nestedTo
+// is set, a reference to the type named by nestedFrom becomes a reference to
+// the generated one instead.
+func (g *QueryGenerator) writeRecordField(buf *bytes.Buffer, dataType *spec.Object, name, nestedTo, nestedFrom string) {
 	field, known := dataType.Field(name)
 	if !known {
-		// A property the server gives meaning to rather than one the data
-		// model fixes, so it is left as raw JSON for the caller to interpret.
+		// A property naming one header field of the message has a type after
+		// all: the form asked for decides it.
+		if header, err := spec.ParseHeaderProperty(name); err == nil && header != nil {
+			writeComment(buf, "\t", headerPropertyDoc(header))
+			fmt.Fprintf(buf, "\t%s %s `json:%q`\n",
+				spec.ExportedName(name), spec.MustParseType(header.Type).GoType(g.Qualifier), name)
+			return
+		}
+		// Anything else the server gives meaning to is left as raw JSON for
+		// the caller to interpret.
 		writeComment(buf, "\t", dynamicPropertyDoc(name))
 		fmt.Fprintf(buf, "\t%s json.RawMessage `json:%q`\n", spec.ExportedName(name), name)
 		return
 	}
 	writeComment(buf, "\t", field.Doc)
-	fmt.Fprintf(buf, "\t%s %s `json:%q`\n", spec.ExportedName(name), field.ParsedType().GoType(g.Qualifier), name)
+	fmt.Fprintf(buf, "\t%s %s `json:%q`\n",
+		spec.ExportedName(name), g.nestedGoType(field.ParsedType(), nestedTo, nestedFrom), name)
+}
+
+// nestedGoType renders a field's Go type, pointing any reference to the
+// narrowed type at the generated one.
+func (g *QueryGenerator) nestedGoType(t *spec.Type, nestedTo, nestedFrom string) string {
+	goType := t.GoType(g.Qualifier)
+	if nestedTo == "" {
+		return goType
+	}
+	return strings.ReplaceAll(goType, g.Qualifier+spec.ExportedName(nestedFrom), nestedTo)
+}
+
+// headerPropertyDoc describes a property naming one header field of a message.
+func headerPropertyDoc(h *spec.HeaderProperty) string {
+	which := "The " + h.Name + " header field"
+	if h.All {
+		which = "Every " + h.Name + " header field in the message, in the order they appear"
+	} else {
+		which += ", or the last of them where the message has several"
+	}
+	switch h.Form {
+	case "", "asRaw":
+		return which + ", as it appears in the message."
+	case "asText":
+		return which + ", decoded and unfolded into text."
+	case "asAddresses":
+		return which + ", parsed as a list of addresses."
+	case "asGroupedAddresses":
+		return which + ", parsed as a list of addresses, keeping the groups they were written in."
+	case "asMessageIds":
+		return which + ", parsed as message ids, without their angle brackets."
+	case "asDate":
+		return which + ", parsed as a date."
+	case "asURLs":
+		return which + ", parsed as a list of URLs."
+	}
+	return which + "."
 }
 
 // dynamicPropertyDoc describes a property whose meaning comes from the server
@@ -351,6 +440,12 @@ func (g *QueryGenerator) writeResultType(buf *bytes.Buffer, p *plan) {
 		}
 		writeComment(buf, "\t", fmt.Sprintf("The response to the %s call, made as %q.", c.Method.Name, c.ID))
 		fmt.Fprintf(buf, "\t%s %s\n", c.GoField, p.calls[c].responseType)
+	}
+	if p.q.CreatedIDs {
+		buf.WriteString("\n")
+		writeComment(buf, "\t", "The creation ids of everything created by this request, together with "+
+			"those carried in. Pass it to the next request so that a reference to any of them still resolves.")
+		fmt.Fprintf(buf, "\tCreatedIDs map[%[1]sID]%[1]sID\n", g.Qualifier)
 	}
 	buf.WriteString("}\n\n")
 }

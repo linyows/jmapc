@@ -1312,3 +1312,117 @@ func TestConfirmPush(t *testing.T) {
 		t.Errorf("Updated = %v, want an entry for sub1", got.Updated)
 	}
 }
+
+// TestReadMessage covers the two ways a fetch narrows what comes back:
+// properties for the record, and bodyProperties for the parts inside it. It
+// also covers header field properties, whose type comes from the form asked
+// for rather than from the Email type.
+func TestReadMessage(t *testing.T) {
+	s := &stub{t: t, response: `{
+	  "sessionState": "session-1",
+	  "methodResponses": [
+	    ["Email/get", {"accountId": "acct1", "state": "s1", "notFound": [], "list": [
+	      {"id": "e1", "subject": "Release notes", "receivedAt": "2024-05-01T09:00:00Z",
+	       "from": [{"name": "Ada", "email": "ada@example.com"}],
+	       "bodyStructure": {
+	         "partId": null, "type": "multipart/alternative",
+	         "subParts": [
+	           {"partId": "1", "type": "text/plain", "size": 402},
+	           {"partId": "2", "type": "text/html", "size": 1204}
+	         ]
+	       },
+	       "textBody": [{"partId": "1", "type": "text/plain", "size": 402}],
+	       "bodyValues": {"1": {"value": "The notes.", "isTruncated": false}},
+	       "header:List-Id:asText": "jmapc discussion <jmapc.example.com>",
+	       "header:List-Post:asURLs": ["mailto:jmapc@example.com"],
+	       "header:Delivery-Date:asDate": "2024-05-01T09:00:01Z"}
+	    ]}, "fetch"]
+	  ]
+	}`}
+
+	got, err := jmapq.ReadMessage(context.Background(), s.client(), jmapq.ReadMessageParams{EmailID: "e1"})
+	if err != nil {
+		t.Fatalf("ReadMessage: %v", err)
+	}
+
+	email := got.List[0]
+
+	// A header field property is typed by the form the query asked for: text
+	// is a string, URLs are a list, a date is a Date.
+	if email.HeaderListIDAsText == nil || !strings.Contains(*email.HeaderListIDAsText, "jmapc.example.com") {
+		t.Errorf("List-Id = %v", email.HeaderListIDAsText)
+	}
+	if len(email.HeaderListPostAsURLs) != 1 || email.HeaderListPostAsURLs[0] != "mailto:jmapc@example.com" {
+		t.Errorf("List-Post = %v", email.HeaderListPostAsURLs)
+	}
+	if email.HeaderDeliveryDateAsDate == nil {
+		t.Fatal("Delivery-Date did not decode")
+	}
+	if got, want := email.HeaderDeliveryDateAsDate.Time.UTC(), mustTime(t, "2024-05-01T09:00:01Z"); !got.Equal(want) {
+		t.Errorf("Delivery-Date = %v, want %v", got, want)
+	}
+
+	// bodyProperties narrows the parts, and reaches through subParts: the
+	// nested parts are the narrowed type too, not the full one.
+	if len(email.BodyStructure.SubParts) != 2 {
+		t.Fatalf("bodyStructure has %d sub-parts, want 2", len(email.BodyStructure.SubParts))
+	}
+	if email.BodyStructure.SubParts[1].Type != "text/html" {
+		t.Errorf("second sub-part = %+v", email.BodyStructure.SubParts[1])
+	}
+	if email.TextBody[0].Size != 402 {
+		t.Errorf("text body size = %d", email.TextBody[0].Size)
+	}
+}
+
+// TestFileIntoNewMailbox covers carrying creation ids in and out. Within one
+// request "#box" resolves on the server; across requests it resolves only
+// because the ids were passed along, which is what RFC 8620 has this for.
+func TestFileIntoNewMailbox(t *testing.T) {
+	s := &stub{t: t, response: `{
+	  "sessionState": "session-1",
+	  "methodResponses": [
+	    ["Mailbox/set", {"accountId": "acct1", "newState": "m2",
+	                     "created": {"box": {"id": "mbx9", "sortOrder": 0, "totalEmails": 0,
+	                                          "unreadEmails": 0, "totalThreads": 0, "unreadThreads": 0}}}, "make"],
+	    ["Email/set", {"accountId": "acct1", "newState": "s2", "updated": {"e1": null}}, "file"]
+	  ],
+	  "createdIds": {"box": "mbx9", "earlier": "mbx1"}
+	}`}
+
+	// Ids from a request that ran before this one.
+	carried := map[jmapc.ID]jmapc.ID{"earlier": "mbx1"}
+
+	got, err := jmapq.FileIntoNewMailbox(context.Background(), s.client(), jmapq.FileIntoNewMailboxParams{
+		Name:          "Receipts",
+		EmailID:       "e1",
+		FromMailboxID: "inbox",
+	}, carried)
+	if err != nil {
+		t.Fatalf("FileIntoNewMailbox: %v", err)
+	}
+
+	// What was carried in goes out with the request.
+	sent, ok := s.got["createdIds"].(map[string]any)
+	if !ok {
+		t.Fatalf("the request carries no createdIds:\n%s", s.raw)
+	}
+	if sent["earlier"] != "mbx1" {
+		t.Errorf("createdIds = %v, want the id carried in", sent)
+	}
+
+	// The patch names the mailbox by its creation id: it has no other id yet.
+	_, file := s.call(t, "file")
+	patch := file["update"].(map[string]any)["e1"].(map[string]any)
+	if patch["mailboxIds/#box"] != true {
+		t.Errorf("patch = %v, want the new mailbox added by creation id", patch)
+	}
+
+	// And what the server assigned comes back, ready for the next request.
+	if got.CreatedIDs["box"] != "mbx9" {
+		t.Errorf("createdIds = %v, want box resolved to mbx9", got.CreatedIDs)
+	}
+	if got.CreatedIDs["earlier"] != "mbx1" {
+		t.Errorf("createdIds = %v, want the carried id kept", got.CreatedIDs)
+	}
+}

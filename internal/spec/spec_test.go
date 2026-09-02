@@ -329,3 +329,81 @@ func TestEnumsAreOnStringProperties(t *testing.T) {
 		}
 	}
 }
+
+// TestParseTypeParentheses covers grouping, which the header field forms need:
+// asking for every instance of a header field gives an array whose items may
+// each be null, and "Date|null[]" cannot say that.
+func TestParseTypeParentheses(t *testing.T) {
+	tests := []struct{ in, want, goType string }{
+		{"(Date|null)[]", "(Date|null)[]", "[]*jmapc.Date"},
+		{"(String[]|null)[]", "(String[]|null)[]", "[][]string"},
+		{"(EmailAddress[])[]", "EmailAddress[][]", "[][]jmapc.EmailAddress"},
+		{"String[][]", "String[][]", "[][]string"},
+	}
+	for _, tt := range tests {
+		got, err := ParseType(tt.in)
+		if err != nil {
+			t.Errorf("ParseType(%q): %v", tt.in, err)
+			continue
+		}
+		if got.String() != tt.want {
+			t.Errorf("ParseType(%q) = %q, want %q", tt.in, got.String(), tt.want)
+		}
+		if g := got.GoType("jmapc."); g != tt.goType {
+			t.Errorf("ParseType(%q).GoType = %q, want %q", tt.in, g, tt.goType)
+		}
+	}
+}
+
+// TestHeaderProperties covers the properties naming one header field of a
+// message, whose type comes entirely from the form asked for.
+func TestHeaderProperties(t *testing.T) {
+	tests := []struct {
+		property string
+		name     string
+		form     string
+		all      bool
+		typ      string
+	}{
+		{"header:List-Id", "List-Id", "", false, "String|null"},
+		{"header:List-Id:asText", "List-Id", "asText", false, "String|null"},
+		{"header:From:asAddresses", "From", "asAddresses", false, "EmailAddress[]|null"},
+		{"header:To:asGroupedAddresses", "To", "asGroupedAddresses", false, "EmailAddressGroup[]|null"},
+		{"header:Message-ID:asMessageIds", "Message-ID", "asMessageIds", false, "String[]|null"},
+		{"header:Date:asDate", "Date", "asDate", false, "Date|null"},
+		{"header:List-Post:asURLs", "List-Post", "asURLs", false, "String[]|null"},
+		{"header:Received:all", "Received", "", true, "String[]"},
+		{"header:Resent-To:asAddresses:all", "Resent-To", "asAddresses", true, "EmailAddress[][]"},
+		{"header:Date:asDate:all", "Date", "asDate", true, "(Date|null)[]"},
+	}
+	for _, tt := range tests {
+		h, err := ParseHeaderProperty(tt.property)
+		if err != nil {
+			t.Errorf("ParseHeaderProperty(%q): %v", tt.property, err)
+			continue
+		}
+		if h == nil {
+			t.Errorf("ParseHeaderProperty(%q) = nil, want a header property", tt.property)
+			continue
+		}
+		if h.Name != tt.name || h.Form != tt.form || h.All != tt.all || h.Type != tt.typ {
+			t.Errorf("ParseHeaderProperty(%q) = {%s %s %v %s}, want {%s %s %v %s}",
+				tt.property, h.Name, h.Form, h.All, h.Type, tt.name, tt.form, tt.all, tt.typ)
+		}
+		if _, err := ParseType(h.Type); err != nil {
+			t.Errorf("ParseHeaderProperty(%q) gives the type %q, which does not parse: %v",
+				tt.property, h.Type, err)
+		}
+	}
+
+	// Not a header property at all.
+	if h, err := ParseHeaderProperty("subject"); h != nil || err != nil {
+		t.Errorf("ParseHeaderProperty(\"subject\") = %v, %v, want nil, nil", h, err)
+	}
+
+	for _, bad := range []string{"header:", "header:Subject:asWords", "header:Subject:asText:all:extra"} {
+		if _, err := ParseHeaderProperty(bad); err == nil {
+			t.Errorf("ParseHeaderProperty(%q) succeeded, want an error", bad)
+		}
+	}
+}

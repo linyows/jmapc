@@ -146,6 +146,11 @@ for _, email := range res.List {
 asked for and nothing else. Ask for another property and the struct grows; ask
 for one that does not exist and the build fails, with a suggestion.
 
+`bodyProperties` narrows the parts of a message the same way, reaching through
+their sub-parts, and a property naming a header field is typed by the form it
+asks for: `header:List-Id:asText` is a `*string`, `header:To:asAddresses` a
+`[]jmapc.EmailAddress`.
+
 ### One request, several steps
 
 The example below is what JMAP is for. Writing a message, submitting it, and
@@ -179,7 +184,7 @@ given it an id. The pointers in the patch are checked against `Email`, so
 `mailboxIds` misspelled is a build failure, and both mailbox parameters come out
 as `jmapc.ID` because that is what the pointer selects by.
 
-[`example/queries`](example/queries) holds twenty-three of these, over mail,
+[`example/queries`](example/queries) holds twenty-five of these, over mail,
 contacts, calendars, sharing and filtering: searching, syncing from a known state, sending,
 creating a contact card, moving one occurrence of a recurring meeting without
 touching the rest of the series.
@@ -199,6 +204,7 @@ else is the request as RFC 8620 defines it.
 | `using` | The capabilities the request declares. Optional: derived from the methods called. |
 | `_doc` | The generated function's documentation. Optional. |
 | `_returns` | The call whose response the function returns. Optional: without it, every response is returned. |
+| `_createdIds` | Carry the creation ids of an earlier request in, and this request's out. Optional; see below. |
 | `_comment` | Why a call is there. Goes in that call's arguments; see below. |
 
 A query file is plain JSON, so `jq` reads it and an editor understands it. To
@@ -239,6 +245,33 @@ change:
 The braces are used rather than a `$` prefix because JMAP keywords are
 themselves written with one, as in `$seen`.
 
+### Creation ids across requests
+
+Referring to `#draft` within one request needs nothing: the server resolves it.
+Carrying a reference from one request into the next needs the ids to travel,
+which `_createdIds` asks for.
+
+```json
+{
+  "_createdIds": true,
+  "methodCalls": [
+    ["Mailbox/set", {"create": {"box": {"name": "{{name}}"}}}, "make"],
+    ["Email/set", {"update": {"{{emailId}}": {"mailboxIds/#box": true}}}, "file"]
+  ]
+}
+```
+
+The generated function takes them and reports them:
+
+```go
+res, err := jmapq.FileIntoNewMailbox(ctx, c, params, carried)
+// res.CreatedIDs goes to the next request.
+```
+
+RFC 8620 has this for proxies, which split one request across servers and need
+the references to still resolve. A query using it returns every response rather
+than one, since the ids belong to the request rather than to any call in it.
+
 ### Account ids
 
 Leave `accountId` out and the generated function fills it in from the primary
@@ -255,7 +288,11 @@ Everything below is a compile-time failure rather than a server round trip:
   correctly, and selects a value the target argument can accept
 - filter conditions are checked against the type being queried, including the
   ones nested inside `AND`, `OR`, and `NOT` operators
-- `properties` names properties the type has
+- `properties` names properties the type has, and `bodyProperties` names
+  properties an `EmailBodyPart` has
+- a property naming a header field asks for a parsed form the specification
+  defines, so `header:List-Id:asText` is a string and `header:To:asAddresses` a
+  list of addresses
 - a `PatchObject` points at properties the record being patched actually has,
   and sets them to values of the right type
 - `sort` names properties the type can actually be sorted by, and supplies the
@@ -512,25 +549,9 @@ declarative — no Go to write.
 | `PushSubscription` | `get` `set` |
 | `Core` | `echo` |
 
-### What is missing
+### What is not checked
 
-Things jmapc does not do yet, stated plainly so that nobody has to find out the
-hard way.
-
-**`bodyProperties` narrows nothing.** `Email/get` accepts the argument and
-passes it through, but the generated body parts hold every property of
-`EmailBodyPart` rather than the subset asked for. `properties`, on the record
-itself, does narrow the generated type.
-
-**Header field properties are untyped.** A property such as
-`header:List-Id:asText` is accepted, since the server decides what those mean,
-but it lands in the generated struct as `json.RawMessage` for the caller to
-decode.
-
-**Creation ids do not cross requests.** Referring to `#draft` within one request
-works, and is what makes [sending a message](#one-request-several-steps)
-possible. Carrying `createdIds` from one request into the next, as RFC 8620
-allows, is not something a query can express.
+One thing, and it is on purpose.
 
 **Open sets are not checked, deliberately.** Where a specification fixes the
 values a property takes, jmapc checks them. Where it leaves the set open — a

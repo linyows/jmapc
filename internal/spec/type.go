@@ -147,7 +147,13 @@ func parseSuffix(s string) (*Type, error) {
 		}
 		return &Type{Key: key, Value: value}, nil
 	}
-	if strings.ContainsAny(s, "[]|") {
+	if strings.HasPrefix(s, "(") && strings.HasSuffix(s, ")") {
+		// Parentheses group a union or a nullable type so that a suffix can
+		// apply to the whole of it: "(Date|null)[]" is an array whose items
+		// may each be null, which "Date|null[]" could not say.
+		return parseUnion(s[1 : len(s)-1])
+	}
+	if strings.ContainsAny(s, "[]|()") {
 		return nil, fmt.Errorf("malformed type expression %q", s)
 	}
 	return &Type{Name: s}, nil
@@ -158,8 +164,10 @@ func matchingOpen(s string) int {
 	depth := 0
 	for i := len(s) - 1; i >= 0; i-- {
 		switch s[i] {
-		case ']':
+		case ']', ')':
 			depth++
+		case '(':
+			depth--
 		case '[':
 			depth--
 			if depth == 0 {
@@ -176,9 +184,9 @@ func splitTopLevel(s string, sep byte) []string {
 	depth, start := 0, 0
 	for i := 0; i < len(s); i++ {
 		switch s[i] {
-		case '[':
+		case '[', '(':
 			depth++
-		case ']':
+		case ']', ')':
 			depth--
 		case sep:
 			if depth == 0 {
@@ -221,7 +229,13 @@ func (t *Type) String() string {
 	var s string
 	switch {
 	case t.IsArray():
-		s = t.Elem.String() + "[]"
+		elem := t.Elem.String()
+		if t.Elem.IsUnion() || t.Elem.Nullable {
+			// Without the parentheses the suffix would bind to the last
+			// member of the union rather than to the whole of it.
+			elem = "(" + elem + ")"
+		}
+		s = elem + "[]"
 	case t.IsMap():
 		s = t.Key.String() + "[" + t.Value.String() + "]"
 	case t.IsUnion():
