@@ -1,0 +1,79 @@
+# goreleaser builds the jmapc binaries published with each release.
+#
+# The generator is a Go tool, and today it generates Go, so most users are
+# better served by `go get -tool`, which pins a version in their own go.mod.
+# The binaries are here for the ones who are not: they will matter more once
+# jmapc can generate TypeScript, since that is a user who need not have a Go
+# toolchain at all.
+version: 2
+
+project_name: jmapc
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: jmapc
+    main: ./cmd/jmapc
+    binary: jmapc
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    # Trim the build and stamp the version, so that `jmapc version` reports
+    # what was released rather than "(devel)".
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - id: jmapc
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  use: github
+  groups:
+    - title: Changes
+      order: 0
+  filters:
+    exclude:
+      - "^ci:"
+      - "^docs:"
+      - "^test:"
+      - "^Merge pull request"
+
+release:
+  # The tag is pushed once the work is on main, so the release is not a draft.
+  draft: false
+  prerelease: auto
+  footer: |
+    ## Install
+
+    The generator is a Go tool, and what it generates is Go, so the usual way
+    is to record it in the module that uses it:
+
+    ```
+    go get -tool github.com/linyows/jmapc/cmd/jmapc@{{ .Tag }}
+    ```
+
+    Binaries are attached below for anyone without a Go toolchain.

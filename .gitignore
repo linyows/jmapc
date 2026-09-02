@@ -1,0 +1,2 @@
+# goreleaser writes its builds here.
+/dist/
