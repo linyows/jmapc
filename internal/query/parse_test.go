@@ -919,3 +919,62 @@ func TestSMIMEStatusValues(t *testing.T) {
 	  }}, "c0"]
 	]}`)
 }
+
+// TestBlobExtension covers RFC 9404, which brings blob creation and reading
+// into the API. The point of it is that a blob can be created and used within
+// one request, which the upload endpoint of RFC 8620 cannot do.
+func TestBlobExtension(t *testing.T) {
+	q := parse(t, "AttachNote"+Extension, `{
+	  "methodCalls": [
+	    ["Blob/upload", {
+	      "create": {"note": {"data": [{"data:asText": "{{note}}"}], "type": "text/plain"}}
+	    }, "upload"],
+	    ["Email/set", {
+	      "create": {"draft": {
+	        "subject": "{{subject}}",
+	        "attachments": [{"blobId": "#note", "type": "text/plain"}]
+	      }}
+	    }, "draft"]
+	  ]
+	}`)
+	want := "urn:ietf:params:jmap:core urn:ietf:params:jmap:blob urn:ietf:params:jmap:mail"
+	if got := strings.Join(q.Using, " "); got != want {
+		t.Errorf("Using = %q, want %q", got, want)
+	}
+}
+
+// TestBlobProperties covers the properties Blob/get takes, which mix fixed
+// names with ones the server gives meaning to.
+func TestBlobProperties(t *testing.T) {
+	// A digest names an algorithm the session says it supports, and "data"
+	// asks the server to choose an encoding, so neither is a fixed property.
+	parse(t, "Peek"+Extension, `{"methodCalls": [
+	  ["Blob/get", {
+	    "ids": ["{{blobId}}"],
+	    "properties": ["data:asText", "data:asBase64", "data", "size", "digest:sha-256"],
+	    "offset": 0,
+	    "length": 4096
+	  }, "c0"]
+	]}`)
+
+	got := parseErr(t, `{"methodCalls": [
+	  ["Blob/get", {"ids": ["b1"], "properties": ["data:asTxt"]}, "c0"]
+	]}`)
+	if !strings.Contains(got, `did you mean "data:asText"?`) {
+		t.Errorf("error was:\n%s", got)
+	}
+}
+
+// TestBlobLookup covers the method that says which records refer to a blob.
+func TestBlobLookup(t *testing.T) {
+	parse(t, "WhatUses"+Extension, `{"methodCalls": [
+	  ["Blob/lookup", {"typeNames": ["Email", "Mailbox"], "ids": ["{{blobId}}"]}, "c0"]
+	]}`)
+
+	got := parseErr(t, `{"methodCalls": [
+	  ["Blob/lookup", {"typeNames": ["Email"], "ids": ["b1"], "extra": true}, "c0"]
+	]}`)
+	if !strings.Contains(got, `Blob/lookup has no argument "extra"`) {
+		t.Errorf("error was:\n%s", got)
+	}
+}

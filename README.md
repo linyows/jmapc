@@ -172,7 +172,7 @@ given it an id. The pointers in the patch are checked against `Email`, so
 `mailboxIds` misspelled is a build failure, and both mailbox parameters come out
 as `jmapc.ID` because that is what the pointer selects by.
 
-[`example/queries`](example/queries) holds fifteen of these, over mail,
+[`example/queries`](example/queries) holds seventeen of these, over mail,
 contacts, calendars and sharing: searching, syncing from a known state, sending,
 creating a contact card, moving one occurrence of a recurring meeting without
 touching the rest of the series.
@@ -293,6 +293,11 @@ defer blob.Close()
 
 An upload larger than the server said it accepts fails before it is sent.
 
+A server offering `urn:ietf:params:jmap:blob` can also create and read blobs
+through the API, which the endpoints cannot: `Blob/upload` puts a blob in the
+same request as the call that uses it, so the id never comes back to the client
+in between.
+
 ## Push
 
 `Client.EventSource` opens the server's push endpoint. An event says which types
@@ -402,8 +407,8 @@ stands on each.
 | `urn:ietf:params:jmap:principals` | [RFC 9670](https://www.rfc-editor.org/rfc/rfc9670) | Yes |
 | `urn:ietf:params:jmap:principals:owner` | [RFC 9670](https://www.rfc-editor.org/rfc/rfc9670) | Yes |
 | `urn:ietf:params:jmap:smimeverify` | [RFC 9219](https://www.rfc-editor.org/rfc/rfc9219) | Yes |
+| `urn:ietf:params:jmap:blob` | [RFC 9404](https://www.rfc-editor.org/rfc/rfc9404) | Yes |
 | `urn:ietf:params:jmap:mdn` | [RFC 9007](https://www.rfc-editor.org/rfc/rfc9007) | No |
-| `urn:ietf:params:jmap:blob` | [RFC 9404](https://www.rfc-editor.org/rfc/rfc9404) | No |
 | `urn:ietf:params:jmap:quota` | [RFC 9425](https://www.rfc-editor.org/rfc/rfc9425) | No |
 | `urn:ietf:params:jmap:sieve` | [RFC 9661](https://www.rfc-editor.org/rfc/rfc9661) | No |
 | `urn:ietf:params:jmap:webpush-vapid` | [RFC 9749](https://www.rfc-editor.org/rfc/rfc9749) | No |
@@ -436,7 +441,7 @@ declarative — no Go to write.
 
 ### Methods
 
-66 methods, all of them checked and generated the same way.
+69 methods, all of them checked and generated the same way.
 
 | Type | Methods |
 |---|---|
@@ -455,7 +460,7 @@ declarative — no Go to write.
 | `ParticipantIdentity` | `get` `changes` `set` |
 | `Principal` | `get` `changes` `set` `query` `queryChanges` `getAvailability` |
 | `ShareNotification` | `get` `changes` `set` `query` `queryChanges` |
-| `Blob` | `copy` |
+| `Blob` | `copy` `upload` `get` `lookup` |
 | `Core` | `echo` |
 
 ### What is missing
@@ -488,11 +493,6 @@ values a property takes, jmapc checks them. Where it leaves the set open — a
 mailbox `role`, an email keyword, a `Content-Disposition` — it does not, because
 rejecting a value the server would have accepted is worse than letting a typo
 through.
-
-**No `Blob/upload`.** Blobs are uploaded over the endpoint the session
-advertises, which is the RFC 8620 way and is implemented. The newer
-`urn:ietf:params:jmap:blob` capability, which adds blob methods to the API
-itself, is not.
 
 ### Generation
 

@@ -1,0 +1,16 @@
+{
+  "doc": "WhatUsesBlob reports which records refer to a blob and reads a little of it, which is how a client answers whether deleting a message would take an attachment with it.",
+
+  "methodCalls": [
+    ["Blob/lookup", {
+      "typeNames": ["Email", "Mailbox"],
+      "ids": ["{{blobId}}"]
+    }, "uses"],
+
+    ["Blob/get", {
+      "ids": ["{{blobId}}"],
+      "properties": ["data:asText", "size", "digest:sha-256"],
+      "length": 4096
+    }, "peek"]
+  ]
+}

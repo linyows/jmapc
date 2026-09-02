@@ -219,7 +219,7 @@ func TestMethodGoName(t *testing.T) {
 func TestStandardCatalogueCovers(t *testing.T) {
 	want := []string{
 		"AddressBook/changes", "AddressBook/get", "AddressBook/set",
-		"Blob/copy",
+		"Blob/copy", "Blob/get", "Blob/lookup", "Blob/upload",
 		"Calendar/changes", "Calendar/get", "Calendar/set",
 		"CalendarEvent/changes", "CalendarEvent/copy", "CalendarEvent/get",
 		"CalendarEvent/parse", "CalendarEvent/query", "CalendarEvent/queryChanges",

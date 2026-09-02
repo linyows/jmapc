@@ -55,6 +55,7 @@ var capabilityAliases = map[string]string{
 	"availability":     spec.CapabilityAvailability,
 	"principals":       spec.CapabilityPrincipals,
 	"smimeverify":      spec.CapabilitySMIMEVerify,
+	"blob":             spec.CapabilityBlob,
 }
 
 // QueryName returns the name a query file gives its query, which is the file
@@ -386,10 +387,23 @@ func (c *checker) properties(call *Call, where string) []string {
 	return props
 }
 
-// isDynamicProperty reports whether a property name is one of the header field
-// forms of RFC 8621, Section 4.1.3, which are not fixed members of the type.
+// isDynamicProperty reports whether a property name is one the server gives
+// meaning to rather than one the data model fixes.
 func isDynamicProperty(name string) bool {
-	return strings.HasPrefix(name, "header:")
+	switch {
+	case strings.HasPrefix(name, "header:"):
+		// The header field forms of RFC 8621, Section 4.1.3.
+		return true
+	case strings.HasPrefix(name, "digest:"):
+		// A digest in whatever algorithm the session says it supports,
+		// RFC 9404, Section 4.2.
+		return true
+	case name == "data":
+		// RFC 9404 asks the server to return the octets as text or as base64,
+		// whichever fits, so what comes back is one of those two properties.
+		return true
+	}
+	return false
 }
 
 // resolveUsing returns the capability URIs the request should declare, either

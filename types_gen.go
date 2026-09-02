@@ -255,6 +255,194 @@ type BlobCopyResponse struct {
 	NotCopied map[ID]SetError `json:"notCopied"`
 }
 
+// BlobData is the content of a blob as the API returns it, rather than as a
+// download. RFC 9404 calls it a blob; the name is qualified here because the
+// runtime's Blob is an open download.
+//
+// A request using this type must declare urn:ietf:params:jmap:blob.
+type BlobData struct {
+	// The id of the blob.
+	ID ID `json:"id,omitzero"`
+
+	// The octets as text, or null where they are not valid UTF-8.
+	DataAsText *string `json:"data:asText,omitzero"`
+
+	// The octets as base64, which works whatever they hold.
+	DataAsBase64 string `json:"data:asBase64,omitzero"`
+
+	// Whether the octets asked for as text were not valid UTF-8.
+	//
+	// The server assumes false when this property is omitted.
+	IsEncodingProblem bool `json:"isEncodingProblem,omitzero"`
+
+	// Whether the range asked for ran past the end of the blob.
+	//
+	// The server assumes false when this property is omitted.
+	IsTruncated bool `json:"isTruncated,omitzero"`
+
+	// The size of the whole blob in octets, whatever range was asked for.
+	Size UnsignedInt `json:"size,omitzero"`
+}
+
+// BlobDataSource is one run of octets to put into a blob. Exactly one of its
+// forms is used: text, base64, or a range of a blob that already exists. RFC
+// 9404 calls it DataSourceObject.
+//
+// A request using this type must declare urn:ietf:params:jmap:blob.
+type BlobDataSource struct {
+	// The octets as text, which the server encodes as UTF-8.
+	DataAsText *string `json:"data:asText,omitzero"`
+
+	// The octets as base64, for content that is not text.
+	DataAsBase64 *string `json:"data:asBase64,omitzero"`
+
+	// The id of a blob to take the octets from, so that a new blob can be
+	// assembled out of ones the server already holds.
+	BlobID ID `json:"blobId,omitzero"`
+
+	// Where in that blob to start, defaulting to the beginning.
+	Offset *UnsignedInt `json:"offset,omitzero"`
+
+	// How many octets to take, defaulting to the rest of the blob.
+	Length *UnsignedInt `json:"length,omitzero"`
+}
+
+// BlobGetArguments holds the arguments of the Blob/get method.
+//
+// A request using this type must declare urn:ietf:params:jmap:blob.
+type BlobGetArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The ids of the blobs to fetch.
+	IDs []ID `json:"ids,omitzero"`
+
+	// What to return for each blob: "data:asText", "data:asBase64", "size",
+	// "data" to let the server pick whichever encoding fits, or "digest:"
+	// followed by an algorithm the session says it supports.
+	Properties []string `json:"properties,omitzero"`
+
+	// Where in each blob to start, so that a large blob can be read a piece at a
+	// time.
+	//
+	// The server assumes 0 when this property is omitted.
+	Offset *UnsignedInt `json:"offset,omitzero"`
+
+	// How many octets to return, defaulting to the rest of the blob.
+	Length *UnsignedInt `json:"length,omitzero"`
+}
+
+// BlobGetResponse holds the response to the Blob/get method.
+//
+// A request using this type must declare urn:ietf:params:jmap:blob.
+type BlobGetResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The blobs that were found.
+	List []BlobData `json:"list"`
+
+	// The ids that were requested but do not exist.
+	NotFound []ID `json:"notFound"`
+}
+
+// BlobLookupArguments holds the arguments of the Blob/lookup method.
+//
+// A request using this type must declare urn:ietf:params:jmap:blob.
+type BlobLookupArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The data types to look in, such as "Email" or "Mailbox". The session says
+	// which ones the server supports.
+	TypeNames []string `json:"typeNames,omitzero"`
+
+	// The ids of the blobs to look for.
+	IDs []ID `json:"ids,omitzero"`
+}
+
+// BlobLookupInfo says which records refer to a blob. RFC 9404 calls it
+// BlobInfo; the name is qualified here because the runtime's BlobInfo
+// describes an upload.
+//
+// A request using this type must declare urn:ietf:params:jmap:blob.
+type BlobLookupInfo struct {
+	// The id of the blob.
+	ID ID `json:"id,omitzero"`
+
+	// The records that refer to the blob, keyed by data type name.
+	MatchedIDs map[string][]ID `json:"matchedIds,omitzero"`
+}
+
+// BlobLookupResponse holds the response to the Blob/lookup method.
+//
+// A request using this type must declare urn:ietf:params:jmap:blob.
+type BlobLookupResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// What was found for each blob.
+	List []BlobLookupInfo `json:"list"`
+
+	// The ids that were requested but do not exist.
+	NotFound []ID `json:"notFound"`
+}
+
+// BlobUploadArguments holds the arguments of the Blob/upload method.
+//
+// A request using this type must declare urn:ietf:params:jmap:blob.
+type BlobUploadArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The blobs to create, keyed by creation id, which the rest of the request
+	// may refer to as "#" followed by that id.
+	Create map[ID]BlobUploadObject `json:"create,omitzero"`
+}
+
+// BlobUploadObject is one blob to create, given as the sources whose octets
+// make it up. RFC 9404 calls it UploadObject.
+//
+// A request using this type must declare urn:ietf:params:jmap:blob.
+type BlobUploadObject struct {
+	// The sources of the blob's octets, concatenated in order.
+	Data []BlobDataSource `json:"data,omitzero"`
+
+	// The media type to record for the blob. The server may disregard it.
+	//
+	// The server assumes null when this property is omitted.
+	Type *string `json:"type,omitzero"`
+}
+
+// BlobUploadResponse holds the response to the Blob/upload method.
+//
+// A request using this type must declare urn:ietf:params:jmap:blob.
+type BlobUploadResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The blobs that were created, keyed by creation id.
+	Created map[ID]BlobUploadResult `json:"created"`
+
+	// A map of creation id to the reason the blob could not be created.
+	NotCreated map[ID]SetError `json:"notCreated"`
+}
+
+// BlobUploadResult is what the server made of one blob it was asked to
+// create.
+//
+// A request using this type must declare urn:ietf:params:jmap:blob.
+type BlobUploadResult struct {
+	// The id of the blob, to refer to it by from here on.
+	ID ID `json:"id"`
+
+	// The media type the server recorded for it.
+	Type *string `json:"type"`
+
+	// The size of the blob in octets.
+	Size UnsignedInt `json:"size"`
+}
+
 // BusyPeriod is a stretch of time a principal is not free.
 //
 // A request using this type must declare

@@ -49,6 +49,7 @@ func (s *stub) start() *httptest.Server {
 				jmapc.CapabilityCalendars:   map[string]any{},
 				jmapc.CapabilityPrincipals:  map[string]any{},
 				jmapc.CapabilitySMIMEVerify: map[string]any{},
+				jmapc.CapabilityBlob:        map[string]any{},
 			},
 			"accounts": map[string]any{
 				string(accountID): map[string]any{"name": "someone@example.com", "isPersonal": true},
@@ -59,6 +60,7 @@ func (s *stub) start() *httptest.Server {
 				jmapc.CapabilityContacts:   string(accountID),
 				jmapc.CapabilityCalendars:  string(accountID),
 				jmapc.CapabilityPrincipals: string(accountID),
+				jmapc.CapabilityBlob:       string(accountID),
 			},
 			"username": "someone@example.com",
 			"apiUrl":   srv.URL + "/jmap/api/",
@@ -915,4 +917,99 @@ func containsString(values []any, want string) bool {
 		}
 	}
 	return false
+}
+
+// TestAttachNote covers the blob extension of RFC 9404. The upload endpoint of
+// RFC 8620 cannot do this: it is a separate HTTP call, so the blob id has to
+// come back to the client before a draft can refer to it. Here both happen in
+// one request, with the draft naming the blob by its creation id.
+func TestAttachNote(t *testing.T) {
+	s := &stub{t: t, response: `{
+	  "sessionState": "session-1",
+	  "methodResponses": [
+	    ["Blob/upload", {"accountId": "acct1",
+	                     "created": {"note": {"id": "blob9", "type": "text/plain", "size": 12}}}, "upload"],
+	    ["Email/set", {"accountId": "acct1", "newState": "s2",
+	                   "created": {"draft": {"id": "e9", "blobId": "b9", "threadId": "t9", "size": 512}}}, "draft"]
+	  ]
+	}`}
+
+	got, err := jmapq.AttachNote(context.Background(), s.client(), jmapq.AttachNoteParams{
+		DraftsMailboxID: "drafts",
+		Subject:         "Minutes",
+		Note:            "Nothing was decided.",
+	})
+	if err != nil {
+		t.Fatalf("AttachNote: %v", err)
+	}
+
+	_, upload := s.call(t, "upload")
+	note := upload["create"].(map[string]any)["note"].(map[string]any)
+	sources := note["data"].([]any)
+	if len(sources) != 1 {
+		t.Fatalf("blob has %d data sources, want 1", len(sources))
+	}
+	if text := sources[0].(map[string]any)["data:asText"]; text != "Nothing was decided." {
+		t.Errorf("data:asText = %v", text)
+	}
+
+	// The draft refers to the blob by the creation id, before the server has
+	// given it a real one.
+	_, draft := s.call(t, "draft")
+	attachment := draft["create"].(map[string]any)["draft"].(map[string]any)["attachments"].([]any)[0]
+	if blobID := attachment.(map[string]any)["blobId"]; blobID != "#note" {
+		t.Errorf("attachment blobId = %v, want the creation id #note", blobID)
+	}
+
+	if got.BlobUpload.Created["note"].ID != "blob9" {
+		t.Errorf("uploaded blob = %+v", got.BlobUpload.Created["note"])
+	}
+	if got.EmailSet.Created["draft"].ID != "e9" {
+		t.Errorf("created draft = %+v", got.EmailSet.Created["draft"])
+	}
+}
+
+// TestWhatUsesBlob covers Blob/lookup, which answers whether deleting a record
+// would take an attachment with it.
+func TestWhatUsesBlob(t *testing.T) {
+	s := &stub{t: t, response: `{
+	  "sessionState": "session-1",
+	  "methodResponses": [
+	    ["Blob/lookup", {"accountId": "acct1", "notFound": [], "list": [
+	      {"id": "blob9", "matchedIds": {"Email": ["e1", "e2"], "Mailbox": []}}
+	    ]}, "uses"],
+	    ["Blob/get", {"accountId": "acct1", "notFound": [], "list": [
+	      {"id": "blob9", "data:asText": "Nothing was decided.", "size": 20,
+	       "digest:sha-256": "3q2+7w=="}
+	    ]}, "peek"]
+	  ]
+	}`}
+
+	got, err := jmapq.WhatUsesBlob(context.Background(), s.client(), jmapq.WhatUsesBlobParams{
+		BlobID: "blob9",
+	})
+	if err != nil {
+		t.Fatalf("WhatUsesBlob: %v", err)
+	}
+
+	uses := got.BlobLookup.List[0]
+	if len(uses.MatchedIDs["Email"]) != 2 {
+		t.Errorf("matchedIds = %v, want two emails", uses.MatchedIDs)
+	}
+	if len(uses.MatchedIDs["Mailbox"]) != 0 {
+		t.Errorf("matchedIds = %v, want no mailboxes", uses.MatchedIDs)
+	}
+
+	peek := got.BlobGet.List[0]
+	if peek.DataAsText == nil || *peek.DataAsText != "Nothing was decided." {
+		t.Errorf("data:asText = %v", peek.DataAsText)
+	}
+	if peek.Size != 20 {
+		t.Errorf("size = %d, want 20", peek.Size)
+	}
+	// A digest is whatever algorithm was asked for, so it comes back as raw
+	// JSON for the caller to interpret.
+	if string(peek.DigestSha256) != `"3q2+7w=="` {
+		t.Errorf("digest = %s", peek.DigestSha256)
+	}
 }
