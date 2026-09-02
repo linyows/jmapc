@@ -176,7 +176,7 @@ for _, email := range res.List {
 パッチの中のポインタは `Email` に照らして検証されるので、`mailboxIds` を綴り間違えればビルドが失敗します。
 二つのメールボックスのパラメータが `jmapc.ID` になるのは、ポインタがその型で要素を選ぶからです。
 
-[`example/queries`](example/queries) には、メール、連絡先、カレンダー、共有、フィルタにまたがる 20 個のクエリがあります。
+[`example/queries`](example/queries) には、メール、連絡先、カレンダー、共有、フィルタにまたがる 21 個のクエリがあります。
 検索、既知の状態からの同期、送信、連絡先カードの作成、繰り返し予定のうち一回だけを他に触れずに動かす操作などです。
 
 ## クエリの書き方
@@ -424,7 +424,7 @@ JMAP は仕様の集まりです。
 | `urn:ietf:params:jmap:blob` | [RFC 9404](https://www.rfc-editor.org/rfc/rfc9404) | あり |
 | `urn:ietf:params:jmap:quota` | [RFC 9425](https://www.rfc-editor.org/rfc/rfc9425) | あり |
 | `urn:ietf:params:jmap:sieve` | [RFC 9661](https://www.rfc-editor.org/rfc/rfc9661) | あり |
-| `urn:ietf:params:jmap:mdn` | [RFC 9007](https://www.rfc-editor.org/rfc/rfc9007) | なし |
+| `urn:ietf:params:jmap:mdn` | [RFC 9007](https://www.rfc-editor.org/rfc/rfc9007) | あり |
 | `urn:ietf:params:jmap:webpush-vapid` | [RFC 9749](https://www.rfc-editor.org/rfc/rfc9749) | なし |
 
 このうち二つは、それ自体が別仕様のオブジェクトを格納します。
@@ -452,7 +452,7 @@ jmapc はクエリが触れたプロパティがどの capability に属する�
 
 ### メソッド
 
-77 のメソッドがあり、すべて同じ方法で検証され生成されます。
+79 のメソッドがあり、すべて同じ方法で検証され生成されます。
 
 | 型 | メソッド |
 |---|---|
@@ -473,6 +473,7 @@ jmapc はクエリが触れたプロパティがどの capability に属する�
 | `ShareNotification` | `get` `changes` `set` `query` `queryChanges` |
 | `Quota` | `get` `changes` `query` `queryChanges` |
 | `SieveScript` | `get` `set` `query` `validate` |
+| `MDN` | `send` `parse` |
 | `Blob` | `copy` `upload` `get` `lookup` |
 | `Core` | `echo` |
 

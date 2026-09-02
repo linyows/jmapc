@@ -33,6 +33,9 @@ const (
 	// CapabilitySieve manages the filtering scripts the server runs on
 	// incoming mail.
 	CapabilitySieve = "urn:ietf:params:jmap:sieve"
+	// CapabilityMDN sends and reads the receipts that say what became of a
+	// message.
+	CapabilityMDN = "urn:ietf:params:jmap:mdn"
 	// CapabilityPrincipalsOwner appears only in an account's capabilities,
 	// where it names the principal that owns the account.
 	CapabilityPrincipalsOwner = "urn:ietf:params:jmap:principals:owner"

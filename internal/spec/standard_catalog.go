@@ -14,5 +14,6 @@ func Standard() *Spec {
 	registerSharing(s)
 	registerQuota(s)
 	registerSieve(s)
+	registerMDN(s)
 	return s
 }
