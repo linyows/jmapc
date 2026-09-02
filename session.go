@@ -20,6 +20,10 @@ const (
 	CapabilityCalendarsParse = "urn:ietf:params:jmap:calendars:parse"
 	// CapabilityAvailability covers Principal/getAvailability.
 	CapabilityAvailability = "urn:ietf:params:jmap:principals:availability"
+	CapabilityPrincipals   = "urn:ietf:params:jmap:principals"
+	// CapabilityPrincipalsOwner appears only in an account's capabilities,
+	// where it names the principal that owns the account.
+	CapabilityPrincipalsOwner = "urn:ietf:params:jmap:principals:owner"
 )
 
 // Session is the Session object described in RFC 8620, Section 2. It tells the

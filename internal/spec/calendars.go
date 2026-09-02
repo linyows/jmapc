@@ -585,6 +585,7 @@ func registerAvailability(s *Spec) {
 	s.AddMethod(&Method{
 		Name:           "Principal/getAvailability",
 		Capability:     CapabilityAvailability,
+		DataType:       "Principal",
 		Doc:            "Reports when a principal is busy over a period, which is what a client needs to find a time everyone can meet.",
 		Arguments:      args.Name,
 		Response:       resp.Name,

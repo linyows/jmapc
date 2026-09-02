@@ -1,0 +1,17 @@
+{
+  "doc": "RecentlyShared reports what other people have shared with the user since a known point. Nothing else tells them: a shared mailbox simply appears in an account they can see, with no message to say so.",
+
+  "methodCalls": [
+    ["ShareNotification/query", {
+      "filter": {"after": "{{since}}"},
+      "sort": [{"property": "created", "isAscending": false}],
+      "limit": "{{limit}}"
+    }, "search"],
+
+    ["ShareNotification/get", {
+      "#ids": {"resultOf": "search", "name": "ShareNotification/query", "path": "/ids"}
+    }, "fetch"]
+  ],
+
+  "returns": "fetch"
+}

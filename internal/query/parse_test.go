@@ -780,3 +780,90 @@ func TestOpenSetsAreNotChecked(t *testing.T) {
 	  ["Email/set", {"create": {"e": {"keywords": {"$seen": true, "anything-at-all": true}}}}, "c1"]
 	]}`)
 }
+
+// TestPrincipalsQuery covers JMAP Sharing: finding the principals an account
+// can be shared with, and reading what has recently been shared.
+func TestPrincipalsQuery(t *testing.T) {
+	q := parse(t, "FindPeople"+Extension, `{
+	  "methodCalls": [
+	    ["Principal/query", {
+	      "filter": {
+	        "operator": "AND",
+	        "conditions": [{"text": "{{phrase}}"}, {"type": "individual"}]
+	      },
+	      "limit": "{{limit}}"
+	    }, "search"],
+	    ["Principal/get", {
+	      "#ids": {"resultOf": "search", "name": "Principal/query", "path": "/ids"},
+	      "properties": ["id", "type", "name", "email", "timeZone"]
+	    }, "fetch"]
+	  ],
+	  "returns": "fetch"
+	}`)
+	want := "urn:ietf:params:jmap:core urn:ietf:params:jmap:principals"
+	if got := strings.Join(q.Using, " "); got != want {
+		t.Errorf("Using = %q, want %q", got, want)
+	}
+}
+
+// TestShareNotificationQuery covers the other half: what has been shared with
+// the user, which nothing else would tell them.
+func TestShareNotificationQuery(t *testing.T) {
+	parse(t, "RecentlyShared"+Extension, `{
+	  "methodCalls": [
+	    ["ShareNotification/query", {
+	      "filter": {"after": "{{since}}", "objectType": "Mailbox"},
+	      "sort": [{"property": "created", "isAscending": false}]
+	    }, "search"],
+	    ["ShareNotification/get", {
+	      "#ids": {"resultOf": "search", "name": "ShareNotification/query", "path": "/ids"}
+	    }, "fetch"]
+	  ]
+	}`)
+}
+
+// TestPrincipalsChecks covers the mistakes a sharing query can make.
+func TestPrincipalsChecks(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want string
+	}{{
+		name: "principal type",
+		src:  `{"methodCalls": [["Principal/query", {"filter": {"type": "person"}}, "c0"]]}`,
+		want: `"person" is not one of the values this property takes (individual, group, resource, location, other)`,
+	}, {
+		name: "misspelled property",
+		src:  `{"methodCalls": [["Principal/get", {"properties": ["id", "emial"]}, "c0"]]}`,
+		want: `did you mean "email"?`,
+	}, {
+		name: "notification sort",
+		src:  `{"methodCalls": [["ShareNotification/query", {"sort": [{"property": "name"}]}, "c0"]]}`,
+		want: `ShareNotification cannot be sorted by "name"`,
+	}, {
+		name: "back reference into accounts",
+		src: `{"methodCalls": [
+			["Principal/get", {}, "c0"],
+			["Mailbox/get", {"#ids": {"resultOf": "c0", "name": "Principal/get", "path": "/list/*/acounts"}}, "c1"]
+		]}`,
+		want: `did you mean "accounts"?`,
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseErr(t, tt.src)
+			if !strings.Contains(got, tt.want) {
+				t.Errorf("error was:\n%s\nwant it to mention: %s", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestUnspecifiedSortIsAllowed checks that a type whose specification leaves the
+// sortable properties to the server accepts any comparator. Principal is such a
+// type, and rejecting a sort the server would have honoured is worse than
+// letting one through.
+func TestUnspecifiedSortIsAllowed(t *testing.T) {
+	parse(t, "SortedPeople"+Extension, `{"methodCalls": [
+	  ["Principal/query", {"sort": [{"property": "name"}, {"property": "email"}]}, "c0"]
+	]}`)
+}

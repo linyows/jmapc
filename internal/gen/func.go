@@ -14,14 +14,16 @@ import (
 // capabilityConstants maps the capability URIs the runtime package names to
 // those names, so that generated code reads as it would if written by hand.
 var capabilityConstants = map[string]string{
-	spec.CapabilityCore:                     "CapabilityCore",
-	spec.CapabilityMail:                     "CapabilityMail",
-	"urn:ietf:params:jmap:submission":       "CapabilitySubmission",
-	"urn:ietf:params:jmap:vacationresponse": "CapabilityVacation",
-	spec.CapabilityContacts:                 "CapabilityContacts",
-	spec.CapabilityCalendars:                "CapabilityCalendars",
-	spec.CapabilityCalendarsParse:           "CapabilityCalendarsParse",
-	spec.CapabilityAvailability:             "CapabilityAvailability",
+	spec.CapabilityCore:            "CapabilityCore",
+	spec.CapabilityMail:            "CapabilityMail",
+	spec.CapabilitySubmission:      "CapabilitySubmission",
+	spec.CapabilityVacation:        "CapabilityVacation",
+	spec.CapabilityContacts:        "CapabilityContacts",
+	spec.CapabilityCalendars:       "CapabilityCalendars",
+	spec.CapabilityCalendarsParse:  "CapabilityCalendarsParse",
+	spec.CapabilityAvailability:    "CapabilityAvailability",
+	spec.CapabilityPrincipals:      "CapabilityPrincipals",
+	spec.CapabilityPrincipalsOwner: "CapabilityPrincipalsOwner",
 }
 
 // writeFunc writes the function that sends the query and decodes its response.

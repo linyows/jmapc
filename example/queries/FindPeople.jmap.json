@@ -1,0 +1,23 @@
+{
+  "doc": "FindPeople looks for the people and things an account can be shared with, which is what a sharing dialogue needs before it can offer anything.",
+
+  "methodCalls": [
+    ["Principal/query", {
+      "filter": {
+        "operator": "AND",
+        "conditions": [
+          {"text": "{{phrase}}"},
+          {"type": "individual"}
+        ]
+      },
+      "limit": "{{limit}}"
+    }, "search"],
+
+    ["Principal/get", {
+      "#ids": {"resultOf": "search", "name": "Principal/query", "path": "/ids"},
+      "properties": ["id", "type", "name", "email", "timeZone"]
+    }, "fetch"]
+  ],
+
+  "returns": "fetch"
+}

@@ -172,10 +172,10 @@ given it an id. The pointers in the patch are checked against `Email`, so
 `mailboxIds` misspelled is a build failure, and both mailbox parameters come out
 as `jmapc.ID` because that is what the pointer selects by.
 
-[`example/queries`](example/queries) holds twelve of these, over mail, contacts
-and calendars: searching, syncing from a known state, sending, creating a
-contact card, moving one occurrence of a recurring meeting without touching the
-rest of the series.
+[`example/queries`](example/queries) holds fourteen of these, over mail,
+contacts, calendars and sharing: searching, syncing from a known state, sending,
+creating a contact card, moving one occurrence of a recurring meeting without
+touching the rest of the series.
 
 ## Writing a query
 
@@ -399,12 +399,13 @@ stands on each.
 | `urn:ietf:params:jmap:contacts` | [RFC 9610](https://www.rfc-editor.org/rfc/rfc9610) | Yes |
 | `urn:ietf:params:jmap:calendars` | [draft-ietf-jmap-calendars](https://datatracker.ietf.org/doc/draft-ietf-jmap-calendars/) | Yes |
 | `urn:ietf:params:jmap:principals:availability` | [draft-ietf-jmap-calendars](https://datatracker.ietf.org/doc/draft-ietf-jmap-calendars/) | Yes |
+| `urn:ietf:params:jmap:principals` | [RFC 9670](https://www.rfc-editor.org/rfc/rfc9670) | Yes |
+| `urn:ietf:params:jmap:principals:owner` | [RFC 9670](https://www.rfc-editor.org/rfc/rfc9670) | Yes |
 | `urn:ietf:params:jmap:mdn` | [RFC 9007](https://www.rfc-editor.org/rfc/rfc9007) | No |
 | `urn:ietf:params:jmap:smimeverify` | [RFC 9219](https://www.rfc-editor.org/rfc/rfc9219) | No |
 | `urn:ietf:params:jmap:blob` | [RFC 9404](https://www.rfc-editor.org/rfc/rfc9404) | No |
 | `urn:ietf:params:jmap:quota` | [RFC 9425](https://www.rfc-editor.org/rfc/rfc9425) | No |
 | `urn:ietf:params:jmap:sieve` | [RFC 9661](https://www.rfc-editor.org/rfc/rfc9661) | No |
-| `urn:ietf:params:jmap:principals` | [RFC 9670](https://www.rfc-editor.org/rfc/rfc9670) | No |
 | `urn:ietf:params:jmap:webpush-vapid` | [RFC 9749](https://www.rfc-editor.org/rfc/rfc9749) | No |
 
 Two of these store objects from specifications of their own: a contact card is
@@ -429,7 +430,7 @@ declarative — no Go to write.
 
 ### Methods
 
-56 methods, all of them checked and generated the same way.
+66 methods, all of them checked and generated the same way.
 
 | Type | Methods |
 |---|---|
@@ -446,7 +447,8 @@ declarative — no Go to write.
 | `CalendarEvent` | `get` `changes` `set` `copy` `query` `queryChanges` `parse` |
 | `CalendarEventNotification` | `get` `changes` `set` `query` `queryChanges` |
 | `ParticipantIdentity` | `get` `changes` `set` |
-| `Principal` | `getAvailability` |
+| `Principal` | `get` `changes` `set` `query` `queryChanges` `getAvailability` |
+| `ShareNotification` | `get` `changes` `set` `query` `queryChanges` |
 | `Blob` | `copy` |
 | `Core` | `echo` |
 
