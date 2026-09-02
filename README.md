@@ -277,6 +277,10 @@ A stream is a connection, not a subscription that outlives the network. An error
 from `Next` means reconnect, and `LastEventID` is where to resume so nothing is
 missed in between.
 
+This is the event source form of push. The other form, where the server posts to
+a URL the client registers, needs `PushSubscription`, which jmapc does not have
+yet — see [What is missing](#what-is-missing).
+
 ## Vendor extensions
 
 JMAP is meant to be extended: a server advertises a capability URI of its own,
@@ -331,21 +335,82 @@ the same checks, plus gofmt, go vet, and govulncheck.
 
 ## Coverage
 
-The data model covers:
+### Capabilities
 
-- **[RFC 8620](https://www.rfc-editor.org/rfc/rfc8620), JMAP core** — the six
-  standard methods (`/get`, `/changes`, `/set`, `/copy`, `/query`,
-  `/queryChanges`), plus `Core/echo` and `Blob/copy`.
-- **[RFC 8621](https://www.rfc-editor.org/rfc/rfc8621), JMAP for Mail** —
-  `Mailbox`, `Thread`, `Email`, and `SearchSnippet`, with `Email/import` and
-  `Email/parse`.
-- **Submission** — `Identity` and `EmailSubmission`, including the
-  `onSuccessUpdateEmail` side effect that files a message under Sent as part of
-  sending it.
-- **Vacation responses** — `VacationResponse`.
+JMAP is a family of specifications: a server advertises capability URIs, and
+each brings its own types and methods. These are the ones
+[IANA lists](https://www.iana.org/assignments/jmap/jmap.xhtml), and where jmapc
+stands on each.
 
-That is 28 methods in all. `internal/spec` is a plain Go declaration of the
-data model, so adding a vendor type is a matter of registering it.
+| Capability | | Built in |
+|---|---|---|
+| `urn:ietf:params:jmap:core` | [RFC 8620](https://www.rfc-editor.org/rfc/rfc8620) | Yes, except push subscriptions |
+| `urn:ietf:params:jmap:mail` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | Yes |
+| `urn:ietf:params:jmap:submission` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | Yes |
+| `urn:ietf:params:jmap:vacationresponse` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | Yes |
+| `urn:ietf:params:jmap:mdn` | [RFC 9007](https://www.rfc-editor.org/rfc/rfc9007) | No |
+| `urn:ietf:params:jmap:smimeverify` | [RFC 9219](https://www.rfc-editor.org/rfc/rfc9219) | No |
+| `urn:ietf:params:jmap:blob` | [RFC 9404](https://www.rfc-editor.org/rfc/rfc9404) | No |
+| `urn:ietf:params:jmap:quota` | [RFC 9425](https://www.rfc-editor.org/rfc/rfc9425) | No |
+| `urn:ietf:params:jmap:contacts` | [RFC 9610](https://www.rfc-editor.org/rfc/rfc9610) | No |
+| `urn:ietf:params:jmap:sieve` | [RFC 9661](https://www.rfc-editor.org/rfc/rfc9661) | No |
+| `urn:ietf:params:jmap:principals` | [RFC 9670](https://www.rfc-editor.org/rfc/rfc9670) | No |
+| `urn:ietf:params:jmap:webpush-vapid` | [RFC 9749](https://www.rfc-editor.org/rfc/rfc9749) | No |
+| `urn:ietf:params:jmap:calendars` | draft | No |
 
-The runtime types in `types_gen.go` are generated from the same catalogue the
-queries are checked against, so the two cannot drift apart.
+A capability that is not built in is not out of reach: describe its types in a
+[schema file](#vendor-extensions) and queries against them are checked like any
+other. That is the same mechanism a vendor extension uses, and the work is
+declarative — no Go to write.
+
+### Methods
+
+28 methods, all of them checked and generated the same way.
+
+| Type | Methods |
+|---|---|
+| `Mailbox` | `get` `changes` `set` `query` `queryChanges` |
+| `Thread` | `get` `changes` |
+| `Email` | `get` `changes` `set` `copy` `query` `queryChanges` `import` `parse` |
+| `SearchSnippet` | `get` |
+| `Identity` | `get` `changes` `set` |
+| `EmailSubmission` | `get` `changes` `set` `query` `queryChanges` |
+| `VacationResponse` | `get` `set` |
+| `Blob` | `copy` |
+| `Core` | `echo` |
+
+### What is missing
+
+Things jmapc does not do yet, stated plainly so that nobody has to find out the
+hard way.
+
+**Push subscriptions.** Push comes in two forms in RFC 8620. The event source,
+where the client holds a connection open, is implemented. The subscription,
+where the server posts to a URL the client registers, is not: there is no
+`PushSubscription` type and no `PushSubscription/get` or `/set`.
+
+**`bodyProperties` narrows nothing.** `Email/get` accepts the argument and
+passes it through, but the generated body parts hold every property of
+`EmailBodyPart` rather than the subset asked for. `properties`, on the record
+itself, does narrow the generated type.
+
+**Header field properties are untyped.** A property such as
+`header:List-Id:asText` is accepted, since the server decides what those mean,
+but it lands in the generated struct as `json.RawMessage` for the caller to
+decode.
+
+**Creation ids do not cross requests.** Referring to `#draft` within one request
+works, and is what makes [sending a message](#one-request-several-steps)
+possible. Carrying `createdIds` from one request into the next, as RFC 8620
+allows, is not something a query can express.
+
+**No `Blob/upload`.** Blobs are uploaded over the endpoint the session
+advertises, which is the RFC 8620 way and is implemented. The newer
+`urn:ietf:params:jmap:blob` capability, which adds blob methods to the API
+itself, is not.
+
+### Generation
+
+`internal/spec` is a plain Go declaration of the data model, and the runtime
+types in `types_gen.go` are generated from the same catalogue the queries are
+checked against, so the two cannot drift apart.
