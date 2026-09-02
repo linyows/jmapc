@@ -169,7 +169,7 @@ for _, email := range res.List {
 パッチの中のポインタは `Email` に照らして検証されるので、`mailboxIds` を綴り間違えればビルドが失敗します。
 二つのメールボックスのパラメータが `jmapc.ID` になるのは、ポインタがその型で要素を選ぶからです。
 
-[`example/queries`](example/queries) には、メール、連絡先、カレンダー、共有にまたがる 14 個のクエリがあります。
+[`example/queries`](example/queries) には、メール、連絡先、カレンダー、共有にまたがる 15 個のクエリがあります。
 検索、既知の状態からの同期、送信、連絡先カードの作成、繰り返し予定のうち一回だけを他に触れずに動かす操作などです。
 
 ## クエリの書き方
@@ -386,8 +386,8 @@ JMAP は仕様の集まりです。
 | `urn:ietf:params:jmap:principals:availability` | [draft-ietf-jmap-calendars](https://datatracker.ietf.org/doc/draft-ietf-jmap-calendars/) | あり |
 | `urn:ietf:params:jmap:principals` | [RFC 9670](https://www.rfc-editor.org/rfc/rfc9670) | あり |
 | `urn:ietf:params:jmap:principals:owner` | [RFC 9670](https://www.rfc-editor.org/rfc/rfc9670) | あり |
+| `urn:ietf:params:jmap:smimeverify` | [RFC 9219](https://www.rfc-editor.org/rfc/rfc9219) | あり |
 | `urn:ietf:params:jmap:mdn` | [RFC 9007](https://www.rfc-editor.org/rfc/rfc9007) | なし |
-| `urn:ietf:params:jmap:smimeverify` | [RFC 9219](https://www.rfc-editor.org/rfc/rfc9219) | なし |
 | `urn:ietf:params:jmap:blob` | [RFC 9404](https://www.rfc-editor.org/rfc/rfc9404) | なし |
 | `urn:ietf:params:jmap:quota` | [RFC 9425](https://www.rfc-editor.org/rfc/rfc9425) | なし |
 | `urn:ietf:params:jmap:sieve` | [RFC 9661](https://www.rfc-editor.org/rfc/rfc9661) | なし |
@@ -405,6 +405,12 @@ JSCalendar は JMAP にない時刻の型も持ち込みます。
 予定の `start` はタイムゾーンを持たない `LocalDateTime` で、`duration` は ISO 8601 の `Duration` です。
 `Duration` が独自の型なのは、サマータイムの切り替えを跨ぐ `P1D` が常に 24 時間とは限らないからです。
 どちらもクエリで検証されるので、末尾に `Z` の付いた `start` や、`90m` と書いた duration はビルドに失敗します。
+
+capability のすべてが固有の型を持ち込むわけではありません。
+S/MIME の検証は `Email` に四つのプロパティを足すだけで、型もメソッドも増やしません。
+つまりメソッド名からは、その capability が必要だと分かりません。
+jmapc はクエリが触れたプロパティがどの capability に属するかを判断し、`using` に加えます。
+`smimeStatus` を要求すれば、`urn:ietf:params:jmap:smimeverify` が自動で現れます。
 
 内蔵していない capability も、手が届かないわけではありません。
 [スキーマファイル](#ベンダ拡張)に型を記述すれば、それに対するクエリも他と同じように検証されます。

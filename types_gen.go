@@ -2789,6 +2789,47 @@ type Email struct {
 	//
 	// The server sets this property; it may not be set by the client.
 	Preview string `json:"preview,omitzero"`
+
+	// What the server made of the message's signature when it last looked:
+	// "unknown", "signed", "signed/verified", "signed/failed",
+	// "encrypted+signed/verified", or "encrypted+signed/failed". Null for a
+	// message with no signature.
+	//
+	// The server sets this property; it may not be set by the client.
+	//
+	// A request using this property must declare
+	// urn:ietf:params:jmap:smimeverify.
+	SMIMEStatus *string `json:"smimeStatus,omitzero"`
+
+	// What the server made of the signature when the message arrived, taking the
+	// same values as smimeStatus: "unknown", "signed", "signed/verified",
+	// "signed/failed", "encrypted+signed/verified", or
+	// "encrypted+signed/failed". It can differ from smimeStatus: a certificate
+	// valid on delivery may have expired since, and it is the state at delivery
+	// that says whether the message was trustworthy when it was sent.
+	//
+	// The server sets this property; it may not be set by the client.
+	//
+	// A request using this property must declare
+	// urn:ietf:params:jmap:smimeverify.
+	SMIMEStatusAtDelivery *string `json:"smimeStatusAtDelivery,omitzero"`
+
+	// What went wrong with the verification, in terms meant for a person to
+	// read.
+	//
+	// The server sets this property; it may not be set by the client.
+	//
+	// A request using this property must declare
+	// urn:ietf:params:jmap:smimeverify.
+	SMIMEErrors []string `json:"smimeErrors,omitzero"`
+
+	// When the server last checked the signature.
+	//
+	// The server sets this property; it may not be set by the client.
+	//
+	// A request using this property must declare
+	// urn:ietf:params:jmap:smimeverify.
+	SMIMEVerifiedAt *UTCDate `json:"smimeVerifiedAt,omitzero"`
 }
 
 // EmailAddress is one address from a header field such as From or To.
@@ -3031,6 +3072,25 @@ type EmailFilterCondition struct {
 	// Matches emails carrying the named header field, optionally with the given
 	// value: [name] or [name, value].
 	Header []string `json:"header,omitzero"`
+
+	// Matches emails according to whether they carry an S/MIME signature at all.
+	//
+	// A request using this property must declare
+	// urn:ietf:params:jmap:smimeverify.
+	HasSMIME bool `json:"hasSmime,omitzero"`
+
+	// Matches emails according to whether their signature verifies now.
+	//
+	// A request using this property must declare
+	// urn:ietf:params:jmap:smimeverify.
+	HasVerifiedSMIME bool `json:"hasVerifiedSmime,omitzero"`
+
+	// Matches emails according to whether their signature verified when the
+	// message arrived.
+	//
+	// A request using this property must declare
+	// urn:ietf:params:jmap:smimeverify.
+	HasVerifiedSMIMEAtDelivery bool `json:"hasVerifiedSmimeAtDelivery,omitzero"`
 }
 
 // EmailGetArguments holds the arguments of the Email/get method.

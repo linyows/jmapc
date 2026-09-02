@@ -169,6 +169,9 @@ func TestExportedName(t *testing.T) {
 		{"upToId", "UpToID"},
 		{"get", "Get"},
 		{"queryChanges", "QueryChanges"},
+		{"smimeStatus", "SMIMEStatus"},
+		{"smimeVerifiedAt", "SMIMEVerifiedAt"},
+		{"hasVerifiedSmime", "HasVerifiedSMIME"},
 	}
 	for _, tt := range tests {
 		if got := ExportedName(tt.in); got != tt.want {

@@ -274,6 +274,7 @@ func (c *checker) object(t *spec.Type, raw json.RawMessage, where string) Node {
 			c.sortTarget = field.SortTarget
 		}
 		c.enum = field.Enum
+		c.useCapability(field)
 		value := c.value(elemType, members[key], where+"."+key, field.Doc)
 		c.patchTarget, c.sortTarget, c.enum = savedPatch, savedSort, savedEnum
 		out.Fields = append(out.Fields, ObjectField{Key: key, Value: value})

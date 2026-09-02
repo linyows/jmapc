@@ -485,6 +485,49 @@ func registerEmail(s *Spec) {
 				ServerSet: true,
 				Doc:       "A short plain-text excerpt of the message body.",
 			},
+
+			// The S/MIME signature verification of RFC 9219. The server does
+			// the cryptography, because a client cannot: the signature covers
+			// the raw message, which the client never sees once the server has
+			// taken it apart into this structure.
+			{
+				Name:       "smimeStatus",
+				Type:       "String|null",
+				Capability: CapabilitySMIMEVerify,
+				ServerSet:  true,
+				Enum: []string{"unknown", "signed", "signed/verified", "signed/failed",
+					"encrypted+signed/verified", "encrypted+signed/failed"},
+				Doc: "What the server made of the message's signature when it last looked: " +
+					"\"unknown\", \"signed\", \"signed/verified\", \"signed/failed\", " +
+					"\"encrypted+signed/verified\", or \"encrypted+signed/failed\". Null for a message with no signature.",
+			},
+			{
+				Name:       "smimeStatusAtDelivery",
+				Type:       "String|null",
+				Capability: CapabilitySMIMEVerify,
+				ServerSet:  true,
+				Enum: []string{"unknown", "signed", "signed/verified", "signed/failed",
+					"encrypted+signed/verified", "encrypted+signed/failed"},
+				Doc: "What the server made of the signature when the message arrived, taking the same values as smimeStatus: " +
+					"\"unknown\", \"signed\", \"signed/verified\", \"signed/failed\", " +
+					"\"encrypted+signed/verified\", or \"encrypted+signed/failed\". " +
+					"It can differ from smimeStatus: a certificate valid on delivery may have expired since, " +
+					"and it is the state at delivery that says whether the message was trustworthy when it was sent.",
+			},
+			{
+				Name:       "smimeErrors",
+				Type:       "String[]|null",
+				Capability: CapabilitySMIMEVerify,
+				ServerSet:  true,
+				Doc:        "What went wrong with the verification, in terms meant for a person to read.",
+			},
+			{
+				Name:       "smimeVerifiedAt",
+				Type:       "UTCDate|null",
+				Capability: CapabilitySMIMEVerify,
+				ServerSet:  true,
+				Doc:        "When the server last checked the signature.",
+			},
 		},
 	})
 
@@ -532,6 +575,26 @@ func registerEmail(s *Spec) {
 				Name: "header",
 				Type: "String[]",
 				Doc:  "Matches emails carrying the named header field, optionally with the given value: [name] or [name, value].",
+			},
+
+			// RFC 9219.
+			{
+				Name:       "hasSmime",
+				Type:       "Boolean",
+				Capability: CapabilitySMIMEVerify,
+				Doc:        "Matches emails according to whether they carry an S/MIME signature at all.",
+			},
+			{
+				Name:       "hasVerifiedSmime",
+				Type:       "Boolean",
+				Capability: CapabilitySMIMEVerify,
+				Doc:        "Matches emails according to whether their signature verifies now.",
+			},
+			{
+				Name:       "hasVerifiedSmimeAtDelivery",
+				Type:       "Boolean",
+				Capability: CapabilitySMIMEVerify,
+				Doc:        "Matches emails according to whether their signature verified when the message arrived.",
 			},
 		},
 	})

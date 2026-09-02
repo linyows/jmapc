@@ -54,6 +54,7 @@ var capabilityAliases = map[string]string{
 	"calendars:parse":  spec.CapabilityCalendarsParse,
 	"availability":     spec.CapabilityAvailability,
 	"principals":       spec.CapabilityPrincipals,
+	"smimeverify":      spec.CapabilitySMIMEVerify,
 }
 
 // QueryName returns the name a query file gives its query, which is the file
@@ -100,6 +101,7 @@ func (p *Parser) Parse(path string, src []byte) (*Query, error) {
 		file:   path,
 		params: newParamSet(),
 		byID:   make(map[string]*Call),
+		used:   make(map[string]bool),
 	}
 	q := &Query{Name: name, Path: path, Doc: f.Doc}
 
@@ -157,6 +159,11 @@ type checker struct {
 	// specification fixes them. It travels with the property so that it reaches
 	// the elements of an array and the keys of a set.
 	enum []string
+
+	// used collects the capabilities the query turned out to need beyond those
+	// its methods imply, for properties that belong to a specification other
+	// than their type's own.
+	used map[string]bool
 }
 
 // errorf records a problem and returns it, so that a hint can be chained on.
@@ -283,6 +290,7 @@ func (c *checker) arguments(call *Call, argsType *spec.Object, raw json.RawMessa
 			c.sortTarget = field.SortTarget
 		}
 		c.enum = field.Enum
+		c.useCapability(field)
 		node := c.value(field.ParsedType(), members[key], where+"."+key, field.Doc)
 		c.patchTarget, c.sortTarget, c.enum = savedPatch, savedSort, savedEnum
 		out.Fields = append(out.Fields, ObjectField{Key: key, Value: node})
@@ -365,12 +373,14 @@ func (c *checker) properties(call *Call, where string) []string {
 		if err := json.Unmarshal(lit.JSON, &name); err != nil {
 			return nil
 		}
-		if _, known := dataType.Field(name); !known && !isDynamicProperty(name) {
+		selected, known := dataType.Field(name)
+		if !known && !isDynamicProperty(name) {
 			c.errorf(fmt.Sprintf("%s.%s[%d]", where, call.Method.PropertiesArgument, i),
 				hintFor(name, dataType.PropertyNames()),
 				"%s has no property %q", dataType.Name, name)
 			continue
 		}
+		c.useCapability(selected)
 		props = append(props, name)
 	}
 	return props
@@ -390,6 +400,9 @@ func (c *checker) resolveUsing(declared []string, calls []*Call) []string {
 		if call.Method.Capability != "" {
 			needed[call.Method.Capability] = true
 		}
+	}
+	for uri := range c.used {
+		needed[uri] = true
 	}
 	if len(declared) == 0 {
 		return sortedCapabilities(needed)
@@ -416,6 +429,32 @@ func (c *checker) resolveUsing(declared []string, calls []*Call) []string {
 			have[cap] = true
 		}
 	}
+	for _, uri := range sortedKeys(c.used) {
+		if !have[uri] {
+			c.errorf("using", fmt.Sprintf("add %q to using", uri),
+				"the query uses properties from %s, which it does not declare", uri)
+			have[uri] = true
+		}
+	}
+	return out
+}
+
+// useCapability records that the query touched a property belonging to a
+// specification other than its type's own.
+func (c *checker) useCapability(f *spec.Field) {
+	if f != nil && f.Capability != "" {
+		c.used[f.Capability] = true
+	}
+}
+
+// sortedKeys returns a map's keys in a stable order, so that two runs report
+// the same thing.
+func sortedKeys(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sortStrings(out)
 	return out
 }
 
