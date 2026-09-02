@@ -14,6 +14,9 @@ const (
 	// CapabilityAvailability covers Principal/getAvailability.
 	CapabilityAvailability = "urn:ietf:params:jmap:principals:availability"
 	CapabilityPrincipals   = "urn:ietf:params:jmap:principals"
+	// CapabilitySMIMEVerify adds the S/MIME verification properties to an
+	// Email; it defines no types or methods of its own.
+	CapabilitySMIMEVerify = "urn:ietf:params:jmap:smimeverify"
 	// CapabilityPrincipalsOwner appears only in an account's capabilities,
 	// where it names the principal that owns the account. It brings no methods
 	// of its own.

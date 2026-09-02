@@ -867,3 +867,55 @@ func TestUnspecifiedSortIsAllowed(t *testing.T) {
 	  ["Principal/query", {"sort": [{"property": "name"}, {"property": "email"}]}, "c0"]
 	]}`)
 }
+
+// TestSMIMECapabilityIsTracked covers a capability that adds properties to a
+// type belonging to another specification. Nothing in the method names says
+// RFC 9219 is involved; only the properties do.
+func TestSMIMECapabilityIsTracked(t *testing.T) {
+	// Derived from the properties, when the query says nothing.
+	q := parse(t, "Signed"+Extension, `{"methodCalls": [
+	  ["Email/query", {"filter": {"hasVerifiedSmime": true}}, "c0"],
+	  ["Email/get", {
+	    "#ids": {"resultOf": "c0", "name": "Email/query", "path": "/ids"},
+	    "properties": ["id", "subject", "smimeStatus"]
+	  }, "c1"]
+	]}`)
+	want := "urn:ietf:params:jmap:core urn:ietf:params:jmap:mail urn:ietf:params:jmap:smimeverify"
+	if got := strings.Join(q.Using, " "); got != want {
+		t.Errorf("Using = %q, want %q", got, want)
+	}
+
+	// Reported, when the query declares a set that does not cover it.
+	got := parseErr(t, `{
+	  "using": ["core", "mail"],
+	  "methodCalls": [["Email/get", {"ids": ["e1"], "properties": ["id", "smimeStatus"]}, "c0"]]
+	}`)
+	if !strings.Contains(got, "uses properties from urn:ietf:params:jmap:smimeverify") {
+		t.Errorf("error was:\n%s\nwant it to name the undeclared capability", got)
+	}
+
+	// A query that touches none of them needs nothing extra.
+	plain := parse(t, "Plain"+Extension, `{"methodCalls": [
+	  ["Email/get", {"ids": ["e1"], "properties": ["id", "subject"]}, "c0"]
+	]}`)
+	if strings.Contains(strings.Join(plain.Using, " "), "smimeverify") {
+		t.Errorf("Using = %v, want no S/MIME capability", plain.Using)
+	}
+}
+
+// TestSMIMEStatusValues checks the values the verification status may take,
+// which are easy to guess wrong: "verified" on its own is not one of them.
+func TestSMIMEStatusValues(t *testing.T) {
+	got := parseErr(t, `{"methodCalls": [
+	  ["Email/set", {"update": {"e1": {"smimeStatus": "verified"}}}, "c0"]
+	]}`)
+	if !strings.Contains(got, `"verified" is not one of the values this property takes`) {
+		t.Errorf("error was:\n%s", got)
+	}
+	parse(t, "Statuses"+Extension, `{"methodCalls": [
+	  ["Email/query", {"filter": {
+	    "operator": "OR",
+	    "conditions": [{"hasSmime": true}, {"hasVerifiedSmimeAtDelivery": true}]
+	  }}, "c0"]
+	]}`)
+}

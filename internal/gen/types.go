@@ -80,6 +80,12 @@ func (g *TypeGenerator) writeField(buf *bytes.Buffer, o *spec.Object, f *spec.Fi
 	if f.Default != "" {
 		doc = strings.TrimSpace(doc + "\n\nThe server assumes " + f.Default + " when this property is omitted.")
 	}
+	if f.Capability != "" && f.Capability != o.Capability {
+		// The property comes from a specification other than its type's own, so
+		// a request that touches it has a capability to declare beyond the one
+		// the type itself needs.
+		doc = strings.TrimSpace(doc + "\n\nA request using this property must declare " + f.Capability + ".")
+	}
 	writeComment(buf, "\t", doc)
 	fmt.Fprintf(buf, "\t%s %s `json:%q`\n", spec.ExportedName(f.Name), g.fieldType(o, f), g.jsonTag(o, f))
 }

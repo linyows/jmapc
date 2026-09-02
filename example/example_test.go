@@ -42,12 +42,13 @@ func (s *stub) start() *httptest.Server {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
 			"capabilities": map[string]any{
-				jmapc.CapabilityCore:       map[string]any{"maxCallsInRequest": 16},
-				jmapc.CapabilityMail:       map[string]any{},
-				jmapc.CapabilitySubmission: map[string]any{},
-				jmapc.CapabilityContacts:   map[string]any{},
-				jmapc.CapabilityCalendars:  map[string]any{},
-				jmapc.CapabilityPrincipals: map[string]any{},
+				jmapc.CapabilityCore:        map[string]any{"maxCallsInRequest": 16},
+				jmapc.CapabilityMail:        map[string]any{},
+				jmapc.CapabilitySubmission:  map[string]any{},
+				jmapc.CapabilityContacts:    map[string]any{},
+				jmapc.CapabilityCalendars:   map[string]any{},
+				jmapc.CapabilityPrincipals:  map[string]any{},
+				jmapc.CapabilitySMIMEVerify: map[string]any{},
 			},
 			"accounts": map[string]any{
 				string(accountID): map[string]any{"name": "someone@example.com", "isPersonal": true},
@@ -840,4 +841,78 @@ func TestRecentlyShared(t *testing.T) {
 	if n.ChangedBy.PrincipalID == nil || *n.ChangedBy.PrincipalID != "pr1" {
 		t.Errorf("changedBy = %+v", n.ChangedBy)
 	}
+}
+
+// TestVerifiedSignatures covers RFC 9219, which adds properties to Email
+// rather than types of its own. Nothing in the method names says it is
+// involved; the capability has to be derived from the properties the query
+// touches, and the request must declare it or the server will not fill them in.
+func TestVerifiedSignatures(t *testing.T) {
+	s := &stub{t: t, response: `{
+	  "sessionState": "session-1",
+	  "methodResponses": [
+	    ["Email/query", {"accountId": "acct1", "queryState": "q1",
+	                     "canCalculateChanges": true, "position": 0, "ids": ["e1", "e2"]}, "search"],
+	    ["Email/get", {"accountId": "acct1", "state": "s1", "notFound": [], "list": [
+	      {"id": "e1", "subject": "Contract", "receivedAt": "2024-05-01T09:00:00Z",
+	       "smimeStatus": "signed/verified", "smimeStatusAtDelivery": "signed/verified",
+	       "smimeErrors": null, "smimeVerifiedAt": "2024-05-02T00:00:00Z"},
+	      {"id": "e2", "subject": "Invoice", "receivedAt": "2024-04-30T08:00:00Z",
+	       "smimeStatus": "signed/failed", "smimeStatusAtDelivery": "signed/verified",
+	       "smimeErrors": ["certificate has expired"], "smimeVerifiedAt": "2024-05-02T00:00:00Z"}
+	    ]}, "fetch"]
+	  ]
+	}`}
+
+	got, err := jmapq.VerifiedSignatures(context.Background(), s.client(), jmapq.VerifiedSignaturesParams{
+		MailboxID: "mbx1",
+		Limit:     25,
+	})
+	if err != nil {
+		t.Fatalf("VerifiedSignatures: %v", err)
+	}
+
+	// The capability is declared even though the query never named it: it was
+	// derived from the properties.
+	var using []any
+	if err := json.Unmarshal(s.raw, &struct{ Using *[]any }{&using}); err != nil {
+		t.Fatalf("decoding the request: %v", err)
+	}
+	if !containsString(using, jmapc.CapabilitySMIMEVerify) {
+		t.Errorf("using = %v, want it to include the S/MIME capability", using)
+	}
+
+	if len(got.List) != 2 {
+		t.Fatalf("got %d emails, want 2", len(got.List))
+	}
+	first := got.List[0]
+	if first.SMIMEStatus == nil || *first.SMIMEStatus != "signed/verified" {
+		t.Errorf("first status = %v", first.SMIMEStatus)
+	}
+	if len(first.SMIMEErrors) != 0 {
+		t.Errorf("first errors = %v, want none", first.SMIMEErrors)
+	}
+
+	// The second message verified on delivery and does not now, which is the
+	// distinction the two properties exist for.
+	second := got.List[1]
+	if second.SMIMEStatus == nil || *second.SMIMEStatus != "signed/failed" {
+		t.Errorf("second status = %v", second.SMIMEStatus)
+	}
+	if second.SMIMEStatusAtDelivery == nil || *second.SMIMEStatusAtDelivery != "signed/verified" {
+		t.Errorf("second status at delivery = %v", second.SMIMEStatusAtDelivery)
+	}
+	if len(second.SMIMEErrors) != 1 || second.SMIMEErrors[0] != "certificate has expired" {
+		t.Errorf("second errors = %v", second.SMIMEErrors)
+	}
+}
+
+// containsString reports whether a decoded JSON array holds the given string.
+func containsString(values []any, want string) bool {
+	for _, v := range values {
+		if s, ok := v.(string); ok && s == want {
+			return true
+		}
+	}
+	return false
 }

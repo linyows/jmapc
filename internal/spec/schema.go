@@ -51,6 +51,7 @@ type SchemaField struct {
 	Doc         string   `json:"doc"`
 	Required    bool     `json:"required"`
 	Enum        []string `json:"enum"`
+	Capability  string   `json:"capability"`
 	ServerSet   bool     `json:"serverSet"`
 	Immutable   bool     `json:"immutable"`
 	Default     string   `json:"default"`
@@ -340,6 +341,7 @@ func schemaFields(where string, in []*SchemaField) ([]*Field, error) {
 			Doc:         f.Doc,
 			Required:    f.Required,
 			Enum:        f.Enum,
+			Capability:  f.Capability,
 			ServerSet:   f.ServerSet,
 			Immutable:   f.Immutable,
 			Default:     f.Default,

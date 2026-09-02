@@ -22,6 +22,7 @@ var initialisms = map[string]string{
 	"json":  "JSON",
 	"mime":  "MIME",
 	"rfc":   "RFC",
+	"smime": "SMIME",
 	"smtp":  "SMTP",
 	"tls":   "TLS",
 	"uid":   "UID",

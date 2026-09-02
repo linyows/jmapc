@@ -90,6 +90,12 @@ type Field struct {
 	// type at all. It is what tells one member of a union from another when a
 	// value would otherwise fit either.
 	Required bool
+	// Capability is the URI a request must declare in order to use this
+	// property, for one that a specification other than its type's own adds.
+	// The S/MIME properties of an Email are the case this exists for: the type
+	// belongs to JMAP for Mail, but those four properties belong to RFC 9219,
+	// and a query that touches them has to say so.
+	Capability string
 	// Enum lists the values the property may take, for a property whose
 	// specification fixes them. It is left empty where the set is open, as it
 	// is for a mailbox role or a Content-Disposition, since rejecting a value
