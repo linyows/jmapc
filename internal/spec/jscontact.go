@@ -49,10 +49,10 @@ func labelField() *Field {
 
 // resourceFields are the members of the Resource type of RFC 9553, Section
 // 1.4.4, which CryptoKey, Directory, Link, and Media are each a kind of.
-func resourceFields(typeName, kindDoc string) []*Field {
+func resourceFields(typeName, kindDoc string, kindEnum ...string) []*Field {
 	return []*Field{
 		atType(typeName),
-		{Name: "kind", Type: "String", Doc: kindDoc},
+		{Name: "kind", Type: "String", Enum: kindEnum, Doc: kindDoc},
 		{Name: "uri", Type: "String", Doc: "The URI where the resource is found."},
 		{Name: "mediaType", Type: "String", Doc: "The media type of the resource, as registered with IANA."},
 		contextsField(),
@@ -81,6 +81,7 @@ func registerJSContactName(s *Spec) {
 			{
 				Name: "kind",
 				Type: "String",
+				Enum: []string{"title", "given", "given2", "surname", "surname2", "credential", "generation", "separator"},
 				Doc:  "What part of the name this is: \"title\", \"given\", \"given2\", \"surname\", \"surname2\", \"credential\", \"generation\", or \"separator\".",
 			},
 			{
@@ -123,6 +124,7 @@ func registerJSContactName(s *Spec) {
 			{
 				Name: "phoneticSystem",
 				Type: "String",
+				Enum: []string{"ipa", "jyut", "piny"},
 				Doc:  "The system the phonetic members use: \"ipa\", \"jyut\", or \"piny\".",
 			},
 		},
@@ -185,6 +187,7 @@ func registerJSContactName(s *Spec) {
 			{
 				Name: "grammaticalGender",
 				Type: "String",
+				Enum: []string{"animate", "common", "feminine", "inanimate", "masculine", "neuter"},
 				Doc:  "The grammatical gender to use in salutations: \"animate\", \"common\", \"feminine\", \"inanimate\", \"masculine\", or \"neuter\".",
 			},
 			{Name: "pronouns", Type: "Id[ContactPronouns]", Doc: "The pronouns to use, keyed by an id local to the card."},
@@ -202,6 +205,7 @@ func registerJSContactName(s *Spec) {
 				Name:    "kind",
 				Type:    "String",
 				Default: "\"title\"",
+				Enum:    []string{"title", "role"},
 				Doc:     "Whether this is a \"title\" or a \"role\".",
 			},
 			{
@@ -306,7 +310,7 @@ func registerJSContactCommunication(s *Spec) {
 		Doc:        "ContactCalendar is a calendar or free-busy feed belonging to the entity. RFC 9553 calls it Calendar, and it is a kind of Resource.",
 		Fields: []*Field{
 			atType("Calendar"),
-			{Name: "kind", Type: "String", Doc: "What the resource is: \"calendar\" or \"freeBusy\"."},
+			{Name: "kind", Type: "String", Enum: []string{"calendar", "freeBusy"}, Doc: "What the resource is: \"calendar\" or \"freeBusy\"."},
 			{Name: "uri", Type: "String", Doc: "The URI where the calendar is found."},
 			{Name: "mediaType", Type: "String", Doc: "The media type of the calendar, as registered with IANA."},
 			contextsField(),
@@ -327,6 +331,7 @@ func registerJSContactAddress(s *Spec) {
 			{
 				Name: "kind",
 				Type: "String",
+				Enum: []string{"room", "apartment", "floor", "building", "number", "name", "block", "subdistrict", "district", "locality", "region", "postcode", "country", "direction", "landmark", "postOfficeBox", "separator"},
 				Doc:  "What part of the address this is: \"room\", \"apartment\", \"floor\", \"building\", \"number\", \"name\", \"block\", \"subdistrict\", \"district\", \"locality\", \"region\", \"postcode\", \"country\", \"direction\", \"landmark\", \"postOfficeBox\", or \"separator\".",
 			},
 			{Name: "phonetic", Type: "String", Doc: "How to pronounce this part, in the script and system the address gives."},
@@ -380,7 +385,8 @@ func registerJSContactResources(s *Spec) {
 		Capability: CapabilityContacts,
 		Doc:        "ContactDirectory is a directory the entity is listed in, or the entry within one. RFC 9553 calls it Directory, and it is a kind of Resource.",
 		Fields: append(
-			resourceFields("Directory", "What the resource is: \"directory\" for a directory the entity is listed in, or \"entry\" for the entity's own entry."),
+			resourceFields("Directory", "What the resource is: \"directory\" for a directory the entity is listed in, or \"entry\" for the entity's own entry.",
+				"directory", "entry"),
 			&Field{
 				Name: "listAs",
 				Type: "UnsignedInt",
@@ -401,7 +407,8 @@ func registerJSContactResources(s *Spec) {
 		Capability: CapabilityContacts,
 		Doc:        "ContactMedia is a photograph, logo, or sound clip of the entity. RFC 9553 calls it Media, and it is a kind of Resource. JMAP for Contacts adds blobId, so that the content can be fetched from the server rather than from the URI.",
 		Fields: append(
-			resourceFields("Media", "What the resource is: \"photo\", \"sound\", or \"logo\"."),
+			resourceFields("Media", "What the resource is: \"photo\", \"sound\", or \"logo\".",
+				"photo", "sound", "logo"),
 			&Field{
 				Name: "blobId",
 				Type: "Id",
@@ -445,7 +452,7 @@ func registerJSContactAdditional(s *Spec) {
 		Doc:        "ContactAnniversary is a date of significance to the entity, such as a birthday. RFC 9553 calls it Anniversary.",
 		Fields: []*Field{
 			atType("Anniversary"),
-			{Name: "kind", Type: "String", Doc: "What the date marks: \"birth\", \"death\", or \"wedding\"."},
+			{Name: "kind", Type: "String", Enum: []string{"birth", "death", "wedding"}, Doc: "What the date marks: \"birth\", \"death\", or \"wedding\"."},
 			{
 				Name: "date",
 				Type: "ContactPartialDate|ContactTimestamp",
@@ -484,11 +491,12 @@ func registerJSContactAdditional(s *Spec) {
 		Doc:        "ContactPersonalInfo is something the entity is interested in or good at. RFC 9553 calls it PersonalInfo.",
 		Fields: []*Field{
 			atType("PersonalInfo"),
-			{Name: "kind", Type: "String", Doc: "What sort of information this is: \"expertise\", \"hobby\", or \"interest\"."},
+			{Name: "kind", Type: "String", Enum: []string{"expertise", "hobby", "interest"}, Doc: "What sort of information this is: \"expertise\", \"hobby\", or \"interest\"."},
 			{Name: "value", Type: "String", Doc: "The interest or field of expertise itself."},
 			{
 				Name: "level",
 				Type: "String",
+				Enum: []string{"high", "medium", "low"},
 				Doc:  "How much: \"high\", \"medium\", or \"low\".",
 			},
 			{

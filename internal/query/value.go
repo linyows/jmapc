@@ -131,6 +131,21 @@ func (c *checker) rankUnion(t *spec.Type, raw json.RawMessage) []*spec.Type {
 	return members
 }
 
+// checkEnum reports a value the property's specification does not allow. It
+// does nothing where the property has no fixed set, which is most of them.
+func (c *checker) checkEnum(value, where string) {
+	if len(c.enum) == 0 {
+		return
+	}
+	for _, allowed := range c.enum {
+		if value == allowed {
+			return
+		}
+	}
+	c.errorf(where, hintFor(value, c.enum), "%q is not one of the values this property takes (%s)",
+		value, strings.Join(c.enum, ", "))
+}
+
 // propertyHint suggests what an unknown property in a path may have meant.
 func propertyHint(err error) string {
 	var unknown *spec.UnknownPropertyError
@@ -198,6 +213,11 @@ func (c *checker) mapValue(t *spec.Type, raw json.RawMessage, where, doc string)
 			!isCreationID(key) && !jmapc.ID(key).Valid() {
 			c.errorf(where+"."+key, "", "%q is not a valid id", key)
 		}
+		if field.KeySegments == nil && keyType.Name == spec.String {
+			// A set such as a participant's roles fixes its keys, not the
+			// booleans they map to.
+			c.checkEnum(key, where+"."+key)
+		}
 		field.Value = c.value(t.Value, members[key], where+"."+key, doc)
 		out.Fields = append(out.Fields, field)
 	}
@@ -246,15 +266,16 @@ func (c *checker) object(t *spec.Type, raw json.RawMessage, where string) Node {
 		// A property may itself carry patches or comparators, as the
 		// localizations of a contact card carry patches to the card. Their
 		// target travels with them, wherever in the arguments they turn up.
-		savedPatch, savedSort := c.patchTarget, c.sortTarget
+		savedPatch, savedSort, savedEnum := c.patchTarget, c.sortTarget, c.enum
 		if field.PatchTarget != "" {
 			c.patchTarget = field.PatchTarget
 		}
 		if field.SortTarget != "" {
 			c.sortTarget = field.SortTarget
 		}
+		c.enum = field.Enum
 		value := c.value(elemType, members[key], where+"."+key, field.Doc)
-		c.patchTarget, c.sortTarget = savedPatch, savedSort
+		c.patchTarget, c.sortTarget, c.enum = savedPatch, savedSort, savedEnum
 		out.Fields = append(out.Fields, ObjectField{Key: key, Value: value})
 	}
 	return out
@@ -294,6 +315,9 @@ func (c *checker) primitive(t *spec.Type, raw json.RawMessage, where string) Nod
 	case spec.String:
 		if kind != "a string" {
 			return fail()
+		}
+		if s, ok := stringValue(raw); ok {
+			c.checkEnum(s, where)
 		}
 	case spec.Boolean:
 		if kind != "a boolean" {
@@ -583,14 +607,14 @@ func (c *checker) patchObject(members map[string]json.RawMessage, keys []string,
 
 		valueType := &spec.Type{Name: spec.Any}
 		var keyTypes []*spec.Type
-		var valueDoc string
+		var target *spec.Field
 		if c.patchTarget != "" {
-			resolved, value, doc, err := c.spec.ResolvePatch(c.patchTarget, segments, unknown)
+			resolved, value, resolvedField, err := c.spec.ResolvePatch(c.patchTarget, segments, unknown)
 			if err != nil {
 				c.errorf(where+"."+key, propertyHint(err), "%v", err)
 				continue
 			}
-			keyTypes, valueType, valueDoc = resolved, value, doc
+			keyTypes, valueType, target = resolved, value, resolvedField
 		}
 
 		field.KeySegments = c.patchKeySegments(segments, keyTypes, where+"."+key)
@@ -598,7 +622,15 @@ func (c *checker) patchObject(members map[string]json.RawMessage, keys []string,
 		// is, whether or not the property itself may hold null.
 		removable := *valueType
 		removable.Nullable = true
+
+		var valueDoc string
+		savedEnum := c.enum
+		c.enum = nil
+		if target != nil {
+			valueDoc, c.enum = target.Doc, target.Enum
+		}
 		field.Value = c.value(&removable, members[key], where+"."+key, valueDoc)
+		c.enum = savedEnum
 		out.Fields = append(out.Fields, field)
 	}
 	return out

@@ -90,6 +90,15 @@ type Field struct {
 	// type at all. It is what tells one member of a union from another when a
 	// value would otherwise fit either.
 	Required bool
+	// Enum lists the values the property may take, for a property whose
+	// specification fixes them. It is left empty where the set is open, as it
+	// is for a mailbox role or a Content-Disposition, since rejecting a value
+	// the server would have accepted is worse than letting a typo through.
+	//
+	// For a property whose type is a set — "String[Boolean]", as a
+	// participant's roles are — the values are the keys of that set, not the
+	// booleans they map to.
+	Enum []string
 	// ServerSet marks a property the server assigns and the client may not
 	// include when creating or updating a record.
 	ServerSet bool
@@ -373,12 +382,13 @@ func unescapePointer(token string) string {
 // ResolvePatch resolves the JSON pointer that keys one member of a PatchObject
 // against the data type being patched, and reports the type each segment of the
 // pointer selects by, along with the type of the value at the end and the
-// documentation of the property it belongs to.
+// property it belongs to, which carries its documentation and the values it is
+// allowed to take.
 //
 // unknown marks the segments a parameter stands in for. A parameter in place of
 // a property name leaves everything past it unknowable, so resolution stops
 // there and the rest is Any.
-func (s *Spec) ResolvePatch(dataType string, segments []string, unknown []bool) (keyTypes []*Type, value *Type, valueDoc string, err error) {
+func (s *Spec) ResolvePatch(dataType string, segments []string, unknown []bool) (keyTypes []*Type, value *Type, target *Field, err error) {
 	keyTypes = make([]*Type, len(segments))
 	cur := &Type{Name: dataType}
 	anyType := &Type{Name: Any}
@@ -401,7 +411,7 @@ func (s *Spec) ResolvePatch(dataType string, segments []string, unknown []bool) 
 		case cur.Name == Any || cur.IsUnion():
 			keyTypes[i] = anyType
 			cur = anyType
-			valueDoc = ""
+			target = nil
 
 		case cur.IsArray():
 			keyTypes[i] = &Type{Name: UnsignedInt}
@@ -414,29 +424,29 @@ func (s *Spec) ResolvePatch(dataType string, segments []string, unknown []bool) 
 		case cur.IsObject():
 			o, ok := s.Object(cur.Name)
 			if !ok {
-				return nil, nil, "", fmt.Errorf("unknown type %q", cur.Name)
+				return nil, nil, nil, fmt.Errorf("unknown type %q", cur.Name)
 			}
 			keyTypes[i] = &Type{Name: String}
 			if unknown[i] {
 				// A parameter stands where a property name belongs, so which
 				// property this is cannot be known here.
 				cur = anyType
-				valueDoc = ""
+				target = nil
 				break
 			}
 			f, known := o.Field(seg)
 			if !known {
-				return nil, nil, "", &UnknownPropertyError{
+				return nil, nil, nil, &UnknownPropertyError{
 					TypeName: o.Name, Property: seg, Known: o.PropertyNames(),
 				}
 			}
 			cur = f.ParsedType()
-			valueDoc = f.Doc
+			target = f
 			nested = f.PatchTarget
 
 		default:
-			return nil, nil, "", fmt.Errorf("cannot look inside %s to reach %q", cur, seg)
+			return nil, nil, nil, fmt.Errorf("cannot look inside %s to reach %q", cur, seg)
 		}
 	}
-	return keyTypes, cur, valueDoc, nil
+	return keyTypes, cur, target, nil
 }

@@ -69,7 +69,12 @@ func (l ErrorList) Err() error {
 // an empty string when nothing is close enough to be worth suggesting.
 func nearest(name string, candidates []string) string {
 	best, bestDist := "", 0
-	limit := len(name)/2 + 1
+	// A suggestion is worth making only when it is close. Allowing a distance
+	// of half the name lets a long mistake match a short candidate that means
+	// something else entirely — "organiser" suggesting "owner" — and a
+	// confident wrong suggestion is worse than none, since the alternatives are
+	// listed either way.
+	limit := min(len(name)/3+1, 4)
 	for _, c := range candidates {
 		d := editDistance(strings.ToLower(name), strings.ToLower(c))
 		if d > limit {

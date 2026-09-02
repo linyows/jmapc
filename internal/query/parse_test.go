@@ -665,3 +665,118 @@ func TestAvailability(t *testing.T) {
 		t.Errorf("Using = %q, want %q", got, want)
 	}
 }
+
+// TestEnumeratedValuesAreChecked covers properties whose specification fixes
+// the values they may take. A misspelling here would otherwise reach the
+// server, which is free to ignore a value it does not recognise, so the query
+// would appear to work while doing nothing.
+func TestEnumeratedValuesAreChecked(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want string
+	}{{
+		name: "filter operator",
+		src: `{"methodCalls": [["Email/query", {"filter": {
+			"operator": "BOTH", "conditions": [{"hasAttachment": true}]
+		}}, "c0"]]}`,
+		want: `"BOTH" is not one of the values this property takes (AND, OR, NOT)`,
+	}, {
+		name: "event status",
+		src:  `{"methodCalls": [["CalendarEvent/set", {"create": {"e": {"status": "confirmd"}}}, "c0"]]}`,
+		want: `did you mean "confirmed"?`,
+	}, {
+		name: "recurrence frequency",
+		src: `{"methodCalls": [["CalendarEvent/set", {"create": {"e": {
+			"recurrenceRules": [{"frequency": "forthnightly"}]
+		}}}, "c0"]]}`,
+		want: `"forthnightly" is not one of the values this property takes`,
+	}, {
+		name: "day of the week",
+		src: `{"methodCalls": [["CalendarEvent/set", {"create": {"e": {
+			"recurrenceRules": [{"frequency": "weekly", "byDay": [{"day": "monday"}]}]
+		}}}, "c0"]]}`,
+		want: `"monday" is not one of the values this property takes (mo, tu, we, th, fr, sa, su)`,
+	}, {
+		name: "participation status",
+		src: `{"methodCalls": [["CalendarEvent/set", {"create": {"e": {
+			"participants": {"p": {"roles": {"attendee": true}, "participationStatus": "maybe"}}
+		}}}, "c0"]]}`,
+		want: `"maybe" is not one of the values this property takes`,
+	}, {
+		name: "a set's keys are the enumerated values",
+		src: `{"methodCalls": [["CalendarEvent/set", {"create": {"e": {
+			"participants": {"p": {"roles": {"organiser": true}}}
+		}}}, "c0"]]}`,
+		want: `"organiser" is not one of the values this property takes (owner, attendee, optional, informational, chair, contact)`,
+	}, {
+		name: "contact card kind",
+		src:  `{"methodCalls": [["ContactCard/set", {"create": {"c": {"kind": "person"}}}, "c0"]]}`,
+		want: `"person" is not one of the values this property takes`,
+	}, {
+		name: "name component kind",
+		src: `{"methodCalls": [["ContactCard/set", {"create": {"c": {
+			"name": {"components": [{"kind": "first", "value": "Ada"}]}
+		}}}, "c0"]]}`,
+		want: `"first" is not one of the values this property takes`,
+	}, {
+		name: "undo status",
+		src:  `{"methodCalls": [["EmailSubmission/set", {"update": {"s1": {"undoStatus": "cancelled"}}}, "c0"]]}`,
+		want: `did you mean "canceled"?`,
+	}, {
+		name: "alert action",
+		src: `{"methodCalls": [["CalendarEvent/set", {"create": {"e": {
+			"alerts": {"a": {"trigger": {"@type": "AbsoluteTrigger", "when": "2024-05-01T09:00:00Z"}, "action": "notify"}}
+		}}}, "c0"]]}`,
+		want: `"notify" is not one of the values this property takes (display, email)`,
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseErr(t, tt.src)
+			if !strings.Contains(got, tt.want) {
+				t.Errorf("error was:\n%s\nwant it to mention: %s", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestEnumeratedValuesAccept checks that the values a specification does allow
+// pass, including through an array and a set.
+func TestEnumeratedValuesAccept(t *testing.T) {
+	parse(t, "Enumerated"+Extension, `{"methodCalls": [
+	  ["CalendarEvent/set", {"create": {"e": {
+	    "@type": "Event",
+	    "status": "tentative",
+	    "privacy": "private",
+	    "freeBusyStatus": "free",
+	    "recurrenceRules": [{
+	      "frequency": "monthly",
+	      "byDay": [{"day": "we"}, {"day": "fr"}],
+	      "skip": "backward",
+	      "firstDayOfWeek": "su"
+	    }],
+	    "participants": {"p": {
+	      "roles": {"owner": true, "attendee": true},
+	      "kind": "individual",
+	      "participationStatus": "accepted",
+	      "scheduleAgent": "client"
+	    }},
+	    "alerts": {"a": {"trigger": {"@type": "OffsetTrigger", "offset": "-PT5M"}, "action": "email"}}
+	  }}}, "c0"],
+	  ["ContactCard/set", {"create": {"c": {
+	    "kind": "org",
+	    "name": {"components": [{"kind": "surname", "value": "Lovelace"}]},
+	    "anniversaries": {"a": {"kind": "birth", "date": {"year": 1815}}}
+	  }}}, "c1"]
+	]}`)
+}
+
+// TestOpenSetsAreNotChecked checks that properties whose values a specification
+// leaves open still take anything. Rejecting a value the server would have
+// accepted is worse than letting a typo through.
+func TestOpenSetsAreNotChecked(t *testing.T) {
+	parse(t, "OpenSets"+Extension, `{"methodCalls": [
+	  ["Mailbox/set", {"create": {"m": {"name": "Receipts", "role": "x-vendor-receipts"}}}, "c0"],
+	  ["Email/set", {"create": {"e": {"keywords": {"$seen": true, "anything-at-all": true}}}}, "c1"]
+	]}`)
+}
