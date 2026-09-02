@@ -5518,6 +5518,282 @@ type PrincipalSetResponse struct {
 	NotDestroyed map[ID]SetError `json:"notDestroyed"`
 }
 
+// Quota is one limit on what an account may hold, and how much of that limit
+// is used. An account may be under several at once: a count of messages, a
+// number of octets, one imposed on the account and another on the whole
+// domain.
+//
+// A request using this type must declare urn:ietf:params:jmap:quota.
+type Quota struct {
+	// The id of the quota.
+	//
+	// The server sets this property; it may not be set by the client.
+	ID ID `json:"id,omitzero"`
+
+	// What is being counted: "count" for a number of objects, or "octets" for
+	// their size.
+	ResourceType string `json:"resourceType,omitzero"`
+
+	// How much of the resource is in use, in whatever the resourceType counts.
+	//
+	// The server sets this property; it may not be set by the client.
+	Used UnsignedInt `json:"used,omitzero"`
+
+	// The point beyond which the server refuses to store more.
+	HardLimit UnsignedInt `json:"hardLimit,omitzero"`
+
+	// Who the limit applies to: "account" for this account alone, "domain" for
+	// everyone in the domain, or "global" for the whole server.
+	Scope string `json:"scope,omitzero"`
+
+	// The name of the quota, which is unique within its scope and resourceType.
+	Name string `json:"name,omitzero"`
+
+	// The data types the quota applies to, such as "Mail" or "Calendar". The
+	// names are those of the capabilities, not of individual record types.
+	Types []string `json:"types,omitzero"`
+
+	// The point at which the server would like the client to warn the user,
+	// which it sets below the hard limit so that there is time to do something
+	// about it.
+	//
+	// The server assumes null when this property is omitted.
+	WarnLimit *UnsignedInt `json:"warnLimit,omitzero"`
+
+	// The point beyond which the server starts refusing some operations while
+	// still allowing others, such as accepting mail but not letting the user
+	// send any.
+	//
+	// The server assumes null when this property is omitted.
+	SoftLimit *UnsignedInt `json:"softLimit,omitzero"`
+
+	// A description of the quota, meant to be shown to the user.
+	//
+	// The server assumes null when this property is omitted.
+	Description *string `json:"description,omitzero"`
+}
+
+// QuotaChangesArguments holds the arguments of the Quota/changes method.
+//
+// A request using this type must declare urn:ietf:params:jmap:quota.
+type QuotaChangesArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The state string the client already has, as returned by an earlier
+	// Quota/get or Quota/changes.
+	SinceState string `json:"sinceState,omitzero"`
+
+	// The maximum number of ids to return across the three change lists.
+	MaxChanges *UnsignedInt `json:"maxChanges,omitzero"`
+}
+
+// QuotaChangesResponse holds the response to the Quota/changes method.
+//
+// A request using this type must declare urn:ietf:params:jmap:quota.
+type QuotaChangesResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The state the changes are calculated from.
+	OldState string `json:"oldState"`
+
+	// The state the client reaches by applying these changes.
+	NewState string `json:"newState"`
+
+	// Whether further changes remain, in which case the call should be repeated
+	// from newState.
+	HasMoreChanges bool `json:"hasMoreChanges"`
+
+	// The ids of records created since oldState.
+	Created []ID `json:"created"`
+
+	// The ids of records updated since oldState.
+	Updated []ID `json:"updated"`
+
+	// The ids of records destroyed since oldState.
+	Destroyed []ID `json:"destroyed"`
+
+	// The properties that changed on every quota in the updated list, or null if
+	// the client should assume anything may have. A server that tracks this can
+	// say "used" alone, which is usually all that moved.
+	UpdatedProperties []string `json:"updatedProperties"`
+}
+
+// QuotaFilterCondition is a condition a quota must satisfy to match a
+// Quota/query.
+//
+// A request using this type must declare urn:ietf:params:jmap:quota.
+type QuotaFilterCondition struct {
+	// Matches quotas whose name contains this string.
+	Name string `json:"name,omitzero"`
+
+	// Matches quotas of this scope: "account", "domain", or "global".
+	Scope string `json:"scope,omitzero"`
+
+	// Matches quotas counting this resource: "count" or "octets".
+	ResourceType string `json:"resourceType,omitzero"`
+
+	// Matches quotas that apply to this data type.
+	Type string `json:"type,omitzero"`
+}
+
+// QuotaGetArguments holds the arguments of the Quota/get method.
+//
+// A request using this type must declare urn:ietf:params:jmap:quota.
+type QuotaGetArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The ids of the records to fetch, or null to fetch all of them.
+	IDs []ID `json:"ids,omitzero"`
+
+	// The properties to include in each returned record, or null for all of
+	// them. The id property is always returned.
+	Properties []string `json:"properties,omitzero"`
+}
+
+// QuotaGetResponse holds the response to the Quota/get method.
+//
+// A request using this type must declare urn:ietf:params:jmap:quota.
+type QuotaGetResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// A string encoding the current state of the type on the server, for use
+	// with Quota/changes.
+	State string `json:"state"`
+
+	// The records that were found, in an undefined order.
+	List []Quota `json:"list"`
+
+	// The ids that were requested but do not exist.
+	NotFound []ID `json:"notFound"`
+}
+
+// QuotaQueryArguments holds the arguments of the Quota/query method.
+//
+// A request using this type must declare urn:ietf:params:jmap:quota.
+type QuotaQueryArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The condition records must match to be included in the results.
+	Filter any `json:"filter,omitzero"`
+
+	// The comparators to sort the results by, in order of precedence.
+	Sort []Comparator `json:"sort,omitzero"`
+
+	// The zero-based index of the first result to return. A negative value
+	// counts back from the end.
+	//
+	// The server assumes 0 when this property is omitted.
+	Position Int `json:"position,omitzero"`
+
+	// The id of a record to position the returned window relative to, instead of
+	// using position.
+	Anchor *ID `json:"anchor,omitzero"`
+
+	// The offset from the anchor at which the returned window starts.
+	//
+	// The server assumes 0 when this property is omitted.
+	AnchorOffset Int `json:"anchorOffset,omitzero"`
+
+	// The maximum number of ids to return.
+	Limit *UnsignedInt `json:"limit,omitzero"`
+
+	// Whether the server should compute the total number of matching records.
+	//
+	// The server assumes false when this property is omitted.
+	CalculateTotal bool `json:"calculateTotal,omitzero"`
+}
+
+// QuotaQueryChangesArguments holds the arguments of the Quota/queryChanges
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:quota.
+type QuotaQueryChangesArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The filter the original query used.
+	Filter any `json:"filter,omitzero"`
+
+	// The sort the original query used.
+	Sort []Comparator `json:"sort,omitzero"`
+
+	// The queryState the client already has, as returned by an earlier
+	// Quota/query.
+	SinceQueryState string `json:"sinceQueryState,omitzero"`
+
+	// The maximum number of changes to return.
+	MaxChanges *UnsignedInt `json:"maxChanges,omitzero"`
+
+	// The id of the last record in the client's cached window, beyond which
+	// changes may be omitted.
+	UpToID *ID `json:"upToId,omitzero"`
+
+	// Whether the server should compute the total number of matching records.
+	//
+	// The server assumes false when this property is omitted.
+	CalculateTotal bool `json:"calculateTotal,omitzero"`
+}
+
+// QuotaQueryChangesResponse holds the response to the Quota/queryChanges
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:quota.
+type QuotaQueryChangesResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The query state the changes are calculated from.
+	OldQueryState string `json:"oldQueryState"`
+
+	// The query state the client reaches by applying these changes.
+	NewQueryState string `json:"newQueryState"`
+
+	// The total number of matching records, present only if calculateTotal was
+	// true.
+	Total UnsignedInt `json:"total"`
+
+	// The ids to remove from the cached result list.
+	Removed []ID `json:"removed"`
+
+	// The ids to add to the cached result list, each with the index to insert it
+	// at.
+	Added []AddedItem `json:"added"`
+}
+
+// QuotaQueryResponse holds the response to the Quota/query method.
+//
+// A request using this type must declare urn:ietf:params:jmap:quota.
+type QuotaQueryResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// A string encoding the current state of the query on the server, for use
+	// with Quota/queryChanges.
+	QueryState string `json:"queryState"`
+
+	// Whether the server can calculate changes for this query.
+	CanCalculateChanges bool `json:"canCalculateChanges"`
+
+	// The zero-based index of the first returned id in the full result list.
+	Position UnsignedInt `json:"position"`
+
+	// The ids of the matching records, in sorted order.
+	IDs []ID `json:"ids"`
+
+	// The total number of matching records, present only if calculateTotal was
+	// true.
+	Total UnsignedInt `json:"total"`
+
+	// The limit the server applied, present only if it is lower than the one
+	// requested.
+	Limit UnsignedInt `json:"limit"`
+}
+
 // SearchSnippet is the part of an email that matched a search, with the
 // matching words marked up for display.
 //

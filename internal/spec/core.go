@@ -20,6 +20,9 @@ const (
 	// CapabilityBlob brings blob creation, reading and lookup into the API,
 	// alongside the upload and download endpoints of the core specification.
 	CapabilityBlob = "urn:ietf:params:jmap:blob"
+	// CapabilityQuota reports the limits an account is under and how much of
+	// each is used.
+	CapabilityQuota = "urn:ietf:params:jmap:quota"
 	// CapabilityPrincipalsOwner appears only in an account's capabilities,
 	// where it names the principal that owns the account. It brings no methods
 	// of its own.

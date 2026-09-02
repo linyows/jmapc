@@ -978,3 +978,81 @@ func TestBlobLookup(t *testing.T) {
 		t.Errorf("error was:\n%s", got)
 	}
 }
+
+// TestQuota covers JMAP Quotas, which a client can only read: there is no
+// Quota/set, because nothing about a limit is the client's to decide.
+func TestQuota(t *testing.T) {
+	q := parse(t, "MailQuota"+Extension, `{
+	  "methodCalls": [
+	    ["Quota/query", {
+	      "filter": {"operator": "AND", "conditions": [
+	        {"resourceType": "octets"},
+	        {"type": "Mail"}
+	      ]},
+	      "sort": [{"property": "used", "isAscending": false}]
+	    }, "search"],
+	    ["Quota/get", {
+	      "#ids": {"resultOf": "search", "name": "Quota/query", "path": "/ids"},
+	      "properties": ["id", "name", "used", "hardLimit", "warnLimit"]
+	    }, "fetch"]
+	  ],
+	  "returns": "fetch"
+	}`)
+	want := "urn:ietf:params:jmap:core urn:ietf:params:jmap:quota"
+	if got := strings.Join(q.Using, " "); got != want {
+		t.Errorf("Using = %q, want %q", got, want)
+	}
+}
+
+func TestQuotaChecks(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want string
+	}{{
+		name: "no set method",
+		src:  `{"methodCalls": [["Quota/set", {"update": {"q1": {"hardLimit": 1000}}}, "c0"]]}`,
+		want: `unknown method "Quota/set"`,
+	}, {
+		name: "resource type",
+		src:  `{"methodCalls": [["Quota/query", {"filter": {"resourceType": "bytes"}}, "c0"]]}`,
+		want: `"bytes" is not one of the values this property takes (count, octets)`,
+	}, {
+		name: "scope",
+		src:  `{"methodCalls": [["Quota/query", {"filter": {"scope": "user"}}, "c0"]]}`,
+		want: `"user" is not one of the values this property takes (account, domain, global)`,
+	}, {
+		name: "unsortable property",
+		src:  `{"methodCalls": [["Quota/query", {"sort": [{"property": "hardLimit"}]}, "c0"]]}`,
+		want: `Quota cannot be sorted by "hardLimit"`,
+	}, {
+		name: "misspelled property",
+		src:  `{"methodCalls": [["Quota/get", {"properties": ["id", "hardLimt"]}, "c0"]]}`,
+		want: `did you mean "hardLimit"?`,
+	}, {
+		name: "updatedProperties is on the response, not the arguments",
+		src:  `{"methodCalls": [["Quota/changes", {"sinceState": "s", "updatedProperties": ["used"]}, "c0"]]}`,
+		want: `Quota/changes has no argument "updatedProperties"`,
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseErr(t, tt.src)
+			if !strings.Contains(got, tt.want) {
+				t.Errorf("error was:\n%s\nwant it to mention: %s", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestQuotaChangesReportsUpdatedProperties checks that the response property
+// RFC 9425 adds resolves, since a client uses it to avoid refetching a whole
+// quota when only its used value moved.
+func TestQuotaChangesReportsUpdatedProperties(t *testing.T) {
+	parse(t, "QuotaSince"+Extension, `{"methodCalls": [
+	  ["Quota/changes", {"sinceState": "{{state}}"}, "c0"],
+	  ["Quota/get", {
+	    "#ids": {"resultOf": "c0", "name": "Quota/changes", "path": "/updated"},
+	    "#properties": {"resultOf": "c0", "name": "Quota/changes", "path": "/updatedProperties"}
+	  }, "c1"]
+	]}`)
+}

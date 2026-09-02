@@ -50,6 +50,7 @@ func (s *stub) start() *httptest.Server {
 				jmapc.CapabilityPrincipals:  map[string]any{},
 				jmapc.CapabilitySMIMEVerify: map[string]any{},
 				jmapc.CapabilityBlob:        map[string]any{},
+				jmapc.CapabilityQuota:       map[string]any{},
 			},
 			"accounts": map[string]any{
 				string(accountID): map[string]any{"name": "someone@example.com", "isPersonal": true},
@@ -61,6 +62,7 @@ func (s *stub) start() *httptest.Server {
 				jmapc.CapabilityCalendars:  string(accountID),
 				jmapc.CapabilityPrincipals: string(accountID),
 				jmapc.CapabilityBlob:       string(accountID),
+				jmapc.CapabilityQuota:      string(accountID),
 			},
 			"username": "someone@example.com",
 			"apiUrl":   srv.URL + "/jmap/api/",
@@ -1011,5 +1013,55 @@ func TestWhatUsesBlob(t *testing.T) {
 	// JSON for the caller to interpret.
 	if string(peek.DigestSha256) != `"3q2+7w=="` {
 		t.Errorf("digest = %s", peek.DigestSha256)
+	}
+}
+
+// TestMailQuota covers JMAP Quotas. An account may be under several at once —
+// a count and a size, one on the account and another on the domain — so a
+// client that wants to show "you have used 4 GB of 5" has to say which.
+func TestMailQuota(t *testing.T) {
+	s := &stub{t: t, response: `{
+	  "sessionState": "session-1",
+	  "methodResponses": [
+	    ["Quota/query", {"accountId": "acct1", "queryState": "q1",
+	                     "canCalculateChanges": false, "position": 0, "ids": ["quota1"]}, "search"],
+	    ["Quota/get", {"accountId": "acct1", "state": "s1", "notFound": [], "list": [
+	      {"id": "quota1", "name": "mail-storage", "scope": "account",
+	       "used": 4294967296, "hardLimit": 5368709120,
+	       "warnLimit": 4831838208, "softLimit": null,
+	       "description": "Storage for messages and attachments"}
+	    ]}, "fetch"]
+	  ]
+	}`}
+
+	got, err := jmapq.MailQuota(context.Background(), s.client())
+	if err != nil {
+		t.Fatalf("MailQuota: %v", err)
+	}
+
+	_, search := s.call(t, "search")
+	conditions := search["filter"].(map[string]any)["conditions"].([]any)
+	if c := conditions[0].(map[string]any); c["resourceType"] != "octets" {
+		t.Errorf("first condition = %v, want resourceType octets", c)
+	}
+
+	if len(got.List) != 1 {
+		t.Fatalf("got %d quotas, want 1", len(got.List))
+	}
+	q := got.List[0]
+	if q.Scope != "account" {
+		t.Errorf("scope = %q, want account", q.Scope)
+	}
+	if q.Used != 4294967296 || q.HardLimit != 5368709120 {
+		t.Errorf("used %d of %d", q.Used, q.HardLimit)
+	}
+	// A warn limit set below the hard limit is what lets a client say
+	// something before the account stops accepting mail.
+	if q.WarnLimit == nil || *q.WarnLimit >= q.HardLimit {
+		t.Errorf("warnLimit = %v, want one below the hard limit", q.WarnLimit)
+	}
+	// A soft limit is optional, and this server does not set one.
+	if q.SoftLimit != nil {
+		t.Errorf("softLimit = %v, want nil", *q.SoftLimit)
 	}
 }
