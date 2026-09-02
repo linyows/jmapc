@@ -41,6 +41,23 @@ response decodes into a struct holding exactly the properties you asked for.
 
 ## Install
 
+The generator is a Go tool, and what it generates is Go, so record it in the
+module that uses it:
+
+```
+go get -tool github.com/linyows/jmapc/cmd/jmapc
+```
+
+That pins a version in `go.mod`, and `go tool jmapc` runs it. Everyone who
+builds the project — and CI — then generates with the same version, which
+matters for a tool whose output is committed.
+
+```go
+//go:generate go tool jmapc generate
+```
+
+To put it on your PATH instead:
+
 ```
 go install github.com/linyows/jmapc/cmd/jmapc@latest
 ```
@@ -332,6 +349,9 @@ Or list them in `jmapc.json` under `"schemas"`.
 go test ./...        # everything, including the end-to-end tests
 go generate ./...    # regenerate the runtime types and the example client
 ```
+
+The generator is run from source here, not through `go tool`, because the
+repository is where it lives.
 
 The runtime types and the example client are committed, and a test compares
 them against what the catalogue produces now, so a change to the data model
