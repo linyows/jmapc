@@ -1374,3 +1374,55 @@ func TestReadMessage(t *testing.T) {
 		t.Errorf("text body size = %d", email.TextBody[0].Size)
 	}
 }
+
+// TestFileIntoNewMailbox covers carrying creation ids in and out. Within one
+// request "#box" resolves on the server; across requests it resolves only
+// because the ids were passed along, which is what RFC 8620 has this for.
+func TestFileIntoNewMailbox(t *testing.T) {
+	s := &stub{t: t, response: `{
+	  "sessionState": "session-1",
+	  "methodResponses": [
+	    ["Mailbox/set", {"accountId": "acct1", "newState": "m2",
+	                     "created": {"box": {"id": "mbx9", "sortOrder": 0, "totalEmails": 0,
+	                                          "unreadEmails": 0, "totalThreads": 0, "unreadThreads": 0}}}, "make"],
+	    ["Email/set", {"accountId": "acct1", "newState": "s2", "updated": {"e1": null}}, "file"]
+	  ],
+	  "createdIds": {"box": "mbx9", "earlier": "mbx1"}
+	}`}
+
+	// Ids from a request that ran before this one.
+	carried := map[jmapc.ID]jmapc.ID{"earlier": "mbx1"}
+
+	got, err := jmapq.FileIntoNewMailbox(context.Background(), s.client(), jmapq.FileIntoNewMailboxParams{
+		Name:          "Receipts",
+		EmailID:       "e1",
+		FromMailboxID: "inbox",
+	}, carried)
+	if err != nil {
+		t.Fatalf("FileIntoNewMailbox: %v", err)
+	}
+
+	// What was carried in goes out with the request.
+	sent, ok := s.got["createdIds"].(map[string]any)
+	if !ok {
+		t.Fatalf("the request carries no createdIds:\n%s", s.raw)
+	}
+	if sent["earlier"] != "mbx1" {
+		t.Errorf("createdIds = %v, want the id carried in", sent)
+	}
+
+	// The patch names the mailbox by its creation id: it has no other id yet.
+	_, file := s.call(t, "file")
+	patch := file["update"].(map[string]any)["e1"].(map[string]any)
+	if patch["mailboxIds/#box"] != true {
+		t.Errorf("patch = %v, want the new mailbox added by creation id", patch)
+	}
+
+	// And what the server assigned comes back, ready for the next request.
+	if got.CreatedIDs["box"] != "mbx9" {
+		t.Errorf("createdIds = %v, want box resolved to mbx9", got.CreatedIDs)
+	}
+	if got.CreatedIDs["earlier"] != "mbx1" {
+		t.Errorf("createdIds = %v, want the carried id kept", got.CreatedIDs)
+	}
+}

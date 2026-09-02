@@ -441,5 +441,11 @@ func (g *QueryGenerator) writeResultType(buf *bytes.Buffer, p *plan) {
 		writeComment(buf, "\t", fmt.Sprintf("The response to the %s call, made as %q.", c.Method.Name, c.ID))
 		fmt.Fprintf(buf, "\t%s %s\n", c.GoField, p.calls[c].responseType)
 	}
+	if p.q.CreatedIDs {
+		buf.WriteString("\n")
+		writeComment(buf, "\t", "The creation ids of everything created by this request, together with "+
+			"those carried in. Pass it to the next request so that a reference to any of them still resolves.")
+		fmt.Fprintf(buf, "\tCreatedIDs map[%[1]sID]%[1]sID\n", g.Qualifier)
+	}
 	buf.WriteString("}\n\n")
 }

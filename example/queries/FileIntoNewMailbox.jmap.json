@@ -1,0 +1,23 @@
+{
+  "_doc": "FileIntoNewMailbox creates a mailbox and moves a message into it, referring to the mailbox by its creation id before the server has assigned a real one. Carrying the creation ids in and out lets a proxy split this across servers, or a client continue in a second request, with the reference still resolving.",
+
+  "_createdIds": true,
+
+  "methodCalls": [
+    ["Mailbox/set", {
+      "create": {
+        "box": {"name": "{{name}}", "parentId": null}
+      }
+    }, "make"],
+
+    ["Email/set", {
+      "_comment": "\"#box\" is the mailbox above. Had it been created by an earlier request instead, the creation ids passed in would resolve it just the same.",
+      "update": {
+        "{{emailId}}": {
+          "mailboxIds/#box": true,
+          "mailboxIds/{{fromMailboxId}}": null
+        }
+      }
+    }, "file"]
+  ]
+}

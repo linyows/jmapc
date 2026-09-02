@@ -1392,3 +1392,36 @@ func TestBodyProperties(t *testing.T) {
 	  ["Email/parse", {"blobIds": ["b1"], "bodyProperties": ["partId", "type"]}, "c0"]
 	]}`)
 }
+
+// TestCreatedIDsCarry covers a query that takes the creation ids of an earlier
+// request and reports its own. RFC 8620 has this for proxies, which split one
+// request across several servers and need the references to still resolve.
+func TestCreatedIDsCarry(t *testing.T) {
+	q := parse(t, "CreateAndFile"+Extension, `{
+	  "_createdIds": true,
+	  "methodCalls": [
+	    ["Mailbox/set", {"create": {"box": {"name": "{{name}}", "parentId": null}}}, "make"],
+	    ["Email/set", {"update": {"{{emailId}}": {"mailboxIds/#box": true}}}, "file"]
+	  ]
+	}`)
+	if !q.CreatedIDs {
+		t.Error("the query does not carry creation ids")
+	}
+
+	// The ids belong to the request rather than to any one call, so there is
+	// nowhere to put them in a query that returns a single response.
+	got := parseErr(t, `{
+	  "_createdIds": true,
+	  "_returns": "c0",
+	  "methodCalls": [["Mailbox/get", {}, "c0"]]
+	}`)
+	if !strings.Contains(got, "returns every response") {
+		t.Errorf("error was:\n%s", got)
+	}
+
+	// A query that says nothing about them carries none.
+	plain := parse(t, "Plain"+Extension, `{"methodCalls": [["Mailbox/get", {}, "c0"]]}`)
+	if plain.CreatedIDs {
+		t.Error("a query that did not ask for creation ids carries them")
+	}
+}

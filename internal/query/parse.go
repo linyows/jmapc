@@ -32,6 +32,9 @@ const (
 	DocMember = "_doc"
 	// ReturnsMember names the call whose response the function returns.
 	ReturnsMember = "_returns"
+	// CreatedIDsMember asks for the creation ids of a request to be carried in
+	// and out, so that one request can go on from where another left off.
+	CreatedIDsMember = "_createdIds"
 	// CommentArgument explains what a call is for. It sits in that call's
 	// arguments, and the generator strips it before the request goes out:
 	// RFC 8620 requires a server to reject an argument it does not know.
@@ -59,6 +62,9 @@ type fileSyntax struct {
 	// Returns names the call whose result the generated function returns. It
 	// may be left out, in which case every result is returned.
 	Returns string `json:"_returns"`
+	// CreatedIDs asks the generated function to take the creation ids of an
+	// earlier request and to report its own.
+	CreatedIDs bool `json:"_createdIds"`
 	// Using lists the capabilities the request declares, as RFC 8620 defines
 	// it. It may be left out, in which case it is derived from the methods
 	// called.
@@ -132,7 +138,7 @@ func (p *Parser) Parse(path string, src []byte) (*Query, error) {
 		byID:   make(map[string]*Call),
 		used:   make(map[string]bool),
 	}
-	q := &Query{Name: name, Path: path, Doc: f.Doc}
+	q := &Query{Name: name, Path: path, Doc: f.Doc, CreatedIDs: f.CreatedIDs}
 
 	if len(f.MethodCalls) == 0 {
 		c.errorf("methodCalls", "", "the query makes no method calls")
@@ -146,6 +152,11 @@ func (p *Parser) Parse(path string, src []byte) (*Query, error) {
 
 	q.Using = c.resolveUsing(f.Using, q.Calls)
 	q.Params = c.params.all()
+	if f.Returns != "" && f.CreatedIDs {
+		c.errorf(ReturnsMember, "",
+			"a query carrying %s returns every response, since the creation ids belong to the request rather than to any one call",
+			CreatedIDsMember)
+	}
 	if f.Returns != "" {
 		call, ok := c.byID[f.Returns]
 		if !ok {
