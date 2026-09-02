@@ -47,6 +47,7 @@ func (s *stub) start() *httptest.Server {
 				jmapc.CapabilitySubmission: map[string]any{},
 				jmapc.CapabilityContacts:   map[string]any{},
 				jmapc.CapabilityCalendars:  map[string]any{},
+				jmapc.CapabilityPrincipals: map[string]any{},
 			},
 			"accounts": map[string]any{
 				string(accountID): map[string]any{"name": "someone@example.com", "isPersonal": true},
@@ -56,6 +57,7 @@ func (s *stub) start() *httptest.Server {
 				jmapc.CapabilitySubmission: string(accountID),
 				jmapc.CapabilityContacts:   string(accountID),
 				jmapc.CapabilityCalendars:  string(accountID),
+				jmapc.CapabilityPrincipals: string(accountID),
 			},
 			"username": "someone@example.com",
 			"apiUrl":   srv.URL + "/jmap/api/",
@@ -743,5 +745,99 @@ func TestRescheduleOccurrence(t *testing.T) {
 	// The series itself is untouched: only the one occurrence moves.
 	if len(patch) != 2 {
 		t.Errorf("patch holds %d members, want 2", len(patch))
+	}
+}
+
+// TestFindPeople covers JMAP Sharing: finding who an account can be shared
+// with, which is what a sharing dialogue needs before it can offer anything.
+func TestFindPeople(t *testing.T) {
+	s := &stub{t: t, response: `{
+	  "sessionState": "session-1",
+	  "methodResponses": [
+	    ["Principal/query", {"accountId": "acct1", "queryState": "p1",
+	                         "canCalculateChanges": false, "position": 0, "ids": ["pr1"]}, "search"],
+	    ["Principal/get", {"accountId": "acct1", "state": "p1", "notFound": [], "list": [
+	      {"id": "pr1", "type": "individual", "name": "Ada Lovelace",
+	       "email": "ada@example.com", "timeZone": "Europe/London"}
+	    ]}, "fetch"]
+	  ]
+	}`}
+
+	got, err := jmapq.FindPeople(context.Background(), s.client(), jmapq.FindPeopleParams{
+		Phrase: "ada",
+		Limit:  10,
+	})
+	if err != nil {
+		t.Fatalf("FindPeople: %v", err)
+	}
+
+	_, search := s.call(t, "search")
+	conditions := search["filter"].(map[string]any)["conditions"].([]any)
+	if len(conditions) != 2 {
+		t.Fatalf("filter has %d conditions, want 2", len(conditions))
+	}
+	if c := conditions[1].(map[string]any); c["type"] != "individual" {
+		t.Errorf("second condition = %v, want type individual", c)
+	}
+
+	if len(got.List) != 1 {
+		t.Fatalf("got %d principals, want 1", len(got.List))
+	}
+	who := got.List[0]
+	if who.Type != "individual" || who.Name != "Ada Lovelace" {
+		t.Errorf("principal = %+v", who)
+	}
+	if who.Email == nil || *who.Email != "ada@example.com" {
+		t.Errorf("email = %v", who.Email)
+	}
+}
+
+// TestRecentlyShared covers the other half of sharing: what someone else has
+// shared with the user, which nothing else would tell them.
+func TestRecentlyShared(t *testing.T) {
+	s := &stub{t: t, response: `{
+	  "sessionState": "session-1",
+	  "methodResponses": [
+	    ["ShareNotification/query", {"accountId": "acct1", "queryState": "n1",
+	                                 "canCalculateChanges": false, "position": 0, "ids": ["n1"]}, "search"],
+	    ["ShareNotification/get", {"accountId": "acct1", "state": "n1", "notFound": [], "list": [
+	      {"id": "n1", "created": "2024-05-01T09:00:00Z",
+	       "changedBy": {"name": "Ada", "email": "ada@example.com", "principalId": "pr1"},
+	       "objectType": "Mailbox", "objectAccountId": "acct2", "objectId": "mbx9",
+	       "oldRights": null, "newRights": {"mayReadItems": true}, "name": "Shared plans"}
+	    ]}, "fetch"]
+	  ]
+	}`}
+
+	got, err := jmapq.RecentlyShared(context.Background(), s.client(), jmapq.RecentlySharedParams{
+		Since: jmapc.NewUTCDate(mustTime(t, "2024-04-01T00:00:00Z")),
+		Limit: 20,
+	})
+	if err != nil {
+		t.Fatalf("RecentlyShared: %v", err)
+	}
+
+	_, search := s.call(t, "search")
+	if sort := search["sort"].([]any)[0].(map[string]any); sort["property"] != "created" {
+		t.Errorf("sort = %v, want created", sort)
+	}
+
+	if len(got.List) != 1 {
+		t.Fatalf("got %d notifications, want 1", len(got.List))
+	}
+	n := got.List[0]
+	if n.ObjectType != "Mailbox" || n.Name != "Shared plans" {
+		t.Errorf("notification = %+v", n)
+	}
+	// A null oldRights means the user could not see the object at all before,
+	// so this is something newly shared rather than a change of permissions.
+	if n.OldRights != nil {
+		t.Errorf("oldRights = %v, want nil for something newly shared", n.OldRights)
+	}
+	if !n.NewRights["mayReadItems"] {
+		t.Errorf("newRights = %v, want mayReadItems", n.NewRights)
+	}
+	if n.ChangedBy.PrincipalID == nil || *n.ChangedBy.PrincipalID != "pr1" {
+		t.Errorf("changedBy = %+v", n.ChangedBy)
 	}
 }

@@ -19,9 +19,10 @@ func main() {
 	g := &gen.TypeGenerator{
 		Spec:    spec.Standard(),
 		Package: "jmapc",
-		// PatchObject and SetError are written by hand, because they carry
-		// behaviour beyond their shape.
-		Skip: map[string]bool{"PatchObject": true, "SetError": true},
+		// These are written by hand: PatchObject and SetError carry behaviour
+		// beyond their shape, and Account is part of the session object, which
+		// is not generated.
+		Skip: map[string]bool{"PatchObject": true, "SetError": true, "Account": true},
 	}
 	src, err := g.Generate()
 	if err != nil {

@@ -704,7 +704,10 @@ func mergeTextSegments(segments []KeySegment) []KeySegment {
 // "hasKeyword" sorts on, and the comparator is incomplete without it.
 func (c *checker) comparator(members map[string]json.RawMessage, keys []string, raw json.RawMessage, where string) Node {
 	dataType, ok := c.spec.Object(c.sortTarget)
-	if !ok {
+	if !ok || len(dataType.Sort) == 0 {
+		// Some specifications leave the sortable properties to the server. With
+		// nothing to check against, a comparator naming any property has to be
+		// allowed through.
 		return c.anyValue(raw)
 	}
 	base, ok := c.spec.Object("Comparator")

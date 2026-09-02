@@ -4907,6 +4907,134 @@ type ParticipantIdentitySetResponse struct {
 	NotDestroyed map[ID]SetError `json:"notDestroyed"`
 }
 
+// Principal is an entity that data can be shared with and that may own
+// accounts: a person, a group, or something bookable such as a room or a
+// projector.
+//
+// A request using this type must declare urn:ietf:params:jmap:principals.
+type Principal struct {
+	// The id of the principal.
+	//
+	// The server sets this property; it may not be set by the client.
+	ID ID `json:"id,omitzero"`
+
+	// What the principal is: "individual", "group", "resource", "location", or
+	// "other".
+	//
+	// The server sets this property; it may not be set by the client.
+	Type string `json:"type,omitzero"`
+
+	// The user-visible name of the principal.
+	Name string `json:"name,omitzero"`
+
+	// A longer description of the principal.
+	Description *string `json:"description,omitzero"`
+
+	// An email address for the principal, or null for one that has none.
+	Email *string `json:"email,omitzero"`
+
+	// The time zone the principal is normally in, named as in the IANA Time Zone
+	// Database.
+	TimeZone *string `json:"timeZone,omitzero"`
+
+	// What the principal supports, keyed by capability URI, with the details
+	// each capability defines.
+	//
+	// The server sets this property; it may not be set by the client.
+	Capabilities map[string]any `json:"capabilities,omitzero"`
+
+	// The accounts the principal shares with the authenticated user, keyed by
+	// account id, or null if none are visible.
+	//
+	// The server sets this property; it may not be set by the client.
+	Accounts map[ID]Account `json:"accounts,omitzero"`
+}
+
+// PrincipalChangesArguments holds the arguments of the Principal/changes
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:principals.
+type PrincipalChangesArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The state string the client already has, as returned by an earlier
+	// Principal/get or Principal/changes.
+	SinceState string `json:"sinceState,omitzero"`
+
+	// The maximum number of ids to return across the three change lists.
+	MaxChanges *UnsignedInt `json:"maxChanges,omitzero"`
+}
+
+// PrincipalChangesResponse holds the response to the Principal/changes
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:principals.
+type PrincipalChangesResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The state the changes are calculated from.
+	OldState string `json:"oldState"`
+
+	// The state the client reaches by applying these changes.
+	NewState string `json:"newState"`
+
+	// Whether further changes remain, in which case the call should be repeated
+	// from newState.
+	HasMoreChanges bool `json:"hasMoreChanges"`
+
+	// The ids of records created since oldState.
+	Created []ID `json:"created"`
+
+	// The ids of records updated since oldState.
+	Updated []ID `json:"updated"`
+
+	// The ids of records destroyed since oldState.
+	Destroyed []ID `json:"destroyed"`
+}
+
+// PrincipalFilterCondition is a condition a principal must satisfy to match a
+// Principal/query.
+//
+// A request using this type must declare urn:ietf:params:jmap:principals.
+type PrincipalFilterCondition struct {
+	// Matches principals that share one of these accounts with the user.
+	AccountIDs []string `json:"accountIds,omitzero"`
+
+	// Matches principals whose email address contains this text.
+	Email string `json:"email,omitzero"`
+
+	// Matches principals whose name contains this text.
+	Name string `json:"name,omitzero"`
+
+	// Matches principals where this text appears in the name, email, or
+	// description.
+	Text string `json:"text,omitzero"`
+
+	// Matches principals of this type: "individual", "group", "resource",
+	// "location", or "other".
+	Type string `json:"type,omitzero"`
+
+	// Matches principals in this time zone.
+	TimeZone string `json:"timeZone,omitzero"`
+}
+
+// PrincipalGetArguments holds the arguments of the Principal/get method.
+//
+// A request using this type must declare urn:ietf:params:jmap:principals.
+type PrincipalGetArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The ids of the records to fetch, or null to fetch all of them.
+	IDs []ID `json:"ids,omitzero"`
+
+	// The properties to include in each returned record, or null for all of
+	// them. The id property is always returned.
+	Properties []string `json:"properties,omitzero"`
+}
+
 // PrincipalGetAvailabilityArguments holds the arguments of the
 // Principal/getAvailability method.
 //
@@ -4943,6 +5071,203 @@ type PrincipalGetAvailabilityArguments struct {
 type PrincipalGetAvailabilityResponse struct {
 	// The periods the principal is busy in, merged and in no particular order.
 	List []BusyPeriod `json:"list"`
+}
+
+// PrincipalGetResponse holds the response to the Principal/get method.
+//
+// A request using this type must declare urn:ietf:params:jmap:principals.
+type PrincipalGetResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// A string encoding the current state of the type on the server, for use
+	// with Principal/changes.
+	State string `json:"state"`
+
+	// The records that were found, in an undefined order.
+	List []Principal `json:"list"`
+
+	// The ids that were requested but do not exist.
+	NotFound []ID `json:"notFound"`
+}
+
+// PrincipalQueryArguments holds the arguments of the Principal/query method.
+//
+// A request using this type must declare urn:ietf:params:jmap:principals.
+type PrincipalQueryArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The condition records must match to be included in the results.
+	Filter any `json:"filter,omitzero"`
+
+	// The comparators to sort the results by, in order of precedence.
+	Sort []Comparator `json:"sort,omitzero"`
+
+	// The zero-based index of the first result to return. A negative value
+	// counts back from the end.
+	//
+	// The server assumes 0 when this property is omitted.
+	Position Int `json:"position,omitzero"`
+
+	// The id of a record to position the returned window relative to, instead of
+	// using position.
+	Anchor *ID `json:"anchor,omitzero"`
+
+	// The offset from the anchor at which the returned window starts.
+	//
+	// The server assumes 0 when this property is omitted.
+	AnchorOffset Int `json:"anchorOffset,omitzero"`
+
+	// The maximum number of ids to return.
+	Limit *UnsignedInt `json:"limit,omitzero"`
+
+	// Whether the server should compute the total number of matching records.
+	//
+	// The server assumes false when this property is omitted.
+	CalculateTotal bool `json:"calculateTotal,omitzero"`
+}
+
+// PrincipalQueryChangesArguments holds the arguments of the
+// Principal/queryChanges method.
+//
+// A request using this type must declare urn:ietf:params:jmap:principals.
+type PrincipalQueryChangesArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The filter the original query used.
+	Filter any `json:"filter,omitzero"`
+
+	// The sort the original query used.
+	Sort []Comparator `json:"sort,omitzero"`
+
+	// The queryState the client already has, as returned by an earlier
+	// Principal/query.
+	SinceQueryState string `json:"sinceQueryState,omitzero"`
+
+	// The maximum number of changes to return.
+	MaxChanges *UnsignedInt `json:"maxChanges,omitzero"`
+
+	// The id of the last record in the client's cached window, beyond which
+	// changes may be omitted.
+	UpToID *ID `json:"upToId,omitzero"`
+
+	// Whether the server should compute the total number of matching records.
+	//
+	// The server assumes false when this property is omitted.
+	CalculateTotal bool `json:"calculateTotal,omitzero"`
+}
+
+// PrincipalQueryChangesResponse holds the response to the
+// Principal/queryChanges method.
+//
+// A request using this type must declare urn:ietf:params:jmap:principals.
+type PrincipalQueryChangesResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The query state the changes are calculated from.
+	OldQueryState string `json:"oldQueryState"`
+
+	// The query state the client reaches by applying these changes.
+	NewQueryState string `json:"newQueryState"`
+
+	// The total number of matching records, present only if calculateTotal was
+	// true.
+	Total UnsignedInt `json:"total"`
+
+	// The ids to remove from the cached result list.
+	Removed []ID `json:"removed"`
+
+	// The ids to add to the cached result list, each with the index to insert it
+	// at.
+	Added []AddedItem `json:"added"`
+}
+
+// PrincipalQueryResponse holds the response to the Principal/query method.
+//
+// A request using this type must declare urn:ietf:params:jmap:principals.
+type PrincipalQueryResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// A string encoding the current state of the query on the server, for use
+	// with Principal/queryChanges.
+	QueryState string `json:"queryState"`
+
+	// Whether the server can calculate changes for this query.
+	CanCalculateChanges bool `json:"canCalculateChanges"`
+
+	// The zero-based index of the first returned id in the full result list.
+	Position UnsignedInt `json:"position"`
+
+	// The ids of the matching records, in sorted order.
+	IDs []ID `json:"ids"`
+
+	// The total number of matching records, present only if calculateTotal was
+	// true.
+	Total UnsignedInt `json:"total"`
+
+	// The limit the server applied, present only if it is lower than the one
+	// requested.
+	Limit UnsignedInt `json:"limit"`
+}
+
+// PrincipalSetArguments holds the arguments of the Principal/set method.
+//
+// A request using this type must declare urn:ietf:params:jmap:principals.
+type PrincipalSetArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The state the changes are expected to apply to. The call fails with a
+	// stateMismatch error if the server has moved on.
+	IfInState *string `json:"ifInState,omitzero"`
+
+	// A map of creation id to the record to create. A creation id may be
+	// referenced elsewhere in the same request as "#" followed by the id.
+	Create map[ID]Principal `json:"create,omitzero"`
+
+	// A map of record id to the patch to apply to it.
+	Update map[ID]PatchObject `json:"update,omitzero"`
+
+	// The ids of the records to destroy.
+	Destroy []ID `json:"destroy,omitzero"`
+}
+
+// PrincipalSetResponse holds the response to the Principal/set method.
+//
+// A request using this type must declare urn:ietf:params:jmap:principals.
+type PrincipalSetResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The state before these changes were applied, if the server tracks it.
+	OldState *string `json:"oldState"`
+
+	// The state after these changes were applied.
+	NewState string `json:"newState"`
+
+	// A map of creation id to the properties the server assigned to each created
+	// record.
+	Created map[ID]*Principal `json:"created"`
+
+	// A map of record id to any properties the server changed beyond those the
+	// patch set.
+	Updated map[ID]*Principal `json:"updated"`
+
+	// The ids of the records that were destroyed.
+	Destroyed []ID `json:"destroyed"`
+
+	// A map of creation id to the reason the record could not be created.
+	NotCreated map[ID]SetError `json:"notCreated"`
+
+	// A map of record id to the reason the record could not be updated.
+	NotUpdated map[ID]SetError `json:"notUpdated"`
+
+	// A map of record id to the reason the record could not be destroyed.
+	NotDestroyed map[ID]SetError `json:"notDestroyed"`
 }
 
 // SearchSnippet is the part of an email that matched a search, with the
@@ -4990,6 +5315,357 @@ type SearchSnippetGetResponse struct {
 
 	// The ids that were requested but do not exist.
 	NotFound []ID `json:"notFound"`
+}
+
+// ShareNotification records that someone changed what is shared with the
+// user. Nothing else tells them: the object simply appears in, or disappears
+// from, an account they can see.
+//
+// A request using this type must declare urn:ietf:params:jmap:principals.
+type ShareNotification struct {
+	// The id of the notification.
+	//
+	// The server sets this property; it may not be set by the client.
+	ID ID `json:"id,omitzero"`
+
+	// When the change was made.
+	//
+	// The server sets this property; it may not be set by the client.
+	Created UTCDate `json:"created,omitzero"`
+
+	// Who made the change.
+	//
+	// The server sets this property; it may not be set by the client.
+	ChangedBy ShareNotificationEntity `json:"changedBy,omitzero"`
+
+	// The type of the object whose sharing changed, such as "Mailbox" or
+	// "Calendar".
+	//
+	// The server sets this property; it may not be set by the client.
+	ObjectType string `json:"objectType,omitzero"`
+
+	// The id of the account the object belongs to.
+	//
+	// The server sets this property; it may not be set by the client.
+	ObjectAccountID ID `json:"objectAccountId,omitzero"`
+
+	// The id of the object itself.
+	//
+	// The server sets this property; it may not be set by the client.
+	ObjectID ID `json:"objectId,omitzero"`
+
+	// What the user could do with the object before the change, or null if they
+	// could not see it at all.
+	//
+	// The server sets this property; it may not be set by the client.
+	OldRights map[string]bool `json:"oldRights,omitzero"`
+
+	// What the user can do with the object now, or null if it is no longer
+	// shared with them.
+	//
+	// The server sets this property; it may not be set by the client.
+	NewRights map[string]bool `json:"newRights,omitzero"`
+
+	// The name the object had when the change was made, so that a notification
+	// about something since renamed still reads sensibly.
+	//
+	// The server sets this property; it may not be set by the client.
+	Name string `json:"name,omitzero"`
+}
+
+// ShareNotificationChangesArguments holds the arguments of the
+// ShareNotification/changes method.
+//
+// A request using this type must declare urn:ietf:params:jmap:principals.
+type ShareNotificationChangesArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The state string the client already has, as returned by an earlier
+	// ShareNotification/get or ShareNotification/changes.
+	SinceState string `json:"sinceState,omitzero"`
+
+	// The maximum number of ids to return across the three change lists.
+	MaxChanges *UnsignedInt `json:"maxChanges,omitzero"`
+}
+
+// ShareNotificationChangesResponse holds the response to the
+// ShareNotification/changes method.
+//
+// A request using this type must declare urn:ietf:params:jmap:principals.
+type ShareNotificationChangesResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The state the changes are calculated from.
+	OldState string `json:"oldState"`
+
+	// The state the client reaches by applying these changes.
+	NewState string `json:"newState"`
+
+	// Whether further changes remain, in which case the call should be repeated
+	// from newState.
+	HasMoreChanges bool `json:"hasMoreChanges"`
+
+	// The ids of records created since oldState.
+	Created []ID `json:"created"`
+
+	// The ids of records updated since oldState.
+	Updated []ID `json:"updated"`
+
+	// The ids of records destroyed since oldState.
+	Destroyed []ID `json:"destroyed"`
+}
+
+// ShareNotificationEntity identifies whoever changed what was shared. RFC
+// 9670 calls it Entity.
+//
+// A request using this type must declare urn:ietf:params:jmap:principals.
+type ShareNotificationEntity struct {
+	// The name of whoever made the change.
+	Name string `json:"name,omitzero"`
+
+	// Their email address.
+	Email *string `json:"email,omitzero"`
+
+	// Their principal id, for someone the server knows as a principal.
+	PrincipalID *ID `json:"principalId,omitzero"`
+}
+
+// ShareNotificationFilterCondition is a condition a notification must satisfy
+// to match a ShareNotification/query.
+//
+// A request using this type must declare urn:ietf:params:jmap:principals.
+type ShareNotificationFilterCondition struct {
+	// Matches notifications created at or after this time.
+	After *UTCDate `json:"after,omitzero"`
+
+	// Matches notifications created before this time.
+	Before *UTCDate `json:"before,omitzero"`
+
+	// Matches notifications about objects of this type.
+	ObjectType string `json:"objectType,omitzero"`
+
+	// Matches notifications about objects in this account.
+	ObjectAccountID ID `json:"objectAccountId,omitzero"`
+}
+
+// ShareNotificationGetArguments holds the arguments of the
+// ShareNotification/get method.
+//
+// A request using this type must declare urn:ietf:params:jmap:principals.
+type ShareNotificationGetArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The ids of the records to fetch, or null to fetch all of them.
+	IDs []ID `json:"ids,omitzero"`
+
+	// The properties to include in each returned record, or null for all of
+	// them. The id property is always returned.
+	Properties []string `json:"properties,omitzero"`
+}
+
+// ShareNotificationGetResponse holds the response to the
+// ShareNotification/get method.
+//
+// A request using this type must declare urn:ietf:params:jmap:principals.
+type ShareNotificationGetResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// A string encoding the current state of the type on the server, for use
+	// with ShareNotification/changes.
+	State string `json:"state"`
+
+	// The records that were found, in an undefined order.
+	List []ShareNotification `json:"list"`
+
+	// The ids that were requested but do not exist.
+	NotFound []ID `json:"notFound"`
+}
+
+// ShareNotificationQueryArguments holds the arguments of the
+// ShareNotification/query method.
+//
+// A request using this type must declare urn:ietf:params:jmap:principals.
+type ShareNotificationQueryArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The condition records must match to be included in the results.
+	Filter any `json:"filter,omitzero"`
+
+	// The comparators to sort the results by, in order of precedence.
+	Sort []Comparator `json:"sort,omitzero"`
+
+	// The zero-based index of the first result to return. A negative value
+	// counts back from the end.
+	//
+	// The server assumes 0 when this property is omitted.
+	Position Int `json:"position,omitzero"`
+
+	// The id of a record to position the returned window relative to, instead of
+	// using position.
+	Anchor *ID `json:"anchor,omitzero"`
+
+	// The offset from the anchor at which the returned window starts.
+	//
+	// The server assumes 0 when this property is omitted.
+	AnchorOffset Int `json:"anchorOffset,omitzero"`
+
+	// The maximum number of ids to return.
+	Limit *UnsignedInt `json:"limit,omitzero"`
+
+	// Whether the server should compute the total number of matching records.
+	//
+	// The server assumes false when this property is omitted.
+	CalculateTotal bool `json:"calculateTotal,omitzero"`
+}
+
+// ShareNotificationQueryChangesArguments holds the arguments of the
+// ShareNotification/queryChanges method.
+//
+// A request using this type must declare urn:ietf:params:jmap:principals.
+type ShareNotificationQueryChangesArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The filter the original query used.
+	Filter any `json:"filter,omitzero"`
+
+	// The sort the original query used.
+	Sort []Comparator `json:"sort,omitzero"`
+
+	// The queryState the client already has, as returned by an earlier
+	// ShareNotification/query.
+	SinceQueryState string `json:"sinceQueryState,omitzero"`
+
+	// The maximum number of changes to return.
+	MaxChanges *UnsignedInt `json:"maxChanges,omitzero"`
+
+	// The id of the last record in the client's cached window, beyond which
+	// changes may be omitted.
+	UpToID *ID `json:"upToId,omitzero"`
+
+	// Whether the server should compute the total number of matching records.
+	//
+	// The server assumes false when this property is omitted.
+	CalculateTotal bool `json:"calculateTotal,omitzero"`
+}
+
+// ShareNotificationQueryChangesResponse holds the response to the
+// ShareNotification/queryChanges method.
+//
+// A request using this type must declare urn:ietf:params:jmap:principals.
+type ShareNotificationQueryChangesResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The query state the changes are calculated from.
+	OldQueryState string `json:"oldQueryState"`
+
+	// The query state the client reaches by applying these changes.
+	NewQueryState string `json:"newQueryState"`
+
+	// The total number of matching records, present only if calculateTotal was
+	// true.
+	Total UnsignedInt `json:"total"`
+
+	// The ids to remove from the cached result list.
+	Removed []ID `json:"removed"`
+
+	// The ids to add to the cached result list, each with the index to insert it
+	// at.
+	Added []AddedItem `json:"added"`
+}
+
+// ShareNotificationQueryResponse holds the response to the
+// ShareNotification/query method.
+//
+// A request using this type must declare urn:ietf:params:jmap:principals.
+type ShareNotificationQueryResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// A string encoding the current state of the query on the server, for use
+	// with ShareNotification/queryChanges.
+	QueryState string `json:"queryState"`
+
+	// Whether the server can calculate changes for this query.
+	CanCalculateChanges bool `json:"canCalculateChanges"`
+
+	// The zero-based index of the first returned id in the full result list.
+	Position UnsignedInt `json:"position"`
+
+	// The ids of the matching records, in sorted order.
+	IDs []ID `json:"ids"`
+
+	// The total number of matching records, present only if calculateTotal was
+	// true.
+	Total UnsignedInt `json:"total"`
+
+	// The limit the server applied, present only if it is lower than the one
+	// requested.
+	Limit UnsignedInt `json:"limit"`
+}
+
+// ShareNotificationSetArguments holds the arguments of the
+// ShareNotification/set method.
+//
+// A request using this type must declare urn:ietf:params:jmap:principals.
+type ShareNotificationSetArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The state the changes are expected to apply to. The call fails with a
+	// stateMismatch error if the server has moved on.
+	IfInState *string `json:"ifInState,omitzero"`
+
+	// A map of creation id to the record to create. A creation id may be
+	// referenced elsewhere in the same request as "#" followed by the id.
+	Create map[ID]ShareNotification `json:"create,omitzero"`
+
+	// A map of record id to the patch to apply to it.
+	Update map[ID]PatchObject `json:"update,omitzero"`
+
+	// The ids of the records to destroy.
+	Destroy []ID `json:"destroy,omitzero"`
+}
+
+// ShareNotificationSetResponse holds the response to the
+// ShareNotification/set method.
+//
+// A request using this type must declare urn:ietf:params:jmap:principals.
+type ShareNotificationSetResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The state before these changes were applied, if the server tracks it.
+	OldState *string `json:"oldState"`
+
+	// The state after these changes were applied.
+	NewState string `json:"newState"`
+
+	// A map of creation id to the properties the server assigned to each created
+	// record.
+	Created map[ID]*ShareNotification `json:"created"`
+
+	// A map of record id to any properties the server changed beyond those the
+	// patch set.
+	Updated map[ID]*ShareNotification `json:"updated"`
+
+	// The ids of the records that were destroyed.
+	Destroyed []ID `json:"destroyed"`
+
+	// A map of creation id to the reason the record could not be created.
+	NotCreated map[ID]SetError `json:"notCreated"`
+
+	// A map of record id to the reason the record could not be updated.
+	NotUpdated map[ID]SetError `json:"notUpdated"`
+
+	// A map of record id to the reason the record could not be destroyed.
+	NotDestroyed map[ID]SetError `json:"notDestroyed"`
 }
 
 // Thread is a set of emails the server considers to be one conversation.

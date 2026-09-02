@@ -13,6 +13,11 @@ const (
 	CapabilityCalendarsParse = "urn:ietf:params:jmap:calendars:parse"
 	// CapabilityAvailability covers Principal/getAvailability.
 	CapabilityAvailability = "urn:ietf:params:jmap:principals:availability"
+	CapabilityPrincipals   = "urn:ietf:params:jmap:principals"
+	// CapabilityPrincipalsOwner appears only in an account's capabilities,
+	// where it names the principal that owns the account. It brings no methods
+	// of its own.
+	CapabilityPrincipalsOwner = "urn:ietf:params:jmap:principals:owner"
 )
 
 // registerCore adds the types RFC 8620 defines for every JMAP server: the
@@ -98,6 +103,26 @@ func registerCore(s *Spec) {
 		Capability: CapabilityCore,
 		Doc:        "PatchObject is a set of changes to apply to a record, keyed by JSON pointer into it.",
 		Fields:     nil,
+	})
+
+	s.AddObject(&Object{
+		Name:       "Account",
+		Capability: CapabilityCore,
+		Doc:        "Account is one account the authenticated user has access to, as described in the session object.",
+		Fields: []*Field{
+			{Name: "name", Type: "String", Doc: "A user-facing label for the account."},
+			{
+				Name: "isPersonal",
+				Type: "Boolean",
+				Doc:  "Whether the account belongs to the authenticated user rather than being shared with them.",
+			},
+			{Name: "isReadOnly", Type: "Boolean", Doc: "Whether the user may only read from this account."},
+			{
+				Name: "accountCapabilities",
+				Type: "String[Any]",
+				Doc:  "The capabilities this account supports, and their per-account limits, keyed by capability URI.",
+			},
+		},
 	})
 
 	registerEcho(s)

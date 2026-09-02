@@ -21,7 +21,7 @@ func TestGeneratedTypesAreUpToDate(t *testing.T) {
 	g := &TypeGenerator{
 		Spec:    spec.Standard(),
 		Package: "jmapc",
-		Skip:    map[string]bool{"PatchObject": true, "SetError": true},
+		Skip:    map[string]bool{"PatchObject": true, "SetError": true, "Account": true},
 	}
 	got, err := g.Generate()
 	if err != nil {

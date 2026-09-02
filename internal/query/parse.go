@@ -53,6 +53,7 @@ var capabilityAliases = map[string]string{
 	"calendars":        spec.CapabilityCalendars,
 	"calendars:parse":  spec.CapabilityCalendarsParse,
 	"availability":     spec.CapabilityAvailability,
+	"principals":       spec.CapabilityPrincipals,
 }
 
 // QueryName returns the name a query file gives its query, which is the file
