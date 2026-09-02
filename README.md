@@ -1,7 +1,25 @@
-# jmapc: A JMAP Compiler
+<p align="right">English | <a href="https://github.com/linyows/jmapc/blob/main/README.ja.md">日本語</a></p>
 
-[![Test](https://github.com/linyows/jmapc/actions/workflows/test.yml/badge.svg)](https://github.com/linyows/jmapc/actions/workflows/test.yml)
-[![Go Reference](https://pkg.go.dev/badge/github.com/linyows/jmapc.svg)](https://pkg.go.dev/github.com/linyows/jmapc)
+<h1 align="center">jmapc</h1>
+
+<p align="center">
+  <strong>jmapc</strong> is a JMAP compiler: you write the query, it writes the client.
+</p>
+
+<p align="center">
+  <a href="https://github.com/linyows/jmapc/actions/workflows/test.yml">
+    <img alt="GitHub Workflow Status" src="https://img.shields.io/github/actions/workflow/status/linyows/jmapc/test.yml?branch=main&style=for-the-badge&labelColor=666666">
+  </a>
+  <a href="https://github.com/linyows/jmapc/releases">
+    <img alt="GitHub Release" src="http://img.shields.io/github/release/linyows/jmapc.svg?style=for-the-badge&labelColor=666666&color=DDDDDD">
+  </a>
+  <a href="https://pkg.go.dev/github.com/linyows/jmapc">
+    <img alt="Go Documentation" src="http://img.shields.io/badge/go-docs-blue.svg?style=for-the-badge&labelColor=666666&color=DDDDDD">
+  </a>
+  <a href="https://deepwiki.com/linyows/jmapc">
+    <img alt="Deepwiki Documentation" src="http://img.shields.io/badge/deepwiki-docs-purple.svg?style=for-the-badge&labelColor=666666&color=DDDDDD">
+  </a>
+</p>
 
 jmapc generates **type-safe Go code** from JMAP. Here's how it works:
 
