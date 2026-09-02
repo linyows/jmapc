@@ -169,7 +169,7 @@ for _, email := range res.List {
 パッチの中のポインタは `Email` に照らして検証されるので、`mailboxIds` を綴り間違えればビルドが失敗します。
 二つのメールボックスのパラメータが `jmapc.ID` になるのは、ポインタがその型で要素を選ぶからです。
 
-[`example/queries`](example/queries) には、メール、連絡先、カレンダー、共有、フィルタにまたがる 21 個のクエリがあります。
+[`example/queries`](example/queries) には、メール、連絡先、カレンダー、共有、フィルタにまたがる 23 個のクエリがあります。
 検索、既知の状態からの同期、送信、連絡先カードの作成、繰り返し予定のうち一回だけを他に触れずに動かす操作などです。
 
 ## クエリの書き方
@@ -337,9 +337,12 @@ for {
 `Next` が返すエラーは再接続の合図で、`LastEventID` が再開点です。
 そこから再開すれば、間のイベントを取りこぼしません。
 
-これはイベントソース形式のプッシュです。
-もう一つの形式、つまりクライアントが登録した URL にサーバが送る形式には `PushSubscription` が必要ですが、jmapc はまだ持っていません。
-[未対応の部分](#未対応の部分)を参照してください。
+これはイベントソース形式のプッシュで、接続を保持できるクライアントに向いています。
+もう一つの形式は、サーバが送る先の URL を登録するもので、スマートフォンのアプリにはこちらが必要です。
+[`example/queries`](example/queries) の `RegisterPush` と `ConfirmPush` を参照してください。
+購読は作成した時点ではまだ有効ではありません。
+サーバが URL にコードを送り、クライアントが `PushSubscription/set` でそれを書き戻すまで、他には何も送られません。
+届いたものは `jmapc.PushVerification` でデコードします。
 
 ## ベンダ拡張
 
@@ -404,7 +407,7 @@ JMAP は仕様の集まりです。
 
 | capability | | 内蔵 |
 |---|---|---|
-| `urn:ietf:params:jmap:core` | [RFC 8620](https://www.rfc-editor.org/rfc/rfc8620) | あり（プッシュ購読を除く） |
+| `urn:ietf:params:jmap:core` | [RFC 8620](https://www.rfc-editor.org/rfc/rfc8620) | あり |
 | `urn:ietf:params:jmap:mail` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | あり |
 | `urn:ietf:params:jmap:submission` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | あり |
 | `urn:ietf:params:jmap:vacationresponse` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | あり |
@@ -445,7 +448,7 @@ jmapc はクエリが触れたプロパティがどの capability に属する�
 
 ### メソッド
 
-79 のメソッドがあり、すべて同じ方法で検証され生成されます。
+81 のメソッドがあり、すべて同じ方法で検証され生成されます。
 
 | 型 | メソッド |
 |---|---|
@@ -468,16 +471,13 @@ jmapc はクエリが触れたプロパティがどの capability に属する�
 | `SieveScript` | `get` `set` `query` `validate` |
 | `MDN` | `send` `parse` |
 | `Blob` | `copy` `upload` `get` `lookup` |
+| `PushSubscription` | `get` `set` |
 | `Core` | `echo` |
 
 ### 未対応の部分
 
 jmapc がまだ行わないことです。
 使い始めてから気付くことのないよう、明示しておきます。
-
-**プッシュ購読**：RFC 8620 のプッシュには二つの形式があります。
-クライアントが接続を保持するイベントソース形式は実装済みです。
-クライアントが登録した URL にサーバが送る購読形式は未実装で、`PushSubscription` 型も `PushSubscription/get` も `/set` もありません。
 
 **`bodyProperties` による絞り込みが効かない**：`Email/get` は引数を受け取ってそのまま渡しますが、生成されるボディパートは要求された部分集合ではなく `EmailBodyPart` の全プロパティを持ちます。
 レコード自体に対する `properties` は、生成される型を絞り込みます。

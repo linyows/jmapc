@@ -2,6 +2,7 @@ package jmapc
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -227,5 +228,30 @@ func TestEventSourceUnavailable(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "eventSourceUrl") {
 		t.Errorf("error = %v, want it to mention eventSourceUrl", err)
+	}
+}
+
+// TestPushVerificationDecodes covers the object a server posts to a push
+// subscription's URL before it will send anything else. It arrives at the URL
+// rather than through the API, so a client decodes it from a request body it
+// received rather than from a method response.
+func TestPushVerificationDecodes(t *testing.T) {
+	body := `{
+	  "@type": "PushVerification",
+	  "pushSubscriptionId": "sub1",
+	  "verificationCode": "b7cb4a4c8d1e"
+	}`
+	var v PushVerification
+	if err := json.Unmarshal([]byte(body), &v); err != nil {
+		t.Fatalf("decoding: %v", err)
+	}
+	if v.Type != "PushVerification" {
+		t.Errorf("@type = %q", v.Type)
+	}
+	if v.PushSubscriptionID != "sub1" {
+		t.Errorf("pushSubscriptionId = %q", v.PushSubscriptionID)
+	}
+	if v.VerificationCode != "b7cb4a4c8d1e" {
+		t.Errorf("verificationCode = %q", v.VerificationCode)
 	}
 }

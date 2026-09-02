@@ -143,6 +143,7 @@ func registerCore(s *Spec) {
 	registerEcho(s)
 	registerBlobCopy(s)
 	registerBlobExtension(s)
+	registerPushSubscription(s)
 }
 
 // registerEcho adds Core/echo, which returns its arguments unchanged and so is

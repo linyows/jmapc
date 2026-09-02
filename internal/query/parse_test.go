@@ -1252,3 +1252,79 @@ func TestMDNParse(t *testing.T) {
 	  ["MDN/parse", {"blobIds": ["{{blobId}}"]}, "c1"]
 	]}`)
 }
+
+// TestPushSubscription covers the other form of push, where the server posts to
+// a URL the client registers. Neither of its methods takes an accountId: a
+// subscription belongs to the credentials that created it rather than to an
+// account, which makes these the only methods in the catalogue with no account
+// to name.
+func TestPushSubscription(t *testing.T) {
+	q := parse(t, "RegisterPush"+Extension, `{
+	  "methodCalls": [
+	    ["PushSubscription/set", {
+	      "create": {"device": {
+	        "deviceClientId": "{{deviceClientId}}",
+	        "url": "{{url}}",
+	        "keys": {"p256dh": "{{publicKey}}", "auth": "{{authSecret}}"},
+	        "types": ["Email"]
+	      }}
+	    }, "register"]
+	  ],
+	  "_returns": "register"
+	}`)
+	for _, p := range q.Params {
+		if p.Name == "accountId" {
+			t.Error("the query has an accountId parameter, which these methods do not take")
+		}
+	}
+
+	if got := parseErr(t, `{"methodCalls": [
+	  ["PushSubscription/get", {"accountId": "a1", "ids": null}, "c0"]
+	]}`); !strings.Contains(got, `PushSubscription/get has no argument "accountId"`) {
+		t.Errorf("error was:\n%s", got)
+	}
+}
+
+// TestPushSubscriptionChecks covers the mistakes these methods invite, which
+// come from their looking like the standard forms without being them.
+func TestPushSubscriptionChecks(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want string
+	}{{
+		name: "no state to compare against",
+		src:  `{"methodCalls": [["PushSubscription/set", {"ifInState": "s1"}, "c0"]]}`,
+		want: `PushSubscription/set has no argument "ifInState"`,
+	}, {
+		name: "no changes method",
+		src:  `{"methodCalls": [["PushSubscription/changes", {"sinceState": "s"}, "c0"]]}`,
+		want: `unknown method "PushSubscription/changes"`,
+	}, {
+		name: "misspelled property",
+		src: `{"methodCalls": [["PushSubscription/set", {
+			"create": {"d": {"deviceClientID": "x", "url": "https://example.com/push"}}
+		}, "c0"]]}`,
+		want: `did you mean "deviceClientId"?`,
+	}, {
+		name: "keys are an object, not a string",
+		src: `{"methodCalls": [["PushSubscription/set", {
+			"create": {"d": {"keys": "p256dh"}}
+		}, "c0"]]}`,
+		want: `expected PushSubscriptionKeys|null, found a string`,
+	}, {
+		name: "patch into a subscription",
+		src: `{"methodCalls": [["PushSubscription/set", {
+			"update": {"s1": {"verificationCod": "abc"}}
+		}, "c0"]]}`,
+		want: `did you mean "verificationCode"?`,
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseErr(t, tt.src)
+			if !strings.Contains(got, tt.want) {
+				t.Errorf("error was:\n%s\nwant it to mention: %s", got, tt.want)
+			}
+		})
+	}
+}

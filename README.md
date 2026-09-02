@@ -172,7 +172,7 @@ given it an id. The pointers in the patch are checked against `Email`, so
 `mailboxIds` misspelled is a build failure, and both mailbox parameters come out
 as `jmapc.ID` because that is what the pointer selects by.
 
-[`example/queries`](example/queries) holds twenty-one of these, over mail,
+[`example/queries`](example/queries) holds twenty-three of these, over mail,
 contacts, calendars, sharing and filtering: searching, syncing from a known state, sending,
 creating a contact card, moving one occurrence of a recurring meeting without
 touching the rest of the series.
@@ -349,9 +349,13 @@ A stream is a connection, not a subscription that outlives the network. An error
 from `Next` means reconnect, and `LastEventID` is where to resume so nothing is
 missed in between.
 
-This is the event source form of push. The other form, where the server posts to
-a URL the client registers, needs `PushSubscription`, which jmapc does not have
-yet — see [What is missing](#what-is-missing).
+This is the event source form of push, which suits a client that can hold a
+connection open. The other form registers a URL for the server to post to, which
+is what an app on a phone needs: see `RegisterPush` and `ConfirmPush` in
+[`example/queries`](example/queries). A subscription is not live when it comes
+back — the server pushes a code to the URL, and the client writes it back with a
+`PushSubscription/set` before anything else is sent. `jmapc.PushVerification`
+decodes what arrives.
 
 ## Vendor extensions
 
@@ -419,7 +423,7 @@ stands on each.
 
 | Capability | | Built in |
 |---|---|---|
-| `urn:ietf:params:jmap:core` | [RFC 8620](https://www.rfc-editor.org/rfc/rfc8620) | Yes, except push subscriptions |
+| `urn:ietf:params:jmap:core` | [RFC 8620](https://www.rfc-editor.org/rfc/rfc8620) | Yes |
 | `urn:ietf:params:jmap:mail` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | Yes |
 | `urn:ietf:params:jmap:submission` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | Yes |
 | `urn:ietf:params:jmap:vacationresponse` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | Yes |
@@ -463,7 +467,7 @@ declarative — no Go to write.
 
 ### Methods
 
-79 methods, all of them checked and generated the same way.
+81 methods, all of them checked and generated the same way.
 
 | Type | Methods |
 |---|---|
@@ -486,17 +490,13 @@ declarative — no Go to write.
 | `SieveScript` | `get` `set` `query` `validate` |
 | `MDN` | `send` `parse` |
 | `Blob` | `copy` `upload` `get` `lookup` |
+| `PushSubscription` | `get` `set` |
 | `Core` | `echo` |
 
 ### What is missing
 
 Things jmapc does not do yet, stated plainly so that nobody has to find out the
 hard way.
-
-**Push subscriptions.** Push comes in two forms in RFC 8620. The event source,
-where the client holds a connection open, is implemented. The subscription,
-where the server posts to a URL the client registers, is not: there is no
-`PushSubscription` type and no `PushSubscription/get` or `/set`.
 
 **`bodyProperties` narrows nothing.** `Email/get` accepts the argument and
 passes it through, but the generated body parts hold every property of

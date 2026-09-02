@@ -1,0 +1,22 @@
+{
+  "_doc": "RegisterPush asks the server to post to a URL when something changes, which is how a client that cannot hold a connection open — an app on a phone, say — hears about changes at all. The subscription is not live yet: the server pushes a verification code to the URL first, and ConfirmPush writes it back.",
+
+  "methodCalls": [
+    ["PushSubscription/set", {
+      "_comment": "There is no accountId here. A subscription belongs to the credentials that made it, not to an account, so it hears about every account those credentials can see.",
+      "create": {
+        "device": {
+          "deviceClientId": "{{deviceClientId}}",
+          "url": "{{url}}",
+          "keys": {
+            "p256dh": "{{publicKey}}",
+            "auth": "{{authSecret}}"
+          },
+          "types": ["Email", "EmailDelivery"]
+        }
+      }
+    }, "register"]
+  ],
+
+  "_returns": "register"
+}

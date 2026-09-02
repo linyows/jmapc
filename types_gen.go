@@ -5662,6 +5662,129 @@ type PrincipalSetResponse struct {
 	NotDestroyed map[ID]SetError `json:"notDestroyed"`
 }
 
+// PushSubscription is a URL the server posts to when something changes. It is
+// tied to the credentials that created it rather than to an account, and the
+// server destroys it when those credentials expire.
+type PushSubscription struct {
+	// The id of the subscription.
+	//
+	// The server sets this property; it may not be set by the client.
+	ID ID `json:"id,omitzero"`
+
+	// An id identifying the client and the device it runs on, so that a client
+	// which has lost its local state can still find the subscriptions it made.
+	// It must not carry an unobfuscated device id: the recommendation is a hash
+	// of the device's identifier together with the vendor's own.
+	//
+	// This property may be set when the record is created, but not changed
+	// afterwards.
+	DeviceClientID string `json:"deviceClientId,omitzero"`
+
+	// The absolute URL the server posts to, which must begin with "https://". A
+	// /get never returns it, since it may be private to one device.
+	//
+	// This property may be set when the record is created, but not changed
+	// afterwards.
+	URL string `json:"url,omitzero"`
+
+	// The keys to encrypt pushed data with. A /get never returns them, for the
+	// same reason it withholds the url.
+	//
+	// This property may be set when the record is created, but not changed
+	// afterwards.
+	Keys *PushSubscriptionKeys `json:"keys,omitzero"`
+
+	// The code proving the client controls the URL. It must be null when the
+	// subscription is created; the server then pushes a code to the URL, and the
+	// client writes it back here. Until that happens the server makes no further
+	// requests to the URL, which is what stops a subscription being used to
+	// attack a third party.
+	VerificationCode *string `json:"verificationCode,omitzero"`
+
+	// When the subscription lapses. The server may impose one where the client
+	// gives none, or shorten the one it gives, and a client extends the lifetime
+	// by writing a later time here.
+	Expires *UTCDate `json:"expires,omitzero"`
+
+	// The data types worth being told about, named as the TypeState object names
+	// them. Null means every type.
+	Types []string `json:"types,omitzero"`
+}
+
+// PushSubscriptionGetArguments holds the arguments of the
+// PushSubscription/get method.
+type PushSubscriptionGetArguments struct {
+	// The ids of the subscriptions to fetch, or null for all of them.
+	IDs []ID `json:"ids,omitzero"`
+
+	// The properties to return. Asking for url or keys is refused with a
+	// forbidden error, and leaving this out returns everything except those two.
+	Properties []string `json:"properties,omitzero"`
+}
+
+// PushSubscriptionGetResponse holds the response to the PushSubscription/get
+// method.
+type PushSubscriptionGetResponse struct {
+	// The subscriptions that were found, which are only those the current
+	// credentials created.
+	List []PushSubscription `json:"list"`
+
+	// The ids that were requested but do not exist.
+	NotFound []ID `json:"notFound"`
+}
+
+// PushSubscriptionKeys are the client's encryption keys, which the server
+// uses to encrypt everything it pushes, as RFC 8291 describes. RFC 8620
+// leaves this object unnamed.
+type PushSubscriptionKeys struct {
+	// The P-256 ECDH public key, in URL-safe base64.
+	P256dh string `json:"p256dh,omitzero"`
+
+	// The authentication secret, in URL-safe base64.
+	Auth string `json:"auth,omitzero"`
+}
+
+// PushSubscriptionSetArguments holds the arguments of the
+// PushSubscription/set method.
+type PushSubscriptionSetArguments struct {
+	// The subscriptions to create, keyed by creation id.
+	Create map[ID]PushSubscription `json:"create,omitzero"`
+
+	// Patches to apply, keyed by subscription id. This is how the verification
+	// code is written back and how the expiry is extended; the url and keys
+	// cannot be changed, only replaced by destroying the subscription and
+	// creating another.
+	Update map[ID]PatchObject `json:"update,omitzero"`
+
+	// The ids of the subscriptions to destroy.
+	Destroy []ID `json:"destroy,omitzero"`
+}
+
+// PushSubscriptionSetResponse holds the response to the PushSubscription/set
+// method.
+type PushSubscriptionSetResponse struct {
+	// A map of creation id to the properties the server assigned to each
+	// subscription it created.
+	Created map[ID]*PushSubscription `json:"created"`
+
+	// A map of subscription id to any properties the server changed beyond those
+	// the patch set.
+	Updated map[ID]*PushSubscription `json:"updated"`
+
+	// The ids of the subscriptions that were destroyed.
+	Destroyed []ID `json:"destroyed"`
+
+	// A map of creation id to the reason the subscription could not be created.
+	NotCreated map[ID]SetError `json:"notCreated"`
+
+	// A map of subscription id to the reason it could not be updated. A wrong
+	// verification code is refused here, as an invalidProperties error.
+	NotUpdated map[ID]SetError `json:"notUpdated"`
+
+	// A map of subscription id to the reason it could not be destroyed.
+	NotDestroyed map[ID]SetError `json:"notDestroyed"`
+}
+
 // Quota is one limit on what an account may hold, and how much of that limit
 // is used. An account may be under several at once: a count of messages, a
 // number of octets, one imposed on the account and another on the whole

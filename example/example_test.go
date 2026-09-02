@@ -1222,3 +1222,93 @@ func TestSendReadReceipt(t *testing.T) {
 		t.Errorf("originalMessageId = %v", sent.OriginalMessageID)
 	}
 }
+
+// TestRegisterPush covers the subscription form of push. The request carries no
+// accountId, because a subscription belongs to the credentials that created it
+// rather than to an account, and the subscription is not live when it comes
+// back: the server pushes a code to the URL first.
+func TestRegisterPush(t *testing.T) {
+	s := &stub{t: t, response: `{
+	  "sessionState": "session-1",
+	  "methodResponses": [
+	    ["PushSubscription/set", {"created": {"device": {
+	      "id": "sub1",
+	      "expires": "2024-05-08T00:00:00Z"
+	    }}}, "register"]
+	  ]
+	}`}
+
+	got, err := jmapq.RegisterPush(context.Background(), s.client(), jmapq.RegisterPushParams{
+		DeviceClientID: "a1b2c3",
+		URL:            "https://push.example.com/hook/xyz",
+		PublicKey:      "BN1v...",
+		AuthSecret:     "k9...",
+	})
+	if err != nil {
+		t.Fatalf("RegisterPush: %v", err)
+	}
+
+	_, args := s.call(t, "register")
+	if _, hasAccount := args["accountId"]; hasAccount {
+		t.Error("the request carries an accountId, which these methods do not take")
+	}
+	device := args["create"].(map[string]any)["device"].(map[string]any)
+	if device["url"] != "https://push.example.com/hook/xyz" {
+		t.Errorf("url = %v", device["url"])
+	}
+	keys := device["keys"].(map[string]any)
+	if keys["p256dh"] != "BN1v..." || keys["auth"] != "k9..." {
+		t.Errorf("keys = %v", keys)
+	}
+
+	created := got.Created["device"]
+	if created.ID != "sub1" {
+		t.Errorf("created = %+v", created)
+	}
+	// The server withholds the url and keys even here, and the subscription
+	// carries no verification code until the client writes one back.
+	if created.VerificationCode != nil {
+		t.Errorf("verificationCode = %v, want none yet", *created.VerificationCode)
+	}
+}
+
+// TestConfirmPush covers writing back the code the server pushed. Until this
+// happens the server sends nothing else, which is what stops a subscription
+// being pointed at a third party and used to flood them.
+func TestConfirmPush(t *testing.T) {
+	s := &stub{t: t, response: `{
+	  "sessionState": "session-1",
+	  "methodResponses": [
+	    ["PushSubscription/set", {"updated": {"sub1": null}}, "confirm"]
+	  ]
+	}`}
+
+	// The code arrives at the client's own URL, not through the API, so it is
+	// decoded from a request body the client received.
+	var v jmapc.PushVerification
+	if err := json.Unmarshal([]byte(`{
+	  "@type": "PushVerification",
+	  "pushSubscriptionId": "sub1",
+	  "verificationCode": "b7cb4a4c8d1e"
+	}`), &v); err != nil {
+		t.Fatalf("decoding the verification: %v", err)
+	}
+
+	got, err := jmapq.ConfirmPush(context.Background(), s.client(), jmapq.ConfirmPushParams{
+		SubscriptionID:   v.PushSubscriptionID,
+		VerificationCode: v.VerificationCode,
+		Expires:          jmapc.NewUTCDate(mustTime(t, "2024-05-08T00:00:00Z")),
+	})
+	if err != nil {
+		t.Fatalf("ConfirmPush: %v", err)
+	}
+
+	_, args := s.call(t, "confirm")
+	patch := args["update"].(map[string]any)["sub1"].(map[string]any)
+	if patch["verificationCode"] != "b7cb4a4c8d1e" {
+		t.Errorf("patch = %v, want the code written back", patch)
+	}
+	if _, updated := got.Updated["sub1"]; !updated {
+		t.Errorf("Updated = %v, want an entry for sub1", got.Updated)
+	}
+}
