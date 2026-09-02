@@ -89,24 +89,24 @@ Write a query. The file name is the name of the function to generate.
 
 ```json
 {
-  "jmapcDoc": "ListInboxEmails returns the newest emails in one mailbox.",
+  "_doc": "ListInboxEmails returns the newest emails in one mailbox.",
 
   "methodCalls": [
     ["Email/query", {
-      "jmapcComment": "Find the ids of the matching emails.",
+      "_comment": "Find the ids of the matching emails.",
       "filter": {"inMailbox": "{{mailboxId}}"},
       "sort": [{"property": "receivedAt", "isAscending": false}],
       "limit": "{{limit}}"
     }, "search"],
 
     ["Email/get", {
-      "jmapcComment": "Fetch them in the same request, so the ids never make a round trip.",
+      "_comment": "Fetch them in the same request, so the ids never make a round trip.",
       "#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"},
       "properties": ["id", "subject", "from", "receivedAt"]
     }, "fetch"]
   ],
 
-  "jmapcReturns": "fetch"
+  "_returns": "fetch"
 }
 ```
 
@@ -163,7 +163,7 @@ they are one request:
       }
     }, "send"]
   ],
-  "jmapcReturns": "send"
+  "_returns": "send"
 }
 ```
 
@@ -183,30 +183,32 @@ A query file is a JMAP Request object, exactly as
 [RFC 8620](https://www.rfc-editor.org/rfc/rfc8620) defines it, plus three
 members the generator reads and the server never sees.
 
-A member beginning with `jmapc` is one the generator reads; everything else is
-the request as RFC 8620 defines it.
+A member beginning with an underscore is one the generator reads; everything
+else is the request as RFC 8620 defines it.
 
 | Member | |
 |---|---|
 | `methodCalls` | The calls, as `[name, arguments, callId]`. Required. |
 | `using` | The capabilities the request declares. Optional: derived from the methods called. |
-| `jmapcDoc` | The generated function's documentation. Optional. |
-| `jmapcReturns` | The call whose response the function returns. Optional: without it, every response is returned. |
-| `jmapcComment` | Why a call is there. Goes in that call's arguments; see below. |
+| `_doc` | The generated function's documentation. Optional. |
+| `_returns` | The call whose response the function returns. Optional: without it, every response is returned. |
+| `_comment` | Why a call is there. Goes in that call's arguments; see below. |
 
 A query file is plain JSON, so `jq` reads it and an editor understands it. To
-say why a call is there, give its arguments a `jmapcComment`:
+say why a call is there, give its arguments a `_comment`:
 
 ```json
 ["Email/get", {
-  "jmapcComment": "Fetch them in the same request, so the ids never make a round trip.",
+  "_comment": "Fetch them in the same request, so the ids never make a round trip.",
   "#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"}
 }, "fetch"]
 ```
 
 The generator lifts it into the generated code and leaves it out of the request,
 which it must: RFC 8620 requires a server to reject an argument it does not
-know.
+know. An underscore rather than a dot, because jmapc writes the path to a
+problem with dots — `methodCalls[0].arguments.filter` — and a member named
+`.comment` would read as part of one.
 
 ```go
 // Fetch them in the same request, so the ids never make a round trip.

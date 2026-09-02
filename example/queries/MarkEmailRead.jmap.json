@@ -1,5 +1,5 @@
 {
-  "jmapcDoc": "MarkEmailRead sets the $seen keyword on one email.",
+  "_doc": "MarkEmailRead sets the $seen keyword on one email.",
 
   "methodCalls": [
     ["Email/set", {
@@ -9,5 +9,5 @@
     }, "mark"]
   ],
 
-  "jmapcReturns": "mark"
+  "_returns": "mark"
 }

@@ -1,9 +1,9 @@
 {
-  "jmapcDoc": "Agenda lists what is happening in a window of time, expanding recurring events so that each occurrence comes back as its own entry.",
+  "_doc": "Agenda lists what is happening in a window of time, expanding recurring events so that each occurrence comes back as its own entry.",
 
   "methodCalls": [
     ["CalendarEvent/query", {
-      "jmapcComment": "Without expandRecurrences a weekly meeting is one event; with it, one entry per occurrence, which is what a day view needs.",
+      "_comment": "Without expandRecurrences a weekly meeting is one event; with it, one entry per occurrence, which is what a day view needs.",
       "filter": {
         "operator": "AND",
         "conditions": [
@@ -18,7 +18,7 @@
     }, "search"],
 
     ["CalendarEvent/get", {
-      "jmapcComment": "reduceParticipants keeps a meeting with two hundred people from returning two hundred participants, of which a list view needs none but the organiser and the user.",
+      "_comment": "reduceParticipants keeps a meeting with two hundred people from returning two hundred participants, of which a list view needs none but the organiser and the user.",
       "#ids": {"resultOf": "search", "name": "CalendarEvent/query", "path": "/ids"},
       "properties": [
         "id", "baseEventId", "title", "start", "duration", "timeZone",
@@ -28,5 +28,5 @@
     }, "fetch"]
   ],
 
-  "jmapcReturns": "fetch"
+  "_returns": "fetch"
 }

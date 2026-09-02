@@ -16,23 +16,25 @@ import (
 // Extension is the suffix that marks a file as a JMAP query.
 const Extension = ".jmap.json"
 
-// CommentArgument is the member a query may put in an argument object to
-// explain what the call is for. It is not a JMAP argument: the generator reads
-// it, carries it into the generated code as a comment, and leaves it out of the
-// request. It has to be left out, because RFC 8620 requires a server to reject
-// an argument it does not know.
+// The members a query file carries for the generator rather than for the
+// server all begin with an underscore, which is the whole rule: an underscore
+// means jmapc reads it, and anything else is the JMAP Request object as RFC
+// 8620 defines it. JMAP names its own members in lowerCamelCase, so nothing it
+// adds later can collide.
 //
-// The name is qualified because this is the one place where something jmapc
-// reads sits among the arguments that go to the server.
-const CommentArgument = "jmapcComment"
-
-// DocMember and ReturnsMember are the members at the top of a query file that
-// jmapc reads. They carry the same prefix as CommentArgument, so that the rule
-// is one sentence: a member beginning with "jmapc" is ours, and everything else
-// is the JMAP Request object.
+// An underscore rather than a dot, because jmapc writes the path to a problem
+// with dots — methodCalls[0].arguments.filter — and a member named ".comment"
+// would read as part of one.
 const (
-	DocMember     = "jmapcDoc"
-	ReturnsMember = "jmapcReturns"
+	// DocMember documents the query and becomes the generated function's
+	// comment.
+	DocMember = "_doc"
+	// ReturnsMember names the call whose response the function returns.
+	ReturnsMember = "_returns"
+	// CommentArgument explains what a call is for. It sits in that call's
+	// arguments, and the generator strips it before the request goes out:
+	// RFC 8620 requires a server to reject an argument it does not know.
+	CommentArgument = "_comment"
 )
 
 // Parser reads query files and checks them against a catalogue.
@@ -48,15 +50,14 @@ func NewParser(s *spec.Spec) *Parser {
 
 // fileSyntax is the shape of a query file: a JMAP Request object, plus the few
 // members the generator needs and the server ignores.
-// A member jmapc reads is prefixed and one the specification defines is not, so
-// that a reader can tell at a glance which is which, and so that a member added
-// to the JMAP Request object later cannot clash with one of ours.
+// A member jmapc reads begins with an underscore and one the specification
+// defines does not, so that a reader can tell at a glance which is which.
 type fileSyntax struct {
 	// Doc documents the query, and becomes the generated function's comment.
-	Doc string `json:"jmapcDoc"`
+	Doc string `json:"_doc"`
 	// Returns names the call whose result the generated function returns. It
 	// may be left out, in which case every result is returned.
-	Returns string `json:"jmapcReturns"`
+	Returns string `json:"_returns"`
 	// Using lists the capabilities the request declares, as RFC 8620 defines
 	// it. It may be left out, in which case it is derived from the methods
 	// called.
@@ -145,7 +146,7 @@ func (p *Parser) Parse(path string, src []byte) (*Query, error) {
 	if f.Returns != "" {
 		call, ok := c.byID[f.Returns]
 		if !ok {
-			c.errorf("jmapcReturns", "", "no method call has the id %q", f.Returns).
+			c.errorf(ReturnsMember, "", "no method call has the id %q", f.Returns).
 				hint(hintFor(f.Returns, c.callIDs()))
 		}
 		q.Returns = call

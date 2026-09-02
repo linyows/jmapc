@@ -1,5 +1,5 @@
 {
-  "jmapcDoc": "VerifiedSignatures finds signed messages in a mailbox and reports what became of each signature. The server does the cryptography: the signature covers the raw message, which a client never sees once the server has taken it apart.",
+  "_doc": "VerifiedSignatures finds signed messages in a mailbox and reports what became of each signature. The server does the cryptography: the signature covers the raw message, which a client never sees once the server has taken it apart.",
 
   "methodCalls": [
     ["Email/query", {
@@ -23,5 +23,5 @@
     }, "fetch"]
   ],
 
-  "jmapcReturns": "fetch"
+  "_returns": "fetch"
 }

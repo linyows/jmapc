@@ -1,5 +1,5 @@
 {
-  "jmapcDoc": "CreateEvent puts a weekly meeting in a calendar, with a reminder a quarter of an hour beforehand. An event's time is local, and the time zone is a property of its own, so that the meeting stays at nine when the clocks change.",
+  "_doc": "CreateEvent puts a weekly meeting in a calendar, with a reminder a quarter of an hour beforehand. An event's time is local, and the time zone is a property of its own, so that the meeting stays at nine when the clocks change.",
 
   "methodCalls": [
     ["CalendarEvent/set", {
@@ -39,5 +39,5 @@
     }, "create"]
   ],
 
-  "jmapcReturns": "create"
+  "_returns": "create"
 }

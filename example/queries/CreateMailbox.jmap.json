@@ -1,5 +1,5 @@
 {
-  "jmapcDoc": "CreateMailbox creates a top-level mailbox and subscribes to it.",
+  "_doc": "CreateMailbox creates a top-level mailbox and subscribes to it.",
 
   "methodCalls": [
     ["Mailbox/set", {
@@ -13,5 +13,5 @@
     }, "create"]
   ],
 
-  "jmapcReturns": "create"
+  "_returns": "create"
 }

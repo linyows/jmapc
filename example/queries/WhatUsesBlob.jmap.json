@@ -1,5 +1,5 @@
 {
-  "jmapcDoc": "WhatUsesBlob reports which records refer to a blob and reads a little of it, which is how a client answers whether deleting a message would take an attachment with it.",
+  "_doc": "WhatUsesBlob reports which records refer to a blob and reads a little of it, which is how a client answers whether deleting a message would take an attachment with it.",
 
   "methodCalls": [
     ["Blob/lookup", {
