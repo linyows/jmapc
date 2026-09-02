@@ -1312,3 +1312,65 @@ func TestConfirmPush(t *testing.T) {
 		t.Errorf("Updated = %v, want an entry for sub1", got.Updated)
 	}
 }
+
+// TestReadMessage covers the two ways a fetch narrows what comes back:
+// properties for the record, and bodyProperties for the parts inside it. It
+// also covers header field properties, whose type comes from the form asked
+// for rather than from the Email type.
+func TestReadMessage(t *testing.T) {
+	s := &stub{t: t, response: `{
+	  "sessionState": "session-1",
+	  "methodResponses": [
+	    ["Email/get", {"accountId": "acct1", "state": "s1", "notFound": [], "list": [
+	      {"id": "e1", "subject": "Release notes", "receivedAt": "2024-05-01T09:00:00Z",
+	       "from": [{"name": "Ada", "email": "ada@example.com"}],
+	       "bodyStructure": {
+	         "partId": null, "type": "multipart/alternative",
+	         "subParts": [
+	           {"partId": "1", "type": "text/plain", "size": 402},
+	           {"partId": "2", "type": "text/html", "size": 1204}
+	         ]
+	       },
+	       "textBody": [{"partId": "1", "type": "text/plain", "size": 402}],
+	       "bodyValues": {"1": {"value": "The notes.", "isTruncated": false}},
+	       "header:List-Id:asText": "jmapc discussion <jmapc.example.com>",
+	       "header:List-Post:asURLs": ["mailto:jmapc@example.com"],
+	       "header:Delivery-Date:asDate": "2024-05-01T09:00:01Z"}
+	    ]}, "fetch"]
+	  ]
+	}`}
+
+	got, err := jmapq.ReadMessage(context.Background(), s.client(), jmapq.ReadMessageParams{EmailID: "e1"})
+	if err != nil {
+		t.Fatalf("ReadMessage: %v", err)
+	}
+
+	email := got.List[0]
+
+	// A header field property is typed by the form the query asked for: text
+	// is a string, URLs are a list, a date is a Date.
+	if email.HeaderListIDAsText == nil || !strings.Contains(*email.HeaderListIDAsText, "jmapc.example.com") {
+		t.Errorf("List-Id = %v", email.HeaderListIDAsText)
+	}
+	if len(email.HeaderListPostAsURLs) != 1 || email.HeaderListPostAsURLs[0] != "mailto:jmapc@example.com" {
+		t.Errorf("List-Post = %v", email.HeaderListPostAsURLs)
+	}
+	if email.HeaderDeliveryDateAsDate == nil {
+		t.Fatal("Delivery-Date did not decode")
+	}
+	if got, want := email.HeaderDeliveryDateAsDate.Time.UTC(), mustTime(t, "2024-05-01T09:00:01Z"); !got.Equal(want) {
+		t.Errorf("Delivery-Date = %v, want %v", got, want)
+	}
+
+	// bodyProperties narrows the parts, and reaches through subParts: the
+	// nested parts are the narrowed type too, not the full one.
+	if len(email.BodyStructure.SubParts) != 2 {
+		t.Fatalf("bodyStructure has %d sub-parts, want 2", len(email.BodyStructure.SubParts))
+	}
+	if email.BodyStructure.SubParts[1].Type != "text/html" {
+		t.Errorf("second sub-part = %+v", email.BodyStructure.SubParts[1])
+	}
+	if email.TextBody[0].Size != 402 {
+		t.Errorf("text body size = %d", email.TextBody[0].Size)
+	}
+}

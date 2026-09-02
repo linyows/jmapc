@@ -147,13 +147,15 @@ func registerEmailParse(s *Spec) {
 		},
 	})
 	s.AddMethod(&Method{
-		Name:               "Email/parse",
-		Capability:         CapabilityMail,
-		Doc:                "Reads blobs as RFC 5322 messages without filing them in the account, which is how a message sent as an attachment is displayed.",
-		Arguments:          args.Name,
-		Response:           resp.Name,
-		DataType:           "Email",
-		PropertiesArgument: "properties",
+		Name:                     "Email/parse",
+		Capability:               CapabilityMail,
+		Doc:                      "Reads blobs as RFC 5322 messages without filing them in the account, which is how a message sent as an attachment is displayed.",
+		Arguments:                args.Name,
+		Response:                 resp.Name,
+		DataType:                 "Email",
+		PropertiesArgument:       "properties",
+		NestedPropertiesArgument: "bodyProperties",
+		NestedType:               "EmailBodyPart",
 	})
 }
 
@@ -626,6 +628,12 @@ func registerEmail(s *Spec) {
 	s.RegisterStandard("Email", CapabilityMail, StandardMethods{
 		Get: true, Changes: true, Set: true, Copy: true, Query: true, QueryChanges: true,
 	})
+
+	// Email/get narrows the body parts as well as the records themselves.
+	if m, ok := s.Method("Email/get"); ok {
+		m.NestedPropertiesArgument = "bodyProperties"
+		m.NestedType = "EmailBodyPart"
+	}
 
 	s.AppendArguments("Email/get",
 		&Field{

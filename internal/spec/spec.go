@@ -176,6 +176,12 @@ type Method struct {
 	// ResultProperty names the response property holding the records, so that
 	// a narrowed set of properties can be applied to the right field.
 	ResultProperty string
+	// NestedPropertiesArgument names an argument that narrows the properties
+	// of a type nested inside the records rather than of the records
+	// themselves, as bodyProperties does for the body parts of an Email.
+	NestedPropertiesArgument string
+	// NestedType names the type that argument narrows.
+	NestedType string
 }
 
 // GoName returns the method name as a Go identifier fragment: "Email/get"

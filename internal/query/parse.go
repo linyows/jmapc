@@ -3,6 +3,7 @@ package query
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -262,6 +263,7 @@ func (c *checker) methodCall(raw json.RawMessage, where string) *Call {
 	}
 	call.Args = c.arguments(call, args, parts[1], where+".arguments")
 	call.Properties = c.properties(call, where+".arguments")
+	call.NestedProperties = c.nestedProperties(call, where+".arguments")
 	return call
 }
 
@@ -412,13 +414,73 @@ func (c *checker) properties(call *Call, where string) []string {
 			return nil
 		}
 		selected, known := dataType.Field(name)
-		if !known && !isDynamicProperty(name) {
-			c.errorf(fmt.Sprintf("%s.%s[%d]", where, call.Method.PropertiesArgument, i),
-				hintFor(name, dataType.PropertyNames()),
-				"%s has no property %q", dataType.Name, name)
-			continue
+		if !known {
+			where := fmt.Sprintf("%s.%s[%d]", where, call.Method.PropertiesArgument, i)
+			header, err := spec.ParseHeaderProperty(name)
+			switch {
+			case err != nil:
+				var badForm *spec.HeaderPropertyError
+				hint := ""
+				if errors.As(err, &badForm) && len(badForm.Forms) > 0 {
+					hint = hintFor(badForm.Property, badForm.Forms)
+					if hint == "" {
+						hint = "the parsed forms are " + strings.Join(badForm.Forms, ", ")
+					}
+				}
+				c.errorf(where, hint, "%v", err)
+				continue
+			case header != nil:
+				// A property naming one header field of the message. Its type
+				// comes from the form asked for, so it is not a member of the
+				// data type and cannot be checked against one.
+			case !isDynamicProperty(name):
+				c.errorf(where, hintFor(name, dataType.PropertyNames()),
+					"%s has no property %q", dataType.Name, name)
+				continue
+			}
 		}
 		c.useCapability(selected)
+		props = append(props, name)
+	}
+	return props
+}
+
+// nestedProperties extracts the property names selected for a type nested
+// inside the records, and checks each one against that type. bodyProperties is
+// the only such argument: it narrows the body parts of an Email rather than the
+// Email itself.
+func (c *checker) nestedProperties(call *Call, where string) []string {
+	if call.Method.NestedPropertiesArgument == "" || call.Args == nil {
+		return nil
+	}
+	node, ok := call.Args.Find(call.Method.NestedPropertiesArgument)
+	if !ok {
+		return nil
+	}
+	arr, ok := node.(*Array)
+	if !ok {
+		return nil
+	}
+	nested, ok := c.spec.Object(call.Method.NestedType)
+	if !ok {
+		return nil
+	}
+	var props []string
+	for i, item := range arr.Items {
+		lit, ok := item.(*Literal)
+		if !ok {
+			return nil
+		}
+		var name string
+		if err := json.Unmarshal(lit.JSON, &name); err != nil {
+			return nil
+		}
+		if _, known := nested.Field(name); !known {
+			c.errorf(fmt.Sprintf("%s.%s[%d]", where, call.Method.NestedPropertiesArgument, i),
+				hintFor(name, nested.PropertyNames()),
+				"%s has no property %q", nested.Name, name)
+			continue
+		}
 		props = append(props, name)
 	}
 	return props

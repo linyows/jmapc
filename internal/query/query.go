@@ -44,6 +44,10 @@ type Call struct {
 	// Properties are the property names a /get call selects, when the query
 	// states them literally. It is nil when the call fetches every property.
 	Properties []string
+	// NestedProperties are the property names selected for a type nested
+	// inside the records, as bodyProperties selects them for the body parts of
+	// an Email. It is nil when the call narrows nothing.
+	NestedProperties []string
 	// Comment is what the query said this call is for, carried into the
 	// generated code. It comes from the _comment member of the arguments,
 	// which never reaches the server.

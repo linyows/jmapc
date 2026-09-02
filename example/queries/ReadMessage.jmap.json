@@ -1,0 +1,22 @@
+{
+  "_doc": "ReadMessage fetches one message for display: its text, the parts a viewer needs to lay out, and the header fields a mailing list adds. What comes back is typed down to the header field: a List-Id is a string and a Resent-To is a list of addresses, because the form asked for decides it.",
+
+  "methodCalls": [
+    ["Email/get", {
+      "_comment": "bodyProperties narrows the parts themselves, all the way down through subParts, which properties alone cannot reach.",
+      "ids": ["{{emailId}}"],
+      "properties": [
+        "id", "subject", "from", "to", "receivedAt",
+        "bodyStructure", "textBody", "htmlBody", "attachments", "bodyValues",
+        "header:List-Id:asText",
+        "header:List-Post:asURLs",
+        "header:Delivery-Date:asDate"
+      ],
+      "bodyProperties": ["partId", "blobId", "type", "charset", "size", "name", "disposition", "cid", "subParts"],
+      "fetchTextBodyValues": true,
+      "maxBodyValueBytes": 262144
+    }, "fetch"]
+  ],
+
+  "_returns": "fetch"
+}
