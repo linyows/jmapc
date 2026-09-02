@@ -36,6 +36,10 @@ const (
 	// CapabilityMDN sends and reads the receipts that say what became of a
 	// message.
 	CapabilityMDN = "urn:ietf:params:jmap:mdn"
+	// CapabilityWebPushVAPID says the server authenticates itself to a push
+	// service with VAPID. It defines no types and no methods: what it has to
+	// say is a key, carried in the session.
+	CapabilityWebPushVAPID = "urn:ietf:params:jmap:webpush-vapid"
 	// CapabilityPrincipalsOwner appears only in an account's capabilities,
 	// where it names the principal that owns the account.
 	CapabilityPrincipalsOwner = "urn:ietf:params:jmap:principals:owner"
@@ -78,6 +82,20 @@ type Account struct {
 	AccountCapabilities map[string]json.RawMessage `json:"accountCapabilities"`
 }
 
+// Capability decodes what this account says about a capability into dest.
+// Several capabilities state their per-account limits here rather than in the
+// session: the largest script, the largest blob, how many of each are allowed.
+func (a *Account) Capability(uri string, dest any) error {
+	raw, ok := a.AccountCapabilities[uri]
+	if !ok {
+		return fmt.Errorf("jmapc: account does not support %s", uri)
+	}
+	if err := json.Unmarshal(raw, dest); err != nil {
+		return fmt.Errorf("jmapc: decoding the %s capability of the account: %w", uri, err)
+	}
+	return nil
+}
+
 // CoreCapability holds the server limits advertised under the core capability
 // URI, as defined in RFC 8620, Section 2.
 type CoreCapability struct {
@@ -91,15 +109,48 @@ type CoreCapability struct {
 	CollationAlgorithms   []string    `json:"collationAlgorithms"`
 }
 
+// Capability decodes what the session says about a capability into dest.
+//
+// Not every capability brings types and methods. Some have only something to
+// tell the client — a limit, a key, an identifier — and this is how that is
+// read, including for a capability jmapc has never heard of.
+func (s *Session) Capability(uri string, dest any) error {
+	raw, ok := s.Capabilities[uri]
+	if !ok {
+		return fmt.Errorf("jmapc: session does not advertise %s", uri)
+	}
+	if err := json.Unmarshal(raw, dest); err != nil {
+		return fmt.Errorf("jmapc: decoding the %s capability: %w", uri, err)
+	}
+	return nil
+}
+
 // Core returns the server's core capability limits.
 func (s *Session) Core() (*CoreCapability, error) {
-	raw, ok := s.Capabilities[CapabilityCore]
-	if !ok {
-		return nil, fmt.Errorf("jmapc: session does not advertise %s", CapabilityCore)
-	}
 	var c CoreCapability
-	if err := json.Unmarshal(raw, &c); err != nil {
-		return nil, fmt.Errorf("jmapc: decoding core capability: %w", err)
+	if err := s.Capability(CapabilityCore, &c); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+// WebPushVAPIDCapability holds what a server says about VAPID, as defined by
+// RFC 9749.
+type WebPushVAPIDCapability struct {
+	// ApplicationServerKey is the ECDSA public key the push service will use
+	// to check that a notification really came from this server, in
+	// uncompressed form and base64url-encoded. A client passes it to the push
+	// service when it subscribes there.
+	ApplicationServerKey string `json:"applicationServerKey"`
+}
+
+// WebPushVAPID returns the key the server authenticates itself to a push
+// service with. It changes when the server rotates its keys, which shows up as
+// a new sessionState.
+func (s *Session) WebPushVAPID() (*WebPushVAPIDCapability, error) {
+	var c WebPushVAPIDCapability
+	if err := s.Capability(CapabilityWebPushVAPID, &c); err != nil {
+		return nil, err
 	}
 	return &c, nil
 }

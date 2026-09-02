@@ -287,3 +287,71 @@ func TestSessionWithoutAPIURL(t *testing.T) {
 		t.Fatal("expected an error for a session with no apiUrl")
 	}
 }
+
+// TestCapabilityReading covers the capabilities that bring no types and no
+// methods, only something to tell the client. VAPID is one: what RFC 9749 has
+// to say is a key, carried in the session.
+func TestCapabilityReading(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{
+		  "capabilities": {
+		    "urn:ietf:params:jmap:core": {"maxCallsInRequest": 16},
+		    "urn:ietf:params:jmap:webpush-vapid": {"applicationServerKey": "BN1v_key"},
+		    "urn:example:params:jmap:vendor": {"somethingElse": 7}
+		  },
+		  "accounts": {"a1": {"name": "someone", "isPersonal": true, "accountCapabilities": {
+		    "urn:ietf:params:jmap:sieve": {"maxSizeScript": 65536, "maxNumberScripts": 20}
+		  }}},
+		  "primaryAccounts": {},
+		  "username": "someone",
+		  "apiUrl": "https://example.com/api",
+		  "state": "s1"
+		}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	s, err := New(srv.URL).Session(context.Background())
+	if err != nil {
+		t.Fatalf("Session: %v", err)
+	}
+
+	vapid, err := s.WebPushVAPID()
+	if err != nil {
+		t.Fatalf("WebPushVAPID: %v", err)
+	}
+	if vapid.ApplicationServerKey != "BN1v_key" {
+		t.Errorf("applicationServerKey = %q", vapid.ApplicationServerKey)
+	}
+
+	// A capability jmapc has never heard of is read the same way.
+	var vendor struct {
+		SomethingElse int `json:"somethingElse"`
+	}
+	if err := s.Capability("urn:example:params:jmap:vendor", &vendor); err != nil {
+		t.Fatalf("Capability: %v", err)
+	}
+	if vendor.SomethingElse != 7 {
+		t.Errorf("somethingElse = %d, want 7", vendor.SomethingElse)
+	}
+
+	// Several capabilities state their limits per account rather than for the
+	// server as a whole.
+	var sieve struct {
+		MaxSizeScript    int `json:"maxSizeScript"`
+		MaxNumberScripts int `json:"maxNumberScripts"`
+	}
+	if err := s.Accounts["a1"].Capability(CapabilitySieve, &sieve); err != nil {
+		t.Fatalf("account Capability: %v", err)
+	}
+	if sieve.MaxSizeScript != 65536 || sieve.MaxNumberScripts != 20 {
+		t.Errorf("sieve limits = %+v", sieve)
+	}
+
+	// Asking for one the server does not advertise says so.
+	if err := s.Capability(CapabilityMDN, &vendor); err == nil {
+		t.Error("expected an error for a capability the server does not have")
+	}
+	if err := s.Accounts["a1"].Capability(CapabilityQuota, &vendor); err == nil {
+		t.Error("expected an error for a capability the account does not support")
+	}
+}

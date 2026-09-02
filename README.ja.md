@@ -428,7 +428,7 @@ JMAP は仕様の集まりです。
 | `urn:ietf:params:jmap:quota` | [RFC 9425](https://www.rfc-editor.org/rfc/rfc9425) | あり |
 | `urn:ietf:params:jmap:sieve` | [RFC 9661](https://www.rfc-editor.org/rfc/rfc9661) | あり |
 | `urn:ietf:params:jmap:mdn` | [RFC 9007](https://www.rfc-editor.org/rfc/rfc9007) | あり |
-| `urn:ietf:params:jmap:webpush-vapid` | [RFC 9749](https://www.rfc-editor.org/rfc/rfc9749) | なし |
+| `urn:ietf:params:jmap:webpush-vapid` | [RFC 9749](https://www.rfc-editor.org/rfc/rfc9749) | あり |
 
 このうち二つは、それ自体が別仕様のオブジェクトを格納します。
 連絡先カードは [JSContact](https://www.rfc-editor.org/rfc/rfc9553) の Card であり、カレンダーの予定は [JSCalendar](https://www.rfc-editor.org/rfc/rfc8984) の JSEvent です。
@@ -448,6 +448,19 @@ S/MIME の検証は `Email` に四つのプロパティを足すだけで、型�
 つまりメソッド名からは、その capability が必要だと分かりません。
 jmapc はクエリが触れたプロパティがどの capability に属するかを判断し、`using` に加えます。
 `smimeStatus` を要求すれば、`urn:ietf:params:jmap:smimeverify` が自動で現れます。
+
+型もメソッドも持たず、クライアントに伝えることだけを持つ capability もあります。
+VAPID がそれで、伝えるのは鍵です。
+こうしたものはセッションから読みます。
+`Session.Capability` は、jmapc が知らない capability も含めて、どれでも読めます。
+
+```go
+vapid, err := session.WebPushVAPID()
+// vapid.ApplicationServerKey を push service への購読時に渡す。
+
+var limits struct{ MaxSizeScript int `json:"maxSizeScript"` }
+err = session.Accounts[accountID].Capability(jmapc.CapabilitySieve, &limits)
+```
 
 内蔵していない capability も、手が届かないわけではありません。
 [スキーマファイル](#ベンダ拡張)に型を記述すれば、それに対するクエリも他と同じように検証されます。
