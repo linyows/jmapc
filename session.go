@@ -24,6 +24,9 @@ const (
 	// CapabilitySMIMEVerify adds the S/MIME verification properties to an
 	// Email; it defines no types or methods of its own.
 	CapabilitySMIMEVerify = "urn:ietf:params:jmap:smimeverify"
+	// CapabilityBlob brings blob creation, reading and lookup into the API,
+	// alongside the upload and download endpoints of the core specification.
+	CapabilityBlob = "urn:ietf:params:jmap:blob"
 	// CapabilityPrincipalsOwner appears only in an account's capabilities,
 	// where it names the principal that owns the account.
 	CapabilityPrincipalsOwner = "urn:ietf:params:jmap:principals:owner"

@@ -280,14 +280,31 @@ func contains(list []string, want string) bool {
 func (g *QueryGenerator) writeRecordField(buf *bytes.Buffer, dataType *spec.Object, name string) {
 	field, known := dataType.Field(name)
 	if !known {
-		// A header field property, whose value depends on the form asked for,
-		// so it is left as raw JSON for the caller to interpret.
-		writeComment(buf, "\t", "The "+name+" header field, in the form the query asked for.")
+		// A property the server gives meaning to rather than one the data
+		// model fixes, so it is left as raw JSON for the caller to interpret.
+		writeComment(buf, "\t", dynamicPropertyDoc(name))
 		fmt.Fprintf(buf, "\t%s json.RawMessage `json:%q`\n", spec.ExportedName(name), name)
 		return
 	}
 	writeComment(buf, "\t", field.Doc)
 	fmt.Fprintf(buf, "\t%s %s `json:%q`\n", spec.ExportedName(name), field.ParsedType().GoType(g.Qualifier), name)
+}
+
+// dynamicPropertyDoc describes a property whose meaning comes from the server
+// rather than from the data model.
+func dynamicPropertyDoc(name string) string {
+	switch {
+	case strings.HasPrefix(name, "header:"):
+		return "The " + name + " header field, in the form the query asked for."
+	case strings.HasPrefix(name, "digest:"):
+		return "The digest of the blob under the " + strings.TrimPrefix(name, "digest:") +
+			" algorithm, as base64."
+	case name == "data":
+		return "The blob's octets. The server returns them under data:asText or " +
+			"data:asBase64, whichever suits what they hold, so this property " +
+			"itself does not come back."
+	}
+	return "The " + name + " property, whose meaning the server decides."
 }
 
 // writeResponseTypes writes a response struct for each call whose records are a
