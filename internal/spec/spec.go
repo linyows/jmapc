@@ -86,6 +86,10 @@ type Field struct {
 	Type string
 	// Doc is a comment describing the property.
 	Doc string
+	// Required marks a property that must be present for a value to be of this
+	// type at all. It is what tells one member of a union from another when a
+	// value would otherwise fit either.
+	Required bool
 	// ServerSet marks a property the server assigns and the client may not
 	// include when creating or updating a record.
 	ServerSet bool

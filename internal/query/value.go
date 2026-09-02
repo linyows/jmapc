@@ -101,10 +101,21 @@ func (c *checker) rankUnion(t *spec.Type, raw json.RawMessage) []*spec.Type {
 	if err != nil || len(keys) == 0 {
 		return members
 	}
+	present := make(map[string]bool, len(keys))
+	for _, key := range keys {
+		present[key] = true
+	}
 	score := make(map[*spec.Type]int, len(members))
 	for _, m := range members {
 		o, ok := c.spec.Object(m.Name)
 		if !ok {
+			continue
+		}
+		if missingRequired(o, present) {
+			// The value cannot be of this type at all, whatever else it holds.
+			// Without this, a filter condition with a misspelled property and
+			// nothing else would be reported as a malformed FilterOperator.
+			score[m] = -1
 			continue
 		}
 		for _, key := range keys {
@@ -117,6 +128,17 @@ func (c *checker) rankUnion(t *spec.Type, raw json.RawMessage) []*spec.Type {
 		return score[members[i]] > score[members[j]]
 	})
 	return members
+}
+
+// missingRequired reports whether an object type declares a property that the
+// value does not have.
+func missingRequired(o *spec.Object, present map[string]bool) bool {
+	for _, f := range o.Fields {
+		if f.Required && !present[f.Name] {
+			return true
+		}
+	}
+	return false
 }
 
 // try runs f and, if it reports any problem, undoes everything f recorded and
@@ -211,10 +233,19 @@ func (c *checker) object(t *spec.Type, raw json.RawMessage, where string) Node {
 			// as Any.
 			elemType = &spec.Type{Elem: c.filterUnion}
 		}
-		out.Fields = append(out.Fields, ObjectField{
-			Key:   key,
-			Value: c.value(elemType, members[key], where+"."+key, field.Doc),
-		})
+		// A property may itself carry patches or comparators, as the
+		// localizations of a contact card carry patches to the card. Their
+		// target travels with them, wherever in the arguments they turn up.
+		savedPatch, savedSort := c.patchTarget, c.sortTarget
+		if field.PatchTarget != "" {
+			c.patchTarget = field.PatchTarget
+		}
+		if field.SortTarget != "" {
+			c.sortTarget = field.SortTarget
+		}
+		value := c.value(elemType, members[key], where+"."+key, field.Doc)
+		c.patchTarget, c.sortTarget = savedPatch, savedSort
+		out.Fields = append(out.Fields, ObjectField{Key: key, Value: value})
 	}
 	return out
 }

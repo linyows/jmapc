@@ -215,7 +215,10 @@ func TestMethodGoName(t *testing.T) {
 // method" from the generator.
 func TestStandardCatalogueCovers(t *testing.T) {
 	want := []string{
+		"AddressBook/changes", "AddressBook/get", "AddressBook/set",
 		"Blob/copy",
+		"ContactCard/changes", "ContactCard/copy", "ContactCard/get",
+		"ContactCard/query", "ContactCard/queryChanges", "ContactCard/set",
 		"Core/echo",
 		"Email/changes", "Email/copy", "Email/get", "Email/import", "Email/parse",
 		"Email/query", "Email/queryChanges", "Email/set",

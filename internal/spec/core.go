@@ -6,6 +6,7 @@ const (
 	CapabilityMail       = "urn:ietf:params:jmap:mail"
 	CapabilitySubmission = "urn:ietf:params:jmap:submission"
 	CapabilityVacation   = "urn:ietf:params:jmap:vacationresponse"
+	CapabilityContacts   = "urn:ietf:params:jmap:contacts"
 )
 
 // registerCore adds the types RFC 8620 defines for every JMAP server: the
@@ -17,14 +18,16 @@ func registerCore(s *Spec) {
 		Doc:        "FilterOperator is a boolean node combining the conditions of a /query filter.",
 		Fields: []*Field{
 			{
-				Name: "operator",
-				Type: "String",
-				Doc:  "How to combine the conditions: \"AND\", \"OR\", or \"NOT\".",
+				Name:     "operator",
+				Type:     "String",
+				Required: true,
+				Doc:      "How to combine the conditions: \"AND\", \"OR\", or \"NOT\".",
 			},
 			{
-				Name: "conditions",
-				Type: "Any[]",
-				Doc:  "The conditions to combine, each either a FilterOperator or a filter condition for the type being queried.",
+				Name:     "conditions",
+				Type:     "Any[]",
+				Required: true,
+				Doc:      "The conditions to combine, each either a FilterOperator or a filter condition for the type being queried.",
 			},
 		},
 	})

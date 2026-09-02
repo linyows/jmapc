@@ -13,6 +13,7 @@ const (
 	CapabilityMail       = "urn:ietf:params:jmap:mail"
 	CapabilitySubmission = "urn:ietf:params:jmap:submission"
 	CapabilityVacation   = "urn:ietf:params:jmap:vacationresponse"
+	CapabilityContacts   = "urn:ietf:params:jmap:contacts"
 )
 
 // Session is the Session object described in RFC 8620, Section 2. It tells the

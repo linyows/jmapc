@@ -348,15 +348,22 @@ stands on each.
 | `urn:ietf:params:jmap:mail` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | Yes |
 | `urn:ietf:params:jmap:submission` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | Yes |
 | `urn:ietf:params:jmap:vacationresponse` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | Yes |
+| `urn:ietf:params:jmap:contacts` | [RFC 9610](https://www.rfc-editor.org/rfc/rfc9610) | Yes |
 | `urn:ietf:params:jmap:mdn` | [RFC 9007](https://www.rfc-editor.org/rfc/rfc9007) | No |
 | `urn:ietf:params:jmap:smimeverify` | [RFC 9219](https://www.rfc-editor.org/rfc/rfc9219) | No |
 | `urn:ietf:params:jmap:blob` | [RFC 9404](https://www.rfc-editor.org/rfc/rfc9404) | No |
 | `urn:ietf:params:jmap:quota` | [RFC 9425](https://www.rfc-editor.org/rfc/rfc9425) | No |
-| `urn:ietf:params:jmap:contacts` | [RFC 9610](https://www.rfc-editor.org/rfc/rfc9610) | No |
 | `urn:ietf:params:jmap:sieve` | [RFC 9661](https://www.rfc-editor.org/rfc/rfc9661) | No |
 | `urn:ietf:params:jmap:principals` | [RFC 9670](https://www.rfc-editor.org/rfc/rfc9670) | No |
 | `urn:ietf:params:jmap:webpush-vapid` | [RFC 9749](https://www.rfc-editor.org/rfc/rfc9749) | No |
 | `urn:ietf:params:jmap:calendars` | draft | No |
+
+Contact cards are [JSContact](https://www.rfc-editor.org/rfc/rfc9553) objects,
+not something JMAP defines itself, and JSContact names several types — `Name`,
+`Address`, `EmailAddress`, `Media` — that JMAP also names. Those carry a
+`Contact` prefix here, so `jmapc.ContactEmailAddress` is an address on a card
+and `jmapc.EmailAddress` is one in a header field. Each type's documentation
+gives the name the specification uses.
 
 A capability that is not built in is not out of reach: describe its types in a
 [schema file](#vendor-extensions) and queries against them are checked like any
@@ -365,7 +372,7 @@ declarative — no Go to write.
 
 ### Methods
 
-28 methods, all of them checked and generated the same way.
+37 methods, all of them checked and generated the same way.
 
 | Type | Methods |
 |---|---|
@@ -376,6 +383,8 @@ declarative — no Go to write.
 | `Identity` | `get` `changes` `set` |
 | `EmailSubmission` | `get` `changes` `set` `query` `queryChanges` |
 | `VacationResponse` | `get` `set` |
+| `AddressBook` | `get` `changes` `set` |
+| `ContactCard` | `get` `changes` `set` `copy` `query` `queryChanges` |
 | `Blob` | `copy` |
 | `Core` | `echo` |
 

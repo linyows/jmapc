@@ -423,3 +423,96 @@ func TestSortAccepts(t *testing.T) {
 	  ["Email/query", {"sort": [{"property": "{{sortBy}}", "keyword": "{{keyword}}"}]}, "c1"]
 	]}`)
 }
+
+// TestFilterConditionIsPreferredOverOperator checks that a filter holding
+// nothing but a misspelled condition is reported as a condition, not as a
+// FilterOperator missing its operator. Both shapes are possible in that
+// position, and only one of them is what the author meant.
+func TestFilterConditionIsPreferredOverOperator(t *testing.T) {
+	tests := []struct{ src, want string }{{
+		`{"methodCalls": [["Email/query", {"filter": {"inMailboxx": "abc"}}, "c0"]]}`,
+		`EmailFilterCondition has no property "inMailboxx"`,
+	}, {
+		`{"methodCalls": [["ContactCard/query", {"filter": {"inAddressBok": "abc"}}, "c0"]]}`,
+		`ContactCardFilterCondition has no property "inAddressBok"`,
+	}}
+	for _, tt := range tests {
+		got := parseErr(t, tt.src)
+		if !strings.Contains(got, tt.want) {
+			t.Errorf("error was:\n%s\nwant it to mention: %s", got, tt.want)
+		}
+	}
+}
+
+// TestContactsQuery covers a query against JMAP for Contacts, whose cards are
+// JSContact objects rather than anything JMAP defines itself.
+func TestContactsQuery(t *testing.T) {
+	q := parse(t, "SearchContacts"+Extension, `{
+	  "methodCalls": [
+	    ["ContactCard/query", {
+	      "filter": {
+	        "operator": "AND",
+	        "conditions": [
+	          {"inAddressBook": "{{addressBookId}}"},
+	          {"text": "{{phrase}}"},
+	          {"kind": "individual"}
+	        ]
+	      },
+	      "sort": [{"property": "name/surname"}, {"property": "name/given"}]
+	    }, "search"],
+	    ["ContactCard/get", {
+	      "#ids": {"resultOf": "search", "name": "ContactCard/query", "path": "/ids"},
+	      "properties": ["id", "uid", "name", "emails", "phones"]
+	    }, "fetch"]
+	  ],
+	  "returns": "fetch"
+	}`)
+	want := "urn:ietf:params:jmap:core urn:ietf:params:jmap:contacts"
+	if got := strings.Join(q.Using, " "); got != want {
+		t.Errorf("Using = %q, want %q", got, want)
+	}
+	if got := q.Params[0].GoType("jmapc."); got != "jmapc.ID" {
+		t.Errorf("addressBookId is %s, want jmapc.ID", got)
+	}
+}
+
+// TestContactsChecks covers the mistakes a contacts query can make.
+func TestContactsChecks(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want string
+	}{{
+		name: "misspelled card property",
+		src:  `{"methodCalls": [["ContactCard/get", {"properties": ["id", "nickname"]}, "c0"]]}`,
+		want: `did you mean "nicknames"?`,
+	}, {
+		name: "unsortable property",
+		src:  `{"methodCalls": [["ContactCard/query", {"sort": [{"property": "email"}]}, "c0"]]}`,
+		want: `ContactCard cannot be sorted by "email"`,
+	}, {
+		name: "address book has no query",
+		src:  `{"methodCalls": [["AddressBook/query", {}, "c0"]]}`,
+		want: `unknown method "AddressBook/query"`,
+	}, {
+		name: "patch into a card",
+		src: `{"methodCalls": [["ContactCard/set", {
+			"update": {"c1": {"nicknames/n1/nme": "Bob"}}
+		}, "c0"]]}`,
+		want: `ContactNickname has no property "nme"`,
+	}, {
+		name: "localizations patch the card itself",
+		src: `{"methodCalls": [["ContactCard/set", {
+			"create": {"c": {"localizations": {"de": {"titles/t1/nme": "Ingenieur"}}}}
+		}, "c0"]]}`,
+		want: `ContactTitle has no property "nme"`,
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseErr(t, tt.src)
+			if !strings.Contains(got, tt.want) {
+				t.Errorf("error was:\n%s\nwant it to mention: %s", got, tt.want)
+			}
+		})
+	}
+}

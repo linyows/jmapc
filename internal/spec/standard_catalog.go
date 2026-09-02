@@ -9,5 +9,6 @@ func Standard() *Spec {
 	registerMail(s)
 	registerSubmission(s)
 	registerVacation(s)
+	registerContacts(s)
 	return s
 }

@@ -49,6 +49,7 @@ var capabilityAliases = map[string]string{
 	"mail":             spec.CapabilityMail,
 	"submission":       "urn:ietf:params:jmap:submission",
 	"vacationresponse": "urn:ietf:params:jmap:vacationresponse",
+	"contacts":         spec.CapabilityContacts,
 }
 
 // QueryName returns the name a query file gives its query, which is the file

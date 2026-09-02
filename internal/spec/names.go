@@ -95,7 +95,7 @@ func splitWords(name string) []string {
 	runes := []rune(name)
 	for i, r := range runes {
 		switch {
-		case r == '_' || r == '-' || r == ' ' || r == '.' || r == ':':
+		case r == '_' || r == '-' || r == ' ' || r == '.' || r == ':' || r == '@' || r == '/':
 			flush()
 		case unicode.IsUpper(r):
 			// A run of capitals stays together until the last one, which

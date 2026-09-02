@@ -18,6 +18,7 @@ var capabilityConstants = map[string]string{
 	spec.CapabilityMail:                     "CapabilityMail",
 	"urn:ietf:params:jmap:submission":       "CapabilitySubmission",
 	"urn:ietf:params:jmap:vacationresponse": "CapabilityVacation",
+	spec.CapabilityContacts:                 "CapabilityContacts",
 }
 
 // writeFunc writes the function that sends the query and decodes its response.

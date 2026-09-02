@@ -26,6 +26,207 @@ type Address struct {
 	Parameters map[string]*string `json:"parameters,omitzero"`
 }
 
+// AddressBook is a named collection of contact cards.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type AddressBook struct {
+	// The id of the address book.
+	//
+	// The server sets this property; it may not be set by the client.
+	ID ID `json:"id,omitzero"`
+
+	// The user-visible name of the address book, at most 255 octets of UTF-8.
+	Name string `json:"name,omitzero"`
+
+	// A longer description of what the address book holds.
+	Description *string `json:"description,omitzero"`
+
+	// A hint for where to place the address book in a list of them.
+	//
+	// The server assumes 0 when this property is omitted.
+	SortOrder UnsignedInt `json:"sortOrder,omitzero"`
+
+	// Whether this is the address book a card goes into when the client does not
+	// say. Exactly one address book in an account has this set.
+	//
+	// The server sets this property; it may not be set by the client.
+	IsDefault bool `json:"isDefault,omitzero"`
+
+	// Whether the user has subscribed to the address book.
+	IsSubscribed bool `json:"isSubscribed,omitzero"`
+
+	// Who else the address book is shared with, keyed by principal id, and what
+	// each may do.
+	ShareWith map[ID]AddressBookRights `json:"shareWith,omitzero"`
+
+	// What the authenticated user may do with the address book.
+	//
+	// The server sets this property; it may not be set by the client.
+	MyRights AddressBookRights `json:"myRights,omitzero"`
+}
+
+// AddressBookChangesArguments holds the arguments of the AddressBook/changes
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type AddressBookChangesArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The state string the client already has, as returned by an earlier
+	// AddressBook/get or AddressBook/changes.
+	SinceState string `json:"sinceState,omitzero"`
+
+	// The maximum number of ids to return across the three change lists.
+	MaxChanges *UnsignedInt `json:"maxChanges,omitzero"`
+}
+
+// AddressBookChangesResponse holds the response to the AddressBook/changes
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type AddressBookChangesResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The state the changes are calculated from.
+	OldState string `json:"oldState"`
+
+	// The state the client reaches by applying these changes.
+	NewState string `json:"newState"`
+
+	// Whether further changes remain, in which case the call should be repeated
+	// from newState.
+	HasMoreChanges bool `json:"hasMoreChanges"`
+
+	// The ids of records created since oldState.
+	Created []ID `json:"created"`
+
+	// The ids of records updated since oldState.
+	Updated []ID `json:"updated"`
+
+	// The ids of records destroyed since oldState.
+	Destroyed []ID `json:"destroyed"`
+}
+
+// AddressBookGetArguments holds the arguments of the AddressBook/get method.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type AddressBookGetArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The ids of the records to fetch, or null to fetch all of them.
+	IDs []ID `json:"ids,omitzero"`
+
+	// The properties to include in each returned record, or null for all of
+	// them. The id property is always returned.
+	Properties []string `json:"properties,omitzero"`
+}
+
+// AddressBookGetResponse holds the response to the AddressBook/get method.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type AddressBookGetResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// A string encoding the current state of the type on the server, for use
+	// with AddressBook/changes.
+	State string `json:"state"`
+
+	// The records that were found, in an undefined order.
+	List []AddressBook `json:"list"`
+
+	// The ids that were requested but do not exist.
+	NotFound []ID `json:"notFound"`
+}
+
+// AddressBookRights says what the authenticated user may do with an address
+// book.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type AddressBookRights struct {
+	// Whether the user may read the cards in the address book.
+	MayRead bool `json:"mayRead,omitzero"`
+
+	// Whether the user may create, modify, and destroy cards in it.
+	MayWrite bool `json:"mayWrite,omitzero"`
+
+	// Whether the user may change who else it is shared with.
+	MayShare bool `json:"mayShare,omitzero"`
+
+	// Whether the user may delete the address book itself.
+	MayDelete bool `json:"mayDelete,omitzero"`
+}
+
+// AddressBookSetArguments holds the arguments of the AddressBook/set method.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type AddressBookSetArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The state the changes are expected to apply to. The call fails with a
+	// stateMismatch error if the server has moved on.
+	IfInState *string `json:"ifInState,omitzero"`
+
+	// A map of creation id to the record to create. A creation id may be
+	// referenced elsewhere in the same request as "#" followed by the id.
+	Create map[ID]AddressBook `json:"create,omitzero"`
+
+	// A map of record id to the patch to apply to it.
+	Update map[ID]PatchObject `json:"update,omitzero"`
+
+	// The ids of the records to destroy.
+	Destroy []ID `json:"destroy,omitzero"`
+
+	// Whether destroying an address book may also destroy the cards in it. If
+	// false, destroying one that is not empty fails with an
+	// addressBookHasContents error.
+	//
+	// The server assumes false when this property is omitted.
+	OnDestroyRemoveContents bool `json:"onDestroyRemoveContents,omitzero"`
+
+	// The id of the address book to make the default once the other changes
+	// succeed.
+	OnSuccessSetIsDefault *ID `json:"onSuccessSetIsDefault,omitzero"`
+}
+
+// AddressBookSetResponse holds the response to the AddressBook/set method.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type AddressBookSetResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The state before these changes were applied, if the server tracks it.
+	OldState *string `json:"oldState"`
+
+	// The state after these changes were applied.
+	NewState string `json:"newState"`
+
+	// A map of creation id to the properties the server assigned to each created
+	// record.
+	Created map[ID]*AddressBook `json:"created"`
+
+	// A map of record id to any properties the server changed beyond those the
+	// patch set.
+	Updated map[ID]*AddressBook `json:"updated"`
+
+	// The ids of the records that were destroyed.
+	Destroyed []ID `json:"destroyed"`
+
+	// A map of creation id to the reason the record could not be created.
+	NotCreated map[ID]SetError `json:"notCreated"`
+
+	// A map of record id to the reason the record could not be updated.
+	NotUpdated map[ID]SetError `json:"notUpdated"`
+
+	// A map of record id to the reason the record could not be destroyed.
+	NotDestroyed map[ID]SetError `json:"notDestroyed"`
+}
+
 // BlobCopyArguments holds the arguments of the Blob/copy method.
 type BlobCopyArguments struct {
 	// The id of the account to copy blobs from.
@@ -66,6 +267,1154 @@ type Comparator struct {
 
 	// The collation algorithm to compare strings with.
 	Collation *string `json:"collation,omitzero"`
+}
+
+// ContactAddress is a place associated with the entity, as an ordered set of
+// parts rather than as one string. RFC 9553 calls it Address; it is unrelated
+// to the Address of JMAP for Mail, which is an SMTP envelope address.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactAddress struct {
+	// The type of this object, which is "Address".
+	Type string `json:"@type,omitzero"`
+
+	// The parts of the address.
+	Components []ContactAddressComponent `json:"components,omitzero"`
+
+	// Whether the components are already in the order they should be displayed
+	// in.
+	//
+	// The server assumes false when this property is omitted.
+	IsOrdered bool `json:"isOrdered,omitzero"`
+
+	// The ISO 3166-1 alpha-2 code of the country.
+	CountryCode string `json:"countryCode,omitzero"`
+
+	// The location as a geo: URI, as defined by RFC 5870.
+	Coordinates string `json:"coordinates,omitzero"`
+
+	// The time zone the address is in, named as in the IANA Time Zone Database.
+	TimeZone string `json:"timeZone,omitzero"`
+
+	// The contexts this applies in, mapped to true: "private", "work", or a
+	// context the object's own type defines.
+	Contexts map[string]bool `json:"contexts,omitzero"`
+
+	// The address written out in full, for display.
+	Full string `json:"full,omitzero"`
+
+	// What to put between the components when joining them, where no separator
+	// component says otherwise.
+	DefaultSeparator string `json:"defaultSeparator,omitzero"`
+
+	// How preferred this is among the alternatives, from 1 (most) to 100
+	// (least).
+	Pref UnsignedInt `json:"pref,omitzero"`
+
+	// The script the phonetic members of the components are written in.
+	PhoneticScript string `json:"phoneticScript,omitzero"`
+
+	// The system the phonetic members use: "ipa", "jyut", or "piny".
+	PhoneticSystem string `json:"phoneticSystem,omitzero"`
+}
+
+// ContactAddressComponent is one part of an address, such as a street name or
+// a postcode. RFC 9553 calls it AddressComponent.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactAddressComponent struct {
+	// The type of this object, which is "AddressComponent".
+	Type string `json:"@type,omitzero"`
+
+	// The value of this part of the address.
+	Value string `json:"value,omitzero"`
+
+	// What part of the address this is: "room", "apartment", "floor",
+	// "building", "number", "name", "block", "subdistrict", "district",
+	// "locality", "region", "postcode", "country", "direction", "landmark",
+	// "postOfficeBox", or "separator".
+	Kind string `json:"kind,omitzero"`
+
+	// How to pronounce this part, in the script and system the address gives.
+	Phonetic string `json:"phonetic,omitzero"`
+}
+
+// ContactAnniversary is a date of significance to the entity, such as a
+// birthday. RFC 9553 calls it Anniversary.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactAnniversary struct {
+	// The type of this object, which is "Anniversary".
+	Type string `json:"@type,omitzero"`
+
+	// What the date marks: "birth", "death", or "wedding".
+	Kind string `json:"kind,omitzero"`
+
+	// The date, either partially known or exact. A value with no @type is a
+	// partial date.
+	Date any `json:"date,omitzero"`
+
+	// Where the anniversary took place.
+	Place ContactAddress `json:"place,omitzero"`
+}
+
+// ContactAuthor is who wrote a note. RFC 9553 calls it Author; at least one
+// of its members besides @type is set.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactAuthor struct {
+	// The type of this object, which is "Author".
+	Type string `json:"@type,omitzero"`
+
+	// The name of the author.
+	Name string `json:"name,omitzero"`
+
+	// A URI identifying the author.
+	URI string `json:"uri,omitzero"`
+}
+
+// ContactCalendar is a calendar or free-busy feed belonging to the entity.
+// RFC 9553 calls it Calendar, and it is a kind of Resource.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactCalendar struct {
+	// The type of this object, which is "Calendar".
+	Type string `json:"@type,omitzero"`
+
+	// What the resource is: "calendar" or "freeBusy".
+	Kind string `json:"kind,omitzero"`
+
+	// The URI where the calendar is found.
+	URI string `json:"uri,omitzero"`
+
+	// The media type of the calendar, as registered with IANA.
+	MediaType string `json:"mediaType,omitzero"`
+
+	// The contexts this applies in, mapped to true: "private", "work", or a
+	// context the object's own type defines.
+	Contexts map[string]bool `json:"contexts,omitzero"`
+
+	// How preferred this is among the alternatives, from 1 (most) to 100
+	// (least).
+	Pref UnsignedInt `json:"pref,omitzero"`
+
+	// A human-readable label for this entry.
+	Label string `json:"label,omitzero"`
+}
+
+// ContactCard is one entry in an address book: a person, an organization, or
+// anything else a card can describe. It is a JSContact Card, as defined by
+// RFC 9553, with the id and addressBookIds that JMAP adds.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactCard struct {
+	// The id of the card.
+	//
+	// The server sets this property; it may not be set by the client.
+	ID ID `json:"id,omitzero"`
+
+	// The address books the card is in, as a set of ids mapped to true.
+	AddressBookIDs map[ID]bool `json:"addressBookIds,omitzero"`
+
+	// The type of this object, which is "Card".
+	Type string `json:"@type,omitzero"`
+
+	// The version of JSContact the card is written in, which is "1.0".
+	Version string `json:"version,omitzero"`
+
+	// When the card was created.
+	Created UTCDate `json:"created,omitzero"`
+
+	// What the card describes: "individual", "group", "org", "location",
+	// "device", or "application". Absent means "individual".
+	Kind string `json:"kind,omitzero"`
+
+	// The language the card's text is written in, as an RFC 5646 tag.
+	Language string `json:"language,omitzero"`
+
+	// The uids of the cards belonging to this one, mapped to true, for a card
+	// whose kind is "group".
+	Members map[string]bool `json:"members,omitzero"`
+
+	// The software that last modified the card.
+	ProdID string `json:"prodId,omitzero"`
+
+	// Other entities related to this one, keyed by their uid.
+	RelatedTo map[string]ContactRelation `json:"relatedTo,omitzero"`
+
+	// A globally unique identifier for the entity, which survives being copied
+	// between address books.
+	UID string `json:"uid,omitzero"`
+
+	// When the card was last modified.
+	Updated UTCDate `json:"updated,omitzero"`
+
+	// The name of the entity.
+	Name ContactName `json:"name,omitzero"`
+
+	// Other names the entity goes by, keyed by an id local to the card.
+	Nicknames map[ID]ContactNickname `json:"nicknames,omitzero"`
+
+	// The organizations the entity belongs to, keyed by an id local to the card.
+	Organizations map[ID]ContactOrganization `json:"organizations,omitzero"`
+
+	// How to address the entity.
+	SpeakToAs ContactSpeakToAs `json:"speakToAs,omitzero"`
+
+	// The positions and roles the entity holds, keyed by an id local to the
+	// card.
+	Titles map[ID]ContactTitle `json:"titles,omitzero"`
+
+	// The addresses the entity receives mail at, keyed by an id local to the
+	// card.
+	Emails map[ID]ContactEmailAddress `json:"emails,omitzero"`
+
+	// The entity's accounts with online services, keyed by an id local to the
+	// card.
+	OnlineServices map[ID]ContactOnlineService `json:"onlineServices,omitzero"`
+
+	// The numbers the entity can be reached on, keyed by an id local to the
+	// card.
+	Phones map[ID]ContactPhone `json:"phones,omitzero"`
+
+	// The languages the entity prefers to be contacted in, keyed by an id local
+	// to the card.
+	PreferredLanguages map[ID]ContactLanguagePref `json:"preferredLanguages,omitzero"`
+
+	// The entity's calendars and free-busy feeds, keyed by an id local to the
+	// card.
+	Calendars map[ID]ContactCalendar `json:"calendars,omitzero"`
+
+	// Where to send the entity scheduling requests, keyed by an id local to the
+	// card.
+	SchedulingAddresses map[ID]ContactSchedulingAddress `json:"schedulingAddresses,omitzero"`
+
+	// The places associated with the entity, keyed by an id local to the card.
+	Addresses map[ID]ContactAddress `json:"addresses,omitzero"`
+
+	// The entity's public keys and certificates, keyed by an id local to the
+	// card.
+	CryptoKeys map[ID]ContactCryptoKey `json:"cryptoKeys,omitzero"`
+
+	// The directories the entity is listed in, keyed by an id local to the card.
+	Directories map[ID]ContactDirectory `json:"directories,omitzero"`
+
+	// Other resources related to the entity, keyed by an id local to the card.
+	Links map[ID]ContactLink `json:"links,omitzero"`
+
+	// Photographs, logos, and sound clips of the entity, keyed by an id local to
+	// the card.
+	Media map[ID]ContactMedia `json:"media,omitzero"`
+
+	// Translations of the card's text, keyed by language tag. Each is a patch to
+	// apply to the card to render it in that language.
+	Localizations map[string]PatchObject `json:"localizations,omitzero"`
+
+	// Dates of significance to the entity, keyed by an id local to the card.
+	Anniversaries map[ID]ContactAnniversary `json:"anniversaries,omitzero"`
+
+	// Free-text keywords the user has put on the card, mapped to true.
+	Keywords map[string]bool `json:"keywords,omitzero"`
+
+	// Free text about the entity, keyed by an id local to the card.
+	Notes map[ID]ContactNote `json:"notes,omitzero"`
+
+	// What the entity is interested in or good at, keyed by an id local to the
+	// card.
+	PersonalInfo map[ID]ContactPersonalInfo `json:"personalInfo,omitzero"`
+}
+
+// ContactCardChangesArguments holds the arguments of the ContactCard/changes
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactCardChangesArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The state string the client already has, as returned by an earlier
+	// ContactCard/get or ContactCard/changes.
+	SinceState string `json:"sinceState,omitzero"`
+
+	// The maximum number of ids to return across the three change lists.
+	MaxChanges *UnsignedInt `json:"maxChanges,omitzero"`
+}
+
+// ContactCardChangesResponse holds the response to the ContactCard/changes
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactCardChangesResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The state the changes are calculated from.
+	OldState string `json:"oldState"`
+
+	// The state the client reaches by applying these changes.
+	NewState string `json:"newState"`
+
+	// Whether further changes remain, in which case the call should be repeated
+	// from newState.
+	HasMoreChanges bool `json:"hasMoreChanges"`
+
+	// The ids of records created since oldState.
+	Created []ID `json:"created"`
+
+	// The ids of records updated since oldState.
+	Updated []ID `json:"updated"`
+
+	// The ids of records destroyed since oldState.
+	Destroyed []ID `json:"destroyed"`
+}
+
+// ContactCardCopyArguments holds the arguments of the ContactCard/copy
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactCardCopyArguments struct {
+	// The id of the account to copy records from.
+	FromAccountID ID `json:"fromAccountId,omitzero"`
+
+	// The state the source account is expected to be in.
+	IfFromInState *string `json:"ifFromInState,omitzero"`
+
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The state the destination account is expected to be in.
+	IfInState *string `json:"ifInState,omitzero"`
+
+	// A map of creation id to the record to copy, each of which must have an id
+	// property naming the record in the source account.
+	Create map[ID]ContactCard `json:"create,omitzero"`
+
+	// Whether to destroy the originals once the copy succeeds.
+	//
+	// The server assumes false when this property is omitted.
+	OnSuccessDestroyOriginal bool `json:"onSuccessDestroyOriginal,omitzero"`
+
+	// The state the source account must be in for the originals to be destroyed.
+	DestroyFromIfInState *string `json:"destroyFromIfInState,omitzero"`
+}
+
+// ContactCardCopyResponse holds the response to the ContactCard/copy method.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactCardCopyResponse struct {
+	// The id of the account the records were copied from.
+	FromAccountID ID `json:"fromAccountId"`
+
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The state of the destination account before the copy.
+	OldState *string `json:"oldState"`
+
+	// The state of the destination account after the copy.
+	NewState string `json:"newState"`
+
+	// A map of creation id to the record created in the destination account.
+	Created map[ID]ContactCard `json:"created"`
+
+	// A map of creation id to the reason the record could not be copied.
+	NotCreated map[ID]SetError `json:"notCreated"`
+}
+
+// ContactCardFilterCondition is a condition a card must satisfy to match a
+// ContactCard/query. Where a condition sets more than one property, a card
+// must satisfy all of them.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactCardFilterCondition struct {
+	// Matches cards in this address book.
+	InAddressBook ID `json:"inAddressBook,omitzero"`
+
+	// Matches the card with this uid.
+	UID string `json:"uid,omitzero"`
+
+	// Matches group cards having a member with this uid.
+	HasMember string `json:"hasMember,omitzero"`
+
+	// Matches cards of this kind.
+	Kind string `json:"kind,omitzero"`
+
+	// Matches cards created before this time.
+	CreatedBefore UTCDate `json:"createdBefore,omitzero"`
+
+	// Matches cards created at or after this time.
+	CreatedAfter UTCDate `json:"createdAfter,omitzero"`
+
+	// Matches cards last modified before this time.
+	UpdatedBefore UTCDate `json:"updatedBefore,omitzero"`
+
+	// Matches cards last modified at or after this time.
+	UpdatedAfter UTCDate `json:"updatedAfter,omitzero"`
+
+	// Matches cards where this text appears in any of the properties the other
+	// conditions search individually.
+	Text string `json:"text,omitzero"`
+
+	// Matches cards where this text appears in the name.
+	Name string `json:"name,omitzero"`
+
+	// Matches cards where this text appears in a given name component.
+	NameGiven string `json:"name/given,omitzero"`
+
+	// Matches cards where this text appears in a surname component.
+	NameSurname string `json:"name/surname,omitzero"`
+
+	// Matches cards where this text appears in a secondary surname component.
+	NameSurname2 string `json:"name/surname2,omitzero"`
+
+	// Matches cards where this text appears in a nickname.
+	Nickname string `json:"nickname,omitzero"`
+
+	// Matches cards where this text appears in an organization name or unit.
+	Organization string `json:"organization,omitzero"`
+
+	// Matches cards where this text appears in an email address.
+	Email string `json:"email,omitzero"`
+
+	// Matches cards where this text appears in a phone number.
+	Phone string `json:"phone,omitzero"`
+
+	// Matches cards where this text appears in an online service name, uri, or
+	// user.
+	OnlineService string `json:"onlineService,omitzero"`
+
+	// Matches cards where this text appears in an address.
+	Address string `json:"address,omitzero"`
+
+	// Matches cards where this text appears in a note.
+	Note string `json:"note,omitzero"`
+}
+
+// ContactCardGetArguments holds the arguments of the ContactCard/get method.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactCardGetArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The ids of the records to fetch, or null to fetch all of them.
+	IDs []ID `json:"ids,omitzero"`
+
+	// The properties to include in each returned record, or null for all of
+	// them. The id property is always returned.
+	Properties []string `json:"properties,omitzero"`
+}
+
+// ContactCardGetResponse holds the response to the ContactCard/get method.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactCardGetResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// A string encoding the current state of the type on the server, for use
+	// with ContactCard/changes.
+	State string `json:"state"`
+
+	// The records that were found, in an undefined order.
+	List []ContactCard `json:"list"`
+
+	// The ids that were requested but do not exist.
+	NotFound []ID `json:"notFound"`
+}
+
+// ContactCardQueryArguments holds the arguments of the ContactCard/query
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactCardQueryArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The condition records must match to be included in the results.
+	Filter any `json:"filter,omitzero"`
+
+	// The comparators to sort the results by, in order of precedence.
+	Sort []Comparator `json:"sort,omitzero"`
+
+	// The zero-based index of the first result to return. A negative value
+	// counts back from the end.
+	//
+	// The server assumes 0 when this property is omitted.
+	Position Int `json:"position,omitzero"`
+
+	// The id of a record to position the returned window relative to, instead of
+	// using position.
+	Anchor *ID `json:"anchor,omitzero"`
+
+	// The offset from the anchor at which the returned window starts.
+	//
+	// The server assumes 0 when this property is omitted.
+	AnchorOffset Int `json:"anchorOffset,omitzero"`
+
+	// The maximum number of ids to return.
+	Limit *UnsignedInt `json:"limit,omitzero"`
+
+	// Whether the server should compute the total number of matching records.
+	//
+	// The server assumes false when this property is omitted.
+	CalculateTotal bool `json:"calculateTotal,omitzero"`
+}
+
+// ContactCardQueryChangesArguments holds the arguments of the
+// ContactCard/queryChanges method.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactCardQueryChangesArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The filter the original query used.
+	Filter any `json:"filter,omitzero"`
+
+	// The sort the original query used.
+	Sort []Comparator `json:"sort,omitzero"`
+
+	// The queryState the client already has, as returned by an earlier
+	// ContactCard/query.
+	SinceQueryState string `json:"sinceQueryState,omitzero"`
+
+	// The maximum number of changes to return.
+	MaxChanges *UnsignedInt `json:"maxChanges,omitzero"`
+
+	// The id of the last record in the client's cached window, beyond which
+	// changes may be omitted.
+	UpToID *ID `json:"upToId,omitzero"`
+
+	// Whether the server should compute the total number of matching records.
+	//
+	// The server assumes false when this property is omitted.
+	CalculateTotal bool `json:"calculateTotal,omitzero"`
+}
+
+// ContactCardQueryChangesResponse holds the response to the
+// ContactCard/queryChanges method.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactCardQueryChangesResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The query state the changes are calculated from.
+	OldQueryState string `json:"oldQueryState"`
+
+	// The query state the client reaches by applying these changes.
+	NewQueryState string `json:"newQueryState"`
+
+	// The total number of matching records, present only if calculateTotal was
+	// true.
+	Total UnsignedInt `json:"total"`
+
+	// The ids to remove from the cached result list.
+	Removed []ID `json:"removed"`
+
+	// The ids to add to the cached result list, each with the index to insert it
+	// at.
+	Added []AddedItem `json:"added"`
+}
+
+// ContactCardQueryResponse holds the response to the ContactCard/query
+// method.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactCardQueryResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// A string encoding the current state of the query on the server, for use
+	// with ContactCard/queryChanges.
+	QueryState string `json:"queryState"`
+
+	// Whether the server can calculate changes for this query.
+	CanCalculateChanges bool `json:"canCalculateChanges"`
+
+	// The zero-based index of the first returned id in the full result list.
+	Position UnsignedInt `json:"position"`
+
+	// The ids of the matching records, in sorted order.
+	IDs []ID `json:"ids"`
+
+	// The total number of matching records, present only if calculateTotal was
+	// true.
+	Total UnsignedInt `json:"total"`
+
+	// The limit the server applied, present only if it is lower than the one
+	// requested.
+	Limit UnsignedInt `json:"limit"`
+}
+
+// ContactCardSetArguments holds the arguments of the ContactCard/set method.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactCardSetArguments struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId,omitzero"`
+
+	// The state the changes are expected to apply to. The call fails with a
+	// stateMismatch error if the server has moved on.
+	IfInState *string `json:"ifInState,omitzero"`
+
+	// A map of creation id to the record to create. A creation id may be
+	// referenced elsewhere in the same request as "#" followed by the id.
+	Create map[ID]ContactCard `json:"create,omitzero"`
+
+	// A map of record id to the patch to apply to it.
+	Update map[ID]PatchObject `json:"update,omitzero"`
+
+	// The ids of the records to destroy.
+	Destroy []ID `json:"destroy,omitzero"`
+}
+
+// ContactCardSetResponse holds the response to the ContactCard/set method.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactCardSetResponse struct {
+	// The id of the account to operate on.
+	AccountID ID `json:"accountId"`
+
+	// The state before these changes were applied, if the server tracks it.
+	OldState *string `json:"oldState"`
+
+	// The state after these changes were applied.
+	NewState string `json:"newState"`
+
+	// A map of creation id to the properties the server assigned to each created
+	// record.
+	Created map[ID]*ContactCard `json:"created"`
+
+	// A map of record id to any properties the server changed beyond those the
+	// patch set.
+	Updated map[ID]*ContactCard `json:"updated"`
+
+	// The ids of the records that were destroyed.
+	Destroyed []ID `json:"destroyed"`
+
+	// A map of creation id to the reason the record could not be created.
+	NotCreated map[ID]SetError `json:"notCreated"`
+
+	// A map of record id to the reason the record could not be updated.
+	NotUpdated map[ID]SetError `json:"notUpdated"`
+
+	// A map of record id to the reason the record could not be destroyed.
+	NotDestroyed map[ID]SetError `json:"notDestroyed"`
+}
+
+// ContactCryptoKey is a public key or certificate belonging to the entity.
+// RFC 9553 calls it CryptoKey, and it is a kind of Resource.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactCryptoKey struct {
+	// The type of this object, which is "CryptoKey".
+	Type string `json:"@type,omitzero"`
+
+	// The kind of key, if the card says.
+	Kind string `json:"kind,omitzero"`
+
+	// The URI where the resource is found.
+	URI string `json:"uri,omitzero"`
+
+	// The media type of the resource, as registered with IANA.
+	MediaType string `json:"mediaType,omitzero"`
+
+	// The contexts this applies in, mapped to true: "private", "work", or a
+	// context the object's own type defines.
+	Contexts map[string]bool `json:"contexts,omitzero"`
+
+	// How preferred this is among the alternatives, from 1 (most) to 100
+	// (least).
+	Pref UnsignedInt `json:"pref,omitzero"`
+
+	// A human-readable label for this entry.
+	Label string `json:"label,omitzero"`
+}
+
+// ContactDirectory is a directory the entity is listed in, or the entry
+// within one. RFC 9553 calls it Directory, and it is a kind of Resource.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactDirectory struct {
+	// The type of this object, which is "Directory".
+	Type string `json:"@type,omitzero"`
+
+	// What the resource is: "directory" for a directory the entity is listed in,
+	// or "entry" for the entity's own entry.
+	Kind string `json:"kind,omitzero"`
+
+	// The URI where the resource is found.
+	URI string `json:"uri,omitzero"`
+
+	// The media type of the resource, as registered with IANA.
+	MediaType string `json:"mediaType,omitzero"`
+
+	// The contexts this applies in, mapped to true: "private", "work", or a
+	// context the object's own type defines.
+	Contexts map[string]bool `json:"contexts,omitzero"`
+
+	// How preferred this is among the alternatives, from 1 (most) to 100
+	// (least).
+	Pref UnsignedInt `json:"pref,omitzero"`
+
+	// A human-readable label for this entry.
+	Label string `json:"label,omitzero"`
+
+	// Where the entity sorts among the entries of the directory, counting from
+	// 1.
+	ListAs UnsignedInt `json:"listAs,omitzero"`
+}
+
+// ContactEmailAddress is an address the entity receives mail at. RFC 9553
+// calls it EmailAddress; it is unrelated to the EmailAddress of JMAP for
+// Mail, which is a header field value.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactEmailAddress struct {
+	// The type of this object, which is "EmailAddress".
+	Type string `json:"@type,omitzero"`
+
+	// The address itself, as an addr-spec.
+	Address string `json:"address,omitzero"`
+
+	// The contexts this applies in, mapped to true: "private", "work", or a
+	// context the object's own type defines.
+	Contexts map[string]bool `json:"contexts,omitzero"`
+
+	// How preferred this is among the alternatives, from 1 (most) to 100
+	// (least).
+	Pref UnsignedInt `json:"pref,omitzero"`
+
+	// A human-readable label for this entry.
+	Label string `json:"label,omitzero"`
+}
+
+// ContactLanguagePref is a language the entity prefers to be contacted in.
+// RFC 9553 calls it LanguagePref.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactLanguagePref struct {
+	// The type of this object, which is "LanguagePref".
+	Type string `json:"@type,omitzero"`
+
+	// The language tag, as defined by RFC 5646.
+	Language string `json:"language,omitzero"`
+
+	// The contexts this applies in, mapped to true: "private", "work", or a
+	// context the object's own type defines.
+	Contexts map[string]bool `json:"contexts,omitzero"`
+
+	// How preferred this is among the alternatives, from 1 (most) to 100
+	// (least).
+	Pref UnsignedInt `json:"pref,omitzero"`
+}
+
+// ContactLink is a resource related to the entity that no other property
+// covers. RFC 9553 calls it Link, and it is a kind of Resource.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactLink struct {
+	// The type of this object, which is "Link".
+	Type string `json:"@type,omitzero"`
+
+	// What the resource is: "contact" for a way of contacting the entity, or
+	// absent if the card does not say.
+	Kind string `json:"kind,omitzero"`
+
+	// The URI where the resource is found.
+	URI string `json:"uri,omitzero"`
+
+	// The media type of the resource, as registered with IANA.
+	MediaType string `json:"mediaType,omitzero"`
+
+	// The contexts this applies in, mapped to true: "private", "work", or a
+	// context the object's own type defines.
+	Contexts map[string]bool `json:"contexts,omitzero"`
+
+	// How preferred this is among the alternatives, from 1 (most) to 100
+	// (least).
+	Pref UnsignedInt `json:"pref,omitzero"`
+
+	// A human-readable label for this entry.
+	Label string `json:"label,omitzero"`
+}
+
+// ContactMedia is a photograph, logo, or sound clip of the entity. RFC 9553
+// calls it Media, and it is a kind of Resource. JMAP for Contacts adds
+// blobId, so that the content can be fetched from the server rather than from
+// the URI.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactMedia struct {
+	// The type of this object, which is "Media".
+	Type string `json:"@type,omitzero"`
+
+	// What the resource is: "photo", "sound", or "logo".
+	Kind string `json:"kind,omitzero"`
+
+	// The URI where the resource is found.
+	URI string `json:"uri,omitzero"`
+
+	// The media type of the resource, as registered with IANA.
+	MediaType string `json:"mediaType,omitzero"`
+
+	// The contexts this applies in, mapped to true: "private", "work", or a
+	// context the object's own type defines.
+	Contexts map[string]bool `json:"contexts,omitzero"`
+
+	// How preferred this is among the alternatives, from 1 (most) to 100
+	// (least).
+	Pref UnsignedInt `json:"pref,omitzero"`
+
+	// A human-readable label for this entry.
+	Label string `json:"label,omitzero"`
+
+	// The id of the blob holding the content, for media the server stores
+	// itself.
+	BlobID ID `json:"blobId,omitzero"`
+}
+
+// ContactName is the name of the entity a card describes, as an ordered set
+// of parts rather than as one string. RFC 9553 calls it Name.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactName struct {
+	// The type of this object, which is "Name".
+	Type string `json:"@type,omitzero"`
+
+	// The parts of the name.
+	Components []ContactNameComponent `json:"components,omitzero"`
+
+	// Whether the components are already in the order they should be displayed
+	// in.
+	//
+	// The server assumes false when this property is omitted.
+	IsOrdered bool `json:"isOrdered,omitzero"`
+
+	// What to put between the components when joining them, where no separator
+	// component says otherwise.
+	DefaultSeparator string `json:"defaultSeparator,omitzero"`
+
+	// The name written out in full, for display.
+	Full string `json:"full,omitzero"`
+
+	// How to sort the name, keyed by the component kind the value sorts in place
+	// of.
+	SortAs map[string]string `json:"sortAs,omitzero"`
+
+	// The script the phonetic members of the components are written in.
+	PhoneticScript string `json:"phoneticScript,omitzero"`
+
+	// The system the phonetic members use: "ipa", "jyut", or "piny".
+	PhoneticSystem string `json:"phoneticSystem,omitzero"`
+}
+
+// ContactNameComponent is one part of a name, such as a given name or a
+// surname. RFC 9553 calls it NameComponent.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactNameComponent struct {
+	// The type of this object, which is "NameComponent".
+	Type string `json:"@type,omitzero"`
+
+	// The value of this part of the name.
+	Value string `json:"value,omitzero"`
+
+	// What part of the name this is: "title", "given", "given2", "surname",
+	// "surname2", "credential", "generation", or "separator".
+	Kind string `json:"kind,omitzero"`
+
+	// How to pronounce this part, written in the script and system the enclosing
+	// name gives.
+	Phonetic string `json:"phonetic,omitzero"`
+}
+
+// ContactNickname is a name the entity is also known by. RFC 9553 calls it
+// Nickname.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactNickname struct {
+	// The type of this object, which is "Nickname".
+	Type string `json:"@type,omitzero"`
+
+	// The nickname.
+	Name string `json:"name,omitzero"`
+
+	// The contexts this applies in, mapped to true: "private", "work", or a
+	// context the object's own type defines.
+	Contexts map[string]bool `json:"contexts,omitzero"`
+
+	// How preferred this is among the alternatives, from 1 (most) to 100
+	// (least).
+	Pref UnsignedInt `json:"pref,omitzero"`
+}
+
+// ContactNote is free text about the entity. RFC 9553 calls it Note.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactNote struct {
+	// The type of this object, which is "Note".
+	Type string `json:"@type,omitzero"`
+
+	// The text of the note.
+	Note string `json:"note,omitzero"`
+
+	// When the note was written.
+	Created UTCDate `json:"created,omitzero"`
+
+	// Who wrote the note.
+	Author ContactAuthor `json:"author,omitzero"`
+}
+
+// ContactOnlineService is an account the entity has with an online service.
+// RFC 9553 calls it OnlineService; at least one of uri and user is set.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactOnlineService struct {
+	// The type of this object, which is "OnlineService".
+	Type string `json:"@type,omitzero"`
+
+	// The name of the service, as the service itself spells it.
+	Service string `json:"service,omitzero"`
+
+	// The URI of the entity's presence on the service.
+	URI string `json:"uri,omitzero"`
+
+	// The entity's username on the service.
+	User string `json:"user,omitzero"`
+
+	// The contexts this applies in, mapped to true: "private", "work", or a
+	// context the object's own type defines.
+	Contexts map[string]bool `json:"contexts,omitzero"`
+
+	// How preferred this is among the alternatives, from 1 (most) to 100
+	// (least).
+	Pref UnsignedInt `json:"pref,omitzero"`
+
+	// A human-readable label for this entry.
+	Label string `json:"label,omitzero"`
+}
+
+// ContactOrgUnit is a unit within an organization, such as a department. RFC
+// 9553 calls it OrgUnit.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactOrgUnit struct {
+	// The type of this object, which is "OrgUnit".
+	Type string `json:"@type,omitzero"`
+
+	// The name of the unit.
+	Name string `json:"name,omitzero"`
+
+	// The value to sort the unit by, in place of its name.
+	SortAs string `json:"sortAs,omitzero"`
+}
+
+// ContactOrganization is a company or other body the entity is associated
+// with. RFC 9553 calls it Organization; at least one of name and units is
+// set.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactOrganization struct {
+	// The type of this object, which is "Organization".
+	Type string `json:"@type,omitzero"`
+
+	// The name of the organization.
+	Name string `json:"name,omitzero"`
+
+	// The units within the organization, from the largest to the smallest.
+	Units []ContactOrgUnit `json:"units,omitzero"`
+
+	// The value to sort the organization by, in place of its name.
+	SortAs string `json:"sortAs,omitzero"`
+
+	// The contexts this applies in, mapped to true: "private", "work", or a
+	// context the object's own type defines.
+	Contexts map[string]bool `json:"contexts,omitzero"`
+}
+
+// ContactPartialDate is a date some of whose parts are unknown, such as a
+// birthday with no year. RFC 9553 calls it PartialDate.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactPartialDate struct {
+	// The type of this object, which is "PartialDate".
+	Type string `json:"@type,omitzero"`
+
+	// The year, if it is known.
+	Year UnsignedInt `json:"year,omitzero"`
+
+	// The month, from 1 to 12, if it is known.
+	Month UnsignedInt `json:"month,omitzero"`
+
+	// The day of the month, from 1 to 31, if it is known.
+	Day UnsignedInt `json:"day,omitzero"`
+
+	// The calendar system the date is given in, named as in CLDR. Absent means
+	// Gregorian.
+	CalendarScale string `json:"calendarScale,omitzero"`
+}
+
+// ContactPersonalInfo is something the entity is interested in or good at.
+// RFC 9553 calls it PersonalInfo.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactPersonalInfo struct {
+	// The type of this object, which is "PersonalInfo".
+	Type string `json:"@type,omitzero"`
+
+	// What sort of information this is: "expertise", "hobby", or "interest".
+	Kind string `json:"kind,omitzero"`
+
+	// The interest or field of expertise itself.
+	Value string `json:"value,omitzero"`
+
+	// How much: "high", "medium", or "low".
+	Level string `json:"level,omitzero"`
+
+	// Where this sorts among the entity's other information of the same kind,
+	// counting from 1.
+	ListAs UnsignedInt `json:"listAs,omitzero"`
+
+	// A human-readable label for this entry.
+	Label string `json:"label,omitzero"`
+}
+
+// ContactPhone is a number the entity can be reached on. RFC 9553 calls it
+// Phone.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactPhone struct {
+	// The type of this object, which is "Phone".
+	Type string `json:"@type,omitzero"`
+
+	// The number, either as a URI or as free text.
+	Number string `json:"number,omitzero"`
+
+	// What the number can be used for, mapped to true: "mobile", "voice",
+	// "text", "video", "main-number", "textphone", "fax", or "pager".
+	Features map[string]bool `json:"features,omitzero"`
+
+	// The contexts this applies in, mapped to true: "private", "work", or a
+	// context the object's own type defines.
+	Contexts map[string]bool `json:"contexts,omitzero"`
+
+	// How preferred this is among the alternatives, from 1 (most) to 100
+	// (least).
+	Pref UnsignedInt `json:"pref,omitzero"`
+
+	// A human-readable label for this entry.
+	Label string `json:"label,omitzero"`
+}
+
+// ContactPronouns is a set of pronouns to use for the entity. RFC 9553 calls
+// it Pronouns.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactPronouns struct {
+	// The type of this object, which is "Pronouns".
+	Type string `json:"@type,omitzero"`
+
+	// The pronouns, written as the entity would have them written.
+	Pronouns string `json:"pronouns,omitzero"`
+
+	// The contexts this applies in, mapped to true: "private", "work", or a
+	// context the object's own type defines.
+	Contexts map[string]bool `json:"contexts,omitzero"`
+
+	// How preferred this is among the alternatives, from 1 (most) to 100
+	// (least).
+	Pref UnsignedInt `json:"pref,omitzero"`
+}
+
+// ContactRelation says how another entity is related to this one. RFC 9553
+// calls it Relation.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactRelation struct {
+	// The type of this object, which is "Relation".
+	Type string `json:"@type,omitzero"`
+
+	// The kinds of relation, mapped to true, such as "friend", "colleague", or
+	// "spouse". An empty object means the entities are related in a way the card
+	// does not name.
+	//
+	// The server assumes an empty object when this property is omitted.
+	Relation map[string]bool `json:"relation,omitzero"`
+}
+
+// ContactSchedulingAddress is where to send scheduling requests for the
+// entity. RFC 9553 calls it SchedulingAddress.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactSchedulingAddress struct {
+	// The type of this object, which is "SchedulingAddress".
+	Type string `json:"@type,omitzero"`
+
+	// The address to send scheduling requests to, such as a mailto: URI.
+	URI string `json:"uri,omitzero"`
+
+	// The contexts this applies in, mapped to true: "private", "work", or a
+	// context the object's own type defines.
+	Contexts map[string]bool `json:"contexts,omitzero"`
+
+	// How preferred this is among the alternatives, from 1 (most) to 100
+	// (least).
+	Pref UnsignedInt `json:"pref,omitzero"`
+
+	// A human-readable label for this entry.
+	Label string `json:"label,omitzero"`
+}
+
+// ContactSpeakToAs says how to address the entity in speech and writing. RFC
+// 9553 calls it SpeakToAs; at least one of its members is set.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactSpeakToAs struct {
+	// The type of this object, which is "SpeakToAs".
+	Type string `json:"@type,omitzero"`
+
+	// The grammatical gender to use in salutations: "animate", "common",
+	// "feminine", "inanimate", "masculine", or "neuter".
+	GrammaticalGender string `json:"grammaticalGender,omitzero"`
+
+	// The pronouns to use, keyed by an id local to the card.
+	Pronouns map[ID]ContactPronouns `json:"pronouns,omitzero"`
+}
+
+// ContactTimestamp is a date and time known exactly, which an anniversary may
+// carry instead of a partial date. RFC 9553 calls it Timestamp.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactTimestamp struct {
+	// The type of this object, which is "Timestamp".
+	Type string `json:"@type,omitzero"`
+
+	// The point in time, in UTC.
+	UTC UTCDate `json:"utc,omitzero"`
+}
+
+// ContactTitle is a position or role the entity holds. RFC 9553 calls it
+// Title.
+//
+// A request using this type must declare urn:ietf:params:jmap:contacts.
+type ContactTitle struct {
+	// The type of this object, which is "Title".
+	Type string `json:"@type,omitzero"`
+
+	// The title or role.
+	Name string `json:"name,omitzero"`
+
+	// Whether this is a "title" or a "role".
+	//
+	// The server assumes "title" when this property is omitted.
+	Kind *string `json:"kind,omitzero"`
+
+	// The id, within this card's organizations, of the organization the title is
+	// held in.
+	OrganizationID ID `json:"organizationId,omitzero"`
 }
 
 // CoreEchoArguments holds the arguments of the Core/echo method, which may be
