@@ -85,29 +85,30 @@ Go のツールチェインがない環境では、[リリース](https://github
 クエリを書きます。
 ファイル名が、生成される関数の名前になります。
 
-```jsonc
-// queries/ListInboxEmails.jmap.json
+```json
 {
-  "doc": "ListInboxEmails returns the newest emails in one mailbox.",
+  "_doc": "ListInboxEmails returns the newest emails in one mailbox.",
 
   "methodCalls": [
-    // 該当するメールの id を探す。
     ["Email/query", {
+      "_comment": "該当するメールの id を探す。",
       "filter": {"inMailbox": "{{mailboxId}}"},
       "sort": [{"property": "receivedAt", "isAscending": false}],
       "limit": "{{limit}}"
     }, "search"],
 
-    // 同じリクエストで取得する。id が往復することはない。
     ["Email/get", {
+      "_comment": "同じリクエストで取得する。id が往復することはない。",
       "#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"},
       "properties": ["id", "subject", "from", "receivedAt"]
     }, "fetch"]
   ],
 
-  "returns": "fetch"
+  "_returns": "fetch"
 }
 ```
+
+(`queries/ListInboxEmails.jmap.json`)
 
 生成します。
 
@@ -141,8 +142,7 @@ for _, email := range res.List {
 メッセージを作り、送信し、下書きから移す。
 この三つは途中で分断されてはならない操作であり、ここでは一つのリクエストになっています。
 
-```jsonc
-// queries/SendEmail.jmap.json
+```json
 {
   "methodCalls": [
     ["Email/set", {
@@ -160,7 +160,7 @@ for _, email := range res.List {
       }
     }, "send"]
   ],
-  "returns": "send"
+  "_returns": "send"
 }
 ```
 
@@ -177,15 +177,38 @@ for _, email := range res.List {
 クエリファイルは [RFC 8620](https://www.rfc-editor.org/rfc/rfc8620) が定義する JMAP の Request オブジェクトそのものです。
 これに、ジェネレータが読みサーバが見ることのない三つのメンバが加わります。
 
+アンダースコアで始まるメンバはジェネレータが読むもので、それ以外は RFC 8620 が定義するリクエストそのものです。
+
 | メンバ | |
 |---|---|
 | `methodCalls` | 呼び出しを `[name, arguments, callId]` の形で並べます。必須です。 |
 | `using` | リクエストが宣言する capability です。省略でき、その場合は呼び出すメソッドから導出されます。 |
-| `doc` | 生成される関数のドキュメントです。省略できます。 |
-| `returns` | どの呼び出しのレスポンスを関数の戻り値にするかを指定します。省略すると全てのレスポンスが返ります。 |
+| `_doc` | 生成される関数のドキュメントです。省略できます。 |
+| `_returns` | どの呼び出しのレスポンスを関数の戻り値にするかを指定します。省略すると全てのレスポンスが返ります。 |
+| `_comment` | その呼び出しが何のためにあるかを書きます。呼び出しの引数の中に置きます。次項を参照してください。 |
 
-JSON にコメントはありませんが、クエリファイルでは書けます。
-クエリはソースコードであり、注釈を付ける価値があるからです。
+クエリファイルは素の JSON です。
+`jq` で読めますし、エディタも理解します。
+呼び出しの意図を書くには、その引数に `_comment` を置きます。
+
+```json
+["Email/get", {
+  "_comment": "同じリクエストで取得する。id が往復することはない。",
+  "#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"}
+}, "fetch"]
+```
+
+ジェネレータはこれを生成コードのコメントに移し、リクエストからは除きます。
+除かなければなりません。
+RFC 8620 は、知らない引数をサーバが拒否することを求めているからです。
+
+ドットではなくアンダースコアなのは、jmapc が問題の場所をドットで綴るからです。
+`methodCalls[0].arguments.filter` のような表記の中では、`.comment` というメンバがその一部に見えてしまいます。
+
+```go
+// 同じリクエストで取得する。id が往復することはない。
+{Name: "Email/get", CallID: "fetch", Args: map[string]any{
+```
 
 ### パラメータ
 

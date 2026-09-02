@@ -1,5 +1,5 @@
 {
-  "doc": "AttachNote writes a note into a blob and attaches it to a draft in the same request. The upload endpoint of RFC 8620 cannot do this: it is a separate HTTP call, so the blob id has to come back to the client before the draft can refer to it.",
+  "_doc": "AttachNote writes a note into a blob and attaches it to a draft in the same request. The upload endpoint of RFC 8620 cannot do this: it is a separate HTTP call, so the blob id has to come back to the client before the draft can refer to it.",
 
   "methodCalls": [
     ["Blob/upload", {
@@ -11,9 +11,8 @@
       }
     }, "upload"],
 
-    // "#note" is the blob the call above creates, before the server has given
-    // it an id.
     ["Email/set", {
+      "_comment": "\"#note\" is the blob the call above creates, before the server has given it an id.",
       "create": {
         "draft": {
           "mailboxIds": {"{{draftsMailboxId}}": true},

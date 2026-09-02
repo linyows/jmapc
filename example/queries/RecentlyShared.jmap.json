@@ -1,5 +1,5 @@
 {
-  "doc": "RecentlyShared reports what other people have shared with the user since a known point. Nothing else tells them: a shared mailbox simply appears in an account they can see, with no message to say so.",
+  "_doc": "RecentlyShared reports what other people have shared with the user since a known point. Nothing else tells them: a shared mailbox simply appears in an account they can see, with no message to say so.",
 
   "methodCalls": [
     ["ShareNotification/query", {
@@ -13,5 +13,5 @@
     }, "fetch"]
   ],
 
-  "returns": "fetch"
+  "_returns": "fetch"
 }

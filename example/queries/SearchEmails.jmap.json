@@ -1,5 +1,5 @@
 {
-  "doc": "SearchEmails finds emails matching a phrase in one of two mailboxes, and returns both the ids that matched and the emails themselves.",
+  "_doc": "SearchEmails finds emails matching a phrase in one of two mailboxes, and returns both the ids that matched and the emails themselves.",
 
   "methodCalls": [
     ["Email/query", {

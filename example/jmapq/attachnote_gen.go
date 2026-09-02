@@ -73,6 +73,8 @@ func AttachNote(ctx context.Context, c *jmapc.Client, p AttachNoteParams) (*Atta
 					},
 				},
 			}},
+			// "#note" is the blob the call above creates, before the server has given
+			// it an id.
 			{Name: "Email/set", CallID: "draft", Args: map[string]any{
 				"accountId": mailAccountID,
 				"create": map[string]any{

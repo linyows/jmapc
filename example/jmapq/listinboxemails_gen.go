@@ -85,6 +85,7 @@ func ListInboxEmails(ctx context.Context, c *jmapc.Client, p ListInboxEmailsPara
 	req := &jmapc.Request{
 		Using: []string{jmapc.CapabilityCore, jmapc.CapabilityMail},
 		MethodCalls: []jmapc.Invocation{
+			// Find the ids of the matching emails.
 			{Name: "Email/query", CallID: "search", Args: map[string]any{
 				"accountId": mailAccountID,
 				"filter": map[string]any{
@@ -93,6 +94,7 @@ func ListInboxEmails(ctx context.Context, c *jmapc.Client, p ListInboxEmailsPara
 				"sort":  json.RawMessage(`[{"property":"receivedAt","isAscending":false}]`),
 				"limit": p.Limit,
 			}},
+			// Fetch them in the same request, so the ids never make a round trip.
 			{Name: "Email/get", CallID: "fetch", Args: map[string]any{
 				"accountId":  mailAccountID,
 				"#ids":       jmapc.ResultReference{ResultOf: "search", Name: "Email/query", Path: "/ids"},

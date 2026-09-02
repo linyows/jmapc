@@ -47,6 +47,8 @@ func InstallSieveScript(ctx context.Context, c *jmapc.Client, p InstallSieveScri
 	req := &jmapc.Request{
 		Using: []string{jmapc.CapabilityCore, jmapc.CapabilityBlob, jmapc.CapabilitySieve},
 		MethodCalls: []jmapc.Invocation{
+			// A script's text is a blob, not a property, so it goes up first. The blob
+			// extension lets that happen here rather than as a separate upload.
 			{Name: "Blob/upload", CallID: "upload", Args: map[string]any{
 				"accountId": blobAccountID,
 				"create": map[string]any{
@@ -60,6 +62,9 @@ func InstallSieveScript(ctx context.Context, c *jmapc.Client, p InstallSieveScri
 					},
 				},
 			}},
+			// Both onSuccess arguments refer to the script created here, before the
+			// server has given it an id. Deactivation happens first, so there is no
+			// moment with two active scripts.
 			{Name: "SieveScript/set", CallID: "install", Args: map[string]any{
 				"accountId": sieveAccountID,
 				"create": map[string]any{

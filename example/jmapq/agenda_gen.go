@@ -99,6 +99,8 @@ func Agenda(ctx context.Context, c *jmapc.Client, p AgendaParams) (*AgendaCalend
 	req := &jmapc.Request{
 		Using: []string{jmapc.CapabilityCore, jmapc.CapabilityCalendars},
 		MethodCalls: []jmapc.Invocation{
+			// Without expandRecurrences a weekly meeting is one event; with it, one
+			// entry per occurrence, which is what a day view needs.
 			{Name: "CalendarEvent/query", CallID: "search", Args: map[string]any{
 				"accountId": calendarsAccountID,
 				"filter": map[string]any{
@@ -119,6 +121,9 @@ func Agenda(ctx context.Context, c *jmapc.Client, p AgendaParams) (*AgendaCalend
 				"expandRecurrences": true,
 				"timeZone":          p.TimeZone,
 			}},
+			// reduceParticipants keeps a meeting with two hundred people from
+			// returning two hundred participants, of which a list view needs none but
+			// the organiser and the user.
 			{Name: "CalendarEvent/get", CallID: "fetch", Args: map[string]any{
 				"accountId":          calendarsAccountID,
 				"#ids":               jmapc.ResultReference{ResultOf: "search", Name: "CalendarEvent/query", Path: "/ids"},

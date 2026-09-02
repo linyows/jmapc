@@ -1,8 +1,9 @@
 {
-  "doc": "Agenda lists what is happening in a window of time, expanding recurring events so that each occurrence comes back as its own entry.",
+  "_doc": "Agenda lists what is happening in a window of time, expanding recurring events so that each occurrence comes back as its own entry.",
 
   "methodCalls": [
     ["CalendarEvent/query", {
+      "_comment": "Without expandRecurrences a weekly meeting is one event; with it, one entry per occurrence, which is what a day view needs.",
       "filter": {
         "operator": "AND",
         "conditions": [
@@ -12,25 +13,20 @@
         ]
       },
       "sort": [{"property": "start"}],
-
-      // Without this a weekly meeting is one event; with it, one entry per
-      // occurrence, which is what a day view needs.
       "expandRecurrences": true,
       "timeZone": "{{timeZone}}"
     }, "search"],
 
     ["CalendarEvent/get", {
+      "_comment": "reduceParticipants keeps a meeting with two hundred people from returning two hundred participants, of which a list view needs none but the organiser and the user.",
       "#ids": {"resultOf": "search", "name": "CalendarEvent/query", "path": "/ids"},
       "properties": [
         "id", "baseEventId", "title", "start", "duration", "timeZone",
         "status", "locations", "participants"
       ],
-
-      // A meeting with two hundred people has two hundred participants, and a
-      // list view needs none of them but the organiser and the user.
       "reduceParticipants": true
     }, "fetch"]
   ],
 
-  "returns": "fetch"
+  "_returns": "fetch"
 }

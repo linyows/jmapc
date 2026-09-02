@@ -29,23 +29,23 @@ func parseErr(t *testing.T, src string) string {
 }
 
 const listInboxEmails = `{
-  "doc": "ListInboxEmails returns the most recent emails in one mailbox.",
+  "_doc": "ListInboxEmails returns the most recent emails in one mailbox.",
   "methodCalls": [
-    // Find the ids of the matching emails, newest first.
     ["Email/query", {
+      "_comment": "Find the ids of the matching emails, newest first.",
       "accountId": "{{accountId}}",
       "filter": {"inMailbox": "{{mailboxId}}"},
       "sort": [{"property": "receivedAt", "isAscending": false}],
       "limit": "{{limit}}"
     }, "c0"],
-    /* Then fetch them, without a second round trip. */
     ["Email/get", {
+      "_comment": "Then fetch them, without a second round trip.",
       "accountId": "{{accountId}}",
       "#ids": {"resultOf": "c0", "name": "Email/query", "path": "/ids"},
       "properties": ["id", "subject", "from", "receivedAt"]
     }, "c1"]
   ],
-  "returns": "c1"
+  "_returns": "c1"
 }`
 
 func TestParse(t *testing.T) {
@@ -78,6 +78,10 @@ func TestParse(t *testing.T) {
 			t.Errorf("parameter %d = %s %s %s, want %s %s %s",
 				i, p.Name, p.GoName, p.GoType("jmapc."), want.name, want.goName, want.goType)
 		}
+	}
+
+	if got, want := q.Calls[0].Comment, "Find the ids of the matching emails, newest first."; got != want {
+		t.Errorf("comment = %q, want %q", got, want)
 	}
 
 	get := q.Calls[1]
@@ -196,7 +200,7 @@ func TestParseErrors(t *testing.T) {
 		want: `needs the capability urn:ietf:params:jmap:mail`,
 	}, {
 		name: "unknown returns",
-		src:  `{"methodCalls": [["Email/query", {}, "c0"]], "returns": "c9"}`,
+		src:  `{"methodCalls": [["Email/query", {}, "c0"]], "_returns": "c9"}`,
 		want: `no method call has the id "c9"`,
 	}, {
 		name: "invalid id literal",
@@ -465,7 +469,7 @@ func TestContactsQuery(t *testing.T) {
 	      "properties": ["id", "uid", "name", "emails", "phones"]
 	    }, "fetch"]
 	  ],
-	  "returns": "fetch"
+	  "_returns": "fetch"
 	}`)
 	want := "urn:ietf:params:jmap:core urn:ietf:params:jmap:contacts"
 	if got := strings.Join(q.Using, " "); got != want {
@@ -542,7 +546,7 @@ func TestCalendarsQuery(t *testing.T) {
 	      "reduceParticipants": true
 	    }, "fetch"]
 	  ],
-	  "returns": "fetch"
+	  "_returns": "fetch"
 	}`)
 
 	want := map[string]string{
@@ -798,7 +802,7 @@ func TestPrincipalsQuery(t *testing.T) {
 	      "properties": ["id", "type", "name", "email", "timeZone"]
 	    }, "fetch"]
 	  ],
-	  "returns": "fetch"
+	  "_returns": "fetch"
 	}`)
 	want := "urn:ietf:params:jmap:core urn:ietf:params:jmap:principals"
 	if got := strings.Join(q.Using, " "); got != want {
@@ -996,7 +1000,7 @@ func TestQuota(t *testing.T) {
 	      "properties": ["id", "name", "used", "hardLimit", "warnLimit"]
 	    }, "fetch"]
 	  ],
-	  "returns": "fetch"
+	  "_returns": "fetch"
 	}`)
 	want := "urn:ietf:params:jmap:core urn:ietf:params:jmap:quota"
 	if got := strings.Join(q.Using, " "); got != want {
@@ -1057,6 +1061,44 @@ func TestQuotaChangesReportsUpdatedProperties(t *testing.T) {
 	]}`)
 }
 
+// TestCommentArgumentIsNotSent checks the member a query uses to explain a
+// call. It has to be recognised and set aside: RFC 8620 requires a server to
+// reject an argument it does not know, so leaving it among the arguments would
+// make every annotated query fail.
+func TestCommentArgumentIsNotSent(t *testing.T) {
+	q := parse(t, "Annotated"+Extension, `{"methodCalls": [
+	  ["Email/query", {
+	    "_comment": "Why this call is here.",
+	    "filter": {"inMailbox": "{{mailboxId}}"}
+	  }, "c0"]
+	]}`)
+	if got, want := q.Calls[0].Comment, "Why this call is here."; got != want {
+		t.Errorf("comment = %q, want %q", got, want)
+	}
+	if _, sent := q.Calls[0].Args.Find(CommentArgument); sent {
+		t.Error("the comment is among the arguments, and would be sent to the server")
+	}
+
+	if got := parseErr(t, `{"methodCalls": [
+	  ["Email/query", {"_comment": ["not", "a", "string"]}, "c0"]
+	]}`); !strings.Contains(got, "_comment must be a string") {
+		t.Errorf("error was:\n%s", got)
+	}
+}
+
+// TestJSONCommentsAreNotAccepted checks that a query file is plain JSON. It was
+// not always: comments were stripped before parsing, which meant a file named
+// .json that no other tool could read.
+func TestJSONCommentsAreNotAccepted(t *testing.T) {
+	got := parseErr(t, `{
+	  // Find the emails.
+	  "methodCalls": [["Email/query", {}, "c0"]]
+	}`)
+	if !strings.Contains(got, "invalid character") {
+		t.Errorf("error was:\n%s\nwant a JSON syntax error", got)
+	}
+}
+
 // TestSieveScript covers JMAP for Sieve Scripts. A script's text is a blob
 // rather than a property, so installing one takes an upload and a store, and
 // the blob extension lets both happen in one request.
@@ -1072,7 +1114,7 @@ func TestSieveScript(t *testing.T) {
 	      "onSuccessActivateScript": "#filter"
 	    }, "install"]
 	  ],
-	  "returns": "install"
+	  "_returns": "install"
 	}`)
 	want := "urn:ietf:params:jmap:core urn:ietf:params:jmap:blob urn:ietf:params:jmap:sieve"
 	if got := strings.Join(q.Using, " "); got != want {

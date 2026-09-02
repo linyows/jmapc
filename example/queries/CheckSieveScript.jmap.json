@@ -1,5 +1,5 @@
 {
-  "doc": "CheckSieveScript reports whether a script would parse and whether the server supports what it asks for, without storing it. It is what an editor calls while the user is still typing.",
+  "_doc": "CheckSieveScript reports whether a script would parse and whether the server supports what it asks for, without storing it. It is what an editor calls while the user is still typing.",
 
   "methodCalls": [
     ["Blob/upload", {
@@ -11,5 +11,5 @@
     }, "check"]
   ],
 
-  "returns": "check"
+  "_returns": "check"
 }

@@ -1,20 +1,20 @@
 {
-  "doc": "ListInboxEmails returns the most recent emails in one mailbox, newest first.",
+  "_doc": "ListInboxEmails returns the most recent emails in one mailbox, newest first.",
 
   "methodCalls": [
-    // Find the ids of the matching emails.
     ["Email/query", {
+      "_comment": "Find the ids of the matching emails.",
       "filter": {"inMailbox": "{{mailboxId}}"},
       "sort": [{"property": "receivedAt", "isAscending": false}],
       "limit": "{{limit}}"
     }, "search"],
 
-    // Fetch them in the same request, so the ids never make a round trip.
     ["Email/get", {
+      "_comment": "Fetch them in the same request, so the ids never make a round trip.",
       "#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"},
       "properties": ["id", "threadId", "subject", "from", "receivedAt", "preview", "hasAttachment"]
     }, "fetch"]
   ],
 
-  "returns": "fetch"
+  "_returns": "fetch"
 }

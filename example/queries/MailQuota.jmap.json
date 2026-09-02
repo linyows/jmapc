@@ -1,5 +1,5 @@
 {
-  "doc": "MailQuota reports how much of the account's mail storage is used. An account may be under several quotas at once, so the filter narrows it to the one a mail client would show: the octets it is allowed for mail.",
+  "_doc": "MailQuota reports how much of the account's mail storage is used. An account may be under several quotas at once, so the filter narrows it to the one a mail client would show: the octets it is allowed for mail.",
 
   "methodCalls": [
     ["Quota/query", {
@@ -19,5 +19,5 @@
     }, "fetch"]
   ],
 
-  "returns": "fetch"
+  "_returns": "fetch"
 }

@@ -1,5 +1,5 @@
 {
-  "doc": "FindPeople looks for the people and things an account can be shared with, which is what a sharing dialogue needs before it can offer anything.",
+  "_doc": "FindPeople looks for the people and things an account can be shared with, which is what a sharing dialogue needs before it can offer anything.",
 
   "methodCalls": [
     ["Principal/query", {
@@ -19,5 +19,5 @@
     }, "fetch"]
   ],
 
-  "returns": "fetch"
+  "_returns": "fetch"
 }

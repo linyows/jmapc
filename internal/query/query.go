@@ -44,6 +44,10 @@ type Call struct {
 	// Properties are the property names a /get call selects, when the query
 	// states them literally. It is nil when the call fetches every property.
 	Properties []string
+	// Comment is what the query said this call is for, carried into the
+	// generated code. It comes from the _comment member of the arguments,
+	// which never reaches the server.
+	Comment string
 	// GoField is the name of the field this call's result takes in the
 	// generated result struct.
 	GoField string

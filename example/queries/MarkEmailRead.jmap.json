@@ -1,5 +1,5 @@
 {
-  "doc": "MarkEmailRead sets the $seen keyword on one email.",
+  "_doc": "MarkEmailRead sets the $seen keyword on one email.",
 
   "methodCalls": [
     ["Email/set", {
@@ -9,5 +9,5 @@
     }, "mark"]
   ],
 
-  "returns": "mark"
+  "_returns": "mark"
 }
