@@ -359,3 +359,67 @@ func TestSubmissionQuery(t *testing.T) {
 		t.Errorf("Using = %q, want %q", got, want)
 	}
 }
+
+// TestSortIsChecked covers the sort order of a /query. A server is only obliged
+// to sort on the properties its specification names, so sorting on anything
+// else is a query that would fail against a conforming server.
+func TestSortIsChecked(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want string
+	}{{
+		name: "unsortable property",
+		src:  `{"methodCalls": [["Email/query", {"sort": [{"property": "preview"}]}, "c0"]]}`,
+		want: `Email cannot be sorted by "preview"`,
+	}, {
+		name: "misspelled property",
+		src:  `{"methodCalls": [["Email/query", {"sort": [{"property": "recievedAt"}]}, "c0"]]}`,
+		want: `did you mean "receivedAt"?`,
+	}, {
+		name: "wrong type's property",
+		src:  `{"methodCalls": [["Mailbox/query", {"sort": [{"property": "receivedAt"}]}, "c0"]]}`,
+		want: `Mailbox cannot be sorted by "receivedAt"`,
+	}, {
+		name: "missing property",
+		src:  `{"methodCalls": [["Email/query", {"sort": [{"isAscending": false}]}, "c0"]]}`,
+		want: `a comparator must say which property to sort by`,
+	}, {
+		name: "keyword sort without its keyword",
+		src:  `{"methodCalls": [["Email/query", {"sort": [{"property": "hasKeyword"}]}, "c0"]]}`,
+		want: `sorting by "hasKeyword" needs the comparator to also set "keyword"`,
+	}, {
+		name: "keyword on a sort that does not take one",
+		src:  `{"methodCalls": [["Email/query", {"sort": [{"property": "subject", "keyword": "$seen"}]}, "c0"]]}`,
+		want: `a comparator has no member "keyword"`,
+	}, {
+		name: "unknown comparator member",
+		src:  `{"methodCalls": [["Email/query", {"sort": [{"property": "subject", "ascending": true}]}, "c0"]]}`,
+		want: `a comparator has no member "ascending"`,
+	}, {
+		name: "queryChanges sorts too",
+		src:  `{"methodCalls": [["Email/queryChanges", {"sinceQueryState": "s", "sort": [{"property": "nope"}]}, "c0"]]}`,
+		want: `Email cannot be sorted by "nope"`,
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseErr(t, tt.src)
+			if !strings.Contains(got, tt.want) {
+				t.Errorf("error was:\n%s\nwant it to mention: %s", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSortAccepts checks the comparators that should pass, including the
+// keyword form and a property the caller supplies.
+func TestSortAccepts(t *testing.T) {
+	parse(t, "Sorted"+Extension, `{"methodCalls": [
+	  ["Email/query", {"sort": [
+	    {"property": "hasKeyword", "keyword": "$flagged", "isAscending": false},
+	    {"property": "receivedAt", "isAscending": false},
+	    {"property": "subject", "collation": "i;ascii-casemap"}
+	  ]}, "c0"],
+	  ["Email/query", {"sort": [{"property": "{{sortBy}}", "keyword": "{{keyword}}"}]}, "c1"]
+	]}`)
+}

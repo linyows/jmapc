@@ -39,6 +39,43 @@ type Object struct {
 	// Kind says whether the object is a data type, a method's arguments, or a
 	// method's response.
 	Kind ObjectKind
+	// Sort lists the properties a /query call may sort this type by. A server
+	// need not support sorting on everything it stores, and the specifications
+	// say which properties it must.
+	Sort []*SortProperty
+}
+
+// SortProperty is one property a /query may sort by, together with any extra
+// members the comparator takes when it does.
+type SortProperty struct {
+	// Name is the property name as it appears in a comparator.
+	Name string
+	// Doc describes what sorting by it means.
+	Doc string
+	// Extra are the additional comparator members this property requires, such
+	// as the keyword that "hasKeyword" sorts on.
+	Extra []*Field
+}
+
+// SortProperty returns the sort property with the given name.
+func (o *Object) SortProperty(name string) (*SortProperty, bool) {
+	for _, p := range o.Sort {
+		if p.Name == name {
+			return p, true
+		}
+	}
+	return nil, false
+}
+
+// SortNames returns the names of every sortable property, sorted, for use in
+// diagnostics.
+func (o *Object) SortNames() []string {
+	names := make([]string, len(o.Sort))
+	for i, p := range o.Sort {
+		names[i] = p.Name
+	}
+	sort.Strings(names)
+	return names
 }
 
 // Field is one property of an object type.
@@ -61,6 +98,10 @@ type Field struct {
 	// apply to. The type of a PatchObject says nothing about what it patches,
 	// so without this a patch could not be checked at all.
 	PatchTarget string
+	// SortTarget names the data type whose sortable properties the Comparators
+	// in this field may name. As with PatchTarget, the type of a Comparator
+	// does not say what it sorts.
+	SortTarget string
 
 	parsed *Type
 }

@@ -143,6 +143,10 @@ type checker struct {
 	// patchTarget names the data type that the PatchObjects being checked
 	// apply to, carried down from the argument that holds them.
 	patchTarget string
+
+	// sortTarget names the data type whose sortable properties a Comparator
+	// being checked may name, carried down the same way.
+	sortTarget string
 }
 
 // errorf records a problem and returns it, so that a hint can be chained on.
@@ -261,12 +265,15 @@ func (c *checker) arguments(call *Call, argsType *spec.Object, raw json.RawMessa
 			}
 			continue
 		}
-		saved := c.patchTarget
+		savedPatch, savedSort := c.patchTarget, c.sortTarget
 		if field.PatchTarget != "" {
 			c.patchTarget = field.PatchTarget
 		}
+		if field.SortTarget != "" {
+			c.sortTarget = field.SortTarget
+		}
 		node := c.value(field.ParsedType(), members[key], where+"."+key, field.Doc)
-		c.patchTarget = saved
+		c.patchTarget, c.sortTarget = savedPatch, savedSort
 		out.Fields = append(out.Fields, ObjectField{Key: key, Value: node})
 	}
 	return out

@@ -276,6 +276,12 @@ func registerMailbox(s *Spec) {
 		},
 	})
 
+	mailbox, _ := s.Object("Mailbox")
+	mailbox.Sort = []*SortProperty{
+		{Name: "sortOrder", Doc: "Sorts by the hint the server or user set for the mailbox's place among its siblings."},
+		{Name: "name", Doc: "Sorts by the mailbox's name."},
+	}
+
 	s.RegisterStandard("Mailbox", CapabilityMail, StandardMethods{
 		Get: true, Changes: true, Set: true, Query: true, QueryChanges: true,
 	})
@@ -529,6 +535,30 @@ func registerEmail(s *Spec) {
 			},
 		},
 	})
+
+	keywordSort := func(name, doc string) *SortProperty {
+		return &SortProperty{
+			Name: name,
+			Doc:  doc,
+			Extra: []*Field{{
+				Name: "keyword",
+				Type: "String",
+				Doc:  "The keyword to sort on.",
+			}},
+		}
+	}
+	email, _ := s.Object("Email")
+	email.Sort = []*SortProperty{
+		{Name: "receivedAt", Doc: "Sorts by when the email was received, which is the usual order for a mailbox."},
+		{Name: "size", Doc: "Sorts by the size of the raw message."},
+		{Name: "from", Doc: "Sorts by the From header field."},
+		{Name: "to", Doc: "Sorts by the To header field."},
+		{Name: "subject", Doc: "Sorts by the Subject header field, ignoring any reply or forward prefix."},
+		{Name: "sentAt", Doc: "Sorts by the Date header field."},
+		keywordSort("hasKeyword", "Sorts the emails carrying the keyword apart from those that do not."),
+		keywordSort("allInThreadHaveKeyword", "Sorts by whether every email in the thread carries the keyword."),
+		keywordSort("someInThreadHaveKeyword", "Sorts by whether any email in the thread carries the keyword."),
+	}
 
 	s.RegisterStandard("Email", CapabilityMail, StandardMethods{
 		Get: true, Changes: true, Set: true, Copy: true, Query: true, QueryChanges: true,

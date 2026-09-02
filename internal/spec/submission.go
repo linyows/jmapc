@@ -169,6 +169,13 @@ func registerEmailSubmission(s *Spec) {
 		},
 	})
 
+	submission, _ := s.Object("EmailSubmission")
+	submission.Sort = []*SortProperty{
+		{Name: "emailId", Doc: "Sorts by the id of the email that was sent."},
+		{Name: "threadId", Doc: "Sorts by the id of the thread the sent email belongs to."},
+		{Name: "sentAt", Doc: "Sorts by when the message was released to the SMTP server."},
+	}
+
 	s.RegisterStandard("EmailSubmission", CapabilitySubmission, StandardMethods{
 		Get: true, Changes: true, Set: true, Query: true, QueryChanges: true,
 	})

@@ -184,6 +184,12 @@ func (c *checker) object(t *spec.Type, raw json.RawMessage, where string) Node {
 		return &Literal{JSON: raw}
 	}
 
+	// A Comparator's members depend on the property it sorts by, so it too is
+	// resolved against the type being queried.
+	if o.Name == "Comparator" && c.sortTarget != "" {
+		return c.comparator(members, keys, raw, where)
+	}
+
 	// A PatchObject is keyed by JSON pointer rather than by property name, so
 	// its members are resolved against the type being patched instead of
 	// against a fixed set of properties.
@@ -574,4 +580,97 @@ func mergeTextSegments(segments []KeySegment) []KeySegment {
 		out = append(out, seg)
 	}
 	return out
+}
+
+// comparator checks one term of a /query sort order. A server is only obliged
+// to sort on the properties its specification names, so sorting on anything
+// else is a query that will fail at run time on a conforming server. Some of
+// those properties take an extra member of their own, such as the keyword that
+// "hasKeyword" sorts on, and the comparator is incomplete without it.
+func (c *checker) comparator(members map[string]json.RawMessage, keys []string, raw json.RawMessage, where string) Node {
+	dataType, ok := c.spec.Object(c.sortTarget)
+	if !ok {
+		return c.anyValue(raw)
+	}
+	base, ok := c.spec.Object("Comparator")
+	if !ok {
+		return c.anyValue(raw)
+	}
+
+	// The property decides what else the comparator may carry, so resolve it
+	// before checking the other members.
+	sortProperty, extra := c.sortProperty(dataType, members, where)
+
+	out := &Object{Raw: raw}
+	for _, key := range keys {
+		field, isKnown := base.Field(key)
+		if !isKnown {
+			if f, isExtra := extra[key]; isExtra {
+				field = f
+			} else {
+				c.errorf(where+"."+key, hintFor(key, comparatorNames(base, extra)),
+					"a comparator has no member %q", key)
+				continue
+			}
+		}
+		out.Fields = append(out.Fields, ObjectField{
+			Key:   key,
+			Value: c.value(field.ParsedType(), members[key], where+"."+key, field.Doc),
+		})
+	}
+
+	if sortProperty != nil {
+		for _, f := range sortProperty.Extra {
+			if _, given := members[f.Name]; !given {
+				c.errorf(where, "", "sorting by %q needs the comparator to also set %q",
+					sortProperty.Name, f.Name)
+			}
+		}
+	}
+	return out
+}
+
+// sortProperty resolves the property a comparator sorts by, and returns the
+// extra members that property allows. It reports a property the type cannot be
+// sorted on, and stays quiet when the property is a parameter, because then
+// there is nothing to check against.
+func (c *checker) sortProperty(dataType *spec.Object, members map[string]json.RawMessage, where string) (*spec.SortProperty, map[string]*spec.Field) {
+	extra := map[string]*spec.Field{}
+	raw, given := members["property"]
+	if !given {
+		c.errorf(where, "", "a comparator must say which property to sort by")
+		return nil, extra
+	}
+	name, isString := stringValue(raw)
+	if !isString || paramPattern.MatchString(name) {
+		// The property is left to the caller, so which members the comparator
+		// needs cannot be known here. Allow the extras of every sortable
+		// property rather than rejecting a query that may well be right.
+		for _, p := range dataType.Sort {
+			for _, f := range p.Extra {
+				extra[f.Name] = f
+			}
+		}
+		return nil, extra
+	}
+	p, sortable := dataType.SortProperty(name)
+	if !sortable {
+		c.errorf(where+".property", hintFor(name, dataType.SortNames()),
+			"%s cannot be sorted by %q", dataType.Name, name)
+		return nil, extra
+	}
+	for _, f := range p.Extra {
+		extra[f.Name] = f
+	}
+	return p, extra
+}
+
+// comparatorNames returns every member a comparator may have here, for a
+// suggestion.
+func comparatorNames(base *spec.Object, extra map[string]*spec.Field) []string {
+	names := base.PropertyNames()
+	for name := range extra {
+		names = append(names, name)
+	}
+	return names
 }

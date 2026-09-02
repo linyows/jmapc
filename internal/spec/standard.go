@@ -330,9 +330,10 @@ func (s *Spec) registerQuery(dataType, capability string) {
 				Doc:  "The condition records must match to be included in the results.",
 			},
 			{
-				Name: "sort",
-				Type: "Comparator[]|null",
-				Doc:  "The comparators to sort the results by, in order of precedence.",
+				Name:       "sort",
+				Type:       "Comparator[]|null",
+				SortTarget: dataType,
+				Doc:        "The comparators to sort the results by, in order of precedence.",
 			},
 			{
 				Name:    "position",
@@ -416,7 +417,12 @@ func (s *Spec) registerQueryChanges(dataType, capability string) {
 		Fields: []*Field{
 			accountIDField(),
 			{Name: "filter", Type: queryFilterType(dataType), Doc: "The filter the original query used."},
-			{Name: "sort", Type: "Comparator[]|null", Doc: "The sort the original query used."},
+			{
+				Name:       "sort",
+				Type:       "Comparator[]|null",
+				SortTarget: dataType,
+				Doc:        "The sort the original query used.",
+			},
 			{
 				Name: "sinceQueryState",
 				Type: "String",
