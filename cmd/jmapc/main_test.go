@@ -24,9 +24,9 @@ func workspace(t *testing.T, files map[string]string) string {
 }
 
 const listMailboxes = `{
-  "doc": "ListMailboxes returns every mailbox in the account.",
+  "jmapcDoc": "ListMailboxes returns every mailbox in the account.",
   "methodCalls": [["Mailbox/get", {"ids": null, "properties": ["id", "name", "role"]}, "all"]],
-  "returns": "all"
+  "jmapcReturns": "all"
 }`
 
 func TestGenerate(t *testing.T) {
@@ -151,7 +151,7 @@ func TestSchemaExtendsTheModel(t *testing.T) {
 		      "properties": ["id", "title"]
 		    }, "fetch"]
 		  ],
-		  "returns": "fetch"
+		  "jmapcReturns": "fetch"
 		}`,
 	})
 	out := filepath.Join(dir, "jmapq")

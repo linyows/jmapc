@@ -1,5 +1,5 @@
 {
-  "doc": "SearchContacts lists the address books and searches one of them in the same request, so a contact picker can be filled in with one round trip.",
+  "jmapcDoc": "SearchContacts lists the address books and searches one of them in the same request, so a contact picker can be filled in with one round trip.",
 
   "methodCalls": [
     ["AddressBook/get", {

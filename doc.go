@@ -22,7 +22,7 @@
 // Write a query in queries/ListInboxEmails.jmap.json:
 //
 //	{
-//	  "doc": "ListInboxEmails returns the newest emails in one mailbox.",
+//	  "jmapcDoc": "ListInboxEmails returns the newest emails in one mailbox.",
 //	  "methodCalls": [
 //	    ["Email/query", {
 //	      "filter": {"inMailbox": "{{mailboxId}}"},
@@ -34,7 +34,7 @@
 //	      "properties": ["id", "subject", "from", "receivedAt"]
 //	    }, "fetch"]
 //	  ],
-//	  "returns": "fetch"
+//	  "jmapcReturns": "fetch"
 //	}
 //
 // Generate the client:

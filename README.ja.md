@@ -87,7 +87,7 @@ Go のツールチェインがない環境では、[リリース](https://github
 
 ```json
 {
-  "doc": "ListInboxEmails returns the newest emails in one mailbox.",
+  "jmapcDoc": "ListInboxEmails returns the newest emails in one mailbox.",
 
   "methodCalls": [
     ["Email/query", {
@@ -104,7 +104,7 @@ Go のツールチェインがない環境では、[リリース](https://github
     }, "fetch"]
   ],
 
-  "returns": "fetch"
+  "jmapcReturns": "fetch"
 }
 ```
 
@@ -160,7 +160,7 @@ for _, email := range res.List {
       }
     }, "send"]
   ],
-  "returns": "send"
+  "jmapcReturns": "send"
 }
 ```
 
@@ -177,15 +177,15 @@ for _, email := range res.List {
 クエリファイルは [RFC 8620](https://www.rfc-editor.org/rfc/rfc8620) が定義する JMAP の Request オブジェクトそのものです。
 これに、ジェネレータが読みサーバが見ることのない三つのメンバが加わります。
 
+`jmapc` で始まるメンバはジェネレータが読むもので、それ以外は RFC 8620 が定義するリクエストそのものです。
+
 | メンバ | |
 |---|---|
 | `methodCalls` | 呼び出しを `[name, arguments, callId]` の形で並べます。必須です。 |
 | `using` | リクエストが宣言する capability です。省略でき、その場合は呼び出すメソッドから導出されます。 |
-| `doc` | 生成される関数のドキュメントです。省略できます。 |
-| `returns` | どの呼び出しのレスポンスを関数の戻り値にするかを指定します。省略すると全てのレスポンスが返ります。 |
-
-引数オブジェクトには `jmapcComment` も置けます。
-ジェネレータが読み、サーバには届きません。
+| `jmapcDoc` | 生成される関数のドキュメントです。省略できます。 |
+| `jmapcReturns` | どの呼び出しのレスポンスを関数の戻り値にするかを指定します。省略すると全てのレスポンスが返ります。 |
+| `jmapcComment` | その呼び出しが何のためにあるかを書きます。呼び出しの引数の中に置きます。次項を参照してください。 |
 
 クエリファイルは素の JSON です。
 `jq` で読めますし、エディタも理解します。

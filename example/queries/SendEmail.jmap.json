@@ -1,5 +1,5 @@
 {
-  "doc": "SendEmail writes a message, hands it to the submission server, and files it under Sent once the send succeeds — all in one request, so the draft can never be left behind in Drafts by a call that failed halfway.",
+  "jmapcDoc": "SendEmail writes a message, hands it to the submission server, and files it under Sent once the send succeeds — all in one request, so the draft can never be left behind in Drafts by a call that failed halfway.",
 
   "methodCalls": [
     ["Email/set", {
@@ -35,5 +35,5 @@
     }, "send"]
   ],
 
-  "returns": "send"
+  "jmapcReturns": "send"
 }

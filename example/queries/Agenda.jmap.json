@@ -1,5 +1,5 @@
 {
-  "doc": "Agenda lists what is happening in a window of time, expanding recurring events so that each occurrence comes back as its own entry.",
+  "jmapcDoc": "Agenda lists what is happening in a window of time, expanding recurring events so that each occurrence comes back as its own entry.",
 
   "methodCalls": [
     ["CalendarEvent/query", {
@@ -28,5 +28,5 @@
     }, "fetch"]
   ],
 
-  "returns": "fetch"
+  "jmapcReturns": "fetch"
 }

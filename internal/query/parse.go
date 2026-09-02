@@ -26,6 +26,15 @@ const Extension = ".jmap.json"
 // reads sits among the arguments that go to the server.
 const CommentArgument = "jmapcComment"
 
+// DocMember and ReturnsMember are the members at the top of a query file that
+// jmapc reads. They carry the same prefix as CommentArgument, so that the rule
+// is one sentence: a member beginning with "jmapc" is ours, and everything else
+// is the JMAP Request object.
+const (
+	DocMember     = "jmapcDoc"
+	ReturnsMember = "jmapcReturns"
+)
+
 // Parser reads query files and checks them against a catalogue.
 type Parser struct {
 	// Spec is the catalogue the queries are checked against.
@@ -39,16 +48,20 @@ func NewParser(s *spec.Spec) *Parser {
 
 // fileSyntax is the shape of a query file: a JMAP Request object, plus the few
 // members the generator needs and the server ignores.
+// A member jmapc reads is prefixed and one the specification defines is not, so
+// that a reader can tell at a glance which is which, and so that a member added
+// to the JMAP Request object later cannot clash with one of ours.
 type fileSyntax struct {
 	// Doc documents the query, and becomes the generated function's comment.
-	Doc string `json:"doc"`
-	// Using lists the capabilities the request declares. It may be left out,
-	// in which case it is derived from the methods called.
-	Using []string `json:"using"`
+	Doc string `json:"jmapcDoc"`
 	// Returns names the call whose result the generated function returns. It
 	// may be left out, in which case every result is returned.
-	Returns string `json:"returns"`
-	// MethodCalls are the calls the request makes.
+	Returns string `json:"jmapcReturns"`
+	// Using lists the capabilities the request declares, as RFC 8620 defines
+	// it. It may be left out, in which case it is derived from the methods
+	// called.
+	Using []string `json:"using"`
+	// MethodCalls are the calls the request makes, as RFC 8620 defines them.
 	MethodCalls []json.RawMessage `json:"methodCalls"`
 }
 
@@ -132,7 +145,7 @@ func (p *Parser) Parse(path string, src []byte) (*Query, error) {
 	if f.Returns != "" {
 		call, ok := c.byID[f.Returns]
 		if !ok {
-			c.errorf("returns", "", "no method call has the id %q", f.Returns).
+			c.errorf("jmapcReturns", "", "no method call has the id %q", f.Returns).
 				hint(hintFor(f.Returns, c.callIDs()))
 		}
 		q.Returns = call

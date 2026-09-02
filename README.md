@@ -89,7 +89,7 @@ Write a query. The file name is the name of the function to generate.
 
 ```json
 {
-  "doc": "ListInboxEmails returns the newest emails in one mailbox.",
+  "jmapcDoc": "ListInboxEmails returns the newest emails in one mailbox.",
 
   "methodCalls": [
     ["Email/query", {
@@ -106,7 +106,7 @@ Write a query. The file name is the name of the function to generate.
     }, "fetch"]
   ],
 
-  "returns": "fetch"
+  "jmapcReturns": "fetch"
 }
 ```
 
@@ -163,7 +163,7 @@ they are one request:
       }
     }, "send"]
   ],
-  "returns": "send"
+  "jmapcReturns": "send"
 }
 ```
 
@@ -183,15 +183,16 @@ A query file is a JMAP Request object, exactly as
 [RFC 8620](https://www.rfc-editor.org/rfc/rfc8620) defines it, plus three
 members the generator reads and the server never sees.
 
+A member beginning with `jmapc` is one the generator reads; everything else is
+the request as RFC 8620 defines it.
+
 | Member | |
 |---|---|
 | `methodCalls` | The calls, as `[name, arguments, callId]`. Required. |
 | `using` | The capabilities the request declares. Optional: derived from the methods called. |
-| `doc` | The generated function's documentation. Optional. |
-| `returns` | The call whose response the function returns. Optional: without it, every response is returned. |
-
-An argument object may also carry a `jmapcComment`, which the generator reads
-and the server never sees.
+| `jmapcDoc` | The generated function's documentation. Optional. |
+| `jmapcReturns` | The call whose response the function returns. Optional: without it, every response is returned. |
+| `jmapcComment` | Why a call is there. Goes in that call's arguments; see below. |
 
 A query file is plain JSON, so `jq` reads it and an editor understands it. To
 say why a call is there, give its arguments a `jmapcComment`:

@@ -1,5 +1,5 @@
 {
-  "doc": "AttachNote writes a note into a blob and attaches it to a draft in the same request. The upload endpoint of RFC 8620 cannot do this: it is a separate HTTP call, so the blob id has to come back to the client before the draft can refer to it.",
+  "jmapcDoc": "AttachNote writes a note into a blob and attaches it to a draft in the same request. The upload endpoint of RFC 8620 cannot do this: it is a separate HTTP call, so the blob id has to come back to the client before the draft can refer to it.",
 
   "methodCalls": [
     ["Blob/upload", {

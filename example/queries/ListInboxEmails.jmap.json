@@ -1,5 +1,5 @@
 {
-  "doc": "ListInboxEmails returns the most recent emails in one mailbox, newest first.",
+  "jmapcDoc": "ListInboxEmails returns the most recent emails in one mailbox, newest first.",
 
   "methodCalls": [
     ["Email/query", {
@@ -16,5 +16,5 @@
     }, "fetch"]
   ],
 
-  "returns": "fetch"
+  "jmapcReturns": "fetch"
 }

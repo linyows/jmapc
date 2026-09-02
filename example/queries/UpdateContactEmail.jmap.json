@@ -1,5 +1,5 @@
 {
-  "doc": "UpdateContactEmail changes one address on a card and makes it the preferred one, sending the two values that changed rather than the whole card.",
+  "jmapcDoc": "UpdateContactEmail changes one address on a card and makes it the preferred one, sending the two values that changed rather than the whole card.",
 
   "methodCalls": [
     ["ContactCard/set", {
@@ -12,5 +12,5 @@
     }, "update"]
   ],
 
-  "returns": "update"
+  "jmapcReturns": "update"
 }

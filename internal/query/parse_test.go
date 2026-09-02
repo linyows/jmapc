@@ -29,7 +29,7 @@ func parseErr(t *testing.T, src string) string {
 }
 
 const listInboxEmails = `{
-  "doc": "ListInboxEmails returns the most recent emails in one mailbox.",
+  "jmapcDoc": "ListInboxEmails returns the most recent emails in one mailbox.",
   "methodCalls": [
     ["Email/query", {
       "jmapcComment": "Find the ids of the matching emails, newest first.",
@@ -45,7 +45,7 @@ const listInboxEmails = `{
       "properties": ["id", "subject", "from", "receivedAt"]
     }, "c1"]
   ],
-  "returns": "c1"
+  "jmapcReturns": "c1"
 }`
 
 func TestParse(t *testing.T) {
@@ -200,7 +200,7 @@ func TestParseErrors(t *testing.T) {
 		want: `needs the capability urn:ietf:params:jmap:mail`,
 	}, {
 		name: "unknown returns",
-		src:  `{"methodCalls": [["Email/query", {}, "c0"]], "returns": "c9"}`,
+		src:  `{"methodCalls": [["Email/query", {}, "c0"]], "jmapcReturns": "c9"}`,
 		want: `no method call has the id "c9"`,
 	}, {
 		name: "invalid id literal",
@@ -469,7 +469,7 @@ func TestContactsQuery(t *testing.T) {
 	      "properties": ["id", "uid", "name", "emails", "phones"]
 	    }, "fetch"]
 	  ],
-	  "returns": "fetch"
+	  "jmapcReturns": "fetch"
 	}`)
 	want := "urn:ietf:params:jmap:core urn:ietf:params:jmap:contacts"
 	if got := strings.Join(q.Using, " "); got != want {
@@ -546,7 +546,7 @@ func TestCalendarsQuery(t *testing.T) {
 	      "reduceParticipants": true
 	    }, "fetch"]
 	  ],
-	  "returns": "fetch"
+	  "jmapcReturns": "fetch"
 	}`)
 
 	want := map[string]string{
@@ -802,7 +802,7 @@ func TestPrincipalsQuery(t *testing.T) {
 	      "properties": ["id", "type", "name", "email", "timeZone"]
 	    }, "fetch"]
 	  ],
-	  "returns": "fetch"
+	  "jmapcReturns": "fetch"
 	}`)
 	want := "urn:ietf:params:jmap:core urn:ietf:params:jmap:principals"
 	if got := strings.Join(q.Using, " "); got != want {
@@ -1000,7 +1000,7 @@ func TestQuota(t *testing.T) {
 	      "properties": ["id", "name", "used", "hardLimit", "warnLimit"]
 	    }, "fetch"]
 	  ],
-	  "returns": "fetch"
+	  "jmapcReturns": "fetch"
 	}`)
 	want := "urn:ietf:params:jmap:core urn:ietf:params:jmap:quota"
 	if got := strings.Join(q.Using, " "); got != want {
