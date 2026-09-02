@@ -1,6 +1,6 @@
 # jmapc
 
-[![CI](https://github.com/linyows/jmapc/actions/workflows/ci.yml/badge.svg)](https://github.com/linyows/jmapc/actions/workflows/ci.yml)
+[![Test](https://github.com/linyows/jmapc/actions/workflows/test.yml/badge.svg)](https://github.com/linyows/jmapc/actions/workflows/test.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/linyows/jmapc.svg)](https://pkg.go.dev/github.com/linyows/jmapc)
 
 Write the JMAP request. Get a typed Go client.
