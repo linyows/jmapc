@@ -34,7 +34,8 @@ type Blob struct {
 	// Size is the size in octets, or -1 when the server did not say.
 	Size int64
 	// Name is the filename from the Content-Disposition header, if the server
-	// sent one.
+	// sent one. It is whatever the server said, which may be a path rather
+	// than a name: take the base of it before writing anything under it.
 	Name string
 }
 

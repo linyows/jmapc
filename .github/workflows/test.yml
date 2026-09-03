@@ -34,6 +34,10 @@ jobs:
           - {os: windows-latest, go: "stable"}
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Nothing here writes back, so the job has no use for a credential
+          # in the git config.
+          persist-credentials: false
 
       - uses: actions/setup-go@v7
         with:
@@ -53,6 +57,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Nothing here writes back, so the job has no use for a credential
+          # in the git config.
+          persist-credentials: false
 
       - uses: actions/setup-go@v7
         with:
@@ -92,6 +100,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Nothing here writes back, so the job has no use for a credential
+          # in the git config.
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
@@ -108,20 +120,3 @@ jobs:
         run: |
           npx --yes -p typescript@5 tsc -p tsconfig.node.json
           node dist/check.js
-
-  vulncheck:
-    name: govulncheck
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-go@v7
-        with:
-          go-version: stable
-          cache-dependency-path: go.mod
-
-      # The module has no dependencies, so this is watching the standard
-      # library, and it fails when the Go release in use has a known problem
-      # in code jmapc actually reaches.
-      - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...

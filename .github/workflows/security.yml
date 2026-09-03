@@ -1,0 +1,80 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # An advisory is published whenever it is published, not when someone
+  # happens to push. A weekly run is what notices one in a quiet week.
+  schedule:
+    - cron: "17 5 * * 1"
+
+# Analysis only reads the repository. The one exception is CodeQL, which
+# reports what it finds to the security tab and asks for that permission
+# in the job itself.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  codeql:
+    name: codeql (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Uploading the results is what puts them in the security tab and on
+      # the pull request that introduced them.
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # The Go is the library and the generator. The workflows are worth a
+        # pass of their own: the queries for them catch a step that takes a
+        # value someone outside the repository controls.
+        language: [go, actions]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Nothing here writes back, so the job has no use for a credential
+          # in the git config.
+          persist-credentials: false
+
+      - uses: actions/setup-go@v7
+        if: matrix.language == 'go'
+        with:
+          go-version: stable
+          cache-dependency-path: go.mod
+
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          # The default suite looks for what is wrong. The extended one also
+          # flags the shapes that tend to become wrong, which is what suits a
+          # library whose callers hold the credentials.
+          queries: security-extended
+
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}
+
+  vulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache-dependency-path: go.mod
+
+      # The module has no dependencies, so this is watching the standard
+      # library, and it fails when the Go release in use has a known problem
+      # in code jmapc actually reaches.
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
