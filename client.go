@@ -255,7 +255,9 @@ func (c *Client) send(req *http.Request) (*http.Response, error) {
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("jmapc: %s %s: %w", req.Method, req.URL, err)
+		// Redacted, because a URL may carry credentials in its userinfo, and
+		// this error is on its way to a log.
+		return nil, fmt.Errorf("jmapc: %s %s: %w", req.Method, req.URL.Redacted(), err)
 	}
 	return resp, nil
 }
