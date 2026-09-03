@@ -58,10 +58,17 @@ learning the builder. But the query is the part you care about; the client is
 not. So write the query, and let the tool write the client — an approach this
 takes from [sqlc](https://sqlc.dev).
 
-What you get for it is the part that is tedious to do by hand and easy to get
-wrong: the result references are checked against the methods they point at, the
-arguments against the data model, the property names against the type, and the
-response decodes into a struct holding exactly the properties you asked for.
+Writing the query is all you do; the tool takes on the parts that are tedious
+by hand and easy to get wrong.
+
+- **A mistake in the query stops the build.** Result references are checked
+  against the methods they point at, arguments against the data model, and
+  property names against the type, so a misspelling never reaches the server.
+- **The response is type-safe.** It decodes into a struct holding exactly the
+  properties the query asked for, with no `map[string]any` to walk.
+- **No error goes unchecked.** JMAP fails at three levels — request, method,
+  and record — and the last of them arrives as HTTP 200, which is the one
+  people miss. Generated code looks at it.
 
 ## Install
 
