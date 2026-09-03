@@ -149,6 +149,31 @@ for _, email := range res.List {
 ヘッダフィールドを指すプロパティは、要求した形式によって型が決まります。
 `header:List-Id:asText` は `*string`、`header:To:asAddresses` は `[]jmapc.EmailAddress` です。
 
+### 生成される名前
+
+生成される名前はすべてファイル名から決まります。
+そのためファイル名は Go の識別子でなければなりません。
+英数字とアンダースコアからなり、数字で始まらない名前です。
+
+`ListInboxEmails.jmap.json` からは次の名前が生成されます。
+
+| 生成物 | 名前 |
+|---|---|
+| 関数 | `ListInboxEmails` |
+| パラメータ。クエリが値を開けている場合に生成されます | `ListInboxEmailsParams` |
+| プロパティを絞り込んだレコード | `ListInboxEmailsEmail`。ボディパートを絞り込めば `ListInboxEmailsEmailBodyPart` も生成されます |
+| そのレコードを返す呼び出しのレスポンス | `ListInboxEmailsEmailGetResponse` |
+| 結果。`_returns` が呼び出しを指定しない場合に生成されます | `ListInboxEmailsResult` |
+| ファイル | `listinboxemails_gen.go` |
+
+絞り込みのない呼び出しは、クエリごとの型ではなく共有の型で返ります。
+`SendEmail` の戻り値が `*jmapc.EmailSubmissionSetResponse` なのはそのためです。
+同じパッケージに同名のクエリを二つ置くことはできません。
+生成される型の名前がすでに使われている場合は、`ListInboxEmailsEmail2` のように連番が付きます。
+
+TypeScript では関数名とファイル名の先頭が小文字になり、`listInboxEmails.ts` の `listInboxEmails` になります。
+型名は上の表のままです。
+
 ### 一つのリクエストで複数の手順を踏む
 
 次の例が JMAP の本領です。
