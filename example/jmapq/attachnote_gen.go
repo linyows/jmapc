@@ -103,5 +103,18 @@ func AttachNote(ctx context.Context, c *jmapc.Client, p AttachNoteParams) (*Atta
 	if err := resp.Decode("draft", &out.EmailSet); err != nil {
 		return nil, err
 	}
+
+	var failures jmapc.SetErrors
+	failures.Collect("Blob/upload", "upload", map[string]map[jmapc.ID]jmapc.SetError{
+		"notCreated": out.BlobUpload.NotCreated,
+	})
+	failures.Collect("Email/set", "draft", map[string]map[jmapc.ID]jmapc.SetError{
+		"notCreated":   out.EmailSet.NotCreated,
+		"notUpdated":   out.EmailSet.NotUpdated,
+		"notDestroyed": out.EmailSet.NotDestroyed,
+	})
+	if err := failures.Err(); err != nil {
+		return &out, err
+	}
 	return &out, nil
 }

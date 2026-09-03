@@ -103,5 +103,20 @@ func FileIntoNewMailbox(ctx context.Context, c *jmapc.Client, p FileIntoNewMailb
 		return nil, err
 	}
 	out.CreatedIDs = resp.CreatedIDs
+
+	var failures jmapc.SetErrors
+	failures.Collect("Mailbox/set", "make", map[string]map[jmapc.ID]jmapc.SetError{
+		"notCreated":   out.MailboxSet.NotCreated,
+		"notUpdated":   out.MailboxSet.NotUpdated,
+		"notDestroyed": out.MailboxSet.NotDestroyed,
+	})
+	failures.Collect("Email/set", "file", map[string]map[jmapc.ID]jmapc.SetError{
+		"notCreated":   out.EmailSet.NotCreated,
+		"notUpdated":   out.EmailSet.NotUpdated,
+		"notDestroyed": out.EmailSet.NotDestroyed,
+	})
+	if err := failures.Err(); err != nil {
+		return &out, err
+	}
 	return &out, nil
 }

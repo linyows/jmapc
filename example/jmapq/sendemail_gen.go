@@ -124,5 +124,24 @@ func SendEmail(ctx context.Context, c *jmapc.Client, p SendEmailParams) (*jmapc.
 	if err := resp.Decode("send", &out); err != nil {
 		return nil, err
 	}
+
+	var refused0 jmapc.EmailSetResponse
+	if err := resp.Decode("write", &refused0); err != nil {
+		return nil, err
+	}
+	var failures jmapc.SetErrors
+	failures.Collect("Email/set", "write", map[string]map[jmapc.ID]jmapc.SetError{
+		"notCreated":   refused0.NotCreated,
+		"notUpdated":   refused0.NotUpdated,
+		"notDestroyed": refused0.NotDestroyed,
+	})
+	failures.Collect("EmailSubmission/set", "send", map[string]map[jmapc.ID]jmapc.SetError{
+		"notCreated":   out.NotCreated,
+		"notUpdated":   out.NotUpdated,
+		"notDestroyed": out.NotDestroyed,
+	})
+	if err := failures.Err(); err != nil {
+		return &out, err
+	}
 	return &out, nil
 }

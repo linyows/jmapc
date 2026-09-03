@@ -57,5 +57,15 @@ func CreateMailbox(ctx context.Context, c *jmapc.Client, p CreateMailboxParams) 
 	if err := resp.Decode("create", &out); err != nil {
 		return nil, err
 	}
+
+	var failures jmapc.SetErrors
+	failures.Collect("Mailbox/set", "create", map[string]map[jmapc.ID]jmapc.SetError{
+		"notCreated":   out.NotCreated,
+		"notUpdated":   out.NotUpdated,
+		"notDestroyed": out.NotDestroyed,
+	})
+	if err := failures.Err(); err != nil {
+		return &out, err
+	}
 	return &out, nil
 }

@@ -35,13 +35,7 @@ it works:
 1. You run jmapc to generate code with type-safe interfaces to those queries.
 1. You write application code that calls the generated code.
 
-Have a look at [the worked example](example/) to see it in action, and at
-[Why](#why) for the motivation behind jmapc.
-
-## Why
-
-`jmapc` is to JMAP what [sqlc](https://sqlc.dev) is to SQL, and for much the
-same reason.
+## Motivation
 
 JMAP is built around one idea. A request carries several method calls, and a
 call may refer to the result of an earlier one, so a chain of dependent
@@ -58,12 +52,20 @@ resource and a method per path.
 
 Most clients expose this through a builder, which means learning JMAP *and*
 learning the builder. But the query is the part you care about; the client is
-not. So write the query, and let the tool write the client.
+not. So write the query, and let jmapc write the client — an approach it
+takes from [sqlc](https://sqlc.dev).
 
-What you get for it is the part that is tedious to do by hand and easy to get
-wrong: the result references are checked against the methods they point at, the
-arguments against the data model, the property names against the type, and the
-response decodes into a struct holding exactly the properties you asked for.
+Writing the query is all you do; jmapc takes on the parts that are tedious by
+hand and easy to get wrong.
+
+- **A mistake in the query stops the build.** Result references are checked
+  against the methods they point at, arguments against the data model, and
+  property names against the type, so a misspelling never reaches the server.
+- **The response is type-safe.** It decodes into a struct holding exactly the
+  properties the query asked for, with no `map[string]any` to walk.
+- **No error goes unchecked.** JMAP fails at three levels — request, method,
+  and record — and the last of them arrives as HTTP 200, which is the one
+  people miss. Generated code looks at it.
 
 ## Install
 
@@ -225,7 +227,7 @@ rather than a shape are named aliases of `string`, so an `Id` and a
 ## Writing a query
 
 A query file is a JMAP Request object, exactly as
-[RFC 8620](https://www.rfc-editor.org/rfc/rfc8620) defines it, plus three
+[RFC 8620](https://www.rfc-editor.org/rfc/rfc8620) defines it, plus four
 members the generator reads and the server never sees.
 
 A member beginning with an underscore is one the generator reads; everything
@@ -252,9 +254,7 @@ say why a call is there, give its arguments a `_comment`:
 
 The generator lifts it into the generated code and leaves it out of the request,
 which it must: RFC 8620 requires a server to reject an argument it does not
-know. An underscore rather than a dot, because jmapc writes the path to a
-problem with dots — `methodCalls[0].arguments.filter` — and a member named
-`.comment` would read as part of one.
+know.
 
 ```go
 // Fetch them in the same request, so the ids never make a round trip.
@@ -372,6 +372,37 @@ A **method-level** failure is a `jmapc.MethodErrors`. JMAP runs the calls it
 can, so the response comes back alongside the error, and each error names the
 method and call id that failed rather than the bare `"error"` the wire format
 carries.
+
+There is a third level, and it is the one that gets missed. A `/set` answers
+**200 with no error in it** and lists the records it would not act on:
+
+```json
+["Email/set", {"notCreated": {"draft": {"type": "invalidProperties",
+                                        "properties": ["subject"]}}}, "write"]
+```
+
+Read only the transport error and this is a success where nothing happened.
+Generated code checks it, so a refused record is a `*jmapc.SetErrors`:
+
+```go
+res, err := jmapq.SendEmail(ctx, c, params)
+if err != nil {
+    var refused *jmapc.SetErrors
+    if errors.As(err, &refused) {
+        for _, f := range refused.Failures {
+            log.Printf("%s: %v", f.Key, f.Err) // draft: invalidProperties [subject]
+        }
+    }
+    return err
+}
+```
+
+`res` is returned alongside the error, since the part of the request the server
+did carry out still happened. Calls the query does not name in `_returns` are
+checked too — naming one call should not stop the others from being looked at.
+
+In TypeScript the same failure is a thrown `SetErrors`, with the response on
+`err.result`.
 
 ## Blobs
 
@@ -502,23 +533,23 @@ each brings its own types and methods. These are the ones
 [IANA lists](https://www.iana.org/assignments/jmap/jmap.xhtml), and where jmapc
 stands on each.
 
-| Capability | | Built in |
+| Capability | Specification | Supported |
 |---|---|---|
-| `urn:ietf:params:jmap:core` | [RFC 8620](https://www.rfc-editor.org/rfc/rfc8620) | Yes |
-| `urn:ietf:params:jmap:mail` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | Yes |
-| `urn:ietf:params:jmap:submission` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | Yes |
-| `urn:ietf:params:jmap:vacationresponse` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | Yes |
-| `urn:ietf:params:jmap:contacts` | [RFC 9610](https://www.rfc-editor.org/rfc/rfc9610) | Yes |
-| `urn:ietf:params:jmap:calendars` | [draft-ietf-jmap-calendars](https://datatracker.ietf.org/doc/draft-ietf-jmap-calendars/) | Yes |
-| `urn:ietf:params:jmap:principals:availability` | [draft-ietf-jmap-calendars](https://datatracker.ietf.org/doc/draft-ietf-jmap-calendars/) | Yes |
-| `urn:ietf:params:jmap:principals` | [RFC 9670](https://www.rfc-editor.org/rfc/rfc9670) | Yes |
-| `urn:ietf:params:jmap:principals:owner` | [RFC 9670](https://www.rfc-editor.org/rfc/rfc9670) | Yes |
-| `urn:ietf:params:jmap:smimeverify` | [RFC 9219](https://www.rfc-editor.org/rfc/rfc9219) | Yes |
-| `urn:ietf:params:jmap:blob` | [RFC 9404](https://www.rfc-editor.org/rfc/rfc9404) | Yes |
-| `urn:ietf:params:jmap:quota` | [RFC 9425](https://www.rfc-editor.org/rfc/rfc9425) | Yes |
-| `urn:ietf:params:jmap:sieve` | [RFC 9661](https://www.rfc-editor.org/rfc/rfc9661) | Yes |
-| `urn:ietf:params:jmap:mdn` | [RFC 9007](https://www.rfc-editor.org/rfc/rfc9007) | Yes |
-| `urn:ietf:params:jmap:webpush-vapid` | [RFC 9749](https://www.rfc-editor.org/rfc/rfc9749) | Yes |
+| `urn:ietf:params:jmap:core` | [RFC 8620](https://www.rfc-editor.org/rfc/rfc8620) | ✅ |
+| `urn:ietf:params:jmap:mail` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | ✅ |
+| `urn:ietf:params:jmap:submission` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | ✅ |
+| `urn:ietf:params:jmap:vacationresponse` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | ✅ |
+| `urn:ietf:params:jmap:contacts` | [RFC 9610](https://www.rfc-editor.org/rfc/rfc9610) | ✅ |
+| `urn:ietf:params:jmap:calendars` | [draft-ietf-jmap-calendars](https://datatracker.ietf.org/doc/draft-ietf-jmap-calendars/) | ✅ |
+| `urn:ietf:params:jmap:principals:availability` | [draft-ietf-jmap-calendars](https://datatracker.ietf.org/doc/draft-ietf-jmap-calendars/) | ✅ |
+| `urn:ietf:params:jmap:principals` | [RFC 9670](https://www.rfc-editor.org/rfc/rfc9670) | ✅ |
+| `urn:ietf:params:jmap:principals:owner` | [RFC 9670](https://www.rfc-editor.org/rfc/rfc9670) | ✅ |
+| `urn:ietf:params:jmap:smimeverify` | [RFC 9219](https://www.rfc-editor.org/rfc/rfc9219) | ✅ |
+| `urn:ietf:params:jmap:blob` | [RFC 9404](https://www.rfc-editor.org/rfc/rfc9404) | ✅ |
+| `urn:ietf:params:jmap:quota` | [RFC 9425](https://www.rfc-editor.org/rfc/rfc9425) | ✅ |
+| `urn:ietf:params:jmap:sieve` | [RFC 9661](https://www.rfc-editor.org/rfc/rfc9661) | ✅ |
+| `urn:ietf:params:jmap:mdn` | [RFC 9007](https://www.rfc-editor.org/rfc/rfc9007) | ✅ |
+| `urn:ietf:params:jmap:webpush-vapid` | [RFC 9749](https://www.rfc-editor.org/rfc/rfc9749) | ✅ |
 
 Two of these store objects from specifications of their own: a contact card is
 a [JSContact](https://www.rfc-editor.org/rfc/rfc9553) Card, and a calendar event

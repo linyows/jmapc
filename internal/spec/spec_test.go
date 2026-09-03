@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -453,5 +454,52 @@ func TestTSNeedsQuoting(t *testing.T) {
 		if !TSNeedsQuoting(name) {
 			t.Errorf("%q is written bare, want quoted", name)
 		}
+	}
+}
+
+// TestSetErrorFields checks that the properties reporting per-record failures
+// are found by their type, so that a method nobody thought about is still
+// checked.
+func TestSetErrorFields(t *testing.T) {
+	s := Standard()
+	for _, tt := range []struct {
+		method string
+		want   []string
+	}{
+		{"Email/set", []string{"notCreated", "notUpdated", "notDestroyed"}},
+		{"Email/copy", []string{"notCreated"}},
+		{"Email/import", []string{"notCreated"}},
+		{"Email/get", nil},
+		{"Email/query", nil},
+		{"Mailbox/set", []string{"notCreated", "notUpdated", "notDestroyed"}},
+	} {
+		got := s.SetErrorFields(tt.method)
+		if !reflect.DeepEqual(got, tt.want) {
+			t.Errorf("SetErrorFields(%q) = %v, want %v", tt.method, got, tt.want)
+		}
+	}
+}
+
+// TestSetErrorFieldsInSchema checks that a vendor extension declaring a /set
+// of its own is checked as the standard methods are.
+func TestSetErrorFieldsInSchema(t *testing.T) {
+	s := Standard()
+	s.AddObject(&Object{
+		Name:       "NoteSetResponse",
+		Capability: "urn:example:notes",
+		Kind:       KindResponse,
+		Fields: []*Field{
+			{Name: "created", Type: "Id[Note]|null"},
+			{Name: "notCreated", Type: "Id[SetError]|null"},
+		},
+	})
+	s.AddMethod(&Method{
+		Name:       "Note/set",
+		Capability: "urn:example:notes",
+		Arguments:  "NoteSetArguments",
+		Response:   "NoteSetResponse",
+	})
+	if got := s.SetErrorFields("Note/set"); !reflect.DeepEqual(got, []string{"notCreated"}) {
+		t.Errorf("SetErrorFields(Note/set) = %v, want [notCreated]", got)
 	}
 }

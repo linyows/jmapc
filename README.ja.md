@@ -34,15 +34,9 @@ jmapc は JMAP から**型安全なコード**を、Go または TypeScript で�
 1. jmapc を実行して、そのクエリに型安全なインターフェースを持つコードを生成します。
 1. 生成されたコードを呼ぶアプリケーションコードを書きます。
 
-実際に動くものは[サンプル](example/)に、作った動機は[なぜ作ったか](#なぜ作ったか)にあります。
+## 動機
 
-## なぜ作ったか
-
-`jmapc` が JMAP に対して果たす役割は、[sqlc](https://sqlc.dev) が SQL に対して果たす役割と同じです。
-理由もほとんど同じです。
-
-JMAP は一つの考え方の上に組み立てられています。
-一つのリクエストが複数のメソッド呼び出しを運び、後の呼び出しは前の呼び出しの結果を参照できます。
+JMAP は一つのリクエスト中に複数のメソッド呼び出しを記述でき、後の呼び出しは前の呼び出しの結果を参照できます。
 依存関係のある一連の操作が、一往復で済みます。
 
 ```json
@@ -50,22 +44,30 @@ JMAP は一つの考え方の上に組み立てられています。
 ["Email/get",   {"#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"}}, "fetch"]
 ```
 
-id はクライアントに戻ってきません。
-これがプロトコルの眼目であり、JMAP クライアントが REST クライアントのような形、つまりリソースごとの型とパスごとのメソッドという形にならない理由でもあります。
+一つ目のメソッドの戻りで得られるid はクライアントに戻ってきません。
+これがプロトコルの核心であり、JMAP クライアントが REST クライアントのような形、つまりリソースごとの型とパスごとのメソッドという形にならない理由でもあります。
 
-多くのクライアントはこれをビルダーとして提供します。
-すると利用者は JMAP に加えてビルダーの使い方も覚えることになります。
-しかし関心があるのはクエリであって、クライアントではありません。
-であれば、クエリだけを書いて、クライアントはツールに書かせればよいはずです。
+ほとんどのJMAPクライアントはこれをビルダーとして提供します。
+この場合、利用者は JMAP に加えてビルダーの使い方も覚えることになります。
+しかし利用者の関心があるのはJMAPクエリであって、クライアントの使い方ではありません。
+であれば、クエリだけを書いて、クライアントは jmapc に書かせればよいはずです。
+このアイデアはSQLにおける [sqlc](https://sqlc.dev) インスパイアによるものです。
 
-見返りに得られるのは、手で書くと面倒で間違えやすい部分です。
-結果参照は参照先のメソッドに照らして検証され、引数はデータモデルに、プロパティ名は型に照らして検証されます。
-レスポンスは、クエリが要求したプロパティだけを持つ構造体にデコードされます。
+利用者が書くのはクエリだけで、手で書くと面倒で間違えやすい部分は jmapc が引き受けます。
+
+- **クエリの誤りはビルドで止まります。**
+  結果参照は参照先のメソッドに照らして、引数はデータモデルに、プロパティ名は型に照らして検証されます。
+  プロパティ名の綴り間違いは、サーバに届く前に分かります。
+- **レスポンスは型安全です。**
+  クエリが要求したプロパティだけを持つ構造体にデコードされるので、`map[string]any` を辿る必要はありません。
+- **エラー処理に漏れがありません。**
+  JMAP はリクエスト、メソッド、レコードの三つのレベルで失敗します。
+  最後のものは HTTP 200 で返るので見落とされがちですが、生成コードがこれを検査します。
 
 ## インストール
 
 ジェネレータは Go のツールで、生成するものも Go です。
-使う側のモジュールに記録しておくのが基本です。
+使う側のモジュールに追加しておきます。
 
 ```
 go get -tool github.com/linyows/jmapc/cmd/jmapc
@@ -73,7 +75,6 @@ go get -tool github.com/linyows/jmapc/cmd/jmapc
 
 これでバージョンが `go.mod` に固定され、`go tool jmapc` で実行できます。
 そのプロジェクトをビルドする全員と CI が同じバージョンで生成することになります。
-生成物をコミットするツールでは、これが効いてきます。
 
 ```go
 //go:generate go tool jmapc generate
@@ -86,8 +87,7 @@ go install github.com/linyows/jmapc/cmd/jmapc@latest
 ```
 
 Go のツールチェインがない環境では、[リリース](https://github.com/linyows/jmapc/releases)からバイナリを取得してください。
-TypeScript のプロジェクトではこちらが入口になります。
-`go tool` を実行する Go がないからです。
+TypeScript のプロジェクトではこちらを使います。
 
 ## 使い方
 
@@ -218,14 +218,14 @@ null を取りうるプロパティはポインタではなく union なので�
 ## クエリの書き方
 
 クエリファイルは [RFC 8620](https://www.rfc-editor.org/rfc/rfc8620) が定義する JMAP の Request オブジェクトそのものです。
-これに、ジェネレータが読みサーバが見ることのない三つのメンバが加わります。
+これに、ジェネレータが読みサーバが見ることのない四つのメンバが加わります。
 
 アンダースコアで始まるメンバはジェネレータが読むもので、それ以外は RFC 8620 が定義するリクエストそのものです。
 
 | メンバ | |
 |---|---|
 | `methodCalls` | 呼び出しを `[name, arguments, callId]` の形で並べます。必須です。 |
-| `using` | リクエストが宣言する capability です。省略でき、その場合は呼び出すメソッドから導出されます。 |
+| `using` | リクエストが宣言するケイパビリティです。省略でき、その場合は呼び出すメソッドから導出されます。 |
 | `_doc` | 生成される関数のドキュメントです。省略できます。 |
 | `_returns` | どの呼び出しのレスポンスを関数の戻り値にするかを指定します。省略すると全てのレスポンスが返ります。 |
 | `_createdIds` | 先行するリクエストの creation id を受け取り、このリクエストのものを返します。省略可。次項を参照してください。 |
@@ -246,9 +246,6 @@ null を取りうるプロパティはポインタではなく union なので�
 除かなければなりません。
 RFC 8620 は、知らない引数をサーバが拒否することを求めているからです。
 
-ドットではなくアンダースコアなのは、jmapc が問題の場所をドットで綴るからです。
-`methodCalls[0].arguments.filter` のような表記の中では、`.comment` というメンバがその一部に見えてしまいます。
-
 ```go
 // 同じリクエストで取得する。id が往復することはない。
 {Name: "Email/get", CallID: "fetch", Args: map[string]any{
@@ -267,8 +264,6 @@ Go の型は、その値が埋まる引数から決まります。
 ```json
 ["Email/set", {"update": {"{{emailId}}": {"keywords/$seen": true}}}, "mark"]
 ```
-
-`$` ではなく波括弧を使うのは、JMAP のキーワード自体が `$seen` のように `$` で始まるからです。
 
 ### リクエストを跨ぐ creation id
 
@@ -318,7 +313,7 @@ creation id はリクエスト全体のものであって、その中のどの�
 - `sort` がその型で実際にソートできるプロパティを指し、`hasKeyword` のような比較子が要求する追加メンバを与えていること
 - 仕様が値を固定しているプロパティに、その値のいずれかが与えられていること。文字列の値と、参加者の `roles` のような集合のキーの両方が対象です
 - id、日付、整数の形式が正しいこと
-- リクエストが宣言する capability が、呼び出すメソッドを網羅していること
+- リクエストが宣言するケイパビリティが、呼び出すメソッドを網羅していること
 
 綴り間違いには候補が提示されます。
 
@@ -346,17 +341,48 @@ queries/BadQuery.jmap.json: methodCalls[1].arguments.#ids.name: the referenced c
 
 ## 実行時のエラー
 
-JMAP は二つの水準で失敗します。
+JMAP は二つのレベルで失敗します。
 ランタイムもそれに対応します。
 
-**リクエスト水準**の失敗は、サーバがリクエスト全体を拒否した場合で、`*jmapc.RequestError` になります。
+**リクエストレベル**の失敗は、サーバがリクエスト全体を拒否した場合で、`*jmapc.RequestError` になります。
 RFC 8620 §3.6.1 の problem type を持ちます。
 このうちいくつかは送信前にクライアントが捕まえます。
-セッションが広告していない capability や、サーバが受け付ける数を超える呼び出しなどです。
+セッションが広告していないケイパビリティや、サーバが受け付ける数を超える呼び出しなどです。
 
-**メソッド水準**の失敗は `jmapc.MethodErrors` になります。
+**メソッドレベル**の失敗は `jmapc.MethodErrors` になります。
 JMAP は実行できる呼び出しを実行するので、レスポンスはエラーと一緒に返ります。
 各エラーは、ワイヤフォーマットが運ぶ `"error"` ではなく、失敗したメソッド名と呼び出し id を報告します。
+
+第三のレベルがあり、見落とされるのはこれです。
+`/set` は**エラーを含まない 200** を返しながら、処理を拒んだレコードを列挙します。
+
+```json
+["Email/set", {"notCreated": {"draft": {"type": "invalidProperties",
+                                        "properties": ["subject"]}}}, "write"]
+```
+
+転送レベルのエラーだけを見ると、何も起きていないのに成功に見えます。
+生成コードがこれを検査するので、拒否されたレコードは `*jmapc.SetErrors` になります。
+
+```go
+res, err := jmapq.SendEmail(ctx, c, params)
+if err != nil {
+    var refused *jmapc.SetErrors
+    if errors.As(err, &refused) {
+        for _, f := range refused.Failures {
+            log.Printf("%s: %v", f.Key, f.Err) // draft: invalidProperties [subject]
+        }
+    }
+    return err
+}
+```
+
+`res` はエラーと一緒に返ります。
+サーバが実際に実行した部分は起きているからです。
+クエリが `_returns` で名指ししていない呼び出しも検査されます。
+一つの呼び出しを名指ししたことで、他が見られなくなるべきではないからです。
+
+TypeScript では同じ失敗が `SetErrors` の throw になり、レスポンスは `err.result` に載ります。
 
 ## Blob
 
@@ -420,7 +446,7 @@ for {
 ## ベンダ拡張
 
 JMAP は拡張される前提の設計です。
-サーバは独自の capability URI を広告し、それとともに jmapc の知らない型とメソッドが現れます。
+サーバは独自のケイパビリティ URI を広告し、それとともに jmapc の知らない型とメソッドが現れます。
 スキーマファイルに記述すれば、それに対するクエリも `Email` に対するものとまったく同じように検証されます。
 結果参照、プロパティ名、ソート順、すべてが対象です。
 
@@ -476,29 +502,29 @@ CI では同じ検証に加えて、gofmt、go vet、govulncheck を実行しま
 
 ## 対応範囲
 
-### capability
+### ケイパビリティ
 
 JMAP は仕様の集まりです。
-サーバは capability URI を広告し、それぞれが固有の型とメソッドを持ち込みます。
+サーバはケイパビリティ URI を広告し、それぞれが固有の型とメソッドを持ち込みます。
 以下は [IANA が登録しているもの](https://www.iana.org/assignments/jmap/jmap.xhtml)と、それぞれに対する jmapc の状況です。
 
-| capability | | 内蔵 |
+| ケイパビリティ | 仕様 | サポート |
 |---|---|---|
-| `urn:ietf:params:jmap:core` | [RFC 8620](https://www.rfc-editor.org/rfc/rfc8620) | あり |
-| `urn:ietf:params:jmap:mail` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | あり |
-| `urn:ietf:params:jmap:submission` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | あり |
-| `urn:ietf:params:jmap:vacationresponse` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | あり |
-| `urn:ietf:params:jmap:contacts` | [RFC 9610](https://www.rfc-editor.org/rfc/rfc9610) | あり |
-| `urn:ietf:params:jmap:calendars` | [draft-ietf-jmap-calendars](https://datatracker.ietf.org/doc/draft-ietf-jmap-calendars/) | あり |
-| `urn:ietf:params:jmap:principals:availability` | [draft-ietf-jmap-calendars](https://datatracker.ietf.org/doc/draft-ietf-jmap-calendars/) | あり |
-| `urn:ietf:params:jmap:principals` | [RFC 9670](https://www.rfc-editor.org/rfc/rfc9670) | あり |
-| `urn:ietf:params:jmap:principals:owner` | [RFC 9670](https://www.rfc-editor.org/rfc/rfc9670) | あり |
-| `urn:ietf:params:jmap:smimeverify` | [RFC 9219](https://www.rfc-editor.org/rfc/rfc9219) | あり |
-| `urn:ietf:params:jmap:blob` | [RFC 9404](https://www.rfc-editor.org/rfc/rfc9404) | あり |
-| `urn:ietf:params:jmap:quota` | [RFC 9425](https://www.rfc-editor.org/rfc/rfc9425) | あり |
-| `urn:ietf:params:jmap:sieve` | [RFC 9661](https://www.rfc-editor.org/rfc/rfc9661) | あり |
-| `urn:ietf:params:jmap:mdn` | [RFC 9007](https://www.rfc-editor.org/rfc/rfc9007) | あり |
-| `urn:ietf:params:jmap:webpush-vapid` | [RFC 9749](https://www.rfc-editor.org/rfc/rfc9749) | あり |
+| `urn:ietf:params:jmap:core` | [RFC 8620](https://www.rfc-editor.org/rfc/rfc8620) | ✅ |
+| `urn:ietf:params:jmap:mail` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | ✅ |
+| `urn:ietf:params:jmap:submission` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | ✅ |
+| `urn:ietf:params:jmap:vacationresponse` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | ✅ |
+| `urn:ietf:params:jmap:contacts` | [RFC 9610](https://www.rfc-editor.org/rfc/rfc9610) | ✅ |
+| `urn:ietf:params:jmap:calendars` | [draft-ietf-jmap-calendars](https://datatracker.ietf.org/doc/draft-ietf-jmap-calendars/) | ✅ |
+| `urn:ietf:params:jmap:principals:availability` | [draft-ietf-jmap-calendars](https://datatracker.ietf.org/doc/draft-ietf-jmap-calendars/) | ✅ |
+| `urn:ietf:params:jmap:principals` | [RFC 9670](https://www.rfc-editor.org/rfc/rfc9670) | ✅ |
+| `urn:ietf:params:jmap:principals:owner` | [RFC 9670](https://www.rfc-editor.org/rfc/rfc9670) | ✅ |
+| `urn:ietf:params:jmap:smimeverify` | [RFC 9219](https://www.rfc-editor.org/rfc/rfc9219) | ✅ |
+| `urn:ietf:params:jmap:blob` | [RFC 9404](https://www.rfc-editor.org/rfc/rfc9404) | ✅ |
+| `urn:ietf:params:jmap:quota` | [RFC 9425](https://www.rfc-editor.org/rfc/rfc9425) | ✅ |
+| `urn:ietf:params:jmap:sieve` | [RFC 9661](https://www.rfc-editor.org/rfc/rfc9661) | ✅ |
+| `urn:ietf:params:jmap:mdn` | [RFC 9007](https://www.rfc-editor.org/rfc/rfc9007) | ✅ |
+| `urn:ietf:params:jmap:webpush-vapid` | [RFC 9749](https://www.rfc-editor.org/rfc/rfc9749) | ✅ |
 
 このうち二つは、それ自体が別仕様のオブジェクトを格納します。
 連絡先カードは [JSContact](https://www.rfc-editor.org/rfc/rfc9553) の Card であり、カレンダーの予定は [JSCalendar](https://www.rfc-editor.org/rfc/rfc8984) の JSEvent です。
@@ -513,16 +539,16 @@ JSCalendar は JMAP にない時刻の型も持ち込みます。
 `Duration` が独自の型なのは、サマータイムの切り替えを跨ぐ `P1D` が常に 24 時間とは限らないからです。
 どちらもクエリで検証されるので、末尾に `Z` の付いた `start` や、`90m` と書いた duration はビルドに失敗します。
 
-capability のすべてが固有の型を持ち込むわけではありません。
+ケイパビリティのすべてが固有の型を持ち込むわけではありません。
 S/MIME の検証は `Email` に四つのプロパティを足すだけで、型もメソッドも増やしません。
-つまりメソッド名からは、その capability が必要だと分かりません。
-jmapc はクエリが触れたプロパティがどの capability に属するかを判断し、`using` に加えます。
+つまりメソッド名からは、そのケイパビリティが必要だと分かりません。
+jmapc はクエリが触れたプロパティがどのケイパビリティに属するかを判断し、`using` に加えます。
 `smimeStatus` を要求すれば、`urn:ietf:params:jmap:smimeverify` が自動で現れます。
 
-型もメソッドも持たず、クライアントに伝えることだけを持つ capability もあります。
+型もメソッドも持たず、クライアントに伝えることだけを持つケイパビリティもあります。
 VAPID がそれで、伝えるのは鍵です。
 こうしたものはセッションから読みます。
-`Session.Capability` は、jmapc が知らない capability も含めて、どれでも読めます。
+`Session.Capability` は、jmapc が知らないケイパビリティも含めて、どれでも読めます。
 
 ```go
 vapid, err := session.WebPushVAPID()
@@ -532,7 +558,7 @@ var limits struct{ MaxSizeScript int `json:"maxSizeScript"` }
 err = session.Accounts[accountID].Capability(jmapc.CapabilitySieve, &limits)
 ```
 
-内蔵していない capability も、手が届かないわけではありません。
+サポートしていないケイパビリティも、手が届かないわけではありません。
 [スキーマファイル](#ベンダ拡張)に型を記述すれば、それに対するクエリも他と同じように検証されます。
 ベンダ拡張と同じ仕組みであり、記述するのは宣言だけで、Go を書く必要はありません。
 
