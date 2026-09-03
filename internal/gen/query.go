@@ -1,3 +1,5 @@
+// Package gen turns the JMAP data model, and the queries written against it,
+// into Go source.
 package gen
 
 import (
@@ -5,9 +7,9 @@ import (
 	"fmt"
 	"go/format"
 	"sort"
-	"strconv"
 	"strings"
 
+	"github.com/linyows/jmapc/internal/gen/shared"
 	"github.com/linyows/jmapc/internal/query"
 	"github.com/linyows/jmapc/internal/spec"
 )
@@ -101,27 +103,27 @@ func (g *QueryGenerator) plan() ([]*plan, error) {
 	for _, q := range queries {
 		p := &plan{q: q, calls: make(map[*query.Call]*call, len(q.Calls))}
 		if len(q.Params) > 0 {
-			p.paramsType = unique(taken, q.Name+"Params")
+			p.paramsType = shared.Unique(taken, q.Name+"Params")
 		}
 		for _, c := range q.Calls {
 			info := &call{}
 			// Narrowing the nested type means the record type has to be
 			// generated too, since its own fields change to refer to it.
 			if c.Properties != nil || c.NestedProperties != nil {
-				info.recordType = unique(taken, q.Name+spec.ExportedName(c.Method.DataType))
-				info.responseType = unique(taken, q.Name+c.Field+"Response")
+				info.recordType = shared.Unique(taken, q.Name+spec.ExportedName(c.Method.DataType))
+				info.responseType = shared.Unique(taken, q.Name+c.Field+"Response")
 			} else {
 				info.responseType = g.Qualifier + spec.ExportedName(c.Method.Response)
 			}
 			if c.NestedProperties != nil {
-				info.nestedType = unique(taken, q.Name+spec.ExportedName(c.Method.NestedType))
+				info.nestedType = shared.Unique(taken, q.Name+spec.ExportedName(c.Method.NestedType))
 			}
 			p.calls[c] = info
 		}
 		if q.Returns != nil {
 			p.returnType = p.calls[q.Returns].responseType
 		} else {
-			p.resultType = unique(taken, q.Name+"Result")
+			p.resultType = shared.Unique(taken, q.Name+"Result")
 			p.returnType = p.resultType
 		}
 		g.planAccountIDs(p)
@@ -172,17 +174,6 @@ func accountIDVar(capability string) string {
 	return spec.UnexportedName(short) + "AccountID"
 }
 
-// unique returns name, or name with a number appended, so that no other
-// generated declaration in the package has it.
-func unique(taken map[string]bool, name string) string {
-	candidate := name
-	for i := 2; taken[candidate]; i++ {
-		candidate = name + strconv.Itoa(i)
-	}
-	taken[candidate] = true
-	return candidate
-}
-
 // file writes the source for one query.
 func (g *QueryGenerator) file(p *plan) ([]byte, error) {
 	var body bytes.Buffer
@@ -229,13 +220,13 @@ func (g *QueryGenerator) writeParams(buf *bytes.Buffer, p *plan) {
 	if p.paramsType == "" {
 		return
 	}
-	writeComment(buf, "", p.paramsType+" holds the values "+p.q.Name+" leaves open.")
+	shared.WriteComment(buf, "", p.paramsType+" holds the values "+p.q.Name+" leaves open.")
 	fmt.Fprintf(buf, "type %s struct {\n", p.paramsType)
 	for i, param := range p.q.Params {
 		if i > 0 {
 			buf.WriteString("\n")
 		}
-		writeComment(buf, "\t", param.Doc)
+		shared.WriteComment(buf, "\t", param.Doc)
 		fmt.Fprintf(buf, "\t%s %s\n", param.Field, param.GoType(g.Qualifier))
 	}
 	buf.WriteString("}\n\n")
@@ -257,7 +248,7 @@ func (g *QueryGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 			g.writeNestedType(buf, p, c, info)
 		}
 
-		writeComment(buf, "", fmt.Sprintf("%s holds the properties of %s that the %s call in %s asks for.",
+		shared.WriteComment(buf, "", fmt.Sprintf("%s holds the properties of %s that the %s call in %s asks for.",
 			info.recordType, dataType.Name, c.Method.Name, p.q.Name))
 		fmt.Fprintf(buf, "type %s struct {\n", info.recordType)
 		properties := c.Properties
@@ -267,7 +258,7 @@ func (g *QueryGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 			// type change.
 			properties = dataType.PropertyNames()
 		}
-		for i, name := range recordProperties(properties) {
+		for i, name := range shared.RecordProperties(properties) {
 			if i > 0 {
 				buf.WriteString("\n")
 			}
@@ -275,25 +266,6 @@ func (g *QueryGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 		}
 		buf.WriteString("}\n\n")
 	}
-}
-
-// recordProperties returns the properties a record type holds. A /get response
-// always carries the id, whether or not the query asked for it.
-func recordProperties(props []string) []string {
-	out := make([]string, 0, len(props)+1)
-	if !contains(props, "id") {
-		out = append(out, "id")
-	}
-	return append(out, props...)
-}
-
-func contains(list []string, want string) bool {
-	for _, s := range list {
-		if s == want {
-			return true
-		}
-	}
-	return false
 }
 
 // writeNestedType writes the struct for a type nested inside the records, whose
@@ -305,7 +277,7 @@ func (g *QueryGenerator) writeNestedType(buf *bytes.Buffer, p *plan, c *query.Ca
 	if !ok {
 		return
 	}
-	writeComment(buf, "", fmt.Sprintf("%s holds the properties of %s that the %s call in %s asks for.",
+	shared.WriteComment(buf, "", fmt.Sprintf("%s holds the properties of %s that the %s call in %s asks for.",
 		info.nestedType, nested.Name, c.Method.Name, p.q.Name))
 	fmt.Fprintf(buf, "type %s struct {\n", info.nestedType)
 	for i, name := range c.NestedProperties {
@@ -326,18 +298,18 @@ func (g *QueryGenerator) writeRecordField(buf *bytes.Buffer, dataType *spec.Obje
 		// A property naming one header field of the message has a type after
 		// all: the form asked for decides it.
 		if header, err := spec.ParseHeaderProperty(name); err == nil && header != nil {
-			writeComment(buf, "\t", headerPropertyDoc(header))
+			shared.WriteComment(buf, "\t", shared.HeaderPropertyDoc(header))
 			fmt.Fprintf(buf, "\t%s %s `json:%q`\n",
 				spec.ExportedName(name), spec.MustParseType(header.Type).GoType(g.Qualifier), name)
 			return
 		}
 		// Anything else the server gives meaning to is left as raw JSON for
 		// the caller to interpret.
-		writeComment(buf, "\t", dynamicPropertyDoc(name))
+		shared.WriteComment(buf, "\t", shared.DynamicPropertyDoc(name))
 		fmt.Fprintf(buf, "\t%s json.RawMessage `json:%q`\n", spec.ExportedName(name), name)
 		return
 	}
-	writeComment(buf, "\t", field.Doc)
+	shared.WriteComment(buf, "\t", field.Doc)
 	fmt.Fprintf(buf, "\t%s %s `json:%q`\n",
 		spec.ExportedName(name), g.nestedGoType(field.ParsedType(), nestedTo, nestedFrom), name)
 }
@@ -352,50 +324,6 @@ func (g *QueryGenerator) nestedGoType(t *spec.Type, nestedTo, nestedFrom string)
 	return strings.ReplaceAll(goType, g.Qualifier+spec.ExportedName(nestedFrom), nestedTo)
 }
 
-// headerPropertyDoc describes a property naming one header field of a message.
-func headerPropertyDoc(h *spec.HeaderProperty) string {
-	which := "The " + h.Name + " header field"
-	if h.All {
-		which = "Every " + h.Name + " header field in the message, in the order they appear"
-	} else {
-		which += ", or the last of them where the message has several"
-	}
-	switch h.Form {
-	case "", "asRaw":
-		return which + ", as it appears in the message."
-	case "asText":
-		return which + ", decoded and unfolded into text."
-	case "asAddresses":
-		return which + ", parsed as a list of addresses."
-	case "asGroupedAddresses":
-		return which + ", parsed as a list of addresses, keeping the groups they were written in."
-	case "asMessageIds":
-		return which + ", parsed as message ids, without their angle brackets."
-	case "asDate":
-		return which + ", parsed as a date."
-	case "asURLs":
-		return which + ", parsed as a list of URLs."
-	}
-	return which + "."
-}
-
-// dynamicPropertyDoc describes a property whose meaning comes from the server
-// rather than from the data model.
-func dynamicPropertyDoc(name string) string {
-	switch {
-	case strings.HasPrefix(name, "header:"):
-		return "The " + name + " header field, in the form the query asked for."
-	case strings.HasPrefix(name, "digest:"):
-		return "The digest of the blob under the " + strings.TrimPrefix(name, "digest:") +
-			" algorithm, as base64."
-	case name == "data":
-		return "The blob's octets. The server returns them under data:asText or " +
-			"data:asBase64, whichever suits what they hold, so this property " +
-			"itself does not come back."
-	}
-	return "The " + name + " property, whose meaning the server decides."
-}
-
 // writeResponseTypes writes a response struct for each call whose records are a
 // generated type, mirroring the runtime response but holding those records.
 func (g *QueryGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
@@ -408,14 +336,14 @@ func (g *QueryGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 		if err != nil {
 			continue
 		}
-		writeComment(buf, "", fmt.Sprintf("%s holds the response to the %s call in %s.",
+		shared.WriteComment(buf, "", fmt.Sprintf("%s holds the response to the %s call in %s.",
 			info.responseType, c.Method.Name, p.q.Name))
 		fmt.Fprintf(buf, "type %s struct {\n", info.responseType)
 		for i, field := range respType.Fields {
 			if i > 0 {
 				buf.WriteString("\n")
 			}
-			writeComment(buf, "\t", field.Doc)
+			shared.WriteComment(buf, "\t", field.Doc)
 			goType := field.ParsedType().GoType(g.Qualifier)
 			if field.Name == c.Method.ResultProperty {
 				goType = "[]" + info.recordType
@@ -432,18 +360,18 @@ func (g *QueryGenerator) writeResultType(buf *bytes.Buffer, p *plan) {
 	if p.resultType == "" {
 		return
 	}
-	writeComment(buf, "", fmt.Sprintf("%s holds the response to each method call %s makes.", p.resultType, p.q.Name))
+	shared.WriteComment(buf, "", fmt.Sprintf("%s holds the response to each method call %s makes.", p.resultType, p.q.Name))
 	fmt.Fprintf(buf, "type %s struct {\n", p.resultType)
 	for i, c := range p.q.Calls {
 		if i > 0 {
 			buf.WriteString("\n")
 		}
-		writeComment(buf, "\t", fmt.Sprintf("The response to the %s call, made as %q.", c.Method.Name, c.ID))
+		shared.WriteComment(buf, "\t", fmt.Sprintf("The response to the %s call, made as %q.", c.Method.Name, c.ID))
 		fmt.Fprintf(buf, "\t%s %s\n", c.Field, p.calls[c].responseType)
 	}
 	if p.q.CreatedIDs {
 		buf.WriteString("\n")
-		writeComment(buf, "\t", "The creation ids of everything created by this request, together with "+
+		shared.WriteComment(buf, "\t", "The creation ids of everything created by this request, together with "+
 			"those carried in. Pass it to the next request so that a reference to any of them still resolves.")
 		fmt.Fprintf(buf, "\tCreatedIDs map[%[1]sID]%[1]sID\n", g.Qualifier)
 	}

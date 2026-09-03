@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/linyows/jmapc/internal/gen/shared"
 	"github.com/linyows/jmapc/internal/query"
 	"github.com/linyows/jmapc/internal/spec"
 )
@@ -135,7 +136,7 @@ func (g *QueryGenerator) writeFuncDoc(buf *bytes.Buffer, p *plan) {
 		methods[i] = c.Method.Name
 	}
 	doc += fmt.Sprintf("\n\nIt makes %s in a single request, so that %s.",
-		joinMethods(methods), roundTripPhrase(len(p.q.Calls)))
+		shared.JoinMethods(methods), shared.RoundTripPhrase(len(p.q.Calls)))
 	if p.q.Returns != nil {
 		doc += fmt.Sprintf(" It returns the response to the %s call.", p.q.Returns.Method.Name)
 	}
@@ -146,29 +147,7 @@ func (g *QueryGenerator) writeFuncDoc(buf *bytes.Buffer, p *plan) {
 		doc += "\n\nIt takes the creation ids of an earlier request and reports its own, so that a reference to something created there still resolves here. " +
 			"Pass nil where there is no earlier request."
 	}
-	writeComment(buf, "", doc)
-}
-
-// joinMethods renders a list of method names for prose.
-func joinMethods(names []string) string {
-	switch len(names) {
-	case 0:
-		return "no calls"
-	case 1:
-		return "one " + names[0] + " call"
-	case 2:
-		return names[0] + " and " + names[1] + " calls"
-	default:
-		return strings.Join(names[:len(names)-1], ", ") + ", and " + names[len(names)-1] + " calls"
-	}
-}
-
-// roundTripPhrase describes what batching the calls buys.
-func roundTripPhrase(n int) string {
-	if n <= 1 {
-		return "the server is asked once"
-	}
-	return fmt.Sprintf("%d dependent calls cost one round trip", n)
+	shared.WriteComment(buf, "", doc)
 }
 
 // writeSessionLookups writes the code that resolves the account ids the query
@@ -221,7 +200,7 @@ func (g *QueryGenerator) writeRequest(buf *bytes.Buffer, p *plan) {
 // writeInvocation writes one method call of the request.
 func (g *QueryGenerator) writeInvocation(buf *bytes.Buffer, p *plan, c *query.Call) {
 	if c.Comment != "" {
-		writeComment(buf, "\t\t\t", c.Comment)
+		shared.WriteComment(buf, "\t\t\t", c.Comment)
 	}
 	fmt.Fprintf(buf, "\t\t\t{Name: %q, CallID: %q, Args: map[string]any{\n", c.Method.Name, c.ID)
 	if expr := p.calls[c].accountIDExpr; expr != "" {

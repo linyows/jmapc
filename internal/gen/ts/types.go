@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/linyows/jmapc/internal/gen/shared"
 	"github.com/linyows/jmapc/internal/spec"
 )
 
@@ -27,16 +28,16 @@ func (g *TypeGenerator) Generate() ([]byte, error) {
 	var buf bytes.Buffer
 	writeHeader(&buf, "the JMAP data model in internal/spec")
 
-	writeComment(&buf, "", "The primitive types that carry a format rather than a shape. Each is a "+
+	shared.WriteComment(&buf, "", "The primitive types that carry a format rather than a shape. Each is a "+
 		"string underneath, and named so that the format is visible in a signature and two of them "+
 		"cannot be swapped by accident.")
 	buf.WriteString("\n")
 	for _, alias := range spec.TSPrimitiveAliases() {
-		writeComment(&buf, "", alias.Doc)
+		shared.WriteComment(&buf, "", alias.Doc)
 		fmt.Fprintf(&buf, "export type %s = string\n\n", alias.Name)
 	}
 
-	writeComment(&buf, "", "A set of changes to apply to a record, keyed by JSON pointer into it. "+
+	shared.WriteComment(&buf, "", "A set of changes to apply to a record, keyed by JSON pointer into it. "+
 		"A null value removes what the pointer names.")
 	buf.WriteString("export type PatchObject = { [pointer: string]: unknown }\n\n")
 
@@ -55,7 +56,7 @@ func (g *TypeGenerator) writeObject(buf *bytes.Buffer, o *spec.Object) {
 	if o.Capability != "" && o.Capability != spec.CapabilityCore {
 		doc += "\n\nA request using this type must declare " + o.Capability + "."
 	}
-	writeComment(buf, "", doc)
+	shared.WriteComment(buf, "", doc)
 	fmt.Fprintf(buf, "export interface %s {\n", spec.ExportedName(o.Name))
 	for i, f := range o.Fields {
 		if i > 0 {
@@ -82,7 +83,7 @@ func (g *TypeGenerator) writeField(buf *bytes.Buffer, o *spec.Object, f *spec.Fi
 	if f.Capability != "" && f.Capability != o.Capability {
 		doc = strings.TrimSpace(doc + "\n\nA request using this property must declare " + f.Capability + ".")
 	}
-	writeComment(buf, "  ", doc)
+	shared.WriteComment(buf, "  ", doc)
 
 	name := f.Name
 	if spec.TSNeedsQuoting(name) {

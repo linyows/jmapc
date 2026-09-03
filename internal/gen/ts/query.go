@@ -2,9 +2,9 @@ package ts
 
 import (
 	"sort"
-	"strconv"
 	"strings"
 
+	"github.com/linyows/jmapc/internal/gen/shared"
 	"github.com/linyows/jmapc/internal/query"
 	"github.com/linyows/jmapc/internal/spec"
 )
@@ -73,25 +73,25 @@ func (g *QueryGenerator) plan() ([]*plan, error) {
 			calls:    make(map[*query.Call]*call, len(q.Calls)),
 		}
 		if len(q.Params) > 0 {
-			p.paramsType = unique(taken, q.Name+"Params")
+			p.paramsType = shared.Unique(taken, q.Name+"Params")
 		}
 		for _, c := range q.Calls {
 			info := &call{}
 			if c.Properties != nil || c.NestedProperties != nil {
-				info.recordType = unique(taken, q.Name+spec.ExportedName(c.Method.DataType))
-				info.responseType = unique(taken, q.Name+c.Field+"Response")
+				info.recordType = shared.Unique(taken, q.Name+spec.ExportedName(c.Method.DataType))
+				info.responseType = shared.Unique(taken, q.Name+c.Field+"Response")
 			} else {
 				info.responseType = spec.ExportedName(c.Method.Response)
 			}
 			if c.NestedProperties != nil {
-				info.nestedType = unique(taken, q.Name+spec.ExportedName(c.Method.NestedType))
+				info.nestedType = shared.Unique(taken, q.Name+spec.ExportedName(c.Method.NestedType))
 			}
 			p.calls[c] = info
 		}
 		if q.Returns != nil {
 			p.returnType = p.calls[q.Returns].responseType
 		} else {
-			p.resultType = unique(taken, q.Name+"Result")
+			p.resultType = shared.Unique(taken, q.Name+"Result")
 			p.returnType = p.resultType
 		}
 		g.planAccountIDs(p)
@@ -138,17 +138,6 @@ func accountIDVar(capability string) string {
 		short = short[i+1:]
 	}
 	return lowerFirst(spec.ExportedName(short)) + "AccountId"
-}
-
-// unique returns name, or name with a number appended, so that nothing else in
-// the file has it.
-func unique(taken map[string]bool, name string) string {
-	candidate := name
-	for i := 2; taken[candidate]; i++ {
-		candidate = name + strconv.Itoa(i)
-	}
-	taken[candidate] = true
-	return candidate
 }
 
 // lowerFirst lowers a name's first letter, which is how TypeScript spells a
