@@ -35,9 +35,6 @@ it works:
 1. You run jmapc to generate code with type-safe interfaces to those queries.
 1. You write application code that calls the generated code.
 
-Have a look at [the worked example](example/) to see it in action, and at
-[Motivation](#motivation) for what it is for.
-
 ## Motivation
 
 JMAP is built around one idea. A request carries several method calls, and a
@@ -55,11 +52,11 @@ resource and a method per path.
 
 Most clients expose this through a builder, which means learning JMAP *and*
 learning the builder. But the query is the part you care about; the client is
-not. So write the query, and let the tool write the client — an approach this
+not. So write the query, and let jmapc write the client — an approach it
 takes from [sqlc](https://sqlc.dev).
 
-Writing the query is all you do; the tool takes on the parts that are tedious
-by hand and easy to get wrong.
+Writing the query is all you do; jmapc takes on the parts that are tedious by
+hand and easy to get wrong.
 
 - **A mistake in the query stops the build.** Result references are checked
   against the methods they point at, arguments against the data model, and
