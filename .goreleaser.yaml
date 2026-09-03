@@ -1,10 +1,10 @@
 # goreleaser builds the jmapc binaries published with each release.
 #
-# The generator is a Go tool, and today it generates Go, so most users are
-# better served by `go get -tool`, which pins a version in their own go.mod.
-# The binaries are here for the ones who are not: they will matter more once
-# jmapc can generate TypeScript, since that is a user who need not have a Go
-# toolchain at all.
+# A Go project is better served by `go get -tool`, which pins a version in its
+# own go.mod, so that everyone who builds the project — CI included —
+# generates with the same one. The binaries are for the projects that cannot:
+# jmapc generates TypeScript and Rust from the same queries, and those are
+# users who need not have a Go toolchain at all.
 version: 2
 
 project_name: jmapc
