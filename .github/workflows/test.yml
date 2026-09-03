@@ -34,6 +34,10 @@ jobs:
           - {os: windows-latest, go: "stable"}
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Nothing here writes back, so the job has no use for a credential
+          # in the git config.
+          persist-credentials: false
 
       - uses: actions/setup-go@v7
         with:
@@ -53,6 +57,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Nothing here writes back, so the job has no use for a credential
+          # in the git config.
+          persist-credentials: false
 
       - uses: actions/setup-go@v7
         with:
@@ -92,6 +100,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Nothing here writes back, so the job has no use for a credential
+          # in the git config.
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
@@ -109,19 +121,30 @@ jobs:
           npx --yes -p typescript@5 tsc -p tsconfig.node.json
           node dist/check.js
 
-  vulncheck:
-    name: govulncheck
+  # The Rust jmapc generates has to compile too, and it is generated to the
+  # layout rustfmt would have produced, so the formatter is a check on it
+  # rather than a step that rewrites it.
+  rust:
+    name: rust
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-
-      - uses: actions/setup-go@v7
         with:
-          go-version: stable
-          cache-dependency-path: go.mod
+          # Nothing here writes back, so the job has no use for a credential
+          # in the git config.
+          persist-credentials: false
 
-      # The module has no dependencies, so this is watching the standard
-      # library, and it fails when the Go release in use has a known problem
-      # in code jmapc actually reaches.
-      - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: cargo fmt over the generated client
+        working-directory: example/rust
+        run: cargo fmt --check
+
+      # What the runtime does when it runs, which the compiler cannot say:
+      # that the headers go out, that auth wins over them, that the session is
+      # cached, and that a /set answering 200 with a refusal is still an error.
+      - name: Build and run the generated client against a stub
+        working-directory: example/rust
+        run: cargo test

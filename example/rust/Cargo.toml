@@ -1,0 +1,17 @@
+[package]
+name = "jmapc-example"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# What the generated client asks for, and all it asks for. How the bytes reach
+# the server is a Transport the caller writes, so no HTTP stack, no TLS backend
+# and no async runtime is pulled in here.
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+# Only the tests need somewhere to run a future; the client itself is runtime
+# agnostic.
+futures-lite = "2"

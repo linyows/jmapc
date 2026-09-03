@@ -18,6 +18,10 @@ jobs:
           # goreleaser builds the changelog from the history, which a shallow
           # clone does not have.
           fetch-depth: 0
+          # goreleaser is given the token it needs through the environment.
+          # Leaving a second copy in the git config would put it within reach
+          # of everything else the release runs, the test hook included.
+          persist-credentials: false
 
       - uses: actions/setup-go@v7
         with:

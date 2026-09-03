@@ -28,8 +28,8 @@
   </a>
 </p>
 
-jmapc generates **type-safe code** from JMAP, in Go or TypeScript. Here's how
-it works:
+jmapc generates **type-safe code** from JMAP, in Go, TypeScript or Rust. Here's
+how it works:
 
 1. You write queries in JMAP.
 1. You run jmapc to generate code with type-safe interfaces to those queries.
@@ -91,8 +91,8 @@ go install github.com/linyows/jmapc/cmd/jmapc@latest
 ```
 
 Or take a binary from the [releases](https://github.com/linyows/jmapc/releases),
-which is the way in for a TypeScript project, where there is no Go toolchain to
-run `go tool` with.
+which is the way in for a TypeScript or Rust project, where there is no Go
+toolchain to run `go tool` with.
 
 ## Use
 
@@ -178,6 +178,12 @@ taken gains a number: `ListInboxEmailsEmail2`.
 TypeScript lowercases the first letter of the function and of the file —
 `listInboxEmails` in `listInboxEmails.ts` — and keeps the type names above.
 
+Rust writes the function and its module in snake_case — `list_inbox_emails` in
+`list_inbox_emails.rs` — and keeps the type names too, except that an initialism
+becomes a word, since that is how Rust spells one: a `UTCDate` is a `UtcDate`.
+Properties are snake_case, with a serde rename wherever that is not the name on
+the wire.
+
 ### One request, several steps
 
 The example below is what JMAP is for. Writing a message, submitting it, and
@@ -246,6 +252,80 @@ shapes stays a union: a filter is `FilterOperator | EmailFilterCondition | null`
 rather than the `any` Go falls back on. And the primitives that carry a format
 rather than a shape are named aliases of `string`, so an `Id` and a
 `TimeZoneId` cannot be swapped by accident.
+
+## Rust
+
+The same queries generate Rust:
+
+```
+jmapc generate -lang rust -out src/jmapq
+```
+
+```rust
+use jmapq::list_inbox_emails::{list_inbox_emails, ListInboxEmailsParams};
+use jmapq::Client;
+
+let client = Client::with_bearer_token("https://example.com/.well-known/jmap", http, token);
+
+let res = list_inbox_emails(&client, ListInboxEmailsParams {
+    mailbox_id: inbox,
+    limit: 25,
+})
+.await?;
+for email in &res.list {
+    println!("{} {:?}", email.received_at, email.subject);
+}
+```
+
+The runtime comes with it — `client.rs`, `types.rs`, and the `mod.rs` that
+declares them beside the queries — so `mod jmapq;` is the whole of what a crate
+has to add. What the generated code asks for is **serde and serde_json**, and
+nothing else. How the bytes travel is a `Transport` you write over whichever
+HTTP client the program already has, so no HTTP stack, no TLS backend and no
+async runtime arrives with it:
+
+```rust
+struct Http(reqwest::Client);
+
+impl Transport for Http {
+    async fn send(&self, req: HttpRequest) -> Result<HttpResponse, TransportError> {
+        let mut out = self.0.request(req.method.parse()?, &req.url);
+        for (name, value) in req.headers {
+            out = out.header(name, value);
+        }
+        if let Some(body) = req.body {
+            out = out.body(body);
+        }
+        let res = out.send().await?;
+        Ok(HttpResponse {
+            status: res.status().as_u16(),
+            content_type: res
+                .headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("")
+                .to_string(),
+            body: res.bytes().await?.to_vec(),
+        })
+    }
+}
+```
+
+That is also where authentication a bearer token does not cover belongs — a
+signature over the request, a token refreshed on expiry — since the transport is
+the last thing to see a request before it goes.
+
+Rust says what TypeScript says, in its own words. A nullable property is an
+`Option`, so `subject` is `Option<String>`. A union of shapes stays a union: a
+filter is `Option<FilterOperatorOrEmailFilterCondition>`, an untagged enum,
+rather than the `any` Go falls back on. The primitives that carry a format
+rather than a shape are named aliases of `String`, so an `Id` and a `TimeZoneId`
+read apart in a signature. And a record derives `Default`, which is what makes a
+type with fifty optional properties bearable to build: name the two that matter
+and leave the rest.
+
+What is generated is already laid out the way rustfmt lays things out, so
+`cargo fmt` over the crate leaves it alone.
 
 ## Writing a query
 
@@ -425,7 +505,8 @@ did carry out still happened. Calls the query does not name in `_returns` are
 checked too — naming one call should not stop the others from being looked at.
 
 In TypeScript the same failure is a thrown `SetErrors`, with the response on
-`err.result`.
+`err.result`. In Rust it is an `Error::Set`, and the response is asked for by
+the type the function would have returned, with `err.result::<T>()`.
 
 ## Blobs
 
@@ -532,12 +613,16 @@ Or list them in `jmapc.json` under `"schemas"`.
 
 ```
 go test ./...        # everything, including the end-to-end tests
-go generate ./...    # regenerate the runtime types and both example clients
+go generate ./...    # regenerate the runtime types and every example client
 ```
 
-The example is generated twice, once per language, into `example/jmapq` and
-`example/ts`. CI runs `tsc --strict` over the second, since Go's tests cannot
-say whether TypeScript compiles.
+The example is generated three times, once per language, into `example/jmapq`,
+`example/ts` and `example/rust/src/jmapq`. Go's tests cannot say whether the
+other two compile, so CI runs `tsc --strict` over the TypeScript and
+`cargo fmt --check` and `cargo test` over the Rust. Each of the two has a
+hand-written check beside the generated code, exercising the runtime against a
+stub: that the headers go out, that auth wins over them, that the session is
+cached, and that a `/set` answering 200 with a refusal in it is still an error.
 
 The generator is run from source here, not through `go tool`, because the
 repository is where it lives.
