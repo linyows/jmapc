@@ -36,12 +36,9 @@ it works:
 1. You write application code that calls the generated code.
 
 Have a look at [the worked example](example/) to see it in action, and at
-[Why](#why) for the motivation behind jmapc.
+[Motivation](#motivation) for what it is for.
 
-## Why
-
-`jmapc` is to JMAP what [sqlc](https://sqlc.dev) is to SQL, and for much the
-same reason.
+## Motivation
 
 JMAP is built around one idea. A request carries several method calls, and a
 call may refer to the result of an earlier one, so a chain of dependent
@@ -58,7 +55,8 @@ resource and a method per path.
 
 Most clients expose this through a builder, which means learning JMAP *and*
 learning the builder. But the query is the part you care about; the client is
-not. So write the query, and let the tool write the client.
+not. So write the query, and let the tool write the client — an approach this
+takes from [sqlc](https://sqlc.dev).
 
 What you get for it is the part that is tedious to do by hand and easy to get
 wrong: the result references are checked against the methods they point at, the
