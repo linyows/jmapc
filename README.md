@@ -155,6 +155,29 @@ their sub-parts, and a property naming a header field is typed by the form it
 asks for: `header:List-Id:asText` is a `*string`, `header:To:asAddresses` a
 `[]jmapc.EmailAddress`.
 
+### Generated names
+
+The file name settles every name in the generated file, so it has to be a Go
+identifier: letters, digits and underscores, not starting with a digit.
+`ListInboxEmails.jmap.json` gives:
+
+| Generated | Name |
+| --- | --- |
+| The function | `ListInboxEmails` |
+| Its parameters, where the query leaves any open | `ListInboxEmailsParams` |
+| A record whose properties the query narrows | `ListInboxEmailsEmail`, and `ListInboxEmailsEmailBodyPart` for a narrowed body part |
+| The response to a call returning that record | `ListInboxEmailsEmailGetResponse` |
+| The result, where `_returns` names no call | `ListInboxEmailsResult` |
+| The file | `listinboxemails_gen.go` |
+
+A call the query does not narrow answers with the shared type instead, so
+`SendEmail` returns `*jmapc.EmailSubmissionSetResponse`. Two queries in one
+package cannot take the same name, and a generated type whose name is already
+taken gains a number: `ListInboxEmailsEmail2`.
+
+TypeScript lowercases the first letter of the function and of the file —
+`listInboxEmails` in `listInboxEmails.ts` — and keeps the type names above.
+
 ### One request, several steps
 
 The example below is what JMAP is for. Writing a message, submitting it, and
