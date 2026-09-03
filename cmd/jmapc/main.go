@@ -1,6 +1,7 @@
-// Command jmapc generates a typed Go client from the JMAP queries in a
-// directory. Write the query you want the server to answer; jmapc checks it
-// against the JMAP data model and writes the Go that sends it.
+// Command jmapc generates a typed client from the JMAP queries in a directory,
+// in Go, TypeScript or Rust. Write the query you want the server to answer;
+// jmapc checks it against the JMAP data model and writes the code that sends
+// it.
 package main
 
 import (
@@ -15,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/linyows/jmapc/internal/gen"
+	"github.com/linyows/jmapc/internal/gen/rust"
 	"github.com/linyows/jmapc/internal/gen/ts"
 	"github.com/linyows/jmapc/internal/query"
 	"github.com/linyows/jmapc/internal/spec"
@@ -33,14 +35,14 @@ var version string
 type Config struct {
 	// Queries is the directory holding the query files.
 	Queries string `json:"queries"`
-	// Out is the directory the generated Go is written to.
+	// Out is the directory the generated code is written to.
 	Out string `json:"out"`
-	// Lang is the language to generate, "go" or "typescript". It defaults to
-	// Go.
+	// Lang is the language to generate: "go", "typescript" or "rust". It
+	// defaults to Go.
 	Lang string `json:"lang"`
 	// Package is the name of the generated package, defaulting to the base
-	// name of the output directory. It has no meaning for TypeScript, where a
-	// module is a file.
+	// name of the output directory. It has no meaning for TypeScript or Rust,
+	// where a module is a file.
 	Package string `json:"package"`
 	// Schemas are files describing the types and methods a server offers
 	// beyond the specifications jmapc knows, which queries may then use.
@@ -56,7 +58,7 @@ func main() {
 
 // usage describes the commands, and is printed when the arguments make no
 // sense.
-const usage = `jmapc generates a typed Go client from JMAP queries.
+const usage = `jmapc generates a typed client from JMAP queries, in Go, TypeScript or Rust.
 
 Usage:
 	jmapc generate [flags]   check the queries and write the generated client
@@ -67,7 +69,7 @@ Flags:
 	-config string    settings file to read (default ` + ConfigName + ` if present)
 	-queries string   directory holding the query files (default "queries")
 	-out string       directory to write the generated client to (default "jmapq")
-	-lang string      language to generate: go or typescript (default go)
+	-lang string      language to generate: go, typescript or rust (default go)
 	-package string   name of the generated package, for Go (default: the name of -out)
 	-schema string    schema file describing a vendor extension; repeatable
 
@@ -99,7 +101,7 @@ func run(args []string) error {
 		configPath = fs.String("config", "", "settings file to read")
 		queries    = fs.String("queries", "", "directory holding the query files")
 		out        = fs.String("out", "", "directory to write the generated client to")
-		lang       = fs.String("lang", "", "language to generate: go or typescript")
+		lang       = fs.String("lang", "", "language to generate: go, typescript or rust")
 		pkg        = fs.String("package", "", "name of the generated package")
 		schemas    stringList
 	)
@@ -232,11 +234,14 @@ func write(cfg *Config, catalogue *spec.Spec, queries []*query.Query) error {
 	return nil
 }
 
-// generate produces the files for the configured language. TypeScript takes
-// the runtime with it: there is no package to depend on, so the client and the
-// data types are written alongside the queries.
+// generate produces the files for the configured language. TypeScript and Rust
+// take the runtime with them: there is no package to depend on, so the client
+// and the data types are written alongside the queries.
 func generate(cfg *Config, catalogue *spec.Spec, queries []*query.Query) (map[string][]byte, error) {
-	if cfg.Lang == LangTypeScript {
+	switch cfg.Lang {
+	case LangRust:
+		return generateRust(catalogue, queries)
+	case LangTypeScript:
 		files, err := (&ts.QueryGenerator{Spec: catalogue, Queries: queries}).Generate()
 		if err != nil {
 			return nil, err
@@ -266,6 +271,31 @@ func generate(cfg *Config, catalogue *spec.Spec, queries []*query.Query) (map[st
 	}).Generate()
 }
 
+// generateRust produces the Rust module directory: one file per query, the data
+// model, the runtime, and the mod.rs that declares them all.
+func generateRust(catalogue *spec.Spec, queries []*query.Query) (map[string][]byte, error) {
+	files, err := (&rust.QueryGenerator{Spec: catalogue, Queries: queries}).Generate()
+	if err != nil {
+		return nil, err
+	}
+	types, err := (&rust.TypeGenerator{
+		Spec: catalogue,
+		// PatchObject is written by hand in the runtime, being a shape rather
+		// than a record.
+		Skip: map[string]bool{"PatchObject": true},
+	}).Generate()
+	if err != nil {
+		return nil, err
+	}
+	client, err := (&rust.ClientGenerator{}).Generate()
+	if err != nil {
+		return nil, err
+	}
+	files["types.rs"] = types
+	files["client.rs"] = client
+	return files, nil
+}
+
 // loadConfig reads the settings file, treating a missing default file as an
 // empty configuration rather than an error.
 func loadConfig(path string) (*Config, error) {
@@ -293,6 +323,7 @@ func loadConfig(path string) (*Config, error) {
 const (
 	LangGo         = "go"
 	LangTypeScript = "typescript"
+	LangRust       = "rust"
 )
 
 // applyDefaults fills in the settings that were not given.
@@ -314,10 +345,11 @@ func (c *Config) applyDefaults() {
 // check reports a setting that cannot be acted on.
 func (c *Config) check() error {
 	switch c.Lang {
-	case LangGo, LangTypeScript:
+	case LangGo, LangTypeScript, LangRust:
 		return nil
 	}
-	return fmt.Errorf("cannot generate %q; the languages are %s and %s", c.Lang, LangGo, LangTypeScript)
+	return fmt.Errorf("cannot generate %q; the languages are %s, %s and %s",
+		c.Lang, LangGo, LangTypeScript, LangRust)
 }
 
 // findQueries returns the query files under dir, in a stable order.

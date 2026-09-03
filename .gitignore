@@ -1,3 +1,8 @@
 # goreleaser writes its builds here.
 /dist/
 example/ts/dist/
+# cargo writes its builds here. The lock file is left out with them: the
+# example is not something anyone installs, so pinning it would only be
+# another thing to keep up to date.
+example/rust/target/
+example/rust/Cargo.lock

@@ -28,7 +28,7 @@
   </a>
 </p>
 
-jmapc は JMAP から**型安全なコード**を、Go または TypeScript で生成します。
+jmapc は JMAP から**型安全なコード**を、Go、TypeScript、Rust で生成します。
 
 1. JMAP でクエリを書きます。
 1. jmapc を実行して、そのクエリに型安全なインターフェースを持つコードを生成します。
@@ -87,7 +87,7 @@ go install github.com/linyows/jmapc/cmd/jmapc@latest
 ```
 
 Go のツールチェインがない環境では、[リリース](https://github.com/linyows/jmapc/releases)からバイナリを取得してください。
-TypeScript のプロジェクトではこちらを使います。
+TypeScript や Rust のプロジェクトではこちらを使います。
 
 ## 使い方
 
@@ -174,6 +174,11 @@ for _, email := range res.List {
 TypeScript では関数名とファイル名の先頭が小文字になり、`listInboxEmails.ts` の `listInboxEmails` になります。
 型名は上の表のままです。
 
+Rust では関数名とモジュール名が snake_case になり、`list_inbox_emails.rs` の `list_inbox_emails` になります。
+型名も上の表のままですが、頭字語は一語として綴られます。
+Rust の書き方がそうだからで、`UTCDate` は `UtcDate` になります。
+プロパティは snake_case になり、それがワイヤ上の名前と違う場合には serde の rename が付きます。
+
 ### 一つのリクエストで複数の手順を踏む
 
 次の例が JMAP の本領です。
@@ -239,6 +244,77 @@ null を取りうるプロパティはポインタではなく union なので�
 複数の形を取る値も union のままです。
 フィルタは `FilterOperator | EmailFilterCondition | null` であり、Go で `any` に落ちていたものが型として残ります。
 形ではなく書式を持つプリミティブは `string` の名前付き別名になるので、`Id` と `TimeZoneId` を取り違えることがありません。
+
+## Rust
+
+同じクエリから Rust を生成できます。
+
+```
+jmapc generate -lang rust -out src/jmapq
+```
+
+```rust
+use jmapq::list_inbox_emails::{list_inbox_emails, ListInboxEmailsParams};
+use jmapq::Client;
+
+let client = Client::with_bearer_token("https://example.com/.well-known/jmap", http, token);
+
+let res = list_inbox_emails(&client, ListInboxEmailsParams {
+    mailbox_id: inbox,
+    limit: 25,
+})
+.await?;
+for email in &res.list {
+    println!("{} {:?}", email.received_at, email.subject);
+}
+```
+
+ランタイムも一緒に生成されます。
+`client.rs`、`types.rs`、そしてそれらをクエリと並べて宣言する `mod.rs` が出力されるので、クレイト側が足すのは `mod jmapq;` の一行だけです。
+生成されたコードが求めるのは **serde と serde_json** だけです。
+バイトをどう運ぶかは `Transport` としてあなたが書きます。
+プログラムがすでに持っている HTTP クライアントの上に実装すればよく、HTTP スタックも TLS バックエンドも非同期ランタイムも生成物には付いてきません。
+
+```rust
+struct Http(reqwest::Client);
+
+impl Transport for Http {
+    async fn send(&self, req: HttpRequest) -> Result<HttpResponse, TransportError> {
+        let mut out = self.0.request(req.method.parse()?, &req.url);
+        for (name, value) in req.headers {
+            out = out.header(name, value);
+        }
+        if let Some(body) = req.body {
+            out = out.body(body);
+        }
+        let res = out.send().await?;
+        Ok(HttpResponse {
+            status: res.status().as_u16(),
+            content_type: res
+                .headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("")
+                .to_string(),
+            body: res.bytes().await?.to_vec(),
+        })
+    }
+}
+```
+
+ベアラトークンでは足りない認証も、ここが置き場所です。
+リクエストへの署名や、期限切れで更新するトークンがそれにあたります。
+トランスポートは、リクエストが出ていく前の最後の通過点だからです。
+
+Rust も TypeScript と同じことを、Rust の言葉で言います。
+null を取りうるプロパティは `Option` なので、`subject` は `Option<String>` です。
+複数の形を取る値も union のままです。
+フィルタは `Option<FilterOperatorOrEmailFilterCondition>` という untagged な enum であり、Go で `any` に落ちていたものが型として残ります。
+形ではなく書式を持つプリミティブは `String` の名前付き別名になるので、シグネチャの上で `Id` と `TimeZoneId` が読み分けられます。
+そしてレコードは `Default` を導出します。
+省略可能なプロパティを五十個持つ型を組み立てられるのはこれのおかげで、必要な二つだけを名指しして残りは任せられます。
+
+生成されるコードは rustfmt が整形した形そのものなので、クレイトに `cargo fmt` をかけても何も動きません。
 
 ## クエリの書き方
 
@@ -408,6 +484,7 @@ if err != nil {
 一つの呼び出しを名指ししたことで、他が見られなくなるべきではないからです。
 
 TypeScript では同じ失敗が `SetErrors` の throw になり、レスポンスは `err.result` に載ります。
+Rust では `Error::Set` になり、レスポンスは関数が返すはずだった型を指定して `err.result::<T>()` で取り出します。
 
 ## Blob
 
@@ -512,12 +589,13 @@ jmapc generate -schema schema/notes.json
 
 ```
 go test ./...        # エンドツーエンドのテストを含むすべて
-go generate ./...    # ランタイムの型と、両言語のサンプルクライアントを再生成する
+go generate ./...    # ランタイムの型と、全言語のサンプルクライアントを再生成する
 ```
 
-サンプルは言語ごとに二度生成され、`example/jmapq` と `example/ts` に出力されます。
-CI は後者に対して `tsc --strict` を実行します。
-TypeScript がコンパイルできるかどうかは、Go のテストでは分からないからです。
+サンプルは言語ごとに三度生成され、`example/jmapq`、`example/ts`、`example/rust/src/jmapq` に出力されます。
+残る二つがコンパイルできるかどうかは Go のテストでは分からないので、CI は TypeScript に `tsc --strict` を、Rust に `cargo fmt --check` と `cargo test` を実行します。
+どちらにも生成コードと並ぶ手書きの検査があり、スタブを相手にランタイムを動かします。
+ヘッダが送られること、認証がそれに優先すること、セッションがキャッシュされること、そして 200 を返しながら拒否を含む `/set` がやはりエラーになることを確かめます。
 
 ここでジェネレータをソースから実行しているのは、このリポジトリがジェネレータの居場所だからです。
 

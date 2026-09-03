@@ -49,6 +49,51 @@ func TestGenerate(t *testing.T) {
 	}
 }
 
+func TestGenerateRust(t *testing.T) {
+	dir := workspace(t, map[string]string{
+		"queries/ListMailboxes.jmap.json": listMailboxes,
+	})
+	out := filepath.Join(dir, "jmapq")
+
+	args := []string{"generate", "-queries", filepath.Join(dir, "queries"), "-out", out, "-lang", "rust"}
+	if err := run(args); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	// The runtime comes with the queries, since there is no crate to depend
+	// on, and the mod.rs is what makes the directory a module.
+	for _, name := range []string{"list_mailboxes.rs", "types.rs", "client.rs", "mod.rs"} {
+		if _, err := os.Stat(filepath.Join(out, name)); err != nil {
+			t.Errorf("the generated client has no %s: %v", name, err)
+		}
+	}
+	src, err := os.ReadFile(filepath.Join(out, "list_mailboxes.rs"))
+	if err != nil {
+		t.Fatalf("reading the generated client: %v", err)
+	}
+	for _, want := range []string{
+		"pub async fn list_mailboxes<T: Transport>(",
+		"pub struct ListMailboxesMailboxGetResponse",
+		"use super::client::{",
+	} {
+		if !strings.Contains(string(src), want) {
+			t.Errorf("the generated client does not contain %q:\n%s", want, src)
+		}
+	}
+}
+
+func TestUnknownLanguage(t *testing.T) {
+	dir := workspace(t, map[string]string{
+		"queries/ListMailboxes.jmap.json": listMailboxes,
+	})
+	err := run([]string{"generate", "-queries", filepath.Join(dir, "queries"), "-lang", "cobol"})
+	if err == nil {
+		t.Fatal("generating a language jmapc does not write should have failed")
+	}
+	if !strings.Contains(err.Error(), "rust") {
+		t.Errorf("the error should say what the languages are, and it says: %v", err)
+	}
+}
+
 func TestCheck(t *testing.T) {
 	dir := workspace(t, map[string]string{
 		"queries/ListMailboxes.jmap.json": listMailboxes,

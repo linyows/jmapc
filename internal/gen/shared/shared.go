@@ -18,20 +18,27 @@ const commentWidth = 78
 // with the given indent. Go and TypeScript spell a comment the same way, so one
 // implementation serves both. It writes nothing for empty text.
 func WriteComment(w io.Writer, indent, text string) {
-	for _, line := range wrapComment(indent, text) {
+	WriteCommentMarker(w, indent, "//", text)
+}
+
+// WriteCommentMarker is WriteComment for a language that spells a comment with
+// something other than "//". Rust documents an item with "///", and wants the
+// text wrapped to the same column all the same.
+func WriteCommentMarker(w io.Writer, indent, marker, text string) {
+	for _, line := range wrapComment(indent, marker, text) {
 		io.WriteString(w, line)
 		io.WriteString(w, "\n")
 	}
 }
 
 // wrapComment returns the comment lines for text, each already carrying its
-// indent and "//" prefix.
-func wrapComment(indent, text string) []string {
+// indent and comment marker.
+func wrapComment(indent, marker, text string) []string {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return nil
 	}
-	limit := commentWidth - len(indent) - len("// ")
+	limit := commentWidth - len(indent) - len(marker) - 1
 	if limit < 20 {
 		limit = 20
 	}
@@ -39,7 +46,7 @@ func wrapComment(indent, text string) []string {
 	for _, para := range strings.Split(text, "\n") {
 		para = strings.TrimSpace(para)
 		if para == "" {
-			lines = append(lines, indent+"//")
+			lines = append(lines, indent+marker)
 			continue
 		}
 		var cur strings.Builder
@@ -51,13 +58,13 @@ func wrapComment(indent, text string) []string {
 				cur.WriteByte(' ')
 				cur.WriteString(word)
 			default:
-				lines = append(lines, indent+"// "+cur.String())
+				lines = append(lines, indent+marker+" "+cur.String())
 				cur.Reset()
 				cur.WriteString(word)
 			}
 		}
 		if cur.Len() > 0 {
-			lines = append(lines, indent+"// "+cur.String())
+			lines = append(lines, indent+marker+" "+cur.String())
 		}
 	}
 	return lines
