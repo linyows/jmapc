@@ -6,6 +6,7 @@ import (
 	"go/format"
 	"strings"
 
+	"github.com/linyows/jmapc/internal/gen/shared"
 	"github.com/linyows/jmapc/internal/spec"
 )
 
@@ -57,7 +58,7 @@ func (g *TypeGenerator) writeObject(buf *bytes.Buffer, o *spec.Object) {
 	if o.Capability != "" && o.Capability != spec.CapabilityCore {
 		doc += "\n\nA request using this type must declare " + o.Capability + "."
 	}
-	writeComment(buf, "", doc)
+	shared.WriteComment(buf, "", doc)
 	fmt.Fprintf(buf, "type %s struct {\n", spec.ExportedName(o.Name))
 	for i, f := range o.Fields {
 		if i > 0 {
@@ -86,7 +87,7 @@ func (g *TypeGenerator) writeField(buf *bytes.Buffer, o *spec.Object, f *spec.Fi
 		// the type itself needs.
 		doc = strings.TrimSpace(doc + "\n\nA request using this property must declare " + f.Capability + ".")
 	}
-	writeComment(buf, "\t", doc)
+	shared.WriteComment(buf, "\t", doc)
 	fmt.Fprintf(buf, "\t%s %s `json:%q`\n", spec.ExportedName(f.Name), g.fieldType(o, f), g.jsonTag(o, f))
 }
 

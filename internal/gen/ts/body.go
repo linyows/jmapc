@@ -4,12 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/linyows/jmapc/internal/gen/shared"
 	"github.com/linyows/jmapc/internal/query"
-	"github.com/linyows/jmapc/internal/spec"
 )
 
 // writeFunc writes the function that sends the query and decodes its response.
@@ -136,7 +135,7 @@ func (g *QueryGenerator) writeFuncDoc(buf *bytes.Buffer, p *plan) {
 		methods[i] = c.Method.Name
 	}
 	doc += fmt.Sprintf("\n\nIt makes %s in a single request, so that %s.",
-		joinMethods(methods), roundTripPhrase(len(p.q.Calls)))
+		shared.JoinMethods(methods), shared.RoundTripPhrase(len(p.q.Calls)))
 	if p.q.Returns != nil {
 		doc += fmt.Sprintf(" It returns the response to the %s call.", p.q.Returns.Method.Name)
 	}
@@ -146,29 +145,7 @@ func (g *QueryGenerator) writeFuncDoc(buf *bytes.Buffer, p *plan) {
 	if p.q.CreatedIDs {
 		doc += "\n\nIt takes the creation ids of an earlier request and reports its own, so that a reference to something created there still resolves here."
 	}
-	writeComment(buf, "", doc)
-}
-
-// joinMethods renders a list of method names for prose.
-func joinMethods(names []string) string {
-	switch len(names) {
-	case 0:
-		return "no calls"
-	case 1:
-		return "one " + names[0] + " call"
-	case 2:
-		return names[0] + " and " + names[1] + " calls"
-	default:
-		return strings.Join(names[:len(names)-1], ", ") + ", and " + names[len(names)-1] + " calls"
-	}
-}
-
-// roundTripPhrase describes what batching the calls buys.
-func roundTripPhrase(n int) string {
-	if n <= 1 {
-		return "the server is asked once"
-	}
-	return fmt.Sprintf("%d dependent calls cost one round trip", n)
+	shared.WriteComment(buf, "", doc)
 }
 
 // writeRequest writes the literal request the function sends.
@@ -193,7 +170,7 @@ func (g *QueryGenerator) writeRequest(buf *bytes.Buffer, p *plan) {
 // writeInvocation writes one method call of the request.
 func (g *QueryGenerator) writeInvocation(buf *bytes.Buffer, p *plan, c *query.Call) {
 	if c.Comment != "" {
-		writeComment(buf, "      ", c.Comment)
+		shared.WriteComment(buf, "      ", c.Comment)
 	}
 	fmt.Fprintf(buf, "      [%s, {\n", strconv.Quote(c.Method.Name))
 	if v := p.calls[c].accountIDVar; v != "" {
@@ -272,45 +249,3 @@ func literalExpr(raw json.RawMessage) string {
 	}
 	return compact.String()
 }
-
-// headerPropertyDoc describes a property naming one header field of a message.
-func headerPropertyDoc(h *spec.HeaderProperty) string {
-	which := "The " + h.Name + " header field"
-	if h.All {
-		which = "Every " + h.Name + " header field in the message, in the order they appear"
-	} else {
-		which += ", or the last of them where the message has several"
-	}
-	switch h.Form {
-	case "", "asRaw":
-		return which + ", as it appears in the message."
-	case "asText":
-		return which + ", decoded and unfolded into text."
-	case "asAddresses":
-		return which + ", parsed as a list of addresses."
-	case "asGroupedAddresses":
-		return which + ", parsed as a list of addresses, keeping the groups they were written in."
-	case "asMessageIds":
-		return which + ", parsed as message ids, without their angle brackets."
-	case "asDate":
-		return which + ", parsed as a date."
-	case "asURLs":
-		return which + ", parsed as a list of URLs."
-	}
-	return which + "."
-}
-
-// dynamicPropertyDoc describes a property whose meaning comes from the server.
-func dynamicPropertyDoc(name string) string {
-	switch {
-	case strings.HasPrefix(name, "digest:"):
-		return "The digest of the blob under the " + strings.TrimPrefix(name, "digest:") + " algorithm, as base64."
-	case name == "data":
-		return "The blob's octets. The server returns them under data:asText or " +
-			"data:asBase64, whichever suits what they hold, so this property itself does not come back."
-	}
-	return "The " + name + " property, whose meaning the server decides."
-}
-
-// sortStrings sorts a slice of strings in place.
-func sortStrings(s []string) { sort.Strings(s) }

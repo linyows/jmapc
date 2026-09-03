@@ -3,9 +3,11 @@ package ts
 import (
 	"bytes"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/linyows/jmapc/internal/gen/shared"
 	"github.com/linyows/jmapc/internal/query"
 	"github.com/linyows/jmapc/internal/spec"
 )
@@ -72,7 +74,7 @@ func (g *QueryGenerator) writeImports(buf *bytes.Buffer, p *plan) {
 		for name := range names {
 			sorted = append(sorted, name)
 		}
-		sortStrings(sorted)
+		sort.Strings(sorted)
 		fmt.Fprintf(buf, "import type { %s } from \"./types.js\"\n", strings.Join(sorted, ", "))
 	}
 	buf.WriteString("\n")
@@ -99,7 +101,7 @@ func (g *QueryGenerator) collectRecordTypeNames(c *query.Call, info *call, names
 		if properties == nil {
 			properties = dataType.PropertyNames()
 		}
-		add(dataType, recordProperties(properties))
+		add(dataType, shared.RecordProperties(properties))
 	}
 	if info.nestedType != "" {
 		if nested, ok := g.Spec.Object(c.Method.NestedType); ok {
@@ -151,13 +153,13 @@ func (g *QueryGenerator) writeParams(buf *bytes.Buffer, p *plan) {
 	if p.paramsType == "" {
 		return
 	}
-	writeComment(buf, "", p.paramsType+" holds the values "+p.q.Name+" leaves open.")
+	shared.WriteComment(buf, "", p.paramsType+" holds the values "+p.q.Name+" leaves open.")
 	fmt.Fprintf(buf, "export interface %s {\n", p.paramsType)
 	for i, param := range p.q.Params {
 		if i > 0 {
 			buf.WriteString("\n")
 		}
-		writeComment(buf, "  ", param.Doc)
+		shared.WriteComment(buf, "  ", param.Doc)
 		fmt.Fprintf(buf, "  %s: %s\n", tsMemberName(param.Field), param.ValueType().TSType())
 	}
 	buf.WriteString("}\n\n")
@@ -175,7 +177,7 @@ func (g *QueryGenerator) writeNestedTypes(buf *bytes.Buffer, p *plan) {
 		if !ok {
 			continue
 		}
-		writeComment(buf, "", fmt.Sprintf("%s holds the properties of %s that the %s call in %s asks for.",
+		shared.WriteComment(buf, "", fmt.Sprintf("%s holds the properties of %s that the %s call in %s asks for.",
 			info.nestedType, nested.Name, c.Method.Name, p.q.Name))
 		fmt.Fprintf(buf, "export interface %s {\n", info.nestedType)
 		for i, name := range c.NestedProperties {
@@ -199,14 +201,14 @@ func (g *QueryGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 		if !ok {
 			continue
 		}
-		writeComment(buf, "", fmt.Sprintf("%s holds the properties of %s that the %s call in %s asks for.",
+		shared.WriteComment(buf, "", fmt.Sprintf("%s holds the properties of %s that the %s call in %s asks for.",
 			info.recordType, dataType.Name, c.Method.Name, p.q.Name))
 		fmt.Fprintf(buf, "export interface %s {\n", info.recordType)
 		properties := c.Properties
 		if properties == nil {
 			properties = dataType.PropertyNames()
 		}
-		for i, name := range recordProperties(properties) {
+		for i, name := range shared.RecordProperties(properties) {
 			if i > 0 {
 				buf.WriteString("\n")
 			}
@@ -214,17 +216,6 @@ func (g *QueryGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 		}
 		buf.WriteString("}\n\n")
 	}
-}
-
-// recordProperties returns the properties a record type holds. A /get response
-// always carries the id, whether or not the query asked for it.
-func recordProperties(props []string) []string {
-	for _, p := range props {
-		if p == "id" {
-			return props
-		}
-	}
-	return append([]string{"id"}, props...)
 }
 
 // writeRecordField writes one member of a generated record type.
@@ -237,15 +228,15 @@ func (g *QueryGenerator) writeRecordField(buf *bytes.Buffer, dataType *spec.Obje
 	field, known := dataType.Field(name)
 	if !known {
 		if header, err := spec.ParseHeaderProperty(name); err == nil && header != nil {
-			writeComment(buf, "  ", headerPropertyDoc(header))
+			shared.WriteComment(buf, "  ", shared.HeaderPropertyDoc(header))
 			fmt.Fprintf(buf, "  %s: %s\n", memberName, spec.MustParseType(header.Type).TSType())
 			return
 		}
-		writeComment(buf, "  ", dynamicPropertyDoc(name))
+		shared.WriteComment(buf, "  ", shared.DynamicPropertyDoc(name))
 		fmt.Fprintf(buf, "  %s: unknown\n", memberName)
 		return
 	}
-	writeComment(buf, "  ", field.Doc)
+	shared.WriteComment(buf, "  ", field.Doc)
 	fmt.Fprintf(buf, "  %s: %s\n", memberName, g.nestedTSType(field.ParsedType(), nestedTo, nestedFrom))
 }
 
@@ -271,14 +262,14 @@ func (g *QueryGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 		if err != nil {
 			continue
 		}
-		writeComment(buf, "", fmt.Sprintf("%s holds the response to the %s call in %s.",
+		shared.WriteComment(buf, "", fmt.Sprintf("%s holds the response to the %s call in %s.",
 			info.responseType, c.Method.Name, p.q.Name))
 		fmt.Fprintf(buf, "export interface %s {\n", info.responseType)
 		for i, field := range respType.Fields {
 			if i > 0 {
 				buf.WriteString("\n")
 			}
-			writeComment(buf, "  ", field.Doc)
+			shared.WriteComment(buf, "  ", field.Doc)
 			tsType := field.ParsedType().TSType()
 			if field.Name == c.Method.ResultProperty {
 				tsType = info.recordType + "[]"
@@ -299,18 +290,18 @@ func (g *QueryGenerator) writeResultType(buf *bytes.Buffer, p *plan) {
 	if p.resultType == "" {
 		return
 	}
-	writeComment(buf, "", fmt.Sprintf("%s holds the response to each method call %s makes.", p.resultType, p.q.Name))
+	shared.WriteComment(buf, "", fmt.Sprintf("%s holds the response to each method call %s makes.", p.resultType, p.q.Name))
 	fmt.Fprintf(buf, "export interface %s {\n", p.resultType)
 	for i, c := range p.q.Calls {
 		if i > 0 {
 			buf.WriteString("\n")
 		}
-		writeComment(buf, "  ", fmt.Sprintf("The response to the %s call, made as %q.", c.Method.Name, c.ID))
+		shared.WriteComment(buf, "  ", fmt.Sprintf("The response to the %s call, made as %q.", c.Method.Name, c.ID))
 		fmt.Fprintf(buf, "  %s: %s\n", tsMemberName(c.Field), p.calls[c].responseType)
 	}
 	if p.q.CreatedIDs {
 		buf.WriteString("\n")
-		writeComment(buf, "  ", "The creation ids of everything created by this request, together with "+
+		shared.WriteComment(buf, "  ", "The creation ids of everything created by this request, together with "+
 			"those carried in. Pass it to the next request so that a reference to any of them still resolves.")
 		buf.WriteString("  createdIds: { [creationId: Id]: Id }\n")
 	}
