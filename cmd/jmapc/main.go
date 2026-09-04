@@ -9,11 +9,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime/debug"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/linyows/jmapc/internal/gen"
 	"github.com/linyows/jmapc/internal/gen/rust"
@@ -24,6 +26,13 @@ import (
 
 // ConfigName is the file jmapc reads its settings from when one is present.
 const ConfigName = "jmapc.json"
+
+// stdout and stderr are where the commands write, named here so that a test
+// can read what one wrote.
+var (
+	stdout io.Writer = os.Stdout
+	stderr io.Writer = os.Stderr
+)
 
 // version is stamped into a release build. Built any other way — go install,
 // go tool, go run — it stays empty, and the version the module system knows
@@ -75,6 +84,10 @@ Flags:
 	-package string   name of the generated package, for Go (default: the name of -out)
 	-schema string    schema file describing a vendor extension; repeatable
 
+The check command also takes -session, to check the queries against a server
+rather than against the specifications alone, with -token or -user to
+authenticate and -timeout to bound the wait.
+
 The run and schema commands take flags of their own, which "jmapc run -h"
 and "jmapc schema -h" describe.
 
@@ -84,7 +97,7 @@ ListInboxEmails` + query.Extension + `, and holds a JMAP request.
 
 func run(args []string) error {
 	if len(args) == 0 {
-		fmt.Fprint(os.Stderr, usage)
+		fmt.Fprint(stderr, usage)
 		return errors.New("no command given")
 	}
 	command := args[0]
@@ -101,7 +114,7 @@ func run(args []string) error {
 		fmt.Print(usage)
 		return nil
 	default:
-		fmt.Fprint(os.Stderr, usage)
+		fmt.Fprint(stderr, usage)
 		return fmt.Errorf("unknown command %q", command)
 	}
 
@@ -115,7 +128,20 @@ func run(args []string) error {
 		schemas    stringList
 	)
 	fs.Var(&schemas, "schema", "schema file describing a vendor extension; repeatable")
-	fs.Usage = func() { fmt.Fprint(os.Stderr, usage) }
+	// Checking against a live server is the one thing generation has no use
+	// for, and the flags for it are offered only where they mean something.
+	var session, token, user *string
+	var timeout *time.Duration
+	if command == "check" {
+		// The session URL is not read from the environment, unlike the
+		// credentials: a check that reaches the network should say so on the
+		// command line rather than because of what is set around it.
+		session = fs.String("session", "", "session URL to check the queries against, or the host to find it under")
+		token = fs.String("token", os.Getenv("JMAP_TOKEN"), "bearer token to authenticate with")
+		user = fs.String("user", os.Getenv("JMAP_USER"), "user:password to authenticate with instead")
+		timeout = fs.Duration("timeout", 30*time.Second, "how long to wait for the server")
+	}
+	fs.Usage = func() { fmt.Fprint(stderr, usage) }
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -163,7 +189,7 @@ func run(args []string) error {
 	for _, path := range queryFiles {
 		q, err := parser.ParseFile(path)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
+			fmt.Fprintln(stderr, err)
 			failures++
 			continue
 		}
@@ -174,7 +200,10 @@ func run(args []string) error {
 	}
 
 	if command == "check" {
-		fmt.Printf("checked %s\n", plural(len(parsed), "query", "queries"))
+		if *session != "" {
+			return checkAgainstServer(catalogue, parsed, *session, *token, *user, *timeout)
+		}
+		fmt.Fprintf(stdout, "checked %s\n", plural(len(parsed), "query", "queries"))
 		return nil
 	}
 	return write(cfg, catalogue, parsed)
@@ -239,7 +268,7 @@ func write(cfg *Config, catalogue *spec.Spec, queries []*query.Query) error {
 		if err := os.WriteFile(path, files[name], 0o644); err != nil {
 			return err
 		}
-		fmt.Println(path)
+		fmt.Fprintln(stdout, path)
 	}
 	return nil
 }

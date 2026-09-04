@@ -430,6 +430,32 @@ queries/BadQuery.jmap.json: methodCalls[1].arguments.#ids.name: the referenced c
 
 `jmapc check` は、何も書き出さずに検証だけを実行します。
 
+### サーバだけが知っていること
+
+ここまではすべて、仕様が言っていることです。
+仕様がサーバに委ねていること —— どのケイパビリティを持つか、どのアカウントを持つか、一度のリクエストでどれだけ引き受けるか —— は、ビルドには分かりません。
+JMAP については正しく、目の前のサーバについては間違っているクエリは、実行時に失敗します。
+`-session` はそれをサーバに尋ねます。
+
+```
+jmapc check -session jmap.example.com -token $JMAP_TOKEN
+checked 25 queries against https://jmap.example.com/api/, as someone@example.com
+```
+
+報告するのは次のものです。
+
+- リクエストが宣言していて、サーバが広告していないケイパビリティ
+- クエリが名指していてセッションが持たないアカウント、そのケイパビリティの primary account がなくセッションが埋められないアカウント、呼び出しに必要なものをサポートしないアカウント
+- `maxCallsInRequest` を超える呼び出し数、`maxObjectsInGet` を超えるレコード数、`maxObjectsInSet` を超える変更数、パラメータを埋める前から `maxSizeRequest` を超えるリクエスト
+- サーバが文字列の比較に使えない `collation`
+
+クエリが呼び出し側に委ねているものには触れません。
+id のリストを表すパラメータは何個にでもなり得るので、そこを推測すれば、問題のないクエリを問題ありと報告することになります。
+
+セッションの URL だけは環境変数から読みません。
+`-token` と `-user` は `$JMAP_TOKEN` と `$JMAP_USER` にフォールバックします。
+ネットワークに出る検証は、周囲にたまたま設定されているものによってではなく、コマンドラインでそう言われて出るべきだからです。
+
 ## エディタ対応
 
 上の検証は jmapc を走らせたときに実行されます。

@@ -88,6 +88,31 @@ const (
 // session's primary account.
 const AccountIDArgument = "accountId"
 
+// AccountIDCapability reports the capability whose primary account fills in
+// this call's accountId, and whether one has to be filled in at all. A query
+// that does not care which account it runs against should not have to say so
+// in every call, so the answer is no only where the method takes no account,
+// or the query names one itself.
+func (c *Call) AccountIDCapability(s *spec.Spec) (string, bool) {
+	args, err := s.ArgumentsOf(c.Method.Name)
+	if err != nil {
+		return "", false
+	}
+	if _, takesAccount := args.Field(AccountIDArgument); !takesAccount {
+		return "", false
+	}
+	if _, given := c.Args.Find(AccountIDArgument); given {
+		return "", false
+	}
+	if _, referenced := c.Args.Find("#" + AccountIDArgument); referenced {
+		return "", false
+	}
+	if c.Method.Capability == "" {
+		return spec.CapabilityCore, true
+	}
+	return c.Method.Capability, true
+}
+
 // Param is a value the query leaves open, written as "$name" where the value
 // belongs.
 type Param struct {
