@@ -277,6 +277,35 @@ func TestDoSendsTheRequestBody(t *testing.T) {
 	}
 }
 
+// TestRelativeAPIURLIsResolved covers a server that advertises apiUrl as a
+// path, which RFC 8620 allows: New(sessionURL, ...) then Do should resolve it
+// against the session URL rather than posting to that literal path.
+func TestRelativeAPIURLIsResolved(t *testing.T) {
+	var apiHits int
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	mux.HandleFunc("/session", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{
+		  "capabilities": {"urn:ietf:params:jmap:core": {}},
+		  "accounts": {}, "primaryAccounts": {}, "username": "u",
+		  "apiUrl": "/api", "state": "s"
+		}`)
+	})
+	mux.HandleFunc("/api", func(w http.ResponseWriter, r *http.Request) {
+		apiHits++
+		fmt.Fprint(w, `{"sessionState":"s","methodResponses":[]}`)
+	})
+
+	c := New(srv.URL + "/session")
+	if _, err := c.Do(context.Background(), &Request{Using: []string{CapabilityCore}}); err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	if apiHits != 1 {
+		t.Errorf("apiHits = %d, want 1", apiHits)
+	}
+}
+
 func TestSessionWithoutAPIURL(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"capabilities":{},"accounts":{},"primaryAccounts":{},"username":"u","state":"s"}`)

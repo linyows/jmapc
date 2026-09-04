@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -118,6 +119,46 @@ func newBlobServer(t *testing.T) *blobServer {
 // client returns a client whose session advertises the blob endpoints.
 func (bs *blobServer) client(opts ...Option) *Client {
 	return New(bs.URL+"/session", opts...)
+}
+
+// TestDownloadWithRelativeSessionURLs checks that a downloadUrl sent as a
+// path, template braces included, still resolves and expands correctly, and
+// is not mangled into percent-escaped braces along the way.
+func TestDownloadWithRelativeSessionURLs(t *testing.T) {
+	var downloadPath string
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	mux.HandleFunc("/session", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{
+		  "capabilities": {"urn:ietf:params:jmap:core": {}},
+		  "accounts": {"a1": {"name": "someone", "isPersonal": true}},
+		  "primaryAccounts": {}, "username": "u",
+		  "apiUrl": "/api",
+		  "downloadUrl": "/dl/{accountId}/{blobId}/{name}?accept={type}",
+		  "state": "s"
+		}`)
+	})
+	mux.HandleFunc("/dl/", func(w http.ResponseWriter, r *http.Request) {
+		downloadPath = r.URL.RequestURI()
+		w.Header().Set("Content-Type", "application/pdf")
+		fmt.Fprint(w, "%PDF-1.4 pretend")
+	})
+
+	c := New(srv.URL + "/session")
+	blob, err := c.Download(context.Background(), "a1", "blob9", &DownloadOptions{
+		Name: "report.pdf",
+		Type: "application/pdf",
+	})
+	if err != nil {
+		t.Fatalf("Download: %v", err)
+	}
+	blob.Close()
+
+	want := "/dl/a1/blob9/report.pdf?accept=application%2Fpdf"
+	if downloadPath != want {
+		t.Errorf("downloaded from %q, want %q", downloadPath, want)
+	}
 }
 
 func TestUpload(t *testing.T) {

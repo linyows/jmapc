@@ -161,6 +161,45 @@ func (s *Session) HasCapability(uri string) bool {
 	return ok
 }
 
+// resolveURLs makes apiUrl, downloadUrl, uploadUrl, and eventSourceUrl
+// absolute, resolving each against base (the session URL) when the server
+// sent it as a reference rather than a full URL. RFC 8620 does not say these
+// have to be absolute, and a server that sends "/jmap" as its apiUrl
+// otherwise turns into a request to that literal path, which fails with an
+// error that does not mention the session at all.
+func (s *Session) resolveURLs(base *url.URL) {
+	s.APIURL = resolveSessionURL(base, s.APIURL)
+	s.DownloadURL = resolveSessionURL(base, s.DownloadURL)
+	s.UploadURL = resolveSessionURL(base, s.UploadURL)
+	s.EventSourceURL = resolveSessionURL(base, s.EventSourceURL)
+}
+
+// resolveSessionURL resolves ref against base per RFC 3986, Section 5. It
+// builds the result by concatenation rather than by round-tripping ref
+// through url.URL, because downloadUrl and uploadUrl are URI templates
+// carrying literal "{" and "}" that url.URL.String would percent-encode.
+func resolveSessionURL(base *url.URL, ref string) string {
+	if ref == "" {
+		return ref
+	}
+	if u, err := url.Parse(ref); err == nil && u.IsAbs() {
+		return ref
+	}
+	if strings.HasPrefix(ref, "//") {
+		return base.Scheme + ":" + ref
+	}
+	if strings.HasPrefix(ref, "/") {
+		return base.Scheme + "://" + base.Host + ref
+	}
+	dir := base.Path
+	if i := strings.LastIndexByte(dir, '/'); i >= 0 {
+		dir = dir[:i+1]
+	} else {
+		dir = "/"
+	}
+	return base.Scheme + "://" + base.Host + dir + ref
+}
+
 // PrimaryAccountID returns the id of the account to use by default for the
 // given capability. Generated code calls this when a query leaves accountId
 // unset.
