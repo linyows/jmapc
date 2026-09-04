@@ -125,7 +125,7 @@ func watch(t *testing.T, ws *watchServer, state string, steps ...step) ([]string
 	err := New(ws.URL+"/session").Watch(ctx, "a1", "Email", state, a.catchUp,
 		// A test has no use for the wait that keeps a real client from
 		// hammering a server that is down.
-		WithRetry(func(int) time.Duration { return 0 }))
+		WithReconnect(func(int) time.Duration { return 0 }))
 	return a.seen, err
 }
 
@@ -248,7 +248,7 @@ func TestWatchStopsOnARefusal(t *testing.T) {
 	defer cancel()
 	err := New(ws.URL+"/session").Watch(ctx, "a1", "Email", "e1",
 		func(context.Context, string) (string, bool, error) { return "", false, nil },
-		WithRetry(func(int) time.Duration { return 0 }))
+		WithReconnect(func(int) time.Duration { return 0 }))
 	var reqErr *RequestError
 	if !errors.As(err, &reqErr) || reqErr.Status != http.StatusForbidden {
 		t.Fatalf("Watch: %v, want the refusal", err)

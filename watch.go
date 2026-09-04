@@ -32,11 +32,11 @@ func WithPing(d time.Duration) WatchOption {
 	return func(c *watchConfig) { c.ping = d }
 }
 
-// WithRetry decides how long to wait before the nth attempt to reconnect,
+// WithReconnect decides how long to wait before the nth attempt to reconnect,
 // counting from one. It replaces the doubling wait that Watch uses otherwise,
 // and is where to add jitter for a fleet of clients that would otherwise
 // reconnect together.
-func WithRetry(f func(attempt int) time.Duration) WatchOption {
+func WithReconnect(f func(attempt int) time.Duration) WatchOption {
 	return func(c *watchConfig) { c.retry = f }
 }
 

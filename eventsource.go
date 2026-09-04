@@ -127,7 +127,7 @@ func (c *Client) EventSource(ctx context.Context, opts *EventSourceOptions) (*Ev
 		req.Header.Set("Last-Event-ID", opts.LastEventID)
 	}
 
-	resp, err := c.send(req)
+	resp, err := c.sendWithRetry(req)
 	if err != nil {
 		return nil, err
 	}
