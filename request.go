@@ -3,6 +3,7 @@ package jmapc
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // Invocation is a single method call or method response. On the wire it is the
@@ -118,6 +119,21 @@ func (r *Response) find(callID string) (*Invocation, bool) {
 	return nil, false
 }
 
+// callIDs lists the call ids the response does carry, quoted and
+// comma-separated, so that a lookup miss can say what was there instead of
+// only what was asked for. A hand-written server stub that echoes whatever
+// call id it likes is the most common way to hit this.
+func (r *Response) callIDs() string {
+	if len(r.MethodResponses) == 0 {
+		return "no results"
+	}
+	ids := make([]string, len(r.MethodResponses))
+	for i, in := range r.MethodResponses {
+		ids[i] = fmt.Sprintf("%q", in.CallID)
+	}
+	return strings.Join(ids, ", ")
+}
+
 // Decode unmarshals the response to the method call with the given call id into
 // dest. It returns a *MethodError if the server reported an error for that
 // call. Generated code uses this to turn one entry of methodResponses into a
@@ -125,7 +141,7 @@ func (r *Response) find(callID string) (*Invocation, bool) {
 func (r *Response) Decode(callID string, dest any) error {
 	in, ok := r.find(callID)
 	if !ok {
-		return fmt.Errorf("jmapc: response has no result for call %q", callID)
+		return fmt.Errorf("jmapc: response has no result for call %q (response has %s)", callID, r.callIDs())
 	}
 	raw, ok := in.RawArgs()
 	if !ok {

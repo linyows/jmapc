@@ -338,8 +338,9 @@ pub enum Error {
     Set(SetErrors),
     /// The response did not have the shape the query asks for.
     Decode(serde_json::Error),
-    /// The response carries no result for a call the request made.
-    Missing(String),
+    /// The response carries no result for a call the request made. The second
+    /// field lists the call ids the response did carry.
+    Missing(String, Vec<String>),
     /// The session does not say something the client needs to know.
     Session(String),
     /// The transport could not deliver the request.
@@ -354,7 +355,24 @@ impl fmt::Display for Error {
             Error::Method(e) => write!(f, "{e}"),
             Error::Set(e) => write!(f, "{e}"),
             Error::Decode(e) => write!(f, "the response could not be read: {e}"),
-            Error::Missing(call_id) => write!(f, "response has no result for call {call_id:?}"),
+            Error::Missing(call_id, present) => {
+                if present.is_empty() {
+                    write!(
+                        f,
+                        "response has no result for call {call_id:?} (response has no results)"
+                    )
+                } else {
+                    let ids = present
+                        .iter()
+                        .map(|id| format!("{id:?}"))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    write!(
+                        f,
+                        "response has no result for call {call_id:?} (response has {ids})"
+                    )
+                }
+            }
             Error::Session(what) => write!(f, "{what}"),
             Error::Transport(e) => write!(f, "the request could not be sent: {e}"),
         }
@@ -643,7 +661,12 @@ pub fn decode<T: serde::de::DeserializeOwned>(
         }
         return serde_json::from_value(args.clone()).map_err(Error::Decode);
     }
-    Err(Error::Missing(call_id.to_string()))
+    let present = res
+        .method_responses
+        .iter()
+        .map(|Invocation(_, _, id)| id.clone())
+        .collect();
+    Err(Error::Missing(call_id.to_string(), present))
 }
 
 /// Record the failures one method call reported, keyed by the response property
