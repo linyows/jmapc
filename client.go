@@ -243,9 +243,16 @@ func (c *Client) resolveAPIURL(ctx context.Context, r *Request) (string, error) 
 func preflight(s *Session, r *Request) error {
 	for _, uri := range r.Using {
 		if !s.HasCapability(uri) {
+			detail := fmt.Sprintf("server does not support %s", uri)
+			if len(s.Capabilities) == 0 {
+				// An empty capabilities map is what a minimal server or a test
+				// stub produces, and it is not the same claim as a server that
+				// listed its capabilities and left this one out.
+				detail = fmt.Sprintf("session lists no capabilities at all, so it cannot say whether it supports %s", uri)
+			}
 			return &RequestError{
 				Type:   ErrTypeUnknownCapability,
-				Detail: fmt.Sprintf("server does not support %s", uri),
+				Detail: detail,
 			}
 		}
 	}

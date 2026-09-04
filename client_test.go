@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 )
@@ -113,6 +114,35 @@ func TestPrimaryAccountID(t *testing.T) {
 
 // TestPreflightRejectsTooManyCalls checks that a request the server has already
 // said it will not accept fails locally.
+// TestPreflightNamesAnEmptyCapabilitiesList checks that a server advertising
+// no capabilities at all - a minimal server, or a test stub - gets a
+// different message than a server that listed its capabilities and left this
+// one out, so the message does not send the reader looking at the server for
+// a decision the session never made.
+func TestPreflightNamesAnEmptyCapabilitiesList(t *testing.T) {
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	mux.HandleFunc("/session", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"capabilities":{},"accounts":{},"primaryAccounts":{},"username":"u","apiUrl":"/api","state":"s"}`)
+	})
+	mux.HandleFunc("/api", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"sessionState":"s","methodResponses":[]}`)
+	})
+
+	_, err := New(srv.URL+"/session").Do(context.Background(), &Request{Using: []string{CapabilityCore}})
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	var reqErr *RequestError
+	if !errors.As(err, &reqErr) {
+		t.Fatalf("error is %T, want *RequestError", err)
+	}
+	if !strings.Contains(reqErr.Detail, "no capabilities at all") {
+		t.Errorf("detail = %q, want it to say the session lists no capabilities", reqErr.Detail)
+	}
+}
+
 func TestPreflightRejectsTooManyCalls(t *testing.T) {
 	ts := newTestServer(t)
 	c := ts.client()
