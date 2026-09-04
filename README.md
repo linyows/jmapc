@@ -42,13 +42,38 @@ call may refer to the result of an earlier one, so a chain of dependent
 operations costs a single round trip:
 
 ```json
-["Email/query", {"filter": {"inMailbox": "mbx1"}}, "search"],
-["Email/get",   {"#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"}}, "fetch"]
+{
+  "using": [
+    "urn:ietf:params:jmap:core",
+    "urn:ietf:params:jmap:mail"
+  ],
+  "methodCalls": [
+    [
+      "Email/query",
+      {
+        "filter": {
+          "inMailbox": "mbx1"
+        }
+      },
+      "search"
+    ],
+    [
+      "Email/get",
+      {
+        "#ids": {
+          "resultOf": "search",
+          "name": "Email/query",
+          "path": "/ids"
+        }
+      },
+      "fetch"
+    ]
+  ]
+}
 ```
 
-The ids never come back to the client. That is the whole point of the protocol,
-and it is why a JMAP client does not look like a REST client, with a type per
-resource and a method per path.
+The ids never come back to the client, which is why a JMAP client does not look
+like a REST client, with a type per resource and a method per path.
 
 Most clients expose this through a builder, which means learning JMAP *and*
 learning the builder. But the query is the part you care about; the client is
@@ -58,19 +83,22 @@ takes from [sqlc](https://sqlc.dev).
 Writing the query is all you do; jmapc takes on the parts that are tedious by
 hand and easy to get wrong.
 
-- **A mistake in the query stops the build.** Result references are checked
-  against the methods they point at, arguments against the data model, and
-  property names against the type, so a misspelling never reaches the server.
-- **The response is type-safe.** It decodes into a struct holding exactly the
-  properties the query asked for, with no `map[string]any` to walk.
-- **No error goes unchecked.** JMAP fails at three levels — request, method,
-  and record — and the last of them arrives as HTTP 200, which is the one
-  people miss. Generated code looks at it.
+- Linting the query
+- A type-safe response
+- Exhaustive error handling
+
+Result references are checked against the methods they point at, arguments
+against the data model, and property names against the type, so a misspelling
+fails the build before it ever reaches the server. The response decodes into a
+struct holding exactly the properties the query asked for, with no
+`map[string]any` to walk, so it is type-safe. JMAP fails at three levels —
+request, method, and record. The record level arrives as HTTP 200, which is
+easy to miss, but generated code checks it.
 
 ## Install
 
-The generator is a Go tool, and what it generates is Go, so record it in the
-module that uses it:
+You generate the client with `go generate`, so record it in the module that
+uses it:
 
 ```
 go get -tool github.com/linyows/jmapc/cmd/jmapc
@@ -96,7 +124,7 @@ toolchain to run `go tool` with.
 
 ## Use
 
-Write a query. The file name is the name of the function to generate.
+The file name is the name of the function to generate.
 
 ```json
 {
@@ -111,7 +139,7 @@ Write a query. The file name is the name of the function to generate.
     }, "search"],
 
     ["Email/get", {
-      "_comment": "Fetch them in the same request, so the ids never make a round trip.",
+      "_comment": "Fetch the message from its id.",
       "#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"},
       "properties": ["id", "subject", "from", "receivedAt"]
     }, "fetch"]
@@ -186,38 +214,7 @@ becomes a word, since that is how Rust spells one: a `UTCDate` is a `UtcDate`.
 Properties are snake_case, with a serde rename wherever that is not the name on
 the wire.
 
-### One request, several steps
-
-The example below is what JMAP is for. Writing a message, submitting it, and
-moving it out of Drafts are three operations that must not come apart, and here
-they are one request:
-
-```json
-{
-  "methodCalls": [
-    ["Email/set", {
-      "create": {"draft": { /* ... */ }}
-    }, "write"],
-
-    ["EmailSubmission/set", {
-      "create": {"send": {"emailId": "#draft", "identityId": "{{identityId}}"}},
-      "onSuccessUpdateEmail": {
-        "#send": {
-          "mailboxIds/{{draftsMailboxId}}": null,
-          "mailboxIds/{{sentMailboxId}}": true,
-          "keywords/$draft": null
-        }
-      }
-    }, "send"]
-  ],
-  "_returns": "send"
-}
-```
-
-`#draft` refers to the message the first call creates, before the server has
-given it an id. The pointers in the patch are checked against `Email`, so
-`mailboxIds` misspelled is a build failure, and both mailbox parameters come out
-as `jmapc.ID` because that is what the pointer selects by.
+### Examples
 
 [`example/queries`](example/queries) holds twenty-five of these, over mail,
 contacts, calendars, sharing and filtering: searching, syncing from a known state, sending,
@@ -226,7 +223,7 @@ touching the rest of the series.
 
 ## TypeScript
 
-The same queries generate TypeScript:
+The same queries generate a TypeScript client:
 
 ```
 jmapc generate -lang typescript -out src/jmapq
@@ -257,7 +254,7 @@ rather than a shape are named aliases of `string`, so an `Id` and a
 
 ## Rust
 
-The same queries generate Rust:
+The same queries generate a Rust client:
 
 ```
 jmapc generate -lang rust -out src/jmapq
@@ -313,18 +310,17 @@ impl Transport for Http {
 }
 ```
 
-That is also where authentication a bearer token does not cover belongs — a
-signature over the request, a token refreshed on expiry — since the transport is
-the last thing to see a request before it goes.
+That is also where authentication that a bearer token does not cover belongs —
+a signature over the request, a token refreshed on expiry — since the transport
+is the last thing to see a request before it goes.
 
-Rust says what TypeScript says, in its own words. A nullable property is an
-`Option`, so `subject` is `Option<String>`. A union of shapes stays a union: a
-filter is `Option<FilterOperatorOrEmailFilterCondition>`, an untagged enum,
-rather than the `any` Go falls back on. The primitives that carry a format
-rather than a shape are named aliases of `String`, so an `Id` and a `TimeZoneId`
-read apart in a signature. And a record derives `Default`, which is what makes a
-type with fifty optional properties bearable to build: name the two that matter
-and leave the rest.
+A nullable property is an `Option`, so `subject` is `Option<String>`. A union of
+shapes stays a union: a filter is `Option<FilterOperatorOrEmailFilterCondition>`,
+an untagged enum, rather than the `any` Go falls back on. The primitives that
+carry a format rather than a shape are named aliases of `String`, so an `Id` and
+a `TimeZoneId` read apart in a signature. And a record derives `Default`, which
+is what makes a type with fifty optional properties bearable to build: name the
+two that matter and leave the rest.
 
 What is generated is already laid out the way rustfmt lays things out, so
 `cargo fmt` over the crate leaves it alone.
@@ -333,7 +329,7 @@ What is generated is already laid out the way rustfmt lays things out, so
 
 A query file is a JMAP Request object, exactly as
 [RFC 8620](https://www.rfc-editor.org/rfc/rfc8620) defines it, plus four
-members the generator reads and the server never sees.
+members jmapc reads and the JMAP server never sees.
 
 A member beginning with an underscore is one the generator reads; everything
 else is the request as RFC 8620 defines it.
@@ -346,27 +342,11 @@ else is the request as RFC 8620 defines it.
 | `_returns` | The call whose response the function returns. Optional: without it, every response is returned. |
 | `_createdIds` | Carry the creation ids of an earlier request in, and this request's out. Optional; see below. |
 | `_watches` | The call a generated client follows the changes of, so that it catches up whenever the server says there is something to catch up on. Optional; see [Push](#push). |
-| `_pages` | The call a generated walk advances, so that what one request answers with part of can be read the whole way through. Optional; see [Walking what does not fit in one request](#walking-what-does-not-fit-in-one-request). |
+| `_pages` | The call a generated walk advances, so that what one request answers with part of can be read the whole way through. Optional; see [Walking an answer that does not fit in one request](#walking-an-answer-that-does-not-fit-in-one-request). |
 | `_comment` | Why a call is there. Goes in that call's arguments; see below. |
 
 A query file is plain JSON, so `jq` reads it and an editor understands it. To
-say why a call is there, give its arguments a `_comment`:
-
-```json
-["Email/get", {
-  "_comment": "Fetch them in the same request, so the ids never make a round trip.",
-  "#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"}
-}, "fetch"]
-```
-
-The generator lifts it into the generated code and leaves it out of the request,
-which it must: RFC 8620 requires a server to reject an argument it does not
-know.
-
-```go
-// Fetch them in the same request, so the ids never make a round trip.
-{Name: "Email/get", CallID: "fetch", Args: map[string]any{
-```
+say why a call is there, give its arguments a `_comment`.
 
 ### Parameters
 
@@ -418,7 +398,7 @@ Leave `accountId` out and the generated function fills it in from the primary
 account of the session, looking the session up once. Write `"{{accountId}}"` to
 make it a parameter instead.
 
-## What is checked
+## Verification
 
 Everything below is a compile-time failure rather than a server round trip:
 
@@ -505,7 +485,6 @@ query file at it:
 ```json
 {
   "$schema": "../jmapc.schema.json",
-
   "methodCalls": [["Email/query", {"filter": {"inMailbox": "{{mailboxId}}"}}, "search"]]
 }
 ```
@@ -607,8 +586,8 @@ Flags, or a `jmapc.json` beside your module:
 
 JMAP fails at two levels, and so does the runtime.
 
-A **request-level** failure, where the server rejected the request whole, is a
-`*jmapc.RequestError` carrying the problem type from RFC 8620 §3.6.1. The client
+A **request-level** failure, where the server rejected the request as a whole,
+is a `*jmapc.RequestError` carrying the problem type from RFC 8620 §3.6.1. The client
 catches some of these before sending: a capability the session does not
 advertise, or more calls than the server accepts.
 
@@ -649,38 +628,24 @@ In TypeScript the same failure is a thrown `SetErrors`, with the response on
 `err.result`. In Rust it is an `Error::Set`, and the response is asked for by
 the type the function would have returned, with `err.result::<T>()`.
 
-### When the server says not now
+### Retries
 
-A server that will not take a request now says so in one of two ways, and both
-of them mean nothing happened: a 429, and a 503. `WithRetry` sends the request
-again where it sees one.
+`WithRetry` retries when the server answers with HTTP 429 or 503.
 
 ```go
 c := jmapc.New(url, jmapc.WithBearerToken(token), jmapc.WithRetry(3))
 ```
 
-Three is how many times the request is sent in all. The wait is what the server
-asked for in `Retry-After`, and a doubling one from a fifth of a second to half
-a minute where it asked for nothing in particular. A server asking for longer
-than a minute is telling the caller to come back later rather than asking a
-request to sit in memory until then, so the refusal is returned instead.
-
-Nothing else is sent again. A request that failed on the way there or on the way
-back may still have been carried out, and a `/set` sent twice creates twice.
-`WithRetryPolicy` is where a client whose requests are safe to repeat says so,
-and where the waits are replaced.
-
-Walking into the refusal is the thing worth not doing at all, and that needs no
-option. The session says how many requests the server takes at once and how many
-uploads, and the client holds itself to both: one over the limit waits for a
-slot rather than being sent and turned away.
+The argument is how many attempts to make. The wait is what the server asked
+for in `Retry-After`, or one that doubles from a fifth of a second to half a
+minute where it asked for nothing in particular.
 
 ## Testing
 
 Testing the code you write around a generated client means answering a request
 that carries several method calls, some of which refer to the results of the
 others. A stub written by hand for one test either ignores that — and stops
-resembling a server — or grows into this, so this is it:
+resembling a server — or grows into this:
 
 ```go
 srv := jmaptest.New(t)
@@ -743,17 +708,22 @@ through the API, which the endpoints cannot: `Blob/upload` puts a blob in the
 same request as the call that uses it, so the id never comes back to the client
 in between.
 
-## Walking what does not fit in one request
+## Walking an answer that does not fit in one request
 
-A JMAP answer is often part of an answer. A `/query` returns the window the
-caller asked for and says where that window sits; a `/changes` returns as much
-as the server cares to and says whether there is more. Either way the next
-request is worked out from the last answer, which is a loop, and `_pages` asks
-for it.
+A JMAP answer is often only part of an answer. A `/query` returns just the
+window of results the caller asked for, and says where that window sits in the
+full result. A `/changes` returns only as many changes as the server cares to,
+and says whether there is more.
 
-`_pages` names the call the loop advances. What says where the next request
-starts — `position` for a `/query`, `sinceState` for a `/changes` — is left to
-the loop, so it is written as a parameter:
+Either way, getting the rest means sending another request, and what goes in it
+comes from the last answer: `position` for a `/query`, `sinceState` for a
+`/changes`. Naming a call in `_pages` generates that loop — call it a walk —
+so nobody has to write it by hand.
+
+The call named in `_pages` is the one the walk resends on each step. Where the
+next request should start — `position` for a `/query`, `sinceState` for a
+`/changes` — is the walk's to manage rather than the caller's, so it is written
+as a parameter in the query:
 
 ```json
 {
@@ -767,7 +737,7 @@ the loop, so it is written as a parameter:
 }
 ```
 
-Go gets an iterator:
+Go gets an iterator. Advancing it sends the next request behind the scenes:
 
 ```go
 for page, err := range jmapq.SearchEmailsPages(ctx, c, params) {
@@ -780,8 +750,8 @@ for page, err := range jmapq.SearchEmailsPages(ctx, c, params) {
 }
 ```
 
-TypeScript gets an async generator, and a failure throws as it does from the
-query itself:
+TypeScript gets an async generator that does the same, one step at a time. A
+failure throws as it does from the query itself:
 
 ```ts
 for await (const page of searchEmailsPages(client, params)) {
@@ -789,8 +759,9 @@ for await (const page of searchEmailsPages(client, params)) {
 }
 ```
 
-Rust gets a value that remembers where it is. A stream would mean a crate to
-define one, and what the generated code asks for is serde and nothing else:
+Rust gets a value that remembers where it is, and advances the same way. A
+stream would mean a crate to define one, and what the generated code asks for
+is serde and nothing else:
 
 ```rust
 let mut pages = search_emails_pages(params);
@@ -801,16 +772,20 @@ while let Some(page) = pages.next(&client).await? {
 }
 ```
 
-The walk starts from the value the parameters carry, so it can begin where a
-previous one stopped. A window with nothing in it ends it rather than being
-handed back, so everything it yields holds something, and where the call asked
-for the total it ends without asking for a window that is not there. A
-`/changes` walk hands back even an answer saying nothing changed, because that
-answer carries the state to go on from, and it ends when the server says there
-is no more.
+When a walk stops depends on what it is walking.
 
-A watching query already asks again while the server says there is more, so
-`_watches` and `_pages` are not written together.
+A `/query` walk starts from the `position` the parameters carry, so it can pick
+up where a previous walk left off. A window with nothing in it is not handed
+back — it ends the walk instead — so everything the walk yields holds
+something. Where the call asked for the total, the walk also stops asking once
+it would be past that total.
+
+A `/changes` walk hands back even an answer saying nothing changed, because
+that answer still carries the `sinceState` to go on from. It ends only when the
+server says there is no more to report.
+
+A watching query already asks again on its own while the server says there is
+more, so `_watches` and `_pages` are never written on the same query.
 
 ## Push
 
@@ -980,8 +955,6 @@ that was not regenerated fails the build rather than going unnoticed. CI runs
 the same checks, plus gofmt, go vet, and govulncheck.
 
 ## Coverage
-
-### Capabilities
 
 JMAP is a family of specifications: a server advertises capability URIs, and
 each brings its own types and methods. These are the ones
