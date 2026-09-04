@@ -36,6 +36,9 @@ type plan struct {
 	returnType          string
 	calls               map[*query.Call]*call
 	sessionCapabilities []string
+	// pagesName is the generator that walks the paged call's windows, empty
+	// where the query is not paged.
+	pagesName string
 }
 
 // Generate returns the source of one file per query, keyed by file name.
@@ -87,6 +90,9 @@ func (g *QueryGenerator) plan() ([]*plan, error) {
 				info.nestedType = shared.Unique(taken, q.Name+spec.ExportedName(c.Method.NestedType))
 			}
 			p.calls[c] = info
+		}
+		if q.Pages != nil {
+			p.pagesName = lowerFirst(shared.Unique(taken, q.Name+"Pages"))
 		}
 		if q.Returns != nil {
 			p.returnType = p.calls[q.Returns].responseType

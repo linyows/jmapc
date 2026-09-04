@@ -165,6 +165,7 @@ for _, email := range res.List {
 | そのレコードを返す呼び出しのレスポンス | `ListInboxEmailsEmailGetResponse` |
 | 結果。`_returns` が呼び出しを指定しない場合に生成されます | `ListInboxEmailsResult` |
 | 変更を追う関数。クエリが `_watches` を持つ場合に生成されます | `SyncEmailsWatch` |
+| 答えの各部分を歩くもの。クエリが `_pages` を持つ場合に生成されます | `SearchEmailsPages` |
 | ファイル | `listinboxemails_gen.go` |
 
 絞り込みのない呼び出しは、クエリごとの型ではなく共有の型で返ります。
@@ -332,6 +333,7 @@ null を取りうるプロパティは `Option` なので、`subject` は `Optio
 | `_returns` | どの呼び出しのレスポンスを関数の戻り値にするかを指定します。省略すると全てのレスポンスが返ります。 |
 | `_createdIds` | 先行するリクエストの creation id を受け取り、このリクエストのものを返します。省略可。次項を参照してください。 |
 | `_watches` | 生成されたクライアントが変更を追う呼び出しを指定します。サーバが「進んだ」と言うたびに追いつきます。省略可。[プッシュ](#プッシュ)を参照してください。 |
+| `_pages` | 生成された歩みが進める呼び出しを指定します。一度のリクエストが一部だけ返す答えを、最後まで読み通せます。省略可。[一度のリクエストに収まらないものを歩く](#一度のリクエストに収まらないものを歩く)を参照してください。 |
 | `_comment` | その呼び出しが何のためにあるかを書きます。呼び出しの引数の中に置きます。次項を参照してください。 |
 
 クエリファイルは素の JSON です。
@@ -418,6 +420,7 @@ creation id はリクエスト全体のものであって、その中のどの�
 - id、日付、整数の形式が正しいこと
 - リクエストが宣言するケイパビリティが、呼び出すメソッドを網羅していること
 - `_watches` が指す呼び出しが、ある状態からの変更を報告するものであり、そこから進む状態がクエリに書き込まれずループに委ねられていること
+- `_pages` が指す呼び出しが、より長い答えの一部を返して残りの在り処を告げるものであり、次のリクエストの開始位置が歩みに委ねられていること
 
 綴り間違いには候補が提示されます。
 
@@ -634,6 +637,75 @@ defer blob.Close()
 `urn:ietf:params:jmap:blob` を提供するサーバでは、API 経由で blob を作成し読み取ることもできます。
 エンドポイントにはできないことです。
 `Blob/upload` は blob を、それを使う呼び出しと同じリクエストに置けるので、id がクライアントに戻ってきません。
+
+## 一度のリクエストに収まらないものを歩く
+
+JMAP の答えは、しばしば答えの一部です。
+`/query` は呼び出し側が求めた窓を返し、その窓がどこにあるかを告げます。
+`/changes` はサーバが返す気になっただけを返し、続きがあるかどうかを告げます。
+どちらも、次のリクエストは直前の答えから割り出されます。
+それはループであり、`_pages` はそれを要求します。
+
+`_pages` は、ループが進める呼び出しを指定します。
+次のリクエストがどこから始まるかを言う値 —— `/query` なら `position`、`/changes` なら `sinceState` —— はループに委ねるので、パラメータとして書きます。
+
+```json
+{
+  "_pages": "search",
+
+  "methodCalls": [
+    ["Email/query", {"filter": {"text": "{{phrase}}"}, "position": "{{position}}",
+                     "limit": 50, "calculateTotal": true}, "search"],
+    ["Email/get", {"#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"}}, "fetch"]
+  ]
+}
+```
+
+Go にはイテレータが生成されます。
+
+```go
+for page, err := range jmapq.SearchEmailsPages(ctx, c, params) {
+	if err != nil {
+		return err
+	}
+	for _, email := range page.EmailGet.List {
+		fmt.Println(*email.Subject)
+	}
+}
+```
+
+TypeScript には非同期ジェネレータが生成されます。
+失敗は、クエリ自体と同じように throw されます。
+
+```ts
+for await (const page of searchEmailsPages(client, params)) {
+  for (const email of page.emailGet.list) console.log(email.subject)
+}
+```
+
+Rust には、どこまで進んだかを覚えている値が生成されます。
+ストリームを返すにはそれを定義するクレートが要り、生成されるコードが求めるのは serde だけだからです。
+
+```rust
+let mut pages = search_emails_pages(params);
+while let Some(page) = pages.next(&client).await? {
+    for email in &page.email_get.list {
+        println!("{:?}", email.subject);
+    }
+}
+```
+
+歩みはパラメータが持つ値から始まります。
+前回の歩みが止まったところから続けられるということです。
+中身のない窓は歩みを終わらせ、手渡されません。
+ですから手渡されるものには必ず中身があります。
+呼び出しが total を求めていれば、存在しない窓を要求せずに終わります。
+`/changes` の歩みは、何も変わっていないという答えも手渡します。
+その答えが、次に進むための状態を運んでいるからです。
+そして、サーバがもう無いと言ったときに終わります。
+
+watch するクエリは、サーバが「まだある」と言う間すでに尋ね直します。
+ですから `_watches` と `_pages` を並べて書くことはありません。
 
 ## プッシュ
 

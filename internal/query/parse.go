@@ -36,6 +36,10 @@ const (
 	// client follows that type's changes, calling the query whenever the
 	// server says there is something to catch up on.
 	WatchesMember = "_watches"
+	// PagesMember names the call a generated pager advances: one request
+	// answers with one window of a longer list, and the pager asks for the
+	// next until there is none.
+	PagesMember = "_pages"
 	// CreatedIDsMember asks for the creation ids of a request to be carried in
 	// and out, so that one request can go on from where another left off.
 	CreatedIDsMember = "_createdIds"
@@ -80,6 +84,9 @@ type fileSyntax struct {
 	// Watches names the call whose state a watching client follows, and asks
 	// for the function that follows it.
 	Watches string `json:"_watches"`
+	// Pages names the call a pager advances, and asks for the function that
+	// walks the whole of what one request returns a window of.
+	Pages string `json:"_pages"`
 	// Using lists the capabilities the request declares, as RFC 8620 defines
 	// it. It may be left out, in which case it is derived from the methods
 	// called.
@@ -185,6 +192,7 @@ func (p *Parser) Parse(path string, src []byte) (*Query, error) {
 		q.Returns = call
 	}
 	c.watch(q, f)
+	c.pages(q, f)
 	assignFieldNames(q)
 
 	if len(c.errs) > 0 {
@@ -244,6 +252,90 @@ func (c *checker) watch(q *Query, f fileSyntax) {
 			"the account of a watched call comes from an earlier call, and a watch has to know whose events to listen for before it makes any")
 	}
 	q.Watches = call
+}
+
+// pages checks the call a query says a pager advances, and records what the
+// generated loop needs: which parameter says where the next request starts,
+// and how the answer says where that is.
+//
+// Two kinds of call return part of an answer and say where the rest is. A
+// /query returns a window of a longer list, and the next window starts after
+// this one. A /changes reports what changed since a state, and answers with as
+// much as it cares to, saying so.
+func (c *checker) pages(q *Query, f fileSyntax) {
+	if f.Pages == "" {
+		return
+	}
+	call, ok := c.byID[f.Pages]
+	if !ok {
+		c.errorf(PagesMember, "", "no method call has the id %q", f.Pages).
+			hint(hintFor(f.Pages, c.callIDs()))
+		return
+	}
+
+	var start string
+	switch {
+	case c.returnsWindow(call):
+		q.PageKind, start = PageQuery, PositionArgument
+	case c.reportsChanges(call):
+		q.PageKind, start = PageChanges, SinceStateArgument
+	default:
+		c.errorf(PagesMember,
+			"a paged call returns a window of a longer list, as "+call.Method.DataType+"/query does, or what changed since a state, as "+call.Method.DataType+"/changes does",
+			"%s cannot be paged", call.Method.Name)
+		return
+	}
+	if f.Watches != "" {
+		c.errorf(PagesMember, "",
+			"a watching query already asks again while the server says there is more, so it does not also take %s", PagesMember)
+	}
+	if f.CreatedIDs {
+		c.errorf(PagesMember, "",
+			"a paged query cannot carry creation ids: they belong to one request, and a pager makes many")
+	}
+	if f.Returns != "" && f.Returns != f.Pages {
+		c.errorf(ReturnsMember, "leave "+ReturnsMember+" out, or name the paged call",
+			"a paged query cannot return only %q, since the loop reads where the next request starts out of the %q response",
+			f.Returns, f.Pages)
+	}
+
+	value, given := call.Args.Find(start)
+	if param, ok := value.(*ParamRef); ok {
+		q.PageStart = param.Param
+	} else {
+		where := fmt.Sprintf("%s.arguments.%s", callPath(q, call), start)
+		if !given {
+			where = PagesMember
+		}
+		c.errorf(where, `write "`+start+`": "{{`+start+`}}"`,
+			"the %s of a paged call is where the next request starts, so it has to be a parameter", start)
+	}
+	q.Pages = call
+}
+
+// returnsWindow reports whether a call answers with one window of a longer
+// list and says where that window sits, which is what a pager walks. As with a
+// /changes, the data model says so rather than the method name: a vendor
+// extension declaring the standard methods for a type of its own is paged
+// exactly as Email is.
+func (c *checker) returnsWindow(call *Call) bool {
+	if call.Method.DataType == "" {
+		return false
+	}
+	args, err := c.spec.ArgumentsOf(call.Method.Name)
+	if err != nil {
+		return false
+	}
+	if _, ok := args.Field(PositionArgument); !ok {
+		return false
+	}
+	resp, err := c.spec.ResponseOf(call.Method.Name)
+	if err != nil {
+		return false
+	}
+	_, hasPosition := resp.Field(PositionArgument)
+	_, hasIDs := resp.Field(IDsProperty)
+	return hasPosition && hasIDs
 }
 
 // reportsChanges reports whether a call answers with what changed since a

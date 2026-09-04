@@ -37,6 +37,11 @@ type plan struct {
 	returnType          string
 	calls               map[*query.Call]*call
 	sessionCapabilities []string
+	// pagesType and pagesFunc are the walk over the paged call's windows: the
+	// state it keeps, and the function that starts one. They are empty where
+	// the query is not paged.
+	pagesType string
+	pagesFunc string
 }
 
 // Generate returns the source of one file per query, keyed by file name,
@@ -94,6 +99,10 @@ func (g *QueryGenerator) plan() ([]*plan, error) {
 				info.nestedType = shared.Unique(taken, prefix+spec.RustTypeName(c.Method.NestedType))
 			}
 			p.calls[c] = info
+		}
+		if q.Pages != nil {
+			p.pagesType = shared.Unique(taken, prefix+"Pages")
+			p.pagesFunc = spec.RustName(p.pagesType)
 		}
 		if q.Returns != nil {
 			p.returnType = p.calls[q.Returns].responseType

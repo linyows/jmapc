@@ -24,6 +24,7 @@ func (g *QueryGenerator) file(p *plan) []byte {
 	g.writeResponseTypes(&body, p)
 	g.writeResultType(&body, p)
 	g.writeFunc(&body, p)
+	g.writePages(&body, p)
 
 	var buf bytes.Buffer
 	writeHeader(&buf, p.q.Path)

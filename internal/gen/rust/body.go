@@ -360,3 +360,92 @@ func (g *QueryGenerator) expr(n query.Node, indent string) string {
 	}
 	return "null"
 }
+
+// writePages writes the walk over the whole of what one request returns a
+// part of. Rust has no stream to hand back without a crate to define one, and
+// the generated code takes nothing but serde, so the walk is a value that
+// remembers where it is and a method that asks for the next part.
+func (g *QueryGenerator) writePages(buf *bytes.Buffer, p *plan) {
+	if p.pagesType == "" {
+		return
+	}
+	start := spec.RustFieldName(p.q.PageStart.Field)
+	startType := p.q.PageStart.ValueType().RustType()
+
+	buf.WriteString("\n")
+	g.writePagesDoc(buf, p, "///")
+	fmt.Fprintf(buf, "pub struct %s {\n", p.pagesType)
+	fmt.Fprintf(buf, "    params: %s,\n", p.paramsType)
+	fmt.Fprintf(buf, "    start: %s,\n", startType)
+	buf.WriteString("    done: bool,\n")
+	buf.WriteString("}\n\n")
+
+	shared.WriteCommentMarker(buf, "", "///", fmt.Sprintf(
+		"%s starts a walk from the %s the parameters carry. Nothing is sent until the first call to next.",
+		p.pagesFunc, p.q.PageStart.Name))
+	fmt.Fprintf(buf, "pub fn %s(p: %s) -> %s {\n", p.pagesFunc, p.paramsType, p.pagesType)
+	fmt.Fprintf(buf, "    %s {\n", p.pagesType)
+	fmt.Fprintf(buf, "        start: p.%s.clone(),\n", start)
+	buf.WriteString("        params: p,\n")
+	buf.WriteString("        done: false,\n")
+	buf.WriteString("    }\n}\n\n")
+
+	fmt.Fprintf(buf, "impl %s {\n", p.pagesType)
+	shared.WriteCommentMarker(buf, "    ", "///",
+		"next asks for the part after the one before, and answers with None where there is none left.")
+	head := "    pub async fn next<T: Transport>(&mut self, client: &Client<T>)"
+	tail := fmt.Sprintf(" -> Result<Option<%s>, Error> {", p.returnType)
+	if len(head+tail) <= lineWidth {
+		buf.WriteString(head + tail + "\n")
+	} else {
+		buf.WriteString("    pub async fn next<T: Transport>(\n        &mut self,\n        client: &Client<T>,\n")
+		fmt.Fprintf(buf, "    )%s\n", tail)
+	}
+	buf.WriteString("        if self.done {\n            return Ok(None);\n        }\n")
+	fmt.Fprintf(buf, "        self.params.%s = self.start.clone();\n", start)
+	fmt.Fprintf(buf, "        let res = %s(client, self.params.clone()).await?;\n", p.funcName)
+
+	window := "&res"
+	if p.q.Returns == nil {
+		window = "&res." + spec.RustFieldName(p.q.Pages.Field)
+	}
+	fmt.Fprintf(buf, "        let window = %s;\n", window)
+
+	switch p.q.PageKind {
+	case query.PageQuery:
+		ids := spec.RustFieldName(spec.ExportedName(query.IDsProperty))
+		// A window with nothing in it is the end of the list rather than a
+		// part of it, and handing it back would make every caller check.
+		fmt.Fprintf(buf, "        if window.%s.is_empty() {\n            self.done = true;\n            return Ok(None);\n        }\n", ids)
+		fmt.Fprintf(buf, "        self.start = window.%s as %s + window.%s.len() as %s;\n",
+			spec.RustFieldName(spec.ExportedName(query.PositionArgument)), startType, ids, startType)
+		// Where the call asked for the total, the end is known without asking
+		// for a part that is not there.
+		fmt.Fprintf(buf, "        if window.%[1]s > 0 && self.start as u64 >= window.%[1]s {\n            self.done = true;\n        }\n",
+			spec.RustFieldName(spec.ExportedName(query.TotalProperty)))
+
+	case query.PageChanges:
+		// An answer saying nothing changed still carries the state to go on
+		// from, so it is worth handing back.
+		fmt.Fprintf(buf, "        if window.%s {\n", spec.RustFieldName(spec.ExportedName(query.HasMoreChangesProperty)))
+		fmt.Fprintf(buf, "            self.start = window.%s.clone();\n", spec.RustFieldName(spec.ExportedName(query.NewStateProperty)))
+		buf.WriteString("        } else {\n            self.done = true;\n        }\n")
+	}
+
+	buf.WriteString("        Ok(Some(res))\n")
+	buf.WriteString("    }\n}\n")
+}
+
+// writePagesDoc writes the walk's documentation, on whichever item carries it.
+func (g *QueryGenerator) writePagesDoc(buf *bytes.Buffer, p *plan, marker string) {
+	doc := fmt.Sprintf("%s walks the whole of what %s returns one part of, calling it again for each part until there is none left.",
+		p.pagesType, p.funcName)
+	switch p.q.PageKind {
+	case query.PageQuery:
+		doc += "\n\nA window with nothing in it ends the walk rather than being handed back, so every part it answers with holds something; " +
+			"where the call asked for the total, the walk ends without asking for a window that is not there."
+	case query.PageChanges:
+		doc += "\n\nAn answer saying nothing changed is still handed back, since it carries the state to go on from, and the walk ends when the server says there is no more."
+	}
+	shared.WriteCommentMarker(buf, "", marker, doc)
+}

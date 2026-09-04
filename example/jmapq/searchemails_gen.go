@@ -6,6 +6,7 @@ package jmapq
 import (
 	"context"
 	"encoding/json"
+	"iter"
 
 	"github.com/linyows/jmapc"
 )
@@ -21,6 +22,10 @@ type SearchEmailsParams struct {
 
 	// Matches emails in this mailbox.
 	SecondMailboxID jmapc.ID
+
+	// The zero-based index of the first result to return. A negative value
+	// counts back from the end.
+	Position jmapc.Int
 }
 
 // SearchEmailsEmail holds the properties of Email that the Email/get call in
@@ -112,6 +117,7 @@ func SearchEmails(ctx context.Context, c *jmapc.Client, p SearchEmailsParams) (*
 				},
 				"sort":            json.RawMessage(`[{"property":"receivedAt","isAscending":false}]`),
 				"collapseThreads": true,
+				"position":        p.Position,
 				"limit":           50,
 				"calculateTotal":  true,
 			}},
@@ -136,4 +142,41 @@ func SearchEmails(ctx context.Context, c *jmapc.Client, p SearchEmailsParams) (*
 		return nil, err
 	}
 	return &out, nil
+}
+
+// SearchEmailsPages walks the whole of what SearchEmails returns one part of,
+// calling it again for each part until there is none left.
+//
+// It starts from the position the parameters carry and works the next one out
+// from each answer. A window with nothing in it ends the walk rather than
+// being handed back, so every result yielded holds something; where the call
+// asked for the total, the walk ends without asking for a window that is not
+// there.
+//
+// An error ends the walk and is yielded with a nil result, so a range over it
+// checks the error each time round. Breaking out of the range stops it, and
+// sends no further request.
+func SearchEmailsPages(ctx context.Context, c *jmapc.Client, p SearchEmailsParams) iter.Seq2[*SearchEmailsResult, error] {
+	return func(yield func(*SearchEmailsResult, error) bool) {
+		start := p.Position
+		for {
+			p.Position = start
+			res, err := SearchEmails(ctx, c, p)
+			if err != nil {
+				yield(nil, err)
+				return
+			}
+			window := &res.EmailQuery
+			if len(window.IDs) == 0 {
+				return
+			}
+			if !yield(res, nil) {
+				return
+			}
+			start = jmapc.Int(window.Position) + jmapc.Int(len(window.IDs))
+			if window.Total > 0 && jmapc.UnsignedInt(start) >= window.Total {
+				return
+			}
+		}
+	}
 }

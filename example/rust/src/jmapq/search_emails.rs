@@ -19,6 +19,10 @@ pub struct SearchEmailsParams {
 
     /// Matches emails in this mailbox.
     pub second_mailbox_id: Id,
+
+    /// The zero-based index of the first result to return. A negative value
+    /// counts back from the end.
+    pub position: i64,
 }
 
 /// SearchEmailsEmail holds the properties of Email that the Email/get call in
@@ -122,6 +126,7 @@ pub async fn search_emails<T: Transport>(
                     },
                     "sort": [{"property":"receivedAt","isAscending":false}],
                     "collapseThreads": true,
+                    "position": p.position,
                     "limit": 50,
                     "calculateTotal": true,
                 }),
@@ -148,4 +153,51 @@ pub async fn search_emails<T: Transport>(
     };
 
     Ok(out)
+}
+
+/// SearchEmailsPages walks the whole of what search_emails returns one part
+/// of, calling it again for each part until there is none left.
+///
+/// A window with nothing in it ends the walk rather than being handed back,
+/// so every part it answers with holds something; where the call asked for
+/// the total, the walk ends without asking for a window that is not there.
+pub struct SearchEmailsPages {
+    params: SearchEmailsParams,
+    start: i64,
+    done: bool,
+}
+
+/// search_emails_pages starts a walk from the position the parameters carry.
+/// Nothing is sent until the first call to next.
+pub fn search_emails_pages(p: SearchEmailsParams) -> SearchEmailsPages {
+    SearchEmailsPages {
+        start: p.position.clone(),
+        params: p,
+        done: false,
+    }
+}
+
+impl SearchEmailsPages {
+    /// next asks for the part after the one before, and answers with None
+    /// where there is none left.
+    pub async fn next<T: Transport>(
+        &mut self,
+        client: &Client<T>,
+    ) -> Result<Option<SearchEmailsResult>, Error> {
+        if self.done {
+            return Ok(None);
+        }
+        self.params.position = self.start.clone();
+        let res = search_emails(client, self.params.clone()).await?;
+        let window = &res.email_query;
+        if window.ids.is_empty() {
+            self.done = true;
+            return Ok(None);
+        }
+        self.start = window.position as i64 + window.ids.len() as i64;
+        if window.total > 0 && self.start as u64 >= window.total {
+            self.done = true;
+        }
+        Ok(Some(res))
+    }
 }

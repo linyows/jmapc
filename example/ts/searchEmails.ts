@@ -15,6 +15,10 @@ export interface SearchEmailsParams {
 
   // Matches emails in this mailbox.
   secondMailboxId: Id
+
+  // The zero-based index of the first result to return. A negative value
+  // counts back from the end.
+  position: number
 }
 
 // SearchEmailsEmail holds the properties of Email that the Email/get call in
@@ -99,6 +103,7 @@ export async function searchEmails(client: Client, p: SearchEmailsParams): Promi
         },
         "sort": [{"property":"receivedAt","isAscending":false}],
         "collapseThreads": true,
+        "position": p.position,
         "limit": 50,
         "calculateTotal": true,
       }, "search"],
@@ -115,5 +120,33 @@ export async function searchEmails(client: Client, p: SearchEmailsParams): Promi
   return {
     emailQuery: decode<EmailQueryResponse>(req, res, "search"),
     emailGet: decode<SearchEmailsEmailGetResponse>(req, res, "fetch"),
+  }
+}
+
+// searchEmailsPages walks the whole of what searchEmails returns one part of,
+// calling it again for each part until there is none left.
+//
+// It starts from the position the parameters carry and works the next one out
+// from each answer. A window with nothing in it ends the walk rather than
+// being yielded, so everything it yields holds something; where the call
+// asked for the total, the walk ends without asking for a window that is not
+// there.
+//
+// A failure throws, as it does from the query itself, and leaving the loop
+// early sends no further request.
+export async function* searchEmailsPages(client: Client, p: SearchEmailsParams): AsyncGenerator<SearchEmailsResult> {
+  let start = p.position
+  for (;;) {
+    p.position = start
+    const res = await searchEmails(client, p)
+    const window = res.emailQuery
+    if (window.ids.length === 0) {
+      return
+    }
+    yield res
+    start = window.position + window.ids.length
+    if (window.total > 0 && start >= window.total) {
+      return
+    }
   }
 }
