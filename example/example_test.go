@@ -776,9 +776,10 @@ func TestFindPeople(t *testing.T) {
 	  ]
 	}`}
 
+	limit := jmapc.UnsignedInt(10)
 	got, err := jmapq.FindPeople(context.Background(), s.client(), jmapq.FindPeopleParams{
 		Phrase: "ada",
-		Limit:  10,
+		Limit:  &limit,
 	})
 	if err != nil {
 		t.Fatalf("FindPeople: %v", err)
@@ -792,6 +793,9 @@ func TestFindPeople(t *testing.T) {
 	if c := conditions[1].(map[string]any); c["type"] != "individual" {
 		t.Errorf("second condition = %v, want type individual", c)
 	}
+	if search["limit"] != float64(10) {
+		t.Errorf("limit = %v, want 10", search["limit"])
+	}
 
 	if len(got.List) != 1 {
 		t.Fatalf("got %d principals, want 1", len(got.List))
@@ -802,6 +806,34 @@ func TestFindPeople(t *testing.T) {
 	}
 	if who.Email == nil || *who.Email != "ada@example.com" {
 		t.Errorf("email = %v", who.Email)
+	}
+}
+
+// TestFindPeopleWithoutLimit covers an argument the query lets the caller
+// leave out, written "{{limit?}}": leaving it out takes the argument out of
+// the request, rather than sending null or a zero the server would honour.
+func TestFindPeopleWithoutLimit(t *testing.T) {
+	s := &stub{t: t, response: `{
+	  "sessionState": "session-1",
+	  "methodResponses": [
+	    ["Principal/query", {"accountId": "acct1", "queryState": "p1",
+	                         "canCalculateChanges": false, "position": 0, "ids": []}, "search"],
+	    ["Principal/get", {"accountId": "acct1", "state": "p1", "notFound": [], "list": []}, "fetch"]
+	  ]
+	}`}
+
+	if _, err := jmapq.FindPeople(context.Background(), s.client(), jmapq.FindPeopleParams{
+		Phrase: "ada",
+	}); err != nil {
+		t.Fatalf("FindPeople: %v", err)
+	}
+
+	_, search := s.call(t, "search")
+	if _, sent := search["limit"]; sent {
+		t.Errorf("limit was sent as %v, want the argument to be left out", search["limit"])
+	}
+	if search["filter"] == nil {
+		t.Error("the arguments that are always there were left out too")
 	}
 }
 

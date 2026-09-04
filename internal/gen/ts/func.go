@@ -161,7 +161,14 @@ func (g *QueryGenerator) writeParams(buf *bytes.Buffer, p *plan) {
 			buf.WriteString("\n")
 		}
 		shared.WriteComment(buf, "  ", param.Doc)
-		fmt.Fprintf(buf, "  %s: %s\n", tsMemberName(param.Field), param.ValueType().TSType())
+		// A parameter that may be left out is an optional member, so leaving
+		// it out is what the caller writes, and undefined is what the request
+		// builder looks for.
+		optional := ""
+		if param.Optional {
+			optional = "?"
+		}
+		fmt.Fprintf(buf, "  %s%s: %s\n", tsMemberName(param.Field), optional, param.ValueType().TSType())
 	}
 	buf.WriteString("}\n\n")
 }

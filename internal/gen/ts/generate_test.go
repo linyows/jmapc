@@ -106,3 +106,29 @@ func compare(t *testing.T, path string, got []byte) {
 	}
 	t.Errorf("%s is out of date; run go generate ./...", path)
 }
+
+// TestOptionalArgumentIsSpreadIn checks the argument a caller may leave out:
+// the member is an optional one on the parameters, and it reaches the request
+// through a spread, so that leaving it out leaves the argument out rather than
+// sending undefined.
+func TestOptionalArgumentIsSpreadIn(t *testing.T) {
+	q, err := query.NewParser(spec.Standard()).Parse("GetChanges"+query.Extension, []byte(`{
+	  "methodCalls": [["Email/changes", {"sinceState": "{{sinceState}}", "maxChanges": "{{maxChanges?}}"}, "changes"]]
+	}`))
+	if err != nil {
+		t.Fatalf("checking the query:\n%v", err)
+	}
+	files, err := (&QueryGenerator{Spec: spec.Standard(), Queries: []*query.Query{q}}).Generate()
+	if err != nil {
+		t.Fatalf("generating: %v", err)
+	}
+	src := string(files["getChanges.ts"])
+	for _, want := range []string{
+		"maxChanges?: number",
+		`...(p.maxChanges !== undefined ? { "maxChanges": p.maxChanges } : {}),`,
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("the generated query does not contain %q:\n%s", want, src)
+		}
+	}
+}

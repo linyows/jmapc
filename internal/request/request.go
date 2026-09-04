@@ -49,6 +49,13 @@ func Build(s *spec.Spec, q *query.Query, values map[string]Value, accounts Accou
 			args[query.AccountIDArgument] = id
 		}
 		for _, f := range c.Args.Fields {
+			// An argument the caller may leave out is not in the request when
+			// they did, which is a different request from one sending null.
+			if param := f.OptionalParam(); param != nil {
+				if _, given := values[param.Name]; !given {
+					continue
+				}
+			}
 			key, err := b.key(f)
 			if err != nil {
 				return nil, err
@@ -77,7 +84,7 @@ func CheckValues(q *query.Query, values map[string]Value) error {
 	var missing []string
 	for _, p := range q.Params {
 		wanted[p.Name] = true
-		if _, ok := values[p.Name]; !ok {
+		if _, ok := values[p.Name]; !ok && !p.Optional {
 			missing = append(missing, fmt.Sprintf("%s (%s)", p.Name, p.ValueType()))
 		}
 	}

@@ -11,7 +11,7 @@ export interface FindPeopleParams {
   phrase: string
 
   // The maximum number of ids to return.
-  limit: number
+  limit?: number
 }
 
 // FindPeoplePrincipal holds the properties of Principal that the
@@ -53,7 +53,8 @@ export interface FindPeoplePrincipalGetResponse {
 }
 
 // FindPeople looks for the people and things an account can be shared with,
-// which is what a sharing dialogue needs before it can offer anything.
+// which is what a sharing dialogue needs before it can offer anything. The
+// limit may be left out, and the server then decides how many to answer with.
 //
 // It makes Principal/query and Principal/get calls in a single request, so
 // that 2 dependent calls cost one round trip. It returns the response to the
@@ -78,7 +79,7 @@ export async function findPeople(client: Client, p: FindPeopleParams): Promise<F
             {"type":"individual"},
           ],
         },
-        "limit": p.limit,
+        ...(p.limit !== undefined ? { "limit": p.limit } : {}),
       }, "search"],
       ["Principal/get", {
         "accountId": principalsAccountId,

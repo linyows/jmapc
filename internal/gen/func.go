@@ -46,6 +46,7 @@ func (g *QueryGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
 	fmt.Fprintf(buf, "%s) (*%s, error) {\n", sig, p.returnType)
 
 	g.writeSessionLookups(buf, p)
+	g.writeArgVars(buf, p)
 	g.writeRequest(buf, p)
 
 	buf.WriteString("\tresp, err := c.Do(ctx, req)\n")
@@ -175,6 +176,48 @@ func (g *QueryGenerator) capabilityExpr(uri string) string {
 	return strconv.Quote(uri)
 }
 
+// writeArgVars writes the argument objects that cannot be stated as one
+// literal, because a member of each is only there when the caller supplied it.
+func (g *QueryGenerator) writeArgVars(buf *bytes.Buffer, p *plan) {
+	for _, c := range p.q.Calls {
+		if !c.HasOptionalArgs() {
+			continue
+		}
+		name := argsVar(c)
+		fmt.Fprintf(buf, "\t%s := map[string]any{\n", name)
+		if expr := p.calls[c].accountIDExpr; expr != "" {
+			fmt.Fprintf(buf, "\t\t%q: %s,\n", query.AccountIDArgument, expr)
+		}
+		for _, field := range c.Args.Fields {
+			if field.OptionalParam() != nil {
+				continue
+			}
+			fmt.Fprintf(buf, "\t\t%s: %s,\n", g.keyExpr(field), g.expr(field.Value, "\t\t"))
+		}
+		buf.WriteString("\t}\n")
+		for _, field := range c.Args.Fields {
+			param := field.OptionalParam()
+			if param == nil {
+				continue
+			}
+			held := "p." + param.Field
+			value := held
+			if strings.HasPrefix(param.GoType(g.Qualifier), "*") {
+				value = "*" + held
+			}
+			fmt.Fprintf(buf, "\tif %s != nil {\n\t\t%s[%s] = %s\n\t}\n", held, name, g.keyExpr(field), value)
+		}
+		buf.WriteString("\n")
+	}
+}
+
+// argsVar names the variable holding a call's arguments, for a call whose
+// arguments are built rather than stated.
+func argsVar(c *query.Call) string {
+	field := c.Field
+	return strings.ToLower(field[:1]) + field[1:] + "Args"
+}
+
 // writeRequest writes the literal JMAP request the function sends.
 func (g *QueryGenerator) writeRequest(buf *bytes.Buffer, p *plan) {
 	fmt.Fprintf(buf, "\treq := &%sRequest{\n", g.Qualifier)
@@ -201,6 +244,10 @@ func (g *QueryGenerator) writeRequest(buf *bytes.Buffer, p *plan) {
 func (g *QueryGenerator) writeInvocation(buf *bytes.Buffer, p *plan, c *query.Call) {
 	if c.Comment != "" {
 		shared.WriteComment(buf, "\t\t\t", c.Comment)
+	}
+	if c.HasOptionalArgs() {
+		fmt.Fprintf(buf, "\t\t\t{Name: %q, CallID: %q, Args: %s},\n", c.Method.Name, c.ID, argsVar(c))
+		return
 	}
 	fmt.Fprintf(buf, "\t\t\t{Name: %q, CallID: %q, Args: map[string]any{\n", c.Method.Name, c.ID)
 	if expr := p.calls[c].accountIDExpr; expr != "" {

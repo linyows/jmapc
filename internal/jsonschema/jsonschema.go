@@ -28,10 +28,11 @@ const Draft = "http://json-schema.org/draft-07/schema#"
 // The definitions the schema declares for itself, rather than for a type in
 // the catalogue.
 const (
-	parameterDef = "parameter"
-	referenceDef = "resultReference"
-	callDef      = "methodCall"
-	methodDef    = "methodName"
+	parameterDef         = "parameter"
+	optionalParameterDef = "optionalParameter"
+	referenceDef         = "resultReference"
+	callDef              = "methodCall"
+	methodDef            = "methodName"
 )
 
 // Generator turns a catalogue into a JSON Schema for the query files written
@@ -126,6 +127,11 @@ func (b *builder) declare() {
 		"pattern":     `^\{\{\s*[A-Za-z_][A-Za-z0-9_]*\s*\}\}$`,
 		"description": "A value the caller supplies, written as {{name}}. Its type comes from the argument it stands in for.",
 	}
+	b.defs[optionalParameterDef] = map[string]any{
+		"type":        "string",
+		"pattern":     `^\{\{\s*[A-Za-z_][A-Za-z0-9_]*\s*\?\s*\}\}$`,
+		"description": "An argument the caller may leave out, written {{name?}}. Leaving it out leaves the argument out of the request, which is not the same as sending null. Only a whole argument may be written this way.",
+	}
 	b.defs[referenceDef] = map[string]any{
 		"type":                 "object",
 		"description":          "A value filled in by the server from the result of an earlier call in the same request.",
@@ -208,7 +214,7 @@ func (b *builder) arguments(m *spec.Method, o *spec.Object) {
 		return
 	}
 	b.defs[o.Name] = true // claimed, so that a cycle through this type stops here
-	props := b.properties(m, o)
+	props := b.properties(m, o, true)
 	props[query.CommentArgument] = map[string]any{
 		"type":        "string",
 		"description": "Why this call is there. It goes into the generated code and never into the request, since a server must reject an argument it does not know.",
@@ -238,7 +244,7 @@ func (b *builder) object(o *spec.Object) {
 	b.defs[o.Name] = map[string]any{
 		"type":                 "object",
 		"description":          o.Doc,
-		"properties":           b.properties(nil, o),
+		"properties":           b.properties(nil, o, false),
 		"additionalProperties": false,
 	}
 }
@@ -246,7 +252,7 @@ func (b *builder) object(o *spec.Object) {
 // properties renders the properties of an object. The method is given for an
 // argument object, since two of its arguments select property names of the
 // type the method operates on, and those names are worth completing.
-func (b *builder) properties(m *spec.Method, o *spec.Object) map[string]any {
+func (b *builder) properties(m *spec.Method, o *spec.Object, argument bool) map[string]any {
 	props := make(map[string]any, len(o.Fields))
 	for _, f := range o.Fields {
 		ctx := fieldContext{enum: f.Enum, patchTarget: f.PatchTarget, sortTarget: f.SortTarget}
@@ -259,9 +265,25 @@ func (b *builder) properties(m *spec.Method, o *spec.Object) map[string]any {
 		default:
 			s = b.value(f.ParsedType(), ctx)
 		}
+		if argument {
+			s = orOptionalParameter(s)
+		}
 		props[f.Name] = describe(s, f.Doc)
 	}
 	return props
+}
+
+// orOptionalParameter lets a value also be written as a parameter the caller
+// may leave out. Only an argument may be written that way, since leaving one
+// out takes the argument itself out of the request.
+func orOptionalParameter(s any) any {
+	if m, isMap := s.(map[string]any); isMap {
+		if alternatives, ok := m["anyOf"].([]any); ok {
+			m["anyOf"] = append(alternatives, ref(optionalParameterDef))
+			return m
+		}
+	}
+	return map[string]any{"anyOf": []any{s, ref(optionalParameterDef)}}
 }
 
 // propertyNames renders an argument that selects property names of a type,

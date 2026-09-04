@@ -147,3 +147,51 @@ func compare(t *testing.T, path string, got []byte) {
 	}
 	t.Errorf("%s is out of date; run go generate ./...", path)
 }
+
+// TestOptionalArgumentIsPutInAfterwards checks the argument a caller may leave
+// out. The json! macro states an object as it is written, so the members that
+// are always there are stated and the rest are put in afterwards.
+func TestOptionalArgumentIsPutInAfterwards(t *testing.T) {
+	q, err := query.NewParser(spec.Standard()).Parse("GetChanges"+query.Extension, []byte(`{
+	  "methodCalls": [["Email/changes", {"sinceState": "{{sinceState}}", "maxChanges": "{{maxChanges?}}"}, "changes"]]
+	}`))
+	if err != nil {
+		t.Fatalf("checking the query:\n%v", err)
+	}
+	files, err := (&QueryGenerator{Spec: spec.Standard(), Queries: []*query.Query{q}}).Generate()
+	if err != nil {
+		t.Fatalf("generating: %v", err)
+	}
+	src := string(files["get_changes.rs"])
+	for _, want := range []string{
+		"pub max_changes: Option<u64>,",
+		"let mut args = json!({",
+		"if let Some(value) = &p.max_changes {",
+		`args["maxChanges"] = json!(value);`,
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("the generated query does not contain %q:\n%s", want, src)
+		}
+	}
+}
+
+// TestOnlyOptionalArgumentsStartFromAnEmptyObject checks the call whose every
+// argument may be left out. The empty object is written on one line, which is
+// where rustfmt would put it, and the crate is checked with rustfmt rather
+// than formatted by it.
+func TestOnlyOptionalArgumentsStartFromAnEmptyObject(t *testing.T) {
+	q, err := query.NewParser(spec.Standard()).Parse("EchoMaybe"+query.Extension, []byte(`{
+	  "methodCalls": [["Core/echo", {"value": "{{value?}}"}, "c0"]]
+	}`))
+	if err != nil {
+		t.Fatalf("checking the query:\n%v", err)
+	}
+	files, err := (&QueryGenerator{Spec: spec.Standard(), Queries: []*query.Query{q}}).Generate()
+	if err != nil {
+		t.Fatalf("generating: %v", err)
+	}
+	src := string(files["echo_maybe.rs"])
+	if !strings.Contains(src, "let mut args = json!({});") {
+		t.Errorf("the empty object is not written the way rustfmt writes one:\n%s", src)
+	}
+}

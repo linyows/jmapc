@@ -169,6 +169,39 @@ type Param struct {
 	// know it, such as a name embedded in a JSON pointer. The first use that
 	// does know settles the type.
 	Weak bool
+	// Optional marks a parameter the caller may leave out, written
+	// "{{name?}}". The argument it stands for is then left out of the request
+	// altogether, which is a different request from one that sends null.
+	//
+	// Only an argument of a method call may be left out, and only where the
+	// parameter standing for it is used nowhere else, so that "left out" has
+	// one meaning: this member is not there.
+	Optional bool
+	// Places records every place in the query the parameter is used, by the
+	// path each was written at. An optional parameter has exactly one.
+	Places []string
+}
+
+// OptionalParam returns the parameter this argument stands for where the
+// caller may leave it out, and nil everywhere else. An argument left out is
+// not in the request at all, so a generator has to build the argument object
+// rather than state it outright.
+func (f ObjectField) OptionalParam() *Param {
+	ref, isParam := f.Value.(*ParamRef)
+	if !isParam || !ref.Param.Optional {
+		return nil
+	}
+	return ref.Param
+}
+
+// HasOptionalArgs reports whether any argument of the call may be left out.
+func (c *Call) HasOptionalArgs() bool {
+	for _, f := range c.Args.Fields {
+		if f.OptionalParam() != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // ValueType returns the parameter's type with the null taken off. A parameter
@@ -180,9 +213,36 @@ func (p *Param) ValueType() *spec.Type {
 	return &t
 }
 
+// absentType returns the parameter's type marked nullable where the parameter
+// may be left out, so that a language spells "no value" the way it already
+// spells null: a pointer in Go, an Option in Rust, and nothing at all where
+// the type has a form of its own for it, as a Go slice does.
+func (p *Param) absentType() *spec.Type {
+	t := p.ValueType()
+	t.Nullable = p.Optional
+	return t
+}
+
 // GoType returns the Go type of the parameter.
 func (p *Param) GoType(qualifier string) string {
-	return p.ValueType().GoType(qualifier)
+	return p.absentType().GoType(qualifier)
+}
+
+// RustType returns the Rust type of the parameter.
+func (p *Param) RustType() string {
+	return p.absentType().RustType()
+}
+
+// addPlace records a use of the parameter. The same path arriving twice is one
+// use: a union tries its alternatives in turn, and the one that fits walks the
+// value the others already walked.
+func (p *Param) addPlace(where string) {
+	for _, seen := range p.Places {
+		if seen == where {
+			return
+		}
+	}
+	p.Places = append(p.Places, where)
 }
 
 // Node is one value inside an argument object: a literal, a parameter, a back

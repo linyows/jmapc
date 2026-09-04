@@ -178,6 +178,14 @@ func (g *QueryGenerator) writeInvocation(buf *bytes.Buffer, p *plan, c *query.Ca
 		fmt.Fprintf(buf, "        %s: %s,\n", strconv.Quote(query.AccountIDArgument), v)
 	}
 	for _, field := range c.Args.Fields {
+		// An argument the caller may leave out is spread in, so that leaving
+		// it out leaves the member itself out rather than sending undefined.
+		if param := field.OptionalParam(); param != nil {
+			held := "p." + tsMemberName(param.Field)
+			fmt.Fprintf(buf, "        ...(%s !== undefined ? { %s: %s } : {}),\n",
+				held, g.keyExpr(field), held)
+			continue
+		}
 		fmt.Fprintf(buf, "        %s: %s,\n", g.keyExpr(field), g.expr(field.Value, "        "))
 	}
 	fmt.Fprintf(buf, "      }, %s],\n", strconv.Quote(c.ID))

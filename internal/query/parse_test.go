@@ -195,6 +195,33 @@ func TestParseErrors(t *testing.T) {
 		src:  `{"methodCalls": [["Email/query", {"accountId": "acct-{{x}}"}, "c0"]]}`,
 		want: `a parameter cannot be embedded in a larger string`,
 	}, {
+		name: "argument left out from inside another value",
+		src:  `{"methodCalls": [["Email/query", {"filter": {"inMailbox": "{{mailboxId?}}"}}, "c0"]]}`,
+		want: `only an argument of a method call may be left out`,
+	}, {
+		name: "argument left out from inside an array",
+		src: `{"methodCalls": [
+			["Email/query", {"filter": {"operator": "AND", "conditions": [{"text": "{{phrase?}}"}]}}, "c0"]
+		]}`,
+		want: `only an argument of a method call may be left out`,
+	}, {
+		name: "parameter that may be left out is used again",
+		src: `{"methodCalls": [
+			["Email/changes", {"sinceState": "{{state?}}"}, "c0"],
+			["Mailbox/changes", {"sinceState": "{{state}}"}, "c1"]
+		]}`,
+		want: `it is used again at methodCalls[1].arguments.sinceState`,
+	}, {
+		name: "accountId left out",
+		src:  `{"methodCalls": [["Email/query", {"accountId": "{{accountId?}}"}, "c0"]]}`,
+		want: `accountId cannot be left out on its own`,
+	}, {
+		name: "watched state left out",
+		src: `{"_watches": "c0", "methodCalls": [
+			["Email/changes", {"sinceState": "{{state?}}"}, "c0"]
+		]}`,
+		want: `so it cannot be left out`,
+	}, {
 		name: "missing capability",
 		src:  `{"using": ["core"], "methodCalls": [["Email/query", {}, "c0"]]}`,
 		want: `needs the capability urn:ietf:params:jmap:mail`,
@@ -326,6 +353,48 @@ func TestPatchPointerParametersAreTyped(t *testing.T) {
 	}
 	if got := q.Params[0].GoType("jmapc."); got != "jmapc.ID" {
 		t.Errorf("mailboxId is %s, want jmapc.ID", got)
+	}
+}
+
+// TestOptionalParameter checks the argument a caller may leave out: the type
+// gains the shape a language already has for "no value", and the parameter
+// knows it stands for an argument that may not be there at all.
+func TestOptionalParameter(t *testing.T) {
+	q := parse(t, "GetChanges"+Extension, `{"methodCalls": [
+	  ["Email/changes", {"sinceState": "{{sinceState}}", "maxChanges": "{{maxChanges?}}"}, "c0"]
+	]}`)
+	if len(q.Params) != 2 {
+		t.Fatalf("got %d parameters, want 2", len(q.Params))
+	}
+	since, max := q.Params[0], q.Params[1]
+	if since.Optional {
+		t.Error("sinceState may be left out, want it required")
+	}
+	if !max.Optional {
+		t.Fatal("maxChanges may not be left out, want it optional")
+	}
+	if got := max.GoType("jmapc."); got != "*jmapc.UnsignedInt" {
+		t.Errorf("maxChanges is %s, want *jmapc.UnsignedInt", got)
+	}
+	if got := max.RustType(); got != "Option<u64>" {
+		t.Errorf("maxChanges is %s in Rust, want Option<u64>", got)
+	}
+	if got := max.ValueType().TSType(); got != "number" {
+		t.Errorf("maxChanges is %s in TypeScript, want number, since the member itself is optional", got)
+	}
+	if !q.Calls[0].HasOptionalArgs() {
+		t.Error("the call does not report an argument that may be left out")
+	}
+}
+
+// TestOptionalArrayParameterNeedsNoPointer checks that a parameter whose type
+// already has a form for "no value" keeps it: a Go slice is nil or it is not.
+func TestOptionalArrayParameterNeedsNoPointer(t *testing.T) {
+	q := parse(t, "GetSome"+Extension, `{"methodCalls": [
+	  ["Email/get", {"ids": "{{ids?}}"}, "c0"]
+	]}`)
+	if got := q.Params[0].GoType("jmapc."); got != "[]jmapc.ID" {
+		t.Errorf("ids is %s, want []jmapc.ID", got)
 	}
 }
 

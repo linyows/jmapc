@@ -1,5 +1,5 @@
 {
-  "_doc": "FindPeople looks for the people and things an account can be shared with, which is what a sharing dialogue needs before it can offer anything.",
+  "_doc": "FindPeople looks for the people and things an account can be shared with, which is what a sharing dialogue needs before it can offer anything. The limit may be left out, and the server then decides how many to answer with.",
 
   "methodCalls": [
     ["Principal/query", {
@@ -10,7 +10,7 @@
           {"type": "individual"}
         ]
       },
-      "limit": "{{limit}}"
+      "limit": "{{limit?}}"
     }, "search"],
 
     ["Principal/get", {
