@@ -164,3 +164,89 @@ func TestGeneratedSourcePathIsPortable(t *testing.T) {
 		}
 	}
 }
+
+// generateOne generates the Go for one query written inline, and returns the
+// source.
+func generateOne(t *testing.T, name, src string) string {
+	t.Helper()
+	q, err := query.NewParser(spec.Standard()).Parse(name+query.Extension, []byte(src))
+	if err != nil {
+		t.Fatalf("checking %s:\n%v", name, err)
+	}
+	g := &QueryGenerator{Spec: spec.Standard(), Package: "jmapq", Qualifier: "jmapc.", Queries: []*query.Query{q}}
+	files, err := g.Generate()
+	if err != nil {
+		t.Fatalf("generating %s: %v", name, err)
+	}
+	return string(files[fileName(name)])
+}
+
+// TestWatchTakesTheAccountFromTheSession checks the account a watch listens
+// for, where the query leaves it to the primary account: the events are keyed
+// by account, so the loop has to resolve it before it makes any request.
+func TestWatchTakesTheAccountFromTheSession(t *testing.T) {
+	src := generateOne(t, "SyncMailboxes", `{
+	  "_watches": "changes",
+	  "methodCalls": [["Mailbox/changes", {"sinceState": "{{sinceState}}"}, "changes"]]
+	}`)
+	for _, want := range []string{
+		"func SyncMailboxesWatch(ctx context.Context, c *jmapc.Client, p SyncMailboxesParams, fn func(context.Context, *SyncMailboxesResult) error, opts ...jmapc.WatchOption) error {",
+		"mailAccountID, err := session.PrimaryAccountID(jmapc.CapabilityMail)",
+		`return c.Watch(ctx, mailAccountID, "Mailbox", p.SinceState,`,
+		"p.SinceState = sinceState",
+		"return res.MailboxChanges.NewState, res.MailboxChanges.HasMoreChanges, nil",
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("the generated watch does not contain %q:\n%s", want, src)
+		}
+	}
+}
+
+// TestWatchTakesTheAccountFromTheQuery checks the two ways a query names the
+// account itself, neither of which costs a session lookup.
+func TestWatchTakesTheAccountFromTheQuery(t *testing.T) {
+	fromParameter := generateOne(t, "SyncEmails", `{
+	  "_watches": "changes",
+	  "methodCalls": [["Email/changes", {"accountId": "{{accountId}}", "sinceState": "{{sinceState}}"}, "changes"]]
+	}`)
+	if !strings.Contains(fromParameter, `return c.Watch(ctx, p.AccountID, "Email", p.SinceState,`) {
+		t.Errorf("the watch does not listen for the account the caller names:\n%s", fromParameter)
+	}
+	if strings.Contains(fromParameter, "PrimaryAccountID") {
+		t.Errorf("the watch looked up an account the query already names:\n%s", fromParameter)
+	}
+
+	stated := generateOne(t, "SyncOne", `{
+	  "_watches": "changes",
+	  "methodCalls": [["Email/changes", {"accountId": "a1", "sinceState": "{{sinceState}}"}, "changes"]]
+	}`)
+	if !strings.Contains(stated, `return c.Watch(ctx, jmapc.ID("a1"), "Email", p.SinceState,`) {
+		t.Errorf("the watch does not listen for the account the query states:\n%s", stated)
+	}
+}
+
+// TestWatchReadsTheStateItReturns checks a query that returns the watched call
+// alone, where the state is on the response itself rather than on a field of a
+// result holding every response.
+func TestWatchReadsTheStateItReturns(t *testing.T) {
+	src := generateOne(t, "SyncEmails", `{
+	  "_watches": "changes",
+	  "_returns": "changes",
+	  "methodCalls": [["Email/changes", {"sinceState": "{{sinceState}}"}, "changes"]]
+	}`)
+	if !strings.Contains(src, "return res.NewState, res.HasMoreChanges, nil") {
+		t.Errorf("the watch does not read the state off the response it returns:\n%s", src)
+	}
+}
+
+// TestUnwatchedQueriesGetNoLoop checks that the function is generated only
+// where the query asked for it.
+func TestUnwatchedQueriesGetNoLoop(t *testing.T) {
+	src := generateOne(t, "ListMailboxes", `{
+	  "methodCalls": [["Mailbox/get", {"ids": null, "properties": ["id", "name"]}, "all"]],
+	  "_returns": "all"
+	}`)
+	if strings.Contains(src, "Watch") {
+		t.Errorf("a query that asked for no watch got one:\n%s", src)
+	}
+}

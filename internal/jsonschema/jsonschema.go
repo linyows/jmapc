@@ -65,6 +65,10 @@ func (g *Generator) Generate() ([]byte, error) {
 				"type":        "string",
 				"description": "The call id whose response the generated function returns. Without it, every response is returned.",
 			},
+			query.WatchesMember: map[string]any{
+				"type":        "string",
+				"description": "The call id whose state a watching client follows. It has to name a call that reports what changed since a state, and the generated client calls the query whenever the server says that type has moved on.",
+			},
 			query.CreatedIDsMember: map[string]any{
 				"type":        "boolean",
 				"description": "Whether the generated function carries the creation ids of an earlier request in and reports its own, so that a reference to something created there still resolves here.",

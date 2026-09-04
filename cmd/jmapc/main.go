@@ -221,6 +221,7 @@ func (l *stringList) Set(v string) error {
 
 // write generates the client and puts it on disk.
 func write(cfg *Config, catalogue *spec.Spec, queries []*query.Query) error {
+	noteUnwatched(cfg, queries)
 	files, err := generate(cfg, catalogue, queries)
 	if err != nil {
 		return err
@@ -241,6 +242,24 @@ func write(cfg *Config, catalogue *spec.Spec, queries []*query.Query) error {
 		fmt.Println(path)
 	}
 	return nil
+}
+
+// noteUnwatched says so where a query asks to be watched in a language that
+// cannot follow it. Following a type's changes means holding a connection to
+// the server's push endpoint open, which only the Go runtime does; the query
+// itself is generated all the same, so the note is a note rather than an
+// error.
+func noteUnwatched(cfg *Config, queries []*query.Query) {
+	if cfg.Lang == LangGo {
+		return
+	}
+	for _, q := range queries {
+		if q.Watches == nil {
+			continue
+		}
+		fmt.Fprintf(stderr, "jmapc: %s asks to be watched, which only the Go client does; the %s client has the query without the loop\n",
+			q.Name, cfg.Lang)
+	}
 }
 
 // generate produces the files for the configured language. TypeScript and Rust

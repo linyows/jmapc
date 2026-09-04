@@ -164,6 +164,7 @@ for _, email := range res.List {
 | プロパティを絞り込んだレコード | `ListInboxEmailsEmail`。ボディパートを絞り込めば `ListInboxEmailsEmailBodyPart` も生成されます |
 | そのレコードを返す呼び出しのレスポンス | `ListInboxEmailsEmailGetResponse` |
 | 結果。`_returns` が呼び出しを指定しない場合に生成されます | `ListInboxEmailsResult` |
+| 変更を追う関数。クエリが `_watches` を持つ場合に生成されます | `SyncEmailsWatch` |
 | ファイル | `listinboxemails_gen.go` |
 
 絞り込みのない呼び出しは、クエリごとの型ではなく共有の型で返ります。
@@ -330,6 +331,7 @@ null を取りうるプロパティは `Option` なので、`subject` は `Optio
 | `_doc` | 生成される関数のドキュメントです。省略できます。 |
 | `_returns` | どの呼び出しのレスポンスを関数の戻り値にするかを指定します。省略すると全てのレスポンスが返ります。 |
 | `_createdIds` | 先行するリクエストの creation id を受け取り、このリクエストのものを返します。省略可。次項を参照してください。 |
+| `_watches` | 生成されたクライアントが変更を追う呼び出しを指定します。サーバが「進んだ」と言うたびに追いつきます。省略可。[プッシュ](#プッシュ)を参照してください。 |
 | `_comment` | その呼び出しが何のためにあるかを書きます。呼び出しの引数の中に置きます。次項を参照してください。 |
 
 クエリファイルは素の JSON です。
@@ -415,6 +417,7 @@ creation id はリクエスト全体のものであって、その中のどの�
 - 仕様が値を固定しているプロパティに、その値のいずれかが与えられていること。文字列の値と、参加者の `roles` のような集合のキーの両方が対象です
 - id、日付、整数の形式が正しいこと
 - リクエストが宣言するケイパビリティが、呼び出すメソッドを網羅していること
+- `_watches` が指す呼び出しが、ある状態からの変更を報告するものであり、そこから進む状態がクエリに書き込まれずループに委ねられていること
 
 綴り間違いには候補が提示されます。
 
@@ -608,9 +611,67 @@ defer blob.Close()
 
 ## プッシュ
 
-`Client.EventSource` はサーバのプッシュエンドポイントに接続します。
 イベントが伝えるのは、どのアカウントのどの型が進んだかであって、何が変わったかではありません。
-クライアントは続けて `/changes` を呼びます。
+ですから変更が欲しいクライアントはループを書きます。
+接続し、手元の状態からの差分を尋ね、それを適用し、次に言われるのを待つ。
+このループは毎回同じで、そのどの部分も間違えうる場所です。
+そこで、クエリの側から要求できるようにしました。
+
+`_watches` は、ループが状態を読む呼び出しを指定します。
+指定できるのは、`Email/changes` のように、ある状態からの変更を報告する呼び出しです。
+
+```json
+{
+  "_watches": "changes",
+
+  "methodCalls": [
+    ["Email/changes", {"sinceState": "{{sinceState}}", "maxChanges": 128}, "changes"],
+    ["Email/get", {"#ids": {"resultOf": "changes", "name": "Email/changes", "path": "/created"}}, "created"]
+  ]
+}
+```
+
+`SyncEmails` はこれまでどおり生成され、その隣に `SyncEmailsWatch` が生成されます。
+
+```go
+err := jmapq.SyncEmailsWatch(ctx, c, jmapq.SyncEmailsParams{SinceState: state},
+	func(ctx context.Context, res *jmapq.SyncEmailsResult) error {
+		for _, email := range res.EmailGet.List {
+			fmt.Println("new:", *email.Subject)
+		}
+		state = res.EmailChanges.NewState // 保存して、次はここから始める
+		return nil
+	})
+```
+
+ループはパラメータが持つ状態から始まり、各回の答えが報告する状態へ進みます。
+呼び出し側が持たずに済むのは次のことです。
+
+- **ストリームは接続であって購読ではありません。** 切れたら別の接続を開き、最後に届いたイベントから再開します。サーバに届かない間は、1 秒から 30 秒へと倍々に待ちます。
+- **接続がない間に変わったものは、誰にもプッシュされていません。** ですから接続のたびに、まず追いつきます。
+- **サーバは `/changes` に好きなだけ答えて** `hasMoreChanges` でそう言います。ループは、そう言わなくなるまで尋ね直します。
+- **他のアカウント、他の型、あるいは既に到達済みの状態のイベント**にリクエストの価値はありません。最後のものはよく起きます。自分の追いつきが、サーバに「今伝えたばかりのこと」をプッシュさせるからです。
+
+ループはコンテキストが終わるまで走り、そのエラーを返します。
+コールバックが返したエラーはループを止め、そのまま返ります。
+接続を明確に拒んだサーバのエラーは、待たずに返します。403 は待っても変わらないからです。
+`jmapc.WithPing` と `jmapc.WithRetry` が、調整する価値のある二つです。
+
+その下にあるのが `Client.Watch` で、追いつき方を関数で受け取ります。
+追いつきが一つのクエリで済まないときは、これを直接呼びます。
+
+```go
+err := c.Watch(ctx, accountID, "Email", state,
+	func(ctx context.Context, since string) (newState string, more bool, err error) {
+		// since からの /changes を呼び、返った id に応じて取得する
+	})
+```
+
+`_watches` を追うのは Go のクライアントだけです。
+接続を保持するのは生成コードではなくランタイムの仕事で、TypeScript と Rust のランタイムはそれをしません。
+それらの言語で watch するクエリを生成すると、ループのないクエリだけが生成され、その旨が表示されます。
+
+`Watch` のさらに下にあるのが `Client.EventSource` で、プッシュエンドポイントに接続してイベントをそのまま返します。
 
 ```go
 stream, err := c.EventSource(ctx, &jmapc.EventSourceOptions{
@@ -625,15 +686,10 @@ for {
 		break // stream.LastEventID() を渡して再接続する
 	}
 	if state, ok := change.StateOf(accountID, "Email"); ok {
-		// 手元の状態からの Email/changes を呼ぶ
 		_ = state
 	}
 }
 ```
-
-ストリームは接続であって、ネットワークより長生きする購読ではありません。
-`Next` が返すエラーは再接続の合図で、`LastEventID` が再開点です。
-そこから再開すれば、間のイベントを取りこぼしません。
 
 これはイベントソース形式のプッシュで、接続を保持できるクライアントに向いています。
 もう一つの形式は、サーバが送る先の URL を登録するもので、スマートフォンのアプリにはこちらが必要です。

@@ -1,5 +1,7 @@
 {
-  "_doc": "SyncEmails fetches the emails that have been created since a known state, so a local cache can catch up without refetching everything.",
+  "_doc": "SyncEmails fetches the emails that have changed since a known state, so a local cache can catch up without refetching everything.",
+
+  "_watches": "changes",
 
   "methodCalls": [
     ["Email/changes", {
