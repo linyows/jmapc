@@ -17,7 +17,7 @@ type FindPeopleParams struct {
 	Phrase string
 
 	// The maximum number of ids to return.
-	Limit jmapc.UnsignedInt
+	Limit *jmapc.UnsignedInt
 }
 
 // FindPeoplePrincipal holds the properties of Principal that the
@@ -59,7 +59,8 @@ type FindPeoplePrincipalGetResponse struct {
 }
 
 // FindPeople looks for the people and things an account can be shared with,
-// which is what a sharing dialogue needs before it can offer anything.
+// which is what a sharing dialogue needs before it can offer anything. The
+// limit may be left out, and the server then decides how many to answer with.
 //
 // It makes Principal/query and Principal/get calls in a single request, so
 // that 2 dependent calls cost one round trip. It returns the response to the
@@ -77,22 +78,26 @@ func FindPeople(ctx context.Context, c *jmapc.Client, p FindPeopleParams) (*Find
 		return nil, err
 	}
 
+	principalQueryArgs := map[string]any{
+		"accountId": principalsAccountID,
+		"filter": map[string]any{
+			"operator": "AND",
+			"conditions": []any{
+				map[string]any{
+					"text": p.Phrase,
+				},
+				json.RawMessage(`{"type":"individual"}`),
+			},
+		},
+	}
+	if p.Limit != nil {
+		principalQueryArgs["limit"] = *p.Limit
+	}
+
 	req := &jmapc.Request{
 		Using: []string{jmapc.CapabilityCore, jmapc.CapabilityPrincipals},
 		MethodCalls: []jmapc.Invocation{
-			{Name: "Principal/query", CallID: "search", Args: map[string]any{
-				"accountId": principalsAccountID,
-				"filter": map[string]any{
-					"operator": "AND",
-					"conditions": []any{
-						map[string]any{
-							"text": p.Phrase,
-						},
-						json.RawMessage(`{"type":"individual"}`),
-					},
-				},
-				"limit": p.Limit,
-			}},
+			{Name: "Principal/query", CallID: "search", Args: principalQueryArgs},
 			{Name: "Principal/get", CallID: "fetch", Args: map[string]any{
 				"accountId":  principalsAccountID,
 				"#ids":       jmapc.ResultReference{ResultOf: "search", Name: "Principal/query", Path: "/ids"},

@@ -202,6 +202,42 @@ func TestWatchTakesTheAccountFromTheSession(t *testing.T) {
 	}
 }
 
+// TestOptionalArgumentIsPutInOnlyWhenGiven checks the argument a caller may
+// leave out: the arguments are built rather than stated, and the member is put
+// in only where there is a value for it.
+func TestOptionalArgumentIsPutInOnlyWhenGiven(t *testing.T) {
+	src := generateOne(t, "GetChanges", `{
+	  "methodCalls": [["Email/changes", {"sinceState": "{{sinceState}}", "maxChanges": "{{maxChanges?}}"}, "changes"]]
+	}`)
+	for _, want := range []string{
+		"MaxChanges *jmapc.UnsignedInt",
+		"emailChangesArgs := map[string]any{",
+		`"sinceState": p.SinceState,`,
+		"if p.MaxChanges != nil {",
+		`emailChangesArgs["maxChanges"] = *p.MaxChanges`,
+		`{Name: "Email/changes", CallID: "changes", Args: emailChangesArgs},`,
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("the generated query does not contain %q:\n%s", want, src)
+		}
+	}
+}
+
+// TestQueriesWithoutOptionalArgumentsStateTheirArguments checks that a query
+// that leaves nothing out still says its arguments outright, so that the code
+// keeps reading like the query it came from.
+func TestQueriesWithoutOptionalArgumentsStateTheirArguments(t *testing.T) {
+	src := generateOne(t, "GetChanges", `{
+	  "methodCalls": [["Email/changes", {"sinceState": "{{sinceState}}"}, "changes"]]
+	}`)
+	if strings.Contains(src, "emailChangesArgs") {
+		t.Errorf("the arguments were built where they could have been stated:\n%s", src)
+	}
+	if !strings.Contains(src, `{Name: "Email/changes", CallID: "changes", Args: map[string]any{`) {
+		t.Errorf("the generated query does not state its arguments:\n%s", src)
+	}
+}
+
 // TestWatchTakesTheAccountFromTheQuery checks the two ways a query names the
 // account itself, neither of which costs a session lookup.
 func TestWatchTakesTheAccountFromTheQuery(t *testing.T) {

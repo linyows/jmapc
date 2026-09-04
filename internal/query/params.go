@@ -40,10 +40,12 @@ func (s *paramSet) use(c *checker, name string, t *spec.Type, where, doc string,
 	p, seen := s.byName[name]
 	if !seen {
 		p = &Param{Name: name, Type: t, Where: where, Doc: doc, Weak: weak}
+		p.addPlace(where)
 		s.byName[name] = p
 		s.order = append(s.order, p)
 		return p
 	}
+	p.addPlace(where)
 	switch {
 	case weak:
 		// The use says nothing the parameter does not already know.

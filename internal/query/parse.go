@@ -193,12 +193,39 @@ func (p *Parser) Parse(path string, src []byte) (*Query, error) {
 	}
 	c.watch(q, f)
 	c.pages(q, f)
+	c.checkOptional(q)
 	assignFieldNames(q)
 
 	if len(c.errs) > 0 {
 		return nil, c.errs
 	}
 	return q, nil
+}
+
+// checkOptional holds a parameter that may be left out to the one reading it
+// has: this argument is not in the request. A parameter used in a second place
+// would have to be there for that other use, and one the generated loop fills
+// in is not the caller's to leave out at all.
+func (c *checker) checkOptional(q *Query) {
+	for _, p := range q.Params {
+		if !p.Optional {
+			continue
+		}
+		if len(p.Places) > 1 {
+			c.errorf(p.Places[0], "use a parameter of its own for the value that is always there",
+				"%q may be left out, so it stands for an argument that may not be there, but it is used again at %s",
+				p.Name, strings.Join(p.Places[1:], ", "))
+		}
+		switch p {
+		case q.WatchState:
+			c.errorf(p.Places[0], "write it as {{"+p.Name+"}}",
+				"the %s of a watched call is where the loop has reached, so it cannot be left out",
+				SinceStateArgument)
+		case q.PageStart:
+			c.errorf(p.Places[0], "write it as {{"+p.Name+"}}",
+				"the start of a paged call is where the next request begins, so it cannot be left out")
+		}
+	}
 }
 
 // watch checks the call a query says drives a watch, and records what the
@@ -399,6 +426,12 @@ type checker struct {
 	// the elements of an array and the keys of a set.
 	enum []string
 
+	// argumentValue says that the value about to be checked is a whole
+	// argument of a method call, which is the one place a parameter may be
+	// left out: leaving it out takes the argument with it. It is cleared as
+	// soon as the value is reached, so that nothing nested inside inherits it.
+	argumentValue bool
+
 	// used collects the capabilities the query turned out to need beyond those
 	// its methods imply, for properties that belong to a specification other
 	// than their type's own.
@@ -541,8 +574,14 @@ func (c *checker) arguments(call *Call, argsType *spec.Object, raw json.RawMessa
 		}
 		c.enum = field.Enum
 		c.useCapability(field)
+		c.argumentValue = true
 		node := c.value(field.ParsedType(), members[key], where+"."+key, field.Doc)
 		c.patchTarget, c.sortTarget, c.enum = savedPatch, savedSort, savedEnum
+		if ref, isParam := node.(*ParamRef); isParam && ref.Param.Optional && name == AccountIDArgument {
+			c.errorf(where+"."+key, "leave "+AccountIDArgument+" out altogether, and it is filled in from the primary account",
+				"%s cannot be left out on its own, since a method call is made against an account",
+				AccountIDArgument)
+		}
 		out.Fields = append(out.Fields, ObjectField{Key: key, Value: node})
 	}
 	return out

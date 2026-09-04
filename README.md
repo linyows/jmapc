@@ -372,6 +372,41 @@ change:
 The braces are used rather than a `$` prefix because JMAP keywords are
 themselves written with one, as in `$seen`.
 
+#### An argument the caller may leave out
+
+Write `{{name?}}` where the caller may leave the argument out altogether:
+
+```json
+["Email/changes", {"sinceState": "{{sinceState}}", "maxChanges": "{{maxChanges?}}"}, "changes"]
+```
+
+Nothing supplied means the argument is not in the request, which is not the
+same as sending null. RFC 8620 makes the difference twice over: `maxChanges`
+absent is no cap, while `maxChanges: 0` asks for nothing at all; and in a
+PatchObject a pointer set to null removes the property while a pointer that is
+not there leaves it alone. Without this, each argument that is only sometimes
+sent would need a query of its own, and *n* of them would need 2ⁿ.
+
+The caller says "left out" the way the language already does. Go takes a
+pointer, or nothing where the type has a nil of its own:
+
+```go
+limit := jmapc.UnsignedInt(25)
+jmapq.FindPeople(ctx, c, jmapq.FindPeopleParams{Phrase: "ada", Limit: &limit})
+jmapq.FindPeople(ctx, c, jmapq.FindPeopleParams{Phrase: "ada"}) // no limit argument
+```
+
+TypeScript makes the member optional (`limit?: number`), Rust wraps it in an
+`Option`, and `jmapc run` leaves the argument out when no `-p` names it.
+
+Only a whole argument of a method call may be left out, and only where the
+parameter standing for it is used nowhere else, so that leaving it out has one
+meaning: this member is not there. A parameter inside a filter or an array is
+part of a larger value, and dropping it would leave a question the query does
+not answer, since an empty `AND` and no filter at all are different requests.
+For a filter whose shape varies, hand the whole filter over as one parameter
+instead.
+
 ### Creation ids across requests
 
 Referring to `#draft` within one request needs nothing: the server resolves it.

@@ -70,10 +70,16 @@ refuses("a member of jmapc's own that is misspelled", {
 })
 refuses("a call that is not a triple", { methodCalls: [["Core/echo", {}]] })
 refuses("a query making no calls", { methodCalls: [] })
+refuses("an argument left out from inside another value", {
+  methodCalls: [["Email/query", { filter: { inMailbox: "{{mailboxId?}}" } }, "c0"]],
+})
 
 // And the things that look like mistakes and are not.
 accepts("a parameter anywhere a value goes", {
   methodCalls: [["Email/query", { limit: "{{limit}}", filter: { inMailbox: "{{mailboxId}}" } }, "c0"]],
+})
+accepts("an argument the caller may leave out", {
+  methodCalls: [["Email/changes", { sinceState: "{{state}}", maxChanges: "{{maxChanges?}}" }, "c0"]],
 })
 accepts("a property naming a header field", {
   methodCalls: [["Email/get", { ids: null, properties: ["header:List-Id:asText"] }, "c0"]],

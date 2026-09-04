@@ -154,3 +154,25 @@ func TestBuildCarriesCreatedIDs(t *testing.T) {
 		t.Errorf("createdIds = %v", req.CreatedIDs)
 	}
 }
+
+// TestBuildLeavesOutAnOptionalParameter checks the argument a query lets the
+// caller leave out: no value for it means the argument is not in the request,
+// which is a different request from one sending null.
+func TestBuildLeavesOutAnOptionalParameter(t *testing.T) {
+	q := parse(t, "GetChanges", `{
+	  "methodCalls": [["Email/changes", {"sinceState": "{{sinceState}}", "maxChanges": "{{maxChanges?}}"}, "changes"]]
+	}`)
+
+	without := build(t, q, values(t, q, map[string]string{"sinceState": "s1"}), account("a1"))
+	if strings.Contains(without, "maxChanges") {
+		t.Errorf("the request carries maxChanges though it was not given:\n%s", without)
+	}
+	if !strings.Contains(without, `"sinceState":"s1"`) {
+		t.Errorf("the request lost an argument that was given:\n%s", without)
+	}
+
+	with := build(t, q, values(t, q, map[string]string{"sinceState": "s1", "maxChanges": "25"}), account("a1"))
+	if !strings.Contains(with, `"maxChanges":25`) {
+		t.Errorf("the request does not carry the maxChanges that was given:\n%s", with)
+	}
+}

@@ -25,14 +25,41 @@ var paramPattern = regexp.MustCompile(`^\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}$`
 // "mailboxIds/{{mailboxId}}" names a property the caller chooses.
 var embeddedParamPattern = regexp.MustCompile(`\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}`)
 
+// optionalParamPattern matches a parameter the caller may leave out. The
+// question mark is asked at the point the value would go, because that is
+// where leaving it out shows: the argument is not in the request at all.
+var optionalParamPattern = regexp.MustCompile(`^\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\?\s*\}\}$`)
+
+// optionalParam records a use of a parameter the caller may leave out. Leaving
+// one out takes the argument it stands for out of the request, so it is only
+// meaningful where the parameter is the whole of an argument.
+func (c *checker) optionalParam(name string, t *spec.Type, where, doc string, allowed bool) *Param {
+	p := c.params.use(c, name, t, where, doc, false)
+	if !allowed {
+		c.errorf(where, fmt.Sprintf("write it as {{%s}}, since this value is always there", name),
+			"only an argument of a method call may be left out, and %q stands for part of one", name)
+		return p
+	}
+	p.Optional = true
+	return p
+}
+
 // value checks one JSON value against the type the JMAP data model says it must
 // have, and returns the node the generator will emit for it.
 func (c *checker) value(t *spec.Type, raw json.RawMessage, where, doc string) Node {
 	raw = json.RawMessage(bytes.TrimSpace(raw))
 
+	// Whether a value may be left out is settled by where it sits, and nothing
+	// under it sits there, so the permission does not travel down.
+	mayBeOptional := c.argumentValue
+	c.argumentValue = false
+
 	if s, isString := stringValue(raw); isString {
 		if m := paramPattern.FindStringSubmatch(s); m != nil {
 			return &ParamRef{Param: c.params.use(c, m[1], t, where, doc, false)}
+		}
+		if m := optionalParamPattern.FindStringSubmatch(s); m != nil {
+			return &ParamRef{Param: c.optionalParam(m[1], t, where, doc, mayBeOptional)}
 		}
 		if strings.Contains(s, "{{") {
 			c.errorf(where, "write the whole value as {{name}}",

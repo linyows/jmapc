@@ -285,7 +285,7 @@ func (g *QueryGenerator) writeParams(buf *bytes.Buffer, p *plan) {
 			buf.WriteString("\n")
 		}
 		writeDoc(buf, "    ", param.Doc)
-		fmt.Fprintf(buf, "    pub %s: %s,\n", spec.RustFieldName(param.Field), param.ValueType().RustType())
+		fmt.Fprintf(buf, "    pub %s: %s,\n", spec.RustFieldName(param.Field), param.RustType())
 	}
 	buf.WriteString("}\n\n")
 }

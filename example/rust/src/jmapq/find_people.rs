@@ -15,7 +15,7 @@ pub struct FindPeopleParams {
     pub phrase: String,
 
     /// The maximum number of ids to return.
-    pub limit: u64,
+    pub limit: Option<u64>,
 }
 
 /// FindPeoplePrincipal holds the properties of Principal that the
@@ -65,7 +65,9 @@ pub struct FindPeoplePrincipalGetResponse {
 }
 
 /// FindPeople looks for the people and things an account can be shared with,
-/// which is what a sharing dialogue needs before it can offer anything.
+/// which is what a sharing dialogue needs before it can offer anything. The
+/// limit may be left out, and the server then decides how many to answer
+/// with.
 ///
 /// It makes Principal/query and Principal/get calls in a single request, so
 /// that 2 dependent calls cost one round trip. It returns the response to the
@@ -89,19 +91,24 @@ pub async fn find_people<T: Transport>(
         method_calls: vec![
             Invocation(
                 "Principal/query".to_string(),
-                json!({
-                    "accountId": principals_account_id,
-                    "filter": {
-                        "operator": "AND",
-                        "conditions": [
-                            {
-                                "text": p.phrase,
-                            },
-                            {"type":"individual"},
-                        ],
-                    },
-                    "limit": p.limit,
-                }),
+                {
+                    let mut args = json!({
+                        "accountId": principals_account_id,
+                        "filter": {
+                            "operator": "AND",
+                            "conditions": [
+                                {
+                                    "text": p.phrase,
+                                },
+                                {"type":"individual"},
+                            ],
+                        },
+                    });
+                    if let Some(value) = &p.limit {
+                        args["limit"] = json!(value);
+                    }
+                    args
+                },
                 "search".to_string(),
             ),
             Invocation(

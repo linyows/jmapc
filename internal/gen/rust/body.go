@@ -273,9 +273,12 @@ func (g *QueryGenerator) writeInvocation(buf *bytes.Buffer, p *plan, c *query.Ca
 	fmt.Fprintf(buf, "%s%s.to_string(),\n", args, quote(c.Method.Name))
 
 	accountID := p.calls[c].accountIDVar
-	if accountID == "" && len(c.Args.Fields) == 0 {
+	switch {
+	case c.HasOptionalArgs():
+		g.writeBuiltArgs(buf, c, accountID, args, members)
+	case accountID == "" && len(c.Args.Fields) == 0:
 		fmt.Fprintf(buf, "%sjson!({}),\n", args)
-	} else {
+	default:
 		fmt.Fprintf(buf, "%sjson!({\n", args)
 		if accountID != "" {
 			fmt.Fprintf(buf, "%s%s: %s,\n", members, quote(query.AccountIDArgument), accountID)
@@ -291,6 +294,46 @@ func (g *QueryGenerator) writeInvocation(buf *bytes.Buffer, p *plan, c *query.Ca
 		return
 	}
 	fmt.Fprintf(buf, "%s),\n", indent)
+}
+
+// writeBuiltArgs writes the arguments of a call one of whose members is only
+// there when the caller supplied it. The json! macro states an object as it
+// is written, so the members that are always there are stated that way and
+// the rest are put in afterwards.
+func (g *QueryGenerator) writeBuiltArgs(buf *bytes.Buffer, c *query.Call, accountID, args, members string) {
+	inner := members + "    "
+	stated := make([]query.ObjectField, 0, len(c.Args.Fields))
+	for _, field := range c.Args.Fields {
+		if field.OptionalParam() == nil {
+			stated = append(stated, field)
+		}
+	}
+	fmt.Fprintf(buf, "%s{\n", args)
+	if accountID == "" && len(stated) == 0 {
+		// An empty object is written on one line, which is where rustfmt
+		// would put it anyway.
+		fmt.Fprintf(buf, "%slet mut args = json!({});\n", members)
+	} else {
+		fmt.Fprintf(buf, "%slet mut args = json!({\n", members)
+		if accountID != "" {
+			fmt.Fprintf(buf, "%s%s: %s,\n", inner, quote(query.AccountIDArgument), accountID)
+		}
+		for _, field := range stated {
+			fmt.Fprintf(buf, "%s%s: %s,\n", inner, g.keyExpr(field), g.expr(field.Value, inner))
+		}
+		fmt.Fprintf(buf, "%s});\n", members)
+	}
+	for _, field := range c.Args.Fields {
+		param := field.OptionalParam()
+		if param == nil {
+			continue
+		}
+		fmt.Fprintf(buf, "%sif let Some(value) = &p.%s {\n", members, spec.RustFieldName(param.Field))
+		fmt.Fprintf(buf, "%sargs[%s] = json!(value);\n", inner, g.keyExpr(field))
+		fmt.Fprintf(buf, "%s}\n", members)
+	}
+	fmt.Fprintf(buf, "%sargs\n", members)
+	fmt.Fprintf(buf, "%s},\n", args)
 }
 
 // keyExpr renders an argument name, which a query may build from parameters. A
