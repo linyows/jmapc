@@ -1425,3 +1425,16 @@ func TestCreatedIDsCarry(t *testing.T) {
 		t.Error("a query that did not ask for creation ids carries them")
 	}
 }
+
+// TestQueryMayNameItsSchema checks that a query file can point at the JSON
+// Schema an editor checks it against. It is the one member that is neither
+// jmapc's nor the specification's, and a file carrying it has to still parse.
+func TestQueryMayNameItsSchema(t *testing.T) {
+	q := parse(t, "Echo.jmap.json", `{
+	  "$schema": "../jmapc.schema.json",
+	  "methodCalls": [["Core/echo", {}, "c0"]]
+	}`)
+	if len(q.Calls) != 1 {
+		t.Errorf("calls = %d", len(q.Calls))
+	}
+}

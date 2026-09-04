@@ -64,6 +64,7 @@ Usage:
 	jmapc generate [flags]   check the queries and write the generated client
 	jmapc check [flags]      check the queries without writing anything
 	jmapc run <query>        send one query to a server and print the response
+	jmapc schema [flags]     write a JSON Schema describing the query files
 	jmapc version            print the version
 
 Flags:
@@ -74,7 +75,8 @@ Flags:
 	-package string   name of the generated package, for Go (default: the name of -out)
 	-schema string    schema file describing a vendor extension; repeatable
 
-The run command takes flags of its own, which "jmapc run -h" describes.
+The run and schema commands take flags of their own, which "jmapc run -h"
+and "jmapc schema -h" describe.
 
 A query file is named after the function to generate, as in
 ListInboxEmails` + query.Extension + `, and holds a JMAP request.
@@ -90,6 +92,8 @@ func run(args []string) error {
 	case "generate", "check":
 	case "run":
 		return runQuery(args[1:])
+	case "schema":
+		return writeSchema(args[1:])
 	case "version", "-version", "--version":
 		fmt.Println(versionString())
 		return nil

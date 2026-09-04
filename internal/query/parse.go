@@ -35,6 +35,9 @@ const (
 	// CreatedIDsMember asks for the creation ids of a request to be carried in
 	// and out, so that one request can go on from where another left off.
 	CreatedIDsMember = "_createdIds"
+	// SchemaMember names the JSON Schema an editor checks the file against,
+	// which "jmapc schema" writes. jmapc reads it only to allow it.
+	SchemaMember = "$schema"
 	// CommentArgument explains what a call is for. It sits in that call's
 	// arguments, and the generator strips it before the request goes out:
 	// RFC 8620 requires a server to reject an argument it does not know.
@@ -57,6 +60,11 @@ func NewParser(s *spec.Spec) *Parser {
 // A member jmapc reads begins with an underscore and one the specification
 // defines does not, so that a reader can tell at a glance which is which.
 type fileSyntax struct {
+	// Schema names the JSON Schema an editor checks the file against. It is
+	// the one member here that is neither jmapc's nor the specification's:
+	// "$schema" is what an editor looks for, and jmapc reads the file whether
+	// it is there or not.
+	Schema string `json:"$schema"`
 	// Doc documents the query, and becomes the generated function's comment.
 	Doc string `json:"_doc"`
 	// Returns names the call whose result the generated function returns. It
@@ -91,6 +99,10 @@ var capabilityAliases = map[string]string{
 	"sieve":            spec.CapabilitySieve,
 	"mdn":              spec.CapabilityMDN,
 }
+
+// CapabilityAliases returns the short names a query may use in place of a
+// capability URI, sorted.
+func CapabilityAliases() []string { return aliasNames() }
 
 // QueryName returns the name a query file gives its query, which is the file
 // name with its extension removed.

@@ -6,3 +6,9 @@ example/ts/dist/
 # another thing to keep up to date.
 example/rust/target/
 example/rust/Cargo.lock
+# The JSON Schema is generated from the catalogue, and the checker that reads
+# it installs a validator to do so. Neither belongs in the repository: the
+# schema is what "jmapc schema" writes, wherever it is wanted.
+example/schema/jmapc.schema.json
+example/schema/node_modules/
+example/schema/package-lock.json

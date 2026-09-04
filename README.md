@@ -449,6 +449,48 @@ queries/BadQuery.jmap.json: methodCalls[1].arguments.#ids.name: the referenced c
 
 `jmapc check` runs the checks without writing anything.
 
+## Editor support
+
+The checks above run when jmapc does. Most of them can run while the query is
+being typed instead, because they are checks on the file itself, and a JSON file
+that names a schema is one an editor already knows how to check and complete.
+
+```
+jmapc schema -out jmapc.schema.json
+```
+
+That writes a JSON Schema for the catalogue, vendor extensions and all. Point a
+query file at it:
+
+```json
+{
+  "$schema": "../jmapc.schema.json",
+
+  "methodCalls": [["Email/query", {"filter": {"inMailbox": "{{mailboxId}}"}}, "search"]]
+}
+```
+
+or point the editor at every query at once, which in VS Code is:
+
+```json
+{
+  "json.schemas": [
+    {"fileMatch": ["*.jmap.json"], "url": "./jmapc.schema.json"}
+  ]
+}
+```
+
+Either way the editor completes a method name, offers the arguments that method
+takes and the properties the type has, and underlines a misspelling where it was
+written. A filter nested inside an `AND` is checked like one outside it, a
+comparator offers the properties the type can actually be sorted by, and a
+`{{parameter}}` is accepted anywhere a value goes.
+
+What a schema cannot say is the part that depends on another call: that a back
+reference names an earlier call and selects a value the argument accepts. That
+stays jmapc's to check, which is why the editor is a first pass rather than a
+replacement for the build.
+
 ## Sending a query
 
 A query is worth trying before there is any code that calls it, so `jmapc run`
@@ -682,6 +724,11 @@ other two compile, so CI runs `tsc --strict` over the TypeScript and
 hand-written check beside the generated code, exercising the runtime against a
 stub: that the headers go out, that auth wins over them, that the session is
 cached, and that a `/set` answering 200 with a refusal in it is still an error.
+
+The schema is checked the same way, and for the same reason: whether a
+validator accepts the example queries and refuses the mistakes the schema
+claims to catch is not something Go's tests can say. `example/schema/check.mjs`
+asks one, over a schema written from the catalogue as it stands.
 
 The generator is run from source here, not through `go tool`, because the
 repository is where it lives.
