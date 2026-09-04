@@ -205,6 +205,13 @@ A call the query does not narrow answers with the shared type instead, so
 package cannot take the same name, and a generated type whose name is already
 taken gains a number: `ListInboxEmailsEmail2`.
 
+A query with no open parameters takes no `Params` argument at all —
+`MailQuota(ctx, c)`, not `MailQuota(ctx, c, MailQuotaParams{})` — so adding
+the first `{{param}}` to a query already in use changes the generated
+function's arity and breaks every call site. That is a deliberate trade for
+the common case of a query with no parameters reading like a plain function
+call, not an oversight.
+
 TypeScript lowercases the first letter of the function and of the file —
 `listInboxEmails` in `listInboxEmails.ts` — and keeps the type names above.
 
