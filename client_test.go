@@ -288,6 +288,22 @@ func TestSessionWithoutAPIURL(t *testing.T) {
 	}
 }
 
+// TestSessionWithoutAPIURLButWithAPIURLOption covers a session that omits
+// apiUrl entirely, such as a minimal test stub, when the client was already
+// told where to post through WithAPIURL. resolveAPIURL never reads the
+// session's apiUrl in that case, so the missing field should not fail the
+// session fetch.
+func TestSessionWithoutAPIURLButWithAPIURLOption(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"capabilities":{},"accounts":{},"primaryAccounts":{},"username":"u","state":"s"}`)
+	}))
+	t.Cleanup(srv.Close)
+	_, err := New(srv.URL, WithAPIURL(srv.URL+"/jmap")).Session(context.Background())
+	if err != nil {
+		t.Fatalf("Session() = %v, want nil", err)
+	}
+}
+
 // TestCapabilityReading covers the capabilities that bring no types and no
 // methods, only something to tell the client. VAPID is one: what RFC 9749 has
 // to say is a key, carried in the session.
