@@ -313,9 +313,9 @@ impl Transport for Http {
 }
 ```
 
-That is also where authentication a bearer token does not cover belongs — a
-signature over the request, a token refreshed on expiry — since the transport is
-the last thing to see a request before it goes.
+That is also where authentication that a bearer token does not cover belongs —
+a signature over the request, a token refreshed on expiry — since the transport
+is the last thing to see a request before it goes.
 
 Rust says what TypeScript says, in its own words. A nullable property is an
 `Option`, so `subject` is `Option<String>`. A union of shapes stays a union: a
@@ -607,8 +607,8 @@ Flags, or a `jmapc.json` beside your module:
 
 JMAP fails at two levels, and so does the runtime.
 
-A **request-level** failure, where the server rejected the request whole, is a
-`*jmapc.RequestError` carrying the problem type from RFC 8620 §3.6.1. The client
+A **request-level** failure, where the server rejected the request as a whole,
+is a `*jmapc.RequestError` carrying the problem type from RFC 8620 §3.6.1. The client
 catches some of these before sending: a capability the session does not
 advertise, or more calls than the server accepts.
 
@@ -660,13 +660,13 @@ c := jmapc.New(url, jmapc.WithBearerToken(token), jmapc.WithRetry(3))
 ```
 
 Three is how many times the request is sent in all. The wait is what the server
-asked for in `Retry-After`, and a doubling one from a fifth of a second to half
+asked for in `Retry-After`, or one that doubles from a fifth of a second to half
 a minute where it asked for nothing in particular. A server asking for longer
 than a minute is telling the caller to come back later rather than asking a
 request to sit in memory until then, so the refusal is returned instead.
 
 Nothing else is sent again. A request that failed on the way there or on the way
-back may still have been carried out, and a `/set` sent twice creates twice.
+back may still have been carried out, and a `/set` sent twice creates it twice.
 `WithRetryPolicy` is where a client whose requests are safe to repeat says so,
 and where the waits are replaced.
 
