@@ -66,8 +66,23 @@ func TestResponseDecode(t *testing.T) {
 	if len(out.IDs) != 1 || out.IDs[0] != "e1" {
 		t.Errorf("ids = %v, want [e1]", out.IDs)
 	}
-	if err := r.Decode("c9", &out); err == nil {
-		t.Error("decoding an absent call succeeded, want an error")
+	err := r.Decode("c9", &out)
+	if err == nil {
+		t.Fatal("decoding an absent call succeeded, want an error")
+	}
+	if want := `jmapc: response has no result for call "c9" (response has "c0")`; err.Error() != want {
+		t.Errorf("error = %q, want %q", err.Error(), want)
+	}
+}
+
+// TestResponseDecodeNamesNoResults checks the diagnostic for a response with
+// no method responses at all, which is the empty-list edge of callIDs.
+func TestResponseDecodeNamesNoResults(t *testing.T) {
+	r := response(t, nil, `{"sessionState":"s","methodResponses":[]}`)
+	var out EmailQueryResponse
+	err := r.Decode("c0", &out)
+	if want := `jmapc: response has no result for call "c0" (response has no results)`; err == nil || err.Error() != want {
+		t.Errorf("error = %v, want %q", err, want)
 	}
 }
 

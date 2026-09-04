@@ -334,7 +334,8 @@ export function decode<T>(req: Request, res: Response, callId: string): T {
     }
     return args as T
   }
-  throw new Error(` + "`" + `jmapc: response has no result for call "${callId}"` + "`" + `)
+  const ids = res.methodResponses.map(([, , id]) => ` + "`" + `"${id}"` + "`" + `).join(", ") || "no results"
+  throw new Error(` + "`" + `jmapc: response has no result for call "${callId}" (response has ${ids})` + "`" + `)
 }
 
 // Every method-level error in a response.
