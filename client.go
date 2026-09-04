@@ -28,6 +28,12 @@ type Client struct {
 	editors    []func(*http.Request) error
 	userAgent  string
 	strict     bool
+	retry      RetryPolicy
+
+	// api and uploads hold the client to the number of each the server said it
+	// takes at once.
+	api     limiter
+	uploads limiter
 
 	mu      sync.Mutex
 	session *Session
@@ -132,7 +138,7 @@ func (c *Client) RefreshSession(ctx context.Context) (*Session, error) {
 		return nil, fmt.Errorf("jmapc: building session request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
-	resp, err := c.send(req)
+	resp, err := c.sendWithRetry(req)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +178,17 @@ func (c *Client) Do(ctx context.Context, r *Request) (*Response, error) {
 	}
 	httpReq.Header.Set("Content-Type", "application/json; charset=utf-8")
 	httpReq.Header.Set("Accept", "application/json")
-	httpResp, err := c.send(httpReq)
+
+	// The server said how many requests it takes at once, and this is one.
+	release, err := c.api.hold(ctx, c.limit(func(core *CoreCapability) UnsignedInt {
+		return core.MaxConcurrentRequests
+	}))
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
+	httpResp, err := c.sendWithRetry(httpReq)
 	if err != nil {
 		return nil, err
 	}

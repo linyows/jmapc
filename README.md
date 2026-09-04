@@ -649,6 +649,32 @@ In TypeScript the same failure is a thrown `SetErrors`, with the response on
 `err.result`. In Rust it is an `Error::Set`, and the response is asked for by
 the type the function would have returned, with `err.result::<T>()`.
 
+### When the server says not now
+
+A server that will not take a request now says so in one of two ways, and both
+of them mean nothing happened: a 429, and a 503. `WithRetry` sends the request
+again where it sees one.
+
+```go
+c := jmapc.New(url, jmapc.WithBearerToken(token), jmapc.WithRetry(3))
+```
+
+Three is how many times the request is sent in all. The wait is what the server
+asked for in `Retry-After`, and a doubling one from a fifth of a second to half
+a minute where it asked for nothing in particular. A server asking for longer
+than a minute is telling the caller to come back later rather than asking a
+request to sit in memory until then, so the refusal is returned instead.
+
+Nothing else is sent again. A request that failed on the way there or on the way
+back may still have been carried out, and a `/set` sent twice creates twice.
+`WithRetryPolicy` is where a client whose requests are safe to repeat says so,
+and where the waits are replaced.
+
+Walking into the refusal is the thing worth not doing at all, and that needs no
+option. The session says how many requests the server takes at once and how many
+uploads, and the client holds itself to both: one over the limit waits for a
+slot rather than being sent and turned away.
+
 ## Testing
 
 Testing the code you write around a generated client means answering a request
@@ -838,8 +864,8 @@ answer reports. What it takes off the caller:
 The loop runs until the context ends, which is the error it returns. An error
 from the callback stops it and comes back as it was. A server that refuses the
 connection outright is returned rather than waited out, because waiting will not
-change a 403. `jmapc.WithPing` and `jmapc.WithRetry` are there for the two
-things worth tuning.
+change a 403. `jmapc.WithPing` and `jmapc.WithReconnect` are there for the
+two things worth tuning.
 
 Underneath is `Client.Watch`, which takes the catch-up as a function and is what
 to call where the catching up is not one query:
