@@ -121,6 +121,37 @@ jobs:
           npx --yes -p typescript@5 tsc -p tsconfig.node.json
           node dist/check.js
 
+  # The JSON Schema jmapc writes describes the query files, and whether it
+  # accepts the queries in this repository and refuses the mistakes it claims
+  # to catch is something Go's tests cannot say without a validator.
+  schema:
+    name: schema
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Nothing here writes back, so the job has no use for a credential
+          # in the git config.
+          persist-credentials: false
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache-dependency-path: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Write the schema
+        run: go run ./cmd/jmapc schema -out example/schema/jmapc.schema.json
+
+      - name: Check it against the example queries, and against mistakes
+        working-directory: example/schema
+        run: |
+          npm install --no-audit --no-fund
+          node check.mjs
+
   # The Rust jmapc generates has to compile too, and it is generated to the
   # layout rustfmt would have produced, so the formatter is a check on it
   # rather than a step that rewrites it.
