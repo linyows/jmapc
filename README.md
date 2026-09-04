@@ -649,6 +649,50 @@ In TypeScript the same failure is a thrown `SetErrors`, with the response on
 `err.result`. In Rust it is an `Error::Set`, and the response is asked for by
 the type the function would have returned, with `err.result::<T>()`.
 
+## Testing
+
+Testing the code you write around a generated client means answering a request
+that carries several method calls, some of which refer to the results of the
+others. A stub written by hand for one test either ignores that — and stops
+resembling a server — or grows into this, so this is it:
+
+```go
+srv := jmaptest.New(t)
+srv.Reply("Email/query", jmapc.EmailQueryResponse{
+	AccountID: jmaptest.AccountID,
+	IDs:       []jmapc.ID{"m1", "m2"},
+})
+srv.Handle("Email/get", func(c *jmaptest.Call) (any, error) {
+	// The ids are the ones the query call answered with: the back reference
+	// has already been resolved, the way a server resolves it.
+	return emailsFor(c.IDs()), nil
+})
+
+res, err := jmapq.ListInboxEmails(ctx, srv.Client(), params)
+```
+
+What it takes off the test:
+
+- **The back references.** They are resolved as RFC 8620 says, including the
+  `*` that maps a path over a list, so a chained query reaches the handlers
+  with real values in it.
+- **The checking.** The request is held to the data model the way the build
+  holds a query to it, so a call with an argument no method has fails the test
+  rather than passing quietly. `jmaptest.WithoutChecks()` is the way out, for a
+  method jmapc has never heard of.
+- **The failures.** `srv.Fail` for a method-level error, `srv.FailRequest` for a
+  request the server would not look at, and a `/set` response listing what it
+  refused for the failure that answers 200.
+- **What was asked.** `srv.Call("Email/query")` is the last call to a method,
+  `srv.Calls()` all of them, and `srv.Requests()` how many requests they took —
+  which is how to check that calls travelled together rather than one at a time.
+- **The push.** `srv.Push` sends a state change to a client watching, which is
+  what a watching query's loop waits for.
+
+What it does not do is store anything. It is a server to test a client against
+rather than an implementation of JMAP: nothing a `/set` creates comes back from
+a later `/get` unless the test says it does.
+
 ## Blobs
 
 Attachments do not travel through the API endpoint. They are uploaded and
