@@ -187,6 +187,11 @@ func (f SetFailure) Error() string {
 	return fmt.Sprintf("%s could not %s %q: %s", f.Method, setVerb(f.Kind), f.Key, f.Err.Error())
 }
 
+// Unwrap exposes the SetError this failure carries, so that
+// errors.As(err, &setError) with a *SetError target can reach it without the
+// caller knowing SetFailure exists.
+func (f SetFailure) Unwrap() error { return &f.Err }
+
 // setVerb turns the name of a response property into the verb it denies, so
 // that an error reads as prose rather than as a field name.
 func setVerb(kind string) string {
