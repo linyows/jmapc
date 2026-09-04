@@ -1,6 +1,8 @@
 {
   "_doc": "SearchEmails finds emails matching a phrase in one of two mailboxes, and returns both the ids that matched and the emails themselves.",
 
+  "_pages": "search",
+
   "methodCalls": [
     ["Email/query", {
       "filter": {
@@ -19,6 +21,7 @@
       },
       "sort": [{"property": "receivedAt", "isAscending": false}],
       "collapseThreads": true,
+      "position": "{{position}}",
       "limit": 50,
       "calculateTotal": true
     }, "search"],

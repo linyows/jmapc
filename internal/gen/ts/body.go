@@ -9,6 +9,7 @@ import (
 
 	"github.com/linyows/jmapc/internal/gen/shared"
 	"github.com/linyows/jmapc/internal/query"
+	"github.com/linyows/jmapc/internal/spec"
 )
 
 // writeFunc writes the function that sends the query and decodes its response.
@@ -248,4 +249,72 @@ func literalExpr(raw json.RawMessage) string {
 		return "undefined"
 	}
 	return compact.String()
+}
+
+// writePages writes the generator that walks the whole of what one request
+// returns a window of. TypeScript spells that as an async generator, so a
+// caller writes for await over it and the loop is somebody else's.
+func (g *QueryGenerator) writePages(buf *bytes.Buffer, p *plan) {
+	if p.pagesName == "" {
+		return
+	}
+	buf.WriteString("\n")
+	g.writePagesDoc(buf, p)
+	fmt.Fprintf(buf, "export async function* %s(client: Client, p: %s): AsyncGenerator<%s> {\n",
+		p.pagesName, p.paramsType, p.returnType)
+
+	start := tsMemberName(p.q.PageStart.Field)
+	fmt.Fprintf(buf, "  let start = p.%s\n", start)
+	buf.WriteString("  for (;;) {\n")
+	fmt.Fprintf(buf, "    p.%s = start\n", start)
+	fmt.Fprintf(buf, "    const res = await %s(client, p)\n", p.funcName)
+
+	window := "res"
+	if p.q.Returns == nil {
+		window = "res." + tsMemberName(p.q.Pages.Field)
+	}
+	fmt.Fprintf(buf, "    const window = %s\n", window)
+
+	switch p.q.PageKind {
+	case query.PageQuery:
+		ids := tsMemberName(spec.ExportedName(query.IDsProperty))
+		// A window with nothing in it is the end of the list rather than a
+		// page of it, and handing it back would make every caller check.
+		fmt.Fprintf(buf, "    if (window.%s.length === 0) {\n      return\n    }\n", ids)
+		buf.WriteString("    yield res\n")
+		fmt.Fprintf(buf, "    start = window.%s + window.%s.length\n",
+			tsMemberName(spec.ExportedName(query.PositionArgument)), ids)
+		// Where the call asked for the total, the end is known without asking
+		// for a window that is not there.
+		fmt.Fprintf(buf, "    if (window.%[1]s > 0 && start >= window.%[1]s) {\n      return\n    }\n",
+			tsMemberName(spec.ExportedName(query.TotalProperty)))
+
+	case query.PageChanges:
+		// An answer saying nothing changed still carries the state to go on
+		// from, so it is worth handing back.
+		buf.WriteString("    yield res\n")
+		fmt.Fprintf(buf, "    if (!window.%s) {\n      return\n    }\n",
+			tsMemberName(spec.ExportedName(query.HasMoreChangesProperty)))
+		fmt.Fprintf(buf, "    start = window.%s\n", tsMemberName(spec.ExportedName(query.NewStateProperty)))
+	}
+
+	buf.WriteString("  }\n")
+	buf.WriteString("}\n")
+}
+
+// writePagesDoc writes the generator's documentation.
+func (g *QueryGenerator) writePagesDoc(buf *bytes.Buffer, p *plan) {
+	doc := fmt.Sprintf("%s walks the whole of what %s returns one part of, calling it again for each part until there is none left.",
+		p.pagesName, p.funcName)
+	doc += fmt.Sprintf("\n\nIt starts from the %s the parameters carry and works the next one out from each answer. ",
+		p.q.PageStart.Name)
+	switch p.q.PageKind {
+	case query.PageQuery:
+		doc += "A window with nothing in it ends the walk rather than being yielded, so everything it yields holds something; " +
+			"where the call asked for the total, the walk ends without asking for a window that is not there."
+	case query.PageChanges:
+		doc += "An answer saying nothing changed is still yielded, since it carries the state to go on from, and the walk ends when the server says there is no more."
+	}
+	doc += "\n\nA failure throws, as it does from the query itself, and leaving the loop early sends no further request."
+	shared.WriteComment(buf, "", doc)
 }

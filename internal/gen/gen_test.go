@@ -250,3 +250,57 @@ func TestUnwatchedQueriesGetNoLoop(t *testing.T) {
 		t.Errorf("a query that asked for no watch got one:\n%s", src)
 	}
 }
+
+// TestPagesWalksAWindow checks the loop generated for a call that answers with
+// one window of a longer list: where the next window starts, and the two things
+// that end the walk.
+func TestPagesWalksAWindow(t *testing.T) {
+	src := generateOne(t, "SearchEmails", `{
+	  "_pages": "search",
+	  "methodCalls": [
+	    ["Email/query", {"position": "{{position}}", "limit": 50, "calculateTotal": true}, "search"],
+	    ["Email/get", {"#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"},
+	                   "properties": ["id", "subject"]}, "fetch"]
+	  ]
+	}`)
+	for _, want := range []string{
+		"func SearchEmailsPages(ctx context.Context, c *jmapc.Client, p SearchEmailsParams) iter.Seq2[*SearchEmailsResult, error] {",
+		"\"iter\"",
+		"start := p.Position",
+		"window := &res.EmailQuery",
+		"if len(window.IDs) == 0 {",
+		"start = jmapc.Int(window.Position) + jmapc.Int(len(window.IDs))",
+		"if window.Total > 0 && jmapc.UnsignedInt(start) >= window.Total {",
+		"yield(nil, err)",
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("the generated walk does not contain %q:\n%s", want, src)
+		}
+	}
+}
+
+// TestPagesWalksChanges checks the loop generated for a call that answers with
+// as much of what changed as the server cares to, which ends when the server
+// says there is no more.
+func TestPagesWalksChanges(t *testing.T) {
+	src := generateOne(t, "CatchUp", `{
+	  "_pages": "changes",
+	  "_returns": "changes",
+	  "methodCalls": [["Email/changes", {"sinceState": "{{sinceState}}"}, "changes"]]
+	}`)
+	for _, want := range []string{
+		"start := p.SinceState",
+		"window := res",
+		"if !window.HasMoreChanges {",
+		"start = window.NewState",
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("the generated walk does not contain %q:\n%s", want, src)
+		}
+	}
+	// Every answer is handed back, even one saying nothing changed, because it
+	// carries the state to go on from.
+	if strings.Contains(src, "== 0 {") {
+		t.Errorf("an empty answer was skipped, and it carries the state:\n%s", src)
+	}
+}

@@ -393,3 +393,77 @@ func (g *QueryGenerator) watchAccount(buf *bytes.Buffer, p *plan) string {
 	}
 	return fmt.Sprintf("%sID(%s)", g.Qualifier, g.expr(account, "\t"))
 }
+
+// writePages writes the function that walks the whole of what one request
+// returns a window of. A /query answers with the window the caller asked for
+// and says where it sits; a /changes answers with as much as the server cares
+// to and says whether there is more. Either way the next request is worked out
+// from the last answer, which is what the loop does.
+func (g *QueryGenerator) writePages(buf *bytes.Buffer, p *plan) {
+	if p.pagesName == "" {
+		return
+	}
+	g.writePagesDoc(buf, p)
+	fmt.Fprintf(buf, "func %s(ctx context.Context, c *%sClient, p %s) iter.Seq2[*%s, error] {\n",
+		p.pagesName, g.Qualifier, p.paramsType, p.returnType)
+	fmt.Fprintf(buf, "\treturn func(yield func(*%s, error) bool) {\n", p.returnType)
+
+	start := p.q.PageStart.Field
+	fmt.Fprintf(buf, "\t\tstart := p.%s\n", start)
+	buf.WriteString("\t\tfor {\n")
+	fmt.Fprintf(buf, "\t\t\tp.%s = start\n", start)
+	fmt.Fprintf(buf, "\t\t\tres, err := %s(ctx, c, p)\n", p.q.Name)
+	buf.WriteString("\t\t\tif err != nil {\n\t\t\t\tyield(nil, err)\n\t\t\t\treturn\n\t\t\t}\n")
+
+	window := "res"
+	if p.q.Returns == nil {
+		window = "&res." + p.q.Pages.Field
+	}
+	fmt.Fprintf(buf, "\t\t\twindow := %s\n", window)
+
+	switch p.q.PageKind {
+	case query.PageQuery:
+		ids := spec.ExportedName(query.IDsProperty)
+		// A window with nothing in it is the end of the list rather than a
+		// page of it, and handing it back would make every caller check.
+		fmt.Fprintf(buf, "\t\t\tif len(window.%s) == 0 {\n\t\t\t\treturn\n\t\t\t}\n", ids)
+		buf.WriteString("\t\t\tif !yield(res, nil) {\n\t\t\t\treturn\n\t\t\t}\n")
+		fmt.Fprintf(buf, "\t\t\tstart = %[1]sInt(window.%[2]s) + %[1]sInt(len(window.%[3]s))\n",
+			g.Qualifier, spec.ExportedName(query.PositionArgument), ids)
+		// Where the call asked for the total, the end is known without asking
+		// for a window that is not there.
+		fmt.Fprintf(buf, "\t\t\tif window.%[1]s > 0 && %[2]sUnsignedInt(start) >= window.%[1]s {\n\t\t\t\treturn\n\t\t\t}\n",
+			spec.ExportedName(query.TotalProperty), g.Qualifier)
+
+	case query.PageChanges:
+		// An answer saying nothing changed still carries the state to go on
+		// from, so it is worth handing back.
+		buf.WriteString("\t\t\tif !yield(res, nil) {\n\t\t\t\treturn\n\t\t\t}\n")
+		fmt.Fprintf(buf, "\t\t\tif !window.%s {\n\t\t\t\treturn\n\t\t\t}\n",
+			spec.ExportedName(query.HasMoreChangesProperty))
+		fmt.Fprintf(buf, "\t\t\tstart = window.%s\n", spec.ExportedName(query.NewStateProperty))
+	}
+
+	buf.WriteString("\t\t}\n")
+	buf.WriteString("\t}\n")
+	buf.WriteString("}\n")
+}
+
+// writePagesDoc writes the pager's documentation, which has to say where the
+// loop starts, what each step hands back, and what ends it.
+func (g *QueryGenerator) writePagesDoc(buf *bytes.Buffer, p *plan) {
+	doc := fmt.Sprintf("%s walks the whole of what %s returns one part of, calling it again for each part until there is none left.",
+		p.pagesName, p.q.Name)
+	doc += fmt.Sprintf("\n\nIt starts from the %s the parameters carry and works the next one out from each answer. ",
+		p.q.PageStart.Name)
+	switch p.q.PageKind {
+	case query.PageQuery:
+		doc += "A window with nothing in it ends the walk rather than being handed back, so every result yielded holds something; " +
+			"where the call asked for the total, the walk ends without asking for a window that is not there."
+	case query.PageChanges:
+		doc += "An answer saying nothing changed is still handed back, since it carries the state to go on from, and the walk ends when the server says there is no more."
+	}
+	doc += "\n\nAn error ends the walk and is yielded with a nil result, so a range over it checks the error each time round. " +
+		"Breaking out of the range stops it, and sends no further request."
+	shared.WriteComment(buf, "", doc)
+}

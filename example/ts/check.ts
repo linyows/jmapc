@@ -2,6 +2,7 @@
 // does at run time, which tsc cannot say. It throws on a failure, and Node
 // exits non-zero, so it needs no test framework and no type packages.
 import { Client, SetErrors } from "./client.js"
+import { searchEmailsPages } from "./searchEmails.js"
 import { sendEmail } from "./sendEmail.js"
 
 function assert(ok: boolean, what: string): void {
@@ -144,6 +145,61 @@ const session = {
   // The part of the response that did arrive is on the error, since it happened.
   const result = errs.result as { newState?: string }
   assert(result.newState === "sub2", "the response was not carried on the error")
+}
+
+// A search whose results do not fit in one request: the walk asks from where
+// the last window ended, and the total ends it rather than a request for a
+// window that is not there.
+{
+  const mailSession = {
+    ...session,
+    primaryAccounts: { "urn:ietf:params:jmap:mail": "acct1" },
+    capabilities: { "urn:ietf:params:jmap:core": {}, "urn:ietf:params:jmap:mail": {} },
+  }
+  const window = (position: number, ids: string[]) => ({
+    sessionState: "s1",
+    methodResponses: [
+      ["Email/query", {
+        accountId: "acct1", queryState: "q1", canCalculateChanges: false,
+        position, total: 3, ids,
+      }, "search"],
+      ["Email/get", {
+        accountId: "acct1", state: "s1", notFound: [],
+        list: ids.map((id) => ({
+          id, subject: `message ${id}`, receivedAt: "2026-09-04T09:00:00Z",
+          from: [{ email: "someone@example.com" }],
+        })),
+      }, "fetch"],
+    ],
+  })
+  const windows = [window(0, ["m1", "m2"]), window(2, ["m3"])]
+  const asked: number[] = []
+  const serve = (async (url: string | URL, init?: RequestInit) => {
+    if (!String(url).endsWith("/api")) {
+      return new Response(JSON.stringify(mailSession), {
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+    const sent = JSON.parse(String(init?.body)) as { methodCalls: [string, { position: number }, string][] }
+    asked.push(sent.methodCalls[0][1].position)
+    const next = windows[asked.length - 1]
+    assert(next !== undefined, `the walk asked for a window past the end, from ${asked.at(-1)}`)
+    return new Response(JSON.stringify(next), { headers: { "Content-Type": "application/json" } })
+  }) as unknown as typeof fetch
+
+  const c = new Client("https://example.com/.well-known/jmap", { fetch: serve })
+  const subjects: string[] = []
+  for await (const page of searchEmailsPages(c, {
+    phrase: "invoice",
+    firstMailboxId: "mbx1",
+    secondMailboxId: "mbx2",
+    position: 0,
+  })) {
+    for (const email of page.emailGet.list) subjects.push(email.subject ?? "")
+  }
+
+  assert(subjects.length === 3, `the walk found ${subjects.length} messages, want 3`)
+  assert(asked.join(",") === "0,2", `the walk asked from ${asked.join(",")}, want 0,2`)
 }
 
 console.log("ok")

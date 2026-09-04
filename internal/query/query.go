@@ -38,6 +38,15 @@ type Query struct {
 	// the changes since. The loop fills it in, from the state the last answer
 	// left it at.
 	WatchState *Param
+	// Pages is the call a generated pager advances, or nil where the query
+	// asked for no pager. One request answers with one window of a longer
+	// list, and the pager asks for the next until there is none.
+	Pages *Call
+	// PageStart is the parameter saying where the next request starts, which
+	// the pager fills in from the answer before it.
+	PageStart *Param
+	// PageKind says how that is worked out.
+	PageKind PageKind
 	// CreatedIDs reports whether the generated function carries the creation
 	// ids of a request in and out, which is what lets a proxy split one
 	// request across several and have the references still resolve.
@@ -81,6 +90,33 @@ const (
 	// HasMoreChangesProperty says the server answered with only part of what
 	// changed, and the call should be repeated from newState.
 	HasMoreChangesProperty = "hasMoreChanges"
+)
+
+// The members of a /query call a generated pager reads. A call that has them
+// returns one window of a longer list, and says where the window sits.
+const (
+	// PositionArgument is where the window the call returns starts, which the
+	// pager moves on by what the last answer held.
+	PositionArgument = "position"
+	// IDsProperty holds the ids in the window.
+	IDsProperty = "ids"
+	// TotalProperty is how many records match in all, which a server reports
+	// only where the call asked it to.
+	TotalProperty = "total"
+)
+
+// PageKind says how a pager works the next request out from the last answer.
+type PageKind int
+
+const (
+	// NotPaged is a query that asked for no pager.
+	NotPaged PageKind = iota
+	// PageQuery advances a /query: the window moves on by the ids that came
+	// back, and the end is a window with nothing in it.
+	PageQuery
+	// PageChanges advances a /changes: the state moves on to the one the
+	// answer reports, and the end is the server saying there is no more.
+	PageChanges
 )
 
 // AccountIDArgument is the argument every standard JMAP method takes to say

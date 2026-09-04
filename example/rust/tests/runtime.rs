@@ -9,6 +9,7 @@ use futures_lite::future::block_on;
 use serde_json::json;
 
 use jmapc_example::jmapq::create_mailbox::{create_mailbox, CreateMailboxParams};
+use jmapc_example::jmapq::search_emails::{search_emails_pages, SearchEmailsParams};
 use jmapc_example::jmapq::{
     Auth, Client, ClientOptions, Error, HttpRequest, HttpResponse, Transport, TransportError,
 };
@@ -245,4 +246,68 @@ fn a_capability_the_session_does_not_have_never_leaves_the_client() {
         1,
         "only the session should have been fetched"
     );
+}
+
+/// One window of a search, and the emails in it, as the two calls of
+/// SearchEmails ask for them.
+fn window(position: u64, total: u64, ids: &[&str]) -> serde_json::Value {
+    let list: Vec<serde_json::Value> = ids
+        .iter()
+        .map(|id| {
+            json!({
+                "id": id,
+                "subject": format!("message {id}"),
+                "from": [{"email": "someone@example.com"}],
+                "receivedAt": "2026-09-04T09:00:00Z",
+            })
+        })
+        .collect();
+    json!({
+        "methodResponses": [
+            ["Email/query", {
+                "accountId": "acct1",
+                "queryState": "q1",
+                "canCalculateChanges": false,
+                "position": position,
+                "total": total,
+                "limit": 50,
+                "ids": ids,
+            }, "search"],
+            ["Email/get", {"accountId": "acct1", "state": "s1", "list": list, "notFound": []}, "fetch"],
+        ],
+        "sessionState": "s1",
+    })
+}
+
+#[test]
+fn a_walk_asks_for_each_window_in_turn() {
+    let stub = Stub::new(vec![
+        session(),
+        window(0, 3, &["m1", "m2"]),
+        window(2, 3, &["m3"]),
+    ]);
+    let client = Client::new("https://example.com/.well-known/jmap", &stub);
+
+    let mut pages = search_emails_pages(SearchEmailsParams {
+        phrase: "invoice".to_string(),
+        first_mailbox_id: "mbx1".to_string(),
+        second_mailbox_id: "mbx2".to_string(),
+        position: 0,
+    });
+    let mut subjects = Vec::new();
+    while let Some(page) = block_on(pages.next(&client)).expect("the walk should hold") {
+        for email in &page.email_get.list {
+            subjects.push(email.subject.clone().unwrap_or_default());
+        }
+    }
+
+    assert_eq!(subjects, vec!["message m1", "message m2", "message m3"]);
+    // The session, and then one request per window: the total ends the walk
+    // rather than a request for a window that is not there.
+    let sent = stub.sent();
+    assert_eq!(sent.len(), 3);
+    let first: serde_json::Value = serde_json::from_slice(sent[1].body.as_ref().unwrap()).unwrap();
+    let second: serde_json::Value = serde_json::from_slice(sent[2].body.as_ref().unwrap()).unwrap();
+    assert_eq!(first["methodCalls"][0][1]["position"], 0);
+    assert_eq!(second["methodCalls"][0][1]["position"], 2);
 }

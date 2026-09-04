@@ -1523,3 +1523,88 @@ func TestWatchesRejects(t *testing.T) {
 		})
 	}
 }
+
+// TestPages checks what a query says when it asks to be paged: which call the
+// loop advances, and how the answer says where the next request starts.
+func TestPages(t *testing.T) {
+	window := parse(t, "SearchEmails"+Extension, `{
+	  "_pages": "search",
+	  "methodCalls": [
+	    ["Email/query", {"position": "{{position}}", "limit": 50}, "search"],
+	    ["Email/get", {"#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"}}, "fetch"]
+	  ]
+	}`)
+	if window.Pages == nil || window.Pages.ID != "search" {
+		t.Fatalf("pages the call %v", window.Pages)
+	}
+	if window.PageKind != PageQuery {
+		t.Errorf("the call is paged as %v, want a window of a longer list", window.PageKind)
+	}
+	if window.PageStart == nil || window.PageStart.Name != "position" {
+		t.Errorf("the walk starts from %v, want position", window.PageStart)
+	}
+
+	changes := parse(t, "CatchUp"+Extension, `{
+	  "_pages": "changes",
+	  "methodCalls": [["Email/changes", {"sinceState": "{{sinceState}}"}, "changes"]]
+	}`)
+	if changes.PageKind != PageChanges {
+		t.Errorf("the call is paged as %v, want what changed since a state", changes.PageKind)
+	}
+	if changes.PageStart == nil || changes.PageStart.Name != "sinceState" {
+		t.Errorf("the walk starts from %v, want sinceState", changes.PageStart)
+	}
+}
+
+// TestPagesRejects covers the queries a walk cannot be built on, each of which
+// would otherwise be a client that quietly stops after the first part.
+func TestPagesRejects(t *testing.T) {
+	cases := []struct{ name, src, want string }{
+		{
+			"a call that is not there",
+			`{"_pages": "serach", "methodCalls": [["Email/query", {"position": "{{p}}"}, "search"]]}`,
+			`did you mean "search"?`,
+		},
+		{
+			"a call that returns the whole of what it has",
+			`{"_pages": "all", "methodCalls": [["Email/get", {"ids": null}, "all"]]}`,
+			"Email/get cannot be paged",
+		},
+		{
+			"a position the query states itself",
+			`{"_pages": "search", "methodCalls": [["Email/query", {"position": 0}, "search"]]}`,
+			"has to be a parameter",
+		},
+		{
+			"a position the query leaves out",
+			`{"_pages": "search", "methodCalls": [["Email/query", {"limit": 10}, "search"]]}`,
+			"has to be a parameter",
+		},
+		{
+			"a walk that is also a watch",
+			`{"_pages": "changes", "_watches": "changes",
+			  "methodCalls": [["Email/changes", {"sinceState": "{{s}}"}, "changes"]]}`,
+			"already asks again while the server says there is more",
+		},
+		{
+			"a return that hides where the next request starts",
+			`{"_pages": "search", "_returns": "fetch", "methodCalls": [
+			   ["Email/query", {"position": "{{p}}"}, "search"],
+			   ["Email/get", {"#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"}}, "fetch"]]}`,
+			`cannot return only "fetch"`,
+		},
+		{
+			"creation ids carried through a walk",
+			`{"_pages": "search", "_createdIds": true,
+			  "methodCalls": [["Email/query", {"position": "{{p}}"}, "search"]]}`,
+			"cannot carry creation ids",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := parseErr(t, c.src); !strings.Contains(got, c.want) {
+				t.Errorf("got  %s\nwant it to mention %q", got, c.want)
+			}
+		})
+	}
+}

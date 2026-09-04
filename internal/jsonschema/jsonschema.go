@@ -69,6 +69,10 @@ func (g *Generator) Generate() ([]byte, error) {
 				"type":        "string",
 				"description": "The call id whose state a watching client follows. It has to name a call that reports what changed since a state, and the generated client calls the query whenever the server says that type has moved on.",
 			},
+			query.PagesMember: map[string]any{
+				"type":        "string",
+				"description": "The call id a generated walk advances. It has to name a call that answers with part of a longer answer and says where the rest is — a /query, or a /changes — and the argument saying where the next request starts is left to the walk.",
+			},
 			query.CreatedIDsMember: map[string]any{
 				"type":        "boolean",
 				"description": "Whether the generated function carries the creation ids of an earlier request in and reports its own, so that a reference to something created there still resolves here.",

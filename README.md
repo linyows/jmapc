@@ -169,6 +169,7 @@ identifier: letters, digits and underscores, not starting with a digit.
 | The response to a call returning that record | `ListInboxEmailsEmailGetResponse` |
 | The result, where `_returns` names no call | `ListInboxEmailsResult` |
 | The function that follows changes, where the query is watched | `SyncEmailsWatch` |
+| The walk over the parts of an answer, where the query is paged | `SearchEmailsPages` |
 | The file | `listinboxemails_gen.go` |
 
 A call the query does not narrow answers with the shared type instead, so
@@ -345,6 +346,7 @@ else is the request as RFC 8620 defines it.
 | `_returns` | The call whose response the function returns. Optional: without it, every response is returned. |
 | `_createdIds` | Carry the creation ids of an earlier request in, and this request's out. Optional; see below. |
 | `_watches` | The call a generated client follows the changes of, so that it catches up whenever the server says there is something to catch up on. Optional; see [Push](#push). |
+| `_pages` | The call a generated walk advances, so that what one request answers with part of can be read the whole way through. Optional; see [Walking what does not fit in one request](#walking-what-does-not-fit-in-one-request). |
 | `_comment` | Why a call is there. Goes in that call's arguments; see below. |
 
 A query file is plain JSON, so `jq` reads it and an editor understands it. To
@@ -441,6 +443,8 @@ Everything below is a compile-time failure rather than a server round trip:
 - the capabilities the request declares cover the methods it calls
 - a watched call is one that reports what changed since a state, and the state
   it goes on from is left to the loop rather than written into the query
+- a paged call is one that answers with part of a longer answer and says where
+  the rest is, and where the next request starts is left to the walk
 
 A misspelling is met with a suggestion:
 
@@ -668,6 +672,75 @@ A server offering `urn:ietf:params:jmap:blob` can also create and read blobs
 through the API, which the endpoints cannot: `Blob/upload` puts a blob in the
 same request as the call that uses it, so the id never comes back to the client
 in between.
+
+## Walking what does not fit in one request
+
+A JMAP answer is often part of an answer. A `/query` returns the window the
+caller asked for and says where that window sits; a `/changes` returns as much
+as the server cares to and says whether there is more. Either way the next
+request is worked out from the last answer, which is a loop, and `_pages` asks
+for it.
+
+`_pages` names the call the loop advances. What says where the next request
+starts — `position` for a `/query`, `sinceState` for a `/changes` — is left to
+the loop, so it is written as a parameter:
+
+```json
+{
+  "_pages": "search",
+
+  "methodCalls": [
+    ["Email/query", {"filter": {"text": "{{phrase}}"}, "position": "{{position}}",
+                     "limit": 50, "calculateTotal": true}, "search"],
+    ["Email/get", {"#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"}}, "fetch"]
+  ]
+}
+```
+
+Go gets an iterator:
+
+```go
+for page, err := range jmapq.SearchEmailsPages(ctx, c, params) {
+	if err != nil {
+		return err
+	}
+	for _, email := range page.EmailGet.List {
+		fmt.Println(*email.Subject)
+	}
+}
+```
+
+TypeScript gets an async generator, and a failure throws as it does from the
+query itself:
+
+```ts
+for await (const page of searchEmailsPages(client, params)) {
+  for (const email of page.emailGet.list) console.log(email.subject)
+}
+```
+
+Rust gets a value that remembers where it is. A stream would mean a crate to
+define one, and what the generated code asks for is serde and nothing else:
+
+```rust
+let mut pages = search_emails_pages(params);
+while let Some(page) = pages.next(&client).await? {
+    for email in &page.email_get.list {
+        println!("{:?}", email.subject);
+    }
+}
+```
+
+The walk starts from the value the parameters carry, so it can begin where a
+previous one stopped. A window with nothing in it ends it rather than being
+handed back, so everything it yields holds something, and where the call asked
+for the total it ends without asking for a window that is not there. A
+`/changes` walk hands back even an answer saying nothing changed, because that
+answer carries the state to go on from, and it ends when the server says there
+is no more.
+
+A watching query already asks again while the server says there is more, so
+`_watches` and `_pages` are not written together.
 
 ## Push
 
