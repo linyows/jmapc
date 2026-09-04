@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 )
@@ -153,6 +154,11 @@ func (c *Client) RefreshSession(ctx context.Context) (*Session, error) {
 	if s.APIURL == "" && c.apiURL == "" {
 		return nil, fmt.Errorf("jmapc: session from %s has no apiUrl", c.sessionURL)
 	}
+	sessionURL, err := url.Parse(c.sessionURL)
+	if err != nil {
+		return nil, fmt.Errorf("jmapc: parsing session URL: %w", err)
+	}
+	s.resolveURLs(sessionURL)
 	c.mu.Lock()
 	c.session = &s
 	c.mu.Unlock()
