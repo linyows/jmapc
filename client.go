@@ -150,7 +150,7 @@ func (c *Client) RefreshSession(ctx context.Context) (*Session, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&s); err != nil {
 		return nil, fmt.Errorf("jmapc: decoding session: %w", err)
 	}
-	if s.APIURL == "" {
+	if s.APIURL == "" && c.apiURL == "" {
 		return nil, fmt.Errorf("jmapc: session from %s has no apiUrl", c.sessionURL)
 	}
 	c.mu.Lock()
