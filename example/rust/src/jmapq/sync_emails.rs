@@ -119,8 +119,8 @@ pub struct SyncEmailsResult {
     pub email_get_2: SyncEmailsEmailGet2Response,
 }
 
-/// SyncEmails fetches the emails that have been created since a known state,
-/// so a local cache can catch up without refetching everything.
+/// SyncEmails fetches the emails that have changed since a known state, so a
+/// local cache can catch up without refetching everything.
 ///
 /// It makes Email/changes, Email/get, and Email/get calls in a single
 /// request, so that 3 dependent calls cost one round trip.

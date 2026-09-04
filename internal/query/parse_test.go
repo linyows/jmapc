@@ -1438,3 +1438,88 @@ func TestQueryMayNameItsSchema(t *testing.T) {
 		t.Errorf("calls = %d", len(q.Calls))
 	}
 }
+
+// syncEmails is a query a watch can be built on: it reports what changed since
+// a state the caller supplies, and fetches what changed.
+const syncEmails = `{
+  "_watches": "changes",
+  "methodCalls": [
+    ["Email/changes", {"sinceState": "{{sinceState}}", "maxChanges": 128}, "changes"],
+    ["Email/get", {"#ids": {"resultOf": "changes", "name": "Email/changes", "path": "/created"}}, "created"]
+  ]
+}`
+
+// TestWatches checks what a query says when it asks to be watched: which call
+// the loop reads the state from, and which parameter carries it back in.
+func TestWatches(t *testing.T) {
+	q := parse(t, "SyncEmails"+Extension, syncEmails)
+	if q.Watches == nil {
+		t.Fatal("the query is not watched")
+	}
+	if q.Watches.ID != "changes" {
+		t.Errorf("watches the call %q, want changes", q.Watches.ID)
+	}
+	if q.WatchState == nil || q.WatchState.Name != "sinceState" {
+		t.Fatalf("the state parameter is %v, want sinceState", q.WatchState)
+	}
+	// The state is a String, whatever the parameter is called.
+	if got := q.WatchState.ValueType().String(); got != "String" {
+		t.Errorf("the state parameter is %s, want String", got)
+	}
+}
+
+// TestWatchesRejects covers the queries a loop cannot be built on, each of
+// which is a mistake that would otherwise show up as a client that quietly
+// never catches up.
+func TestWatchesRejects(t *testing.T) {
+	cases := []struct{ name, src, want string }{
+		{
+			"a call that is not there",
+			`{"_watches": "chnges", "methodCalls": [["Email/changes", {"sinceState": "{{s}}"}, "changes"]]}`,
+			`did you mean "changes"?`,
+		},
+		{
+			"a call that reports no changes",
+			`{"_watches": "all", "methodCalls": [["Email/get", {"ids": null}, "all"]]}`,
+			"Email/get cannot be watched",
+		},
+		{
+			"a state the query states itself",
+			`{"_watches": "changes", "methodCalls": [["Email/changes", {"sinceState": "e1"}, "changes"]]}`,
+			"has to be a parameter",
+		},
+		{
+			"a state the query leaves out",
+			`{"_watches": "changes", "methodCalls": [["Email/changes", {}, "changes"]]}`,
+			"has to be a parameter",
+		},
+		{
+			"a return that hides the state",
+			`{"_watches": "changes", "_returns": "created", "methodCalls": [
+			   ["Email/changes", {"sinceState": "{{s}}"}, "changes"],
+			   ["Email/get", {"#ids": {"resultOf": "changes", "name": "Email/changes", "path": "/created"}}, "created"]]}`,
+			`cannot return only "created"`,
+		},
+		{
+			"creation ids carried through a loop",
+			`{"_watches": "changes", "_createdIds": true, "methodCalls": [
+			   ["Email/changes", {"sinceState": "{{s}}"}, "changes"]]}`,
+			"cannot carry creation ids",
+		},
+		{
+			"an account that is not known until the request runs",
+			`{"_watches": "changes", "methodCalls": [
+			   ["Mailbox/get", {"ids": null, "properties": ["id"]}, "boxes"],
+			   ["Email/changes", {"#accountId": {"resultOf": "boxes", "name": "Mailbox/get", "path": "/accountId"},
+			                      "sinceState": "{{s}}"}, "changes"]]}`,
+			"has to know whose events to listen for",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := parseErr(t, c.src); !strings.Contains(got, c.want) {
+				t.Errorf("got  %s\nwant it to mention %q", got, c.want)
+			}
+		})
+	}
+}

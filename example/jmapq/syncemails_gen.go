@@ -101,8 +101,8 @@ type SyncEmailsResult struct {
 	EmailGet2 SyncEmailsEmailGet2Response
 }
 
-// SyncEmails fetches the emails that have been created since a known state,
-// so a local cache can catch up without refetching everything.
+// SyncEmails fetches the emails that have changed since a known state, so a
+// local cache can catch up without refetching everything.
 //
 // It makes Email/changes, Email/get, and Email/get calls in a single request,
 // so that 3 dependent calls cost one round trip.
@@ -156,4 +156,39 @@ func SyncEmails(ctx context.Context, c *jmapc.Client, p SyncEmailsParams) (*Sync
 		return nil, err
 	}
 	return &out, nil
+}
+
+// SyncEmailsWatch follows the changes to Email, calling SyncEmails whenever
+// the server says there are any and passing the result to fn.
+//
+// It starts from the sinceState the parameters carry, which is the state a
+// previous answer left the caller at, and it goes on from the state each
+// answer reports. A server that answers with only part of what changed is
+// asked again until it says there is no more.
+//
+// It runs until the context ends, which is the error it returns; an error
+// from fn stops it and comes back as it was. A dropped connection is not an
+// error: the loop opens another, resuming where it left off, and asks what it
+// missed while there was none.
+func SyncEmailsWatch(ctx context.Context, c *jmapc.Client, p SyncEmailsParams, fn func(context.Context, *SyncEmailsResult) error, opts ...jmapc.WatchOption) error {
+	session, err := c.Session(ctx)
+	if err != nil {
+		return err
+	}
+	mailAccountID, err := session.PrimaryAccountID(jmapc.CapabilityMail)
+	if err != nil {
+		return err
+	}
+
+	return c.Watch(ctx, mailAccountID, "Email", p.SinceState, func(ctx context.Context, sinceState string) (string, bool, error) {
+		p.SinceState = sinceState
+		res, err := SyncEmails(ctx, c, p)
+		if err != nil {
+			return "", false, err
+		}
+		if err := fn(ctx, res); err != nil {
+			return "", false, err
+		}
+		return res.EmailChanges.NewState, res.EmailChanges.HasMoreChanges, nil
+	}, opts...)
 }

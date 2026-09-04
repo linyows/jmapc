@@ -322,3 +322,74 @@ func rawExpr(raw json.RawMessage) string {
 
 // nodeHasParam reports whether a node depends on a parameter.
 func nodeHasParam(n query.Node) bool { return n.HasParam() }
+
+// writeWatch writes the function that follows the changes to the type the
+// query watches. What the server pushes is that a type has moved on, not what
+// changed, so the loop asks the query; the runtime holds the connection open,
+// reopens it when it drops, and keeps asking while the server says there is
+// more.
+func (g *QueryGenerator) writeWatch(buf *bytes.Buffer, p *plan) {
+	if p.watchName == "" {
+		return
+	}
+	watched := p.q.Watches
+	state := p.q.WatchState.Field
+
+	g.writeWatchDoc(buf, p)
+	fmt.Fprintf(buf, "func %s(ctx context.Context, c *%sClient, p %s, fn func(context.Context, *%s) error, opts ...%[2]sWatchOption) error {\n",
+		p.watchName, g.Qualifier, p.paramsType, p.returnType)
+
+	account := g.watchAccount(buf, p)
+	fmt.Fprintf(buf, "\treturn c.Watch(ctx, %s, %q, p.%s, func(ctx context.Context, sinceState string) (string, bool, error) {\n",
+		account, watched.Method.DataType, state)
+	fmt.Fprintf(buf, "\t\tp.%s = sinceState\n", state)
+	fmt.Fprintf(buf, "\t\tres, err := %s(ctx, c, p)\n", p.q.Name)
+	buf.WriteString("\t\tif err != nil {\n\t\t\treturn \"\", false, err\n\t\t}\n")
+	buf.WriteString("\t\tif err := fn(ctx, res); err != nil {\n\t\t\treturn \"\", false, err\n\t\t}\n")
+	changes := "res."
+	if p.q.Returns == nil {
+		changes += watched.Field + "."
+	}
+	fmt.Fprintf(buf, "\t\treturn %[1]s%[2]s, %[1]s%[3]s, nil\n",
+		changes, spec.ExportedName(query.NewStateProperty), spec.ExportedName(query.HasMoreChangesProperty))
+	buf.WriteString("\t}, opts...)\n")
+	buf.WriteString("}\n")
+}
+
+// writeWatchDoc writes the watching function's documentation, which has to say
+// what the loop does with the query it is built on: where it starts, what it
+// hands back, and when it gives up.
+func (g *QueryGenerator) writeWatchDoc(buf *bytes.Buffer, p *plan) {
+	dataType := p.q.Watches.Method.DataType
+	doc := fmt.Sprintf("%s follows the changes to %s, calling %s whenever the server says there are any and passing the result to fn.",
+		p.watchName, dataType, p.q.Name)
+	doc += fmt.Sprintf("\n\nIt starts from the %s the parameters carry, which is the state a previous answer left the caller at, and it goes on from the state each answer reports. "+
+		"A server that answers with only part of what changed is asked again until it says there is no more.",
+		p.q.WatchState.Name)
+	doc += "\n\nIt runs until the context ends, which is the error it returns; an error from fn stops it and comes back as it was. " +
+		"A dropped connection is not an error: the loop opens another, resuming where it left off, and asks what it missed while there was none."
+	shared.WriteComment(buf, "", doc)
+}
+
+// watchAccount writes whatever is needed to name the account a watch listens
+// for, and returns the expression naming it. The events are keyed by account,
+// so a watch has to know which one before it makes any request at all.
+func (g *QueryGenerator) watchAccount(buf *bytes.Buffer, p *plan) string {
+	watched := p.q.Watches
+	if expr := p.calls[watched].accountIDExpr; expr != "" {
+		capability := watched.Method.Capability
+		if capability == "" {
+			capability = spec.CapabilityCore
+		}
+		buf.WriteString("\tsession, err := c.Session(ctx)\n")
+		buf.WriteString("\tif err != nil {\n\t\treturn err\n\t}\n")
+		fmt.Fprintf(buf, "\t%s, err := session.PrimaryAccountID(%s)\n", expr, g.capabilityExpr(capability))
+		buf.WriteString("\tif err != nil {\n\t\treturn err\n\t}\n\n")
+		return expr
+	}
+	account, _ := watched.Args.Find(query.AccountIDArgument)
+	if param, ok := account.(*query.ParamRef); ok {
+		return "p." + param.Param.Field
+	}
+	return fmt.Sprintf("%sID(%s)", g.Qualifier, g.expr(account, "\t"))
+}

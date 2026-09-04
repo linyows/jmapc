@@ -30,6 +30,14 @@ type Query struct {
 	// Returns is the call whose result the generated function returns, or nil
 	// when it returns all of them.
 	Returns *Call
+	// Watches is the call whose state a generated watch follows, or nil where
+	// the query is not watched. A watch calls the query whenever the server
+	// says that call's type has moved on.
+	Watches *Call
+	// WatchState is the parameter carrying the state a watched call reports
+	// the changes since. The loop fills it in, from the state the last answer
+	// left it at.
+	WatchState *Param
 	// CreatedIDs reports whether the generated function carries the creation
 	// ids of a request in and out, which is what lets a proxy split one
 	// request across several and have the references still resolve.
@@ -61,6 +69,19 @@ type Call struct {
 	// identifier looks like in the language it writes.
 	Field string
 }
+
+// The members of a /changes call the generated watch reads. A call that has
+// them is one a loop can go on from, whichever specification declared it.
+const (
+	// SinceStateArgument is the state a /changes call reports the changes
+	// since, which the loop supplies from the last answer it had.
+	SinceStateArgument = "sinceState"
+	// NewStateProperty is the state the changes leave the client at.
+	NewStateProperty = "newState"
+	// HasMoreChangesProperty says the server answered with only part of what
+	// changed, and the call should be repeated from newState.
+	HasMoreChangesProperty = "hasMoreChanges"
+)
 
 // AccountIDArgument is the argument every standard JMAP method takes to say
 // which account it applies to. A query that omits it has it filled in from the

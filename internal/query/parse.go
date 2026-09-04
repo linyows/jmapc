@@ -32,6 +32,10 @@ const (
 	DocMember = "_doc"
 	// ReturnsMember names the call whose response the function returns.
 	ReturnsMember = "_returns"
+	// WatchesMember names the call whose state drives a watch: the generated
+	// client follows that type's changes, calling the query whenever the
+	// server says there is something to catch up on.
+	WatchesMember = "_watches"
 	// CreatedIDsMember asks for the creation ids of a request to be carried in
 	// and out, so that one request can go on from where another left off.
 	CreatedIDsMember = "_createdIds"
@@ -73,6 +77,9 @@ type fileSyntax struct {
 	// CreatedIDs asks the generated function to take the creation ids of an
 	// earlier request and to report its own.
 	CreatedIDs bool `json:"_createdIds"`
+	// Watches names the call whose state a watching client follows, and asks
+	// for the function that follows it.
+	Watches string `json:"_watches"`
 	// Using lists the capabilities the request declares, as RFC 8620 defines
 	// it. It may be left out, in which case it is derived from the methods
 	// called.
@@ -177,12 +184,100 @@ func (p *Parser) Parse(path string, src []byte) (*Query, error) {
 		}
 		q.Returns = call
 	}
+	c.watch(q, f)
 	assignFieldNames(q)
 
 	if len(c.errs) > 0 {
 		return nil, c.errs
 	}
 	return q, nil
+}
+
+// watch checks the call a query says drives a watch, and records what the
+// generated loop needs to follow it: which call reports the state, and which
+// parameter carries it back in.
+//
+// A watched call is one that reports what changed since a state — a /changes
+// call — because that is the only kind a loop can go on from. What the server
+// pushes is that a type has moved on, not what changed, so the loop asks; and
+// what it asks with is the state the last answer left it at.
+func (c *checker) watch(q *Query, f fileSyntax) {
+	if f.Watches == "" {
+		return
+	}
+	call, ok := c.byID[f.Watches]
+	if !ok {
+		c.errorf(WatchesMember, "", "no method call has the id %q", f.Watches).
+			hint(hintFor(f.Watches, c.callIDs()))
+		return
+	}
+	if !c.reportsChanges(call) {
+		c.errorf(WatchesMember, "a watched call reports what changed since a state, as "+call.Method.DataType+"/changes does",
+			"%s cannot be watched", call.Method.Name)
+		return
+	}
+	if f.CreatedIDs {
+		c.errorf(WatchesMember, "",
+			"a watching query cannot carry creation ids: they belong to one request, and a watch makes many")
+	}
+	if f.Returns != "" && f.Returns != f.Watches {
+		c.errorf(ReturnsMember, "leave "+ReturnsMember+" out, or name the watched call",
+			"a watching query cannot return only %q, since the loop reads the state it goes on from out of the %q response",
+			f.Returns, f.Watches)
+	}
+
+	since, given := call.Args.Find(SinceStateArgument)
+	switch value := since.(type) {
+	case *ParamRef:
+		q.WatchState = value.Param
+	default:
+		_ = value
+		where := fmt.Sprintf("%s.arguments.%s", callPath(q, call), SinceStateArgument)
+		if !given {
+			where = WatchesMember
+		}
+		c.errorf(where, `write "`+SinceStateArgument+`": "{{sinceState}}"`,
+			"the %s of a watched call is the state the loop has reached, so it has to be a parameter", SinceStateArgument)
+	}
+	if _, referenced := call.Args.Find("#" + AccountIDArgument); referenced {
+		c.errorf(WatchesMember, "",
+			"the account of a watched call comes from an earlier call, and a watch has to know whose events to listen for before it makes any")
+	}
+	q.Watches = call
+}
+
+// reportsChanges reports whether a call answers with what changed since a
+// state, which is what a loop can go on from. The data model says so rather
+// than the method name: a vendor extension declaring the standard methods for
+// a type of its own can be watched exactly as Email can.
+func (c *checker) reportsChanges(call *Call) bool {
+	if call.Method.DataType == "" {
+		return false
+	}
+	args, err := c.spec.ArgumentsOf(call.Method.Name)
+	if err != nil {
+		return false
+	}
+	if _, ok := args.Field(SinceStateArgument); !ok {
+		return false
+	}
+	resp, err := c.spec.ResponseOf(call.Method.Name)
+	if err != nil {
+		return false
+	}
+	_, hasState := resp.Field(NewStateProperty)
+	_, hasMore := resp.Field(HasMoreChangesProperty)
+	return hasState && hasMore
+}
+
+// callPath names a call the way a diagnostic about its arguments does.
+func callPath(q *Query, call *Call) string {
+	for i, c := range q.Calls {
+		if c == call {
+			return fmt.Sprintf("methodCalls[%d]", i)
+		}
+	}
+	return "methodCalls"
 }
 
 // checker accumulates the problems found while checking one query file.

@@ -168,6 +168,7 @@ identifier: letters, digits and underscores, not starting with a digit.
 | A record whose properties the query narrows | `ListInboxEmailsEmail`, and `ListInboxEmailsEmailBodyPart` for a narrowed body part |
 | The response to a call returning that record | `ListInboxEmailsEmailGetResponse` |
 | The result, where `_returns` names no call | `ListInboxEmailsResult` |
+| The function that follows changes, where the query is watched | `SyncEmailsWatch` |
 | The file | `listinboxemails_gen.go` |
 
 A call the query does not narrow answers with the shared type instead, so
@@ -343,6 +344,7 @@ else is the request as RFC 8620 defines it.
 | `_doc` | The generated function's documentation. Optional. |
 | `_returns` | The call whose response the function returns. Optional: without it, every response is returned. |
 | `_createdIds` | Carry the creation ids of an earlier request in, and this request's out. Optional; see below. |
+| `_watches` | The call a generated client follows the changes of, so that it catches up whenever the server says there is something to catch up on. Optional; see [Push](#push). |
 | `_comment` | Why a call is there. Goes in that call's arguments; see below. |
 
 A query file is plain JSON, so `jq` reads it and an editor understands it. To
@@ -437,6 +439,8 @@ Everything below is a compile-time failure rather than a server round trip:
   them, whether it is a string or the keys of a set like a participant's `roles`
 - ids, dates, and integers are well formed
 - the capabilities the request declares cover the methods it calls
+- a watched call is one that reports what changed since a state, and the state
+  it goes on from is left to the loop rather than written into the query
 
 A misspelling is met with a suggestion:
 
@@ -635,9 +639,76 @@ in between.
 
 ## Push
 
-`Client.EventSource` opens the server's push endpoint. An event says which types
-in which accounts have moved on, not what changed, so the client follows up with
-a `/changes` call:
+An event says which types in which accounts have moved on, not what changed. So
+a client that wants the changes writes a loop: connect, ask what happened since
+the state you hold, apply it, wait to be told again. That loop is the same every
+time and every part of it is somewhere to be wrong, so a query can ask for it.
+
+`_watches` names the call the loop reads the state from, which has to be one
+that reports what changed since a state, as `Email/changes` does:
+
+```json
+{
+  "_watches": "changes",
+
+  "methodCalls": [
+    ["Email/changes", {"sinceState": "{{sinceState}}", "maxChanges": 128}, "changes"],
+    ["Email/get", {"#ids": {"resultOf": "changes", "name": "Email/changes", "path": "/created"}}, "created"]
+  ]
+}
+```
+
+`SyncEmails` is generated as it would be anyway, and `SyncEmailsWatch` alongside
+it:
+
+```go
+err := jmapq.SyncEmailsWatch(ctx, c, jmapq.SyncEmailsParams{SinceState: state},
+	func(ctx context.Context, res *jmapq.SyncEmailsResult) error {
+		for _, email := range res.EmailGet.List {
+			fmt.Println("new:", *email.Subject)
+		}
+		state = res.EmailChanges.NewState // keep it, and start there next time
+		return nil
+	})
+```
+
+It starts from the state the parameters carry, and goes on from the state each
+answer reports. What it takes off the caller:
+
+- **A stream is a connection, not a subscription.** When it drops, another is
+  opened, resuming from the last event delivered, with a wait that doubles from
+  a second to half a minute while the server is unreachable.
+- **What changed while there was no connection was pushed to nobody**, so every
+  connection is followed by a catch-up.
+- **A server answers a `/changes` with as much as it cares to** and says
+  `hasMoreChanges`, so the loop asks again until it stops saying it.
+- **An event about another account, another type, or a state the loop has
+  already reached** is not worth a request, and the last of those is the common
+  one: a catch-up makes the server push what it has just been told.
+
+The loop runs until the context ends, which is the error it returns. An error
+from the callback stops it and comes back as it was. A server that refuses the
+connection outright is returned rather than waited out, because waiting will not
+change a 403. `jmapc.WithPing` and `jmapc.WithRetry` are there for the two
+things worth tuning.
+
+Underneath is `Client.Watch`, which takes the catch-up as a function and is what
+to call where the catching up is not one query:
+
+```go
+err := c.Watch(ctx, accountID, "Email", state,
+	func(ctx context.Context, since string) (newState string, more bool, err error) {
+		// ... /changes from since, then whatever the ids call for
+	})
+```
+
+Only the Go client follows a watch. Holding a connection open is the runtime's
+part rather than the generated code's, and the TypeScript and Rust runtimes do
+not; generating either from a watching query writes the query without the loop
+and says so.
+
+Below `Watch` is `Client.EventSource`, which opens the push endpoint and hands
+back the events:
 
 ```go
 stream, err := c.EventSource(ctx, &jmapc.EventSourceOptions{
@@ -652,15 +723,10 @@ for {
 		break // reconnect, passing stream.LastEventID()
 	}
 	if state, ok := change.StateOf(accountID, "Email"); ok {
-		// ... Email/changes since the state you hold
 		_ = state
 	}
 }
 ```
-
-A stream is a connection, not a subscription that outlives the network. An error
-from `Next` means reconnect, and `LastEventID` is where to resume so nothing is
-missed in between.
 
 This is the event source form of push, which suits a client that can hold a
 connection open. The other form registers a URL for the server to post to, which
