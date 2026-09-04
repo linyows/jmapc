@@ -453,6 +453,38 @@ queries/BadQuery.jmap.json: methodCalls[1].arguments.#ids.name: the referenced c
 
 `jmapc check` runs the checks without writing anything.
 
+### What only the server knows
+
+Everything above is what the specifications say. What they leave to the server —
+which capabilities it has, which accounts it holds, how much it will do in one
+request — a build cannot know, and a query that is right about JMAP and wrong
+about the server in front of it fails at run time. `-session` asks:
+
+```
+jmapc check -session jmap.example.com -token $JMAP_TOKEN
+checked 25 queries against https://jmap.example.com/api/, as someone@example.com
+```
+
+What it reports:
+
+- a capability the request declares and the server does not advertise
+- an account the query names that the session does not hold, an account the
+  session cannot fill in because it has no primary account for the capability,
+  and an account that does not support what the call needs
+- more calls than `maxCallsInRequest`, more records than `maxObjectsInGet`, more
+  changes than `maxObjectsInSet`, a request already larger than `maxSizeRequest`
+  before its parameters are filled in
+- a `collation` the server does not compare strings with
+
+What the query leaves to its caller is left alone: a parameter standing for a
+list of ids may be any length, and guessing at it would report a query that is
+fine.
+
+The session URL is the one thing not read from the environment — `-token` and
+`-user` fall back to `$JMAP_TOKEN` and `$JMAP_USER` — because a check that
+reaches the network should say so on the command line rather than because of
+what happens to be set around it.
+
 ## Editor support
 
 The checks above run when jmapc does. Most of them can run while the query is

@@ -41,7 +41,7 @@ func Build(s *spec.Spec, q *query.Query, values map[string]Value, accounts Accou
 	req := &jmapc.Request{Using: q.Using, CreatedIDs: createdIDs}
 	for _, c := range q.Calls {
 		args := make(map[string]any, len(c.Args.Fields)+1)
-		if capability, ok := b.needsAccountID(c); ok {
+		if capability, ok := c.AccountIDCapability(s); ok {
 			id, err := b.accountID(capability)
 			if err != nil {
 				return nil, err
@@ -127,29 +127,6 @@ type builder struct {
 	values   map[string]Value
 	accounts Accounts
 	resolved map[string]jmapc.ID
-}
-
-// needsAccountID reports whether a call's accountId has to be filled in, and
-// from which capability's primary account. A query that does not care which
-// account it runs against does not have to say so in every call.
-func (b *builder) needsAccountID(c *query.Call) (string, bool) {
-	args, err := b.spec.ArgumentsOf(c.Method.Name)
-	if err != nil {
-		return "", false
-	}
-	if _, takes := args.Field(query.AccountIDArgument); !takes {
-		return "", false
-	}
-	if _, given := c.Args.Find(query.AccountIDArgument); given {
-		return "", false
-	}
-	if _, referenced := c.Args.Find("#" + query.AccountIDArgument); referenced {
-		return "", false
-	}
-	if c.Method.Capability == "" {
-		return spec.CapabilityCore, true
-	}
-	return c.Method.Capability, true
 }
 
 // accountID resolves a capability's primary account, once per capability.

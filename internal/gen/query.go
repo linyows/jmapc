@@ -144,22 +144,9 @@ func (g *QueryGenerator) plan() ([]*plan, error) {
 func (g *QueryGenerator) planAccountIDs(p *plan) {
 	seen := make(map[string]bool)
 	for _, c := range p.q.Calls {
-		args, err := g.Spec.ArgumentsOf(c.Method.Name)
-		if err != nil {
+		capability, needed := c.AccountIDCapability(g.Spec)
+		if !needed {
 			continue
-		}
-		if _, takesAccount := args.Field(query.AccountIDArgument); !takesAccount {
-			continue
-		}
-		if _, given := c.Args.Find(query.AccountIDArgument); given {
-			continue
-		}
-		if _, referenced := c.Args.Find("#" + query.AccountIDArgument); referenced {
-			continue
-		}
-		capability := c.Method.Capability
-		if capability == "" {
-			capability = spec.CapabilityCore
 		}
 		if !seen[capability] {
 			seen[capability] = true

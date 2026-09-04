@@ -6,7 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"sort"
 	"strings"
@@ -41,13 +40,6 @@ Flags:
 A value is written as the type says: a String or an Id is the text itself, so
 nothing has to be quoted, and anything with a shape is written as JSON.
 `
-
-// stdout and stderr are where a run writes, named here so that a test can read
-// what it wrote.
-var (
-	stdout io.Writer = os.Stdout
-	stderr io.Writer = os.Stderr
-)
 
 // accountPlaceholder stands in for the account id a dry run has no session to
 // look up. It is a valid id, so the request it appears in is one a server would
