@@ -72,9 +72,8 @@ operations costs a single round trip:
 }
 ```
 
-The ids never come back to the client. That is the whole point of the protocol,
-and it is why a JMAP client does not look like a REST client, with a type per
-resource and a method per path.
+The ids never come back to the client, which is why a JMAP client does not look
+like a REST client, with a type per resource and a method per path.
 
 Most clients expose this through a builder, which means learning JMAP *and*
 learning the builder. But the query is the part you care about; the client is
