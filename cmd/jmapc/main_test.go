@@ -42,7 +42,7 @@ func TestGenerate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading the generated client: %v", err)
 	}
-	for _, want := range []string{"package jmapq", "func ListMailboxes(", "ListMailboxesMailboxGetResponse"} {
+	for _, want := range []string{"package jmapq", "func ListMailboxes(", "ListMailboxesAllResponse"} {
 		if !strings.Contains(string(src), want) {
 			t.Errorf("the generated client does not contain %q:\n%s", want, src)
 		}
@@ -72,7 +72,7 @@ func TestGenerateRust(t *testing.T) {
 	}
 	for _, want := range []string{
 		"pub async fn list_mailboxes<T: Transport>(",
-		"pub struct ListMailboxesMailboxGetResponse",
+		"pub struct ListMailboxesAllResponse",
 		"use super::client::{",
 	} {
 		if !strings.Contains(string(src), want) {

@@ -43,9 +43,9 @@ type MailQuotaQuota struct {
 	Description *string `json:"description"`
 }
 
-// MailQuotaQuotaGetResponse holds the response to the Quota/get call in
+// MailQuotaFetchResponse holds the response to the Quota/get call in
 // MailQuota.
-type MailQuotaQuotaGetResponse struct {
+type MailQuotaFetchResponse struct {
 	// The id of the account to operate on.
 	AccountID jmapc.ID `json:"accountId"`
 
@@ -71,7 +71,7 @@ type MailQuotaQuotaGetResponse struct {
 // The query does not say which account to use, so the session's primary
 // account for urn:ietf:params:jmap:quota is used, which costs a session
 // lookup on first use.
-func MailQuota(ctx context.Context, c *jmapc.Client) (*MailQuotaQuotaGetResponse, error) {
+func MailQuota(ctx context.Context, c *jmapc.Client) (*MailQuotaFetchResponse, error) {
 	session, err := c.Session(ctx)
 	if err != nil {
 		return nil, err
@@ -102,7 +102,7 @@ func MailQuota(ctx context.Context, c *jmapc.Client) (*MailQuotaQuotaGetResponse
 		return nil, err
 	}
 
-	var out MailQuotaQuotaGetResponse
+	var out MailQuotaFetchResponse
 	if e := resp.Decode("fetch", &out); e != nil {
 		if err != nil {
 			return nil, err

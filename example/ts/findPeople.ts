@@ -35,9 +35,9 @@ export interface FindPeoplePrincipal {
   timeZone: string | null
 }
 
-// FindPeoplePrincipalGetResponse holds the response to the Principal/get call
-// in FindPeople.
-export interface FindPeoplePrincipalGetResponse {
+// FindPeopleFetchResponse holds the response to the Principal/get call in
+// FindPeople.
+export interface FindPeopleFetchResponse {
   // The id of the account to operate on.
   accountId: Id
 
@@ -63,7 +63,7 @@ export interface FindPeoplePrincipalGetResponse {
 // The query does not say which account to use, so the session's primary
 // account for urn:ietf:params:jmap:principals is used, which costs a session
 // lookup on first use.
-export async function findPeople(client: Client, p: FindPeopleParams): Promise<FindPeoplePrincipalGetResponse> {
+export async function findPeople(client: Client, p: FindPeopleParams): Promise<FindPeopleFetchResponse> {
   const principalsAccountId = await client.primaryAccountId("urn:ietf:params:jmap:principals")
 
   const req: Request = {
@@ -101,7 +101,7 @@ export async function findPeople(client: Client, p: FindPeopleParams): Promise<F
   }
 
   if (failed && !answered(res, "fetch")) throw failed
-  const out = decode<FindPeoplePrincipalGetResponse>(req, res, "fetch")
+  const out = decode<FindPeopleFetchResponse>(req, res, "fetch")
   if (failed) {
     failed.result = out
     throw failed

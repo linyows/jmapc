@@ -64,11 +64,11 @@ pub struct SyncEmailsEmail2 {
     pub keywords: BTreeMap<String, bool>,
 }
 
-/// SyncEmailsEmailGetResponse holds the response to the Email/get call in
+/// SyncEmailsCreatedResponse holds the response to the Email/get call in
 /// SyncEmails.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SyncEmailsEmailGetResponse {
+pub struct SyncEmailsCreatedResponse {
     /// The id of the account to operate on.
     pub account_id: Id,
 
@@ -85,11 +85,11 @@ pub struct SyncEmailsEmailGetResponse {
     pub not_found: Vec<Id>,
 }
 
-/// SyncEmailsEmailGet2Response holds the response to the Email/get call in
+/// SyncEmailsUpdatedResponse holds the response to the Email/get call in
 /// SyncEmails.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SyncEmailsEmailGet2Response {
+pub struct SyncEmailsUpdatedResponse {
     /// The id of the account to operate on.
     pub account_id: Id,
 
@@ -110,13 +110,13 @@ pub struct SyncEmailsEmailGet2Response {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct SyncEmailsResult {
     /// The response to the Email/changes call, made as "changes".
-    pub email_changes: EmailChangesResponse,
+    pub changes: EmailChangesResponse,
 
     /// The response to the Email/get call, made as "created".
-    pub email_get: SyncEmailsEmailGetResponse,
+    pub created: SyncEmailsCreatedResponse,
 
     /// The response to the Email/get call, made as "updated".
-    pub email_get_2: SyncEmailsEmailGet2Response,
+    pub updated: SyncEmailsUpdatedResponse,
 }
 
 /// SyncEmails fetches the emails that have changed since a known state, so a
@@ -181,17 +181,17 @@ pub async fn sync_emails<T: Transport>(
 
     let mut out = SyncEmailsResult::default();
     match decode::<EmailChangesResponse>(&req, &res, "changes") {
-        Ok(v) => out.email_changes = v,
+        Ok(v) => out.changes = v,
         Err(e) if failed.is_none() => return Err(e),
         Err(_) => {}
     }
-    match decode::<SyncEmailsEmailGetResponse>(&req, &res, "created") {
-        Ok(v) => out.email_get = v,
+    match decode::<SyncEmailsCreatedResponse>(&req, &res, "created") {
+        Ok(v) => out.created = v,
         Err(e) if failed.is_none() => return Err(e),
         Err(_) => {}
     }
-    match decode::<SyncEmailsEmailGet2Response>(&req, &res, "updated") {
-        Ok(v) => out.email_get_2 = v,
+    match decode::<SyncEmailsUpdatedResponse>(&req, &res, "updated") {
+        Ok(v) => out.updated = v,
         Err(e) if failed.is_none() => return Err(e),
         Err(_) => {}
     }

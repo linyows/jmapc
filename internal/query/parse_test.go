@@ -88,8 +88,11 @@ func TestParse(t *testing.T) {
 	if got, want := strings.Join(get.Properties, ","), "id,subject,from,receivedAt"; got != want {
 		t.Errorf("properties = %q, want %q", got, want)
 	}
-	if get.Field != "EmailGet" {
-		t.Errorf("GoField = %q, want %q", get.Field, "EmailGet")
+	// The field is the name the query gave the call, not the method it
+	// invokes: call ids are unique in a request, so nothing has to be
+	// numbered, and inserting a call ahead of this one leaves it alone.
+	if get.Field != "C1" {
+		t.Errorf("GoField = %q, want %q", get.Field, "C1")
 	}
 	ref, ok := get.Args.Find("#ids")
 	if !ok {
@@ -1819,5 +1822,46 @@ func TestCreationIDsLeftToTheCallerAreNotNamed(t *testing.T) {
 	]}`)
 	if len(q.Creations) != 0 {
 		t.Errorf("creations = %v, want none: the caller names it", q.Creations)
+	}
+}
+
+// TestCallFieldsAreNamedAfterTheCall checks the name a call goes by in the
+// generated code. A call id is unique within a request by definition, so
+// nothing has to be numbered, and inserting a call ahead of another leaves its
+// name pointing at the same call.
+func TestCallFieldsAreNamedAfterTheCall(t *testing.T) {
+	q := parse(t, "TwoGets"+Extension, `{"methodCalls": [
+	  ["Email/get", {"ids": ["e1"], "properties": ["id"]}, "one"],
+	  ["Email/get", {"ids": ["e2"], "properties": ["id"]}, "two"]
+	]}`)
+	if got, want := q.Calls[0].Field+","+q.Calls[1].Field, "One,Two"; got != want {
+		t.Errorf("fields = %q, want %q", got, want)
+	}
+
+	// The same query with a call inserted ahead of them: the two keep their
+	// names, where a number would have moved onto the new one.
+	inserted := parse(t, "ThreeGets"+Extension, `{"methodCalls": [
+	  ["Email/get", {"ids": ["e0"], "properties": ["id"]}, "zero"],
+	  ["Email/get", {"ids": ["e1"], "properties": ["id"]}, "one"],
+	  ["Email/get", {"ids": ["e2"], "properties": ["id"]}, "two"]
+	]}`)
+	if got, want := inserted.Calls[1].Field+","+inserted.Calls[2].Field, "One,Two"; got != want {
+		t.Errorf("after inserting a call the fields are %q, want %q", got, want)
+	}
+}
+
+// TestACallIDThatIsNotAnIdentifierFallsBack checks the call id RFC 8620 allows
+// and Go does not: any string is a call id, and one that cannot be a name goes
+// back to being named after the method it invokes.
+func TestACallIDThatIsNotAnIdentifierFallsBack(t *testing.T) {
+	q := parse(t, "Odd"+Extension, `{"methodCalls": [
+	  ["Email/query", {"limit": 1}, "0"],
+	  ["Email/get", {"#ids": {"resultOf": "0", "name": "Email/query", "path": "/ids"}}, "1"]
+	]}`)
+	if got, want := q.Calls[0].Field, "EmailQuery"; got != want {
+		t.Errorf("field = %q, want %q", got, want)
+	}
+	if got, want := q.Calls[1].Field, "EmailGet"; got != want {
+		t.Errorf("field = %q, want %q", got, want)
 	}
 }

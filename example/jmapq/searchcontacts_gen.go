@@ -62,9 +62,9 @@ type SearchContactsContactCard struct {
 	Organizations map[jmapc.ID]jmapc.ContactOrganization `json:"organizations"`
 }
 
-// SearchContactsAddressBookGetResponse holds the response to the
-// AddressBook/get call in SearchContacts.
-type SearchContactsAddressBookGetResponse struct {
+// SearchContactsBooksResponse holds the response to the AddressBook/get call
+// in SearchContacts.
+type SearchContactsBooksResponse struct {
 	// The id of the account to operate on.
 	AccountID jmapc.ID `json:"accountId"`
 
@@ -79,9 +79,9 @@ type SearchContactsAddressBookGetResponse struct {
 	NotFound []jmapc.ID `json:"notFound"`
 }
 
-// SearchContactsContactCardGetResponse holds the response to the
-// ContactCard/get call in SearchContacts.
-type SearchContactsContactCardGetResponse struct {
+// SearchContactsFetchResponse holds the response to the ContactCard/get call
+// in SearchContacts.
+type SearchContactsFetchResponse struct {
 	// The id of the account to operate on.
 	AccountID jmapc.ID `json:"accountId"`
 
@@ -100,13 +100,13 @@ type SearchContactsContactCardGetResponse struct {
 // makes.
 type SearchContactsResult struct {
 	// The response to the AddressBook/get call, made as "books".
-	AddressBookGet SearchContactsAddressBookGetResponse
+	Books SearchContactsBooksResponse
 
 	// The response to the ContactCard/query call, made as "search".
-	ContactCardQuery jmapc.ContactCardQueryResponse
+	Search jmapc.ContactCardQueryResponse
 
 	// The response to the ContactCard/get call, made as "fetch".
-	ContactCardGet SearchContactsContactCardGetResponse
+	Fetch SearchContactsFetchResponse
 }
 
 // SearchContacts lists the address books and searches one of them in the same
@@ -171,13 +171,13 @@ func SearchContacts(ctx context.Context, c *jmapc.Client, p SearchContactsParams
 	}
 
 	var out SearchContactsResult
-	if e := resp.Decode("books", &out.AddressBookGet); e != nil && err == nil {
+	if e := resp.Decode("books", &out.Books); e != nil && err == nil {
 		return nil, e
 	}
-	if e := resp.Decode("search", &out.ContactCardQuery); e != nil && err == nil {
+	if e := resp.Decode("search", &out.Search); e != nil && err == nil {
 		return nil, e
 	}
-	if e := resp.Decode("fetch", &out.ContactCardGet); e != nil && err == nil {
+	if e := resp.Decode("fetch", &out.Fetch); e != nil && err == nil {
 		return nil, e
 	}
 	return &out, err

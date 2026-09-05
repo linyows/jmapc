@@ -60,9 +60,9 @@ type AgendaCalendarEvent struct {
 	Participants map[jmapc.ID]jmapc.EventParticipant `json:"participants"`
 }
 
-// AgendaCalendarEventGetResponse holds the response to the CalendarEvent/get
-// call in Agenda.
-type AgendaCalendarEventGetResponse struct {
+// AgendaFetchResponse holds the response to the CalendarEvent/get call in
+// Agenda.
+type AgendaFetchResponse struct {
 	// The id of the account to operate on.
 	AccountID jmapc.ID `json:"accountId"`
 
@@ -87,7 +87,7 @@ type AgendaCalendarEventGetResponse struct {
 // The query does not say which account to use, so the session's primary
 // account for urn:ietf:params:jmap:calendars is used, which costs a session
 // lookup on first use.
-func Agenda(ctx context.Context, c *jmapc.Client, p AgendaParams) (*AgendaCalendarEventGetResponse, error) {
+func Agenda(ctx context.Context, c *jmapc.Client, p AgendaParams) (*AgendaFetchResponse, error) {
 	session, err := c.Session(ctx)
 	if err != nil {
 		return nil, err
@@ -139,7 +139,7 @@ func Agenda(ctx context.Context, c *jmapc.Client, p AgendaParams) (*AgendaCalend
 		return nil, err
 	}
 
-	var out AgendaCalendarEventGetResponse
+	var out AgendaFetchResponse
 	if e := resp.Decode("fetch", &out); e != nil {
 		if err != nil {
 			return nil, err

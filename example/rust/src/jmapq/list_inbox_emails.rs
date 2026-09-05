@@ -48,11 +48,11 @@ pub struct ListInboxEmailsEmail {
     pub has_attachment: bool,
 }
 
-/// ListInboxEmailsEmailGetResponse holds the response to the Email/get call
-/// in ListInboxEmails.
+/// ListInboxEmailsFetchResponse holds the response to the Email/get call in
+/// ListInboxEmails.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ListInboxEmailsEmailGetResponse {
+pub struct ListInboxEmailsFetchResponse {
     /// The id of the account to operate on.
     pub account_id: Id,
 
@@ -82,7 +82,7 @@ pub struct ListInboxEmailsEmailGetResponse {
 pub async fn list_inbox_emails<T: Transport>(
     client: &Client<T>,
     p: ListInboxEmailsParams,
-) -> Result<ListInboxEmailsEmailGetResponse, Error> {
+) -> Result<ListInboxEmailsFetchResponse, Error> {
     let mail_account_id = client
         .primary_account_id("urn:ietf:params:jmap:mail")
         .await?;
@@ -127,7 +127,7 @@ pub async fn list_inbox_emails<T: Transport>(
         Err(e) => return Err(e),
     };
 
-    let out = match decode::<ListInboxEmailsEmailGetResponse>(&req, &res, "fetch") {
+    let out = match decode::<ListInboxEmailsFetchResponse>(&req, &res, "fetch") {
         Ok(out) => out,
         Err(e) => return Err(failed.map(Error::Method).unwrap_or(e)),
     };

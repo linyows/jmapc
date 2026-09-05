@@ -47,11 +47,11 @@ pub struct MailQuotaQuota {
     pub description: Option<String>,
 }
 
-/// MailQuotaQuotaGetResponse holds the response to the Quota/get call in
+/// MailQuotaFetchResponse holds the response to the Quota/get call in
 /// MailQuota.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MailQuotaQuotaGetResponse {
+pub struct MailQuotaFetchResponse {
     /// The id of the account to operate on.
     pub account_id: Id,
 
@@ -79,9 +79,7 @@ pub struct MailQuotaQuotaGetResponse {
 /// The query does not say which account to use, so the session's primary
 /// account for urn:ietf:params:jmap:quota is used, which costs a session
 /// lookup on first use.
-pub async fn mail_quota<T: Transport>(
-    client: &Client<T>,
-) -> Result<MailQuotaQuotaGetResponse, Error> {
+pub async fn mail_quota<T: Transport>(client: &Client<T>) -> Result<MailQuotaFetchResponse, Error> {
     let quota_account_id = client
         .primary_account_id("urn:ietf:params:jmap:quota")
         .await?;
@@ -120,7 +118,7 @@ pub async fn mail_quota<T: Transport>(
         Err(e) => return Err(e),
     };
 
-    let out = match decode::<MailQuotaQuotaGetResponse>(&req, &res, "fetch") {
+    let out = match decode::<MailQuotaFetchResponse>(&req, &res, "fetch") {
         Ok(out) => out,
         Err(e) => return Err(failed.map(Error::Method).unwrap_or(e)),
     };

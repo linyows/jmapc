@@ -182,7 +182,7 @@ func TestTheResponseIsNotDropped(t *testing.T) {
 	for _, want := range []string{
 		"if (!(e instanceof MethodErrors)) throw e",
 		"res = e.response",
-		`...(answered(res, "thread") ? { threadGet: decode<ThreadGetResponse>(req, res, "thread") } : {}),`,
+		`...(answered(res, "thread") ? { thread: decode<ThreadGetResponse>(req, res, "thread") } : {}),`,
 		"failed.result = out",
 	} {
 		if !strings.Contains(src, want) {

@@ -254,14 +254,14 @@ func TestSyncEmails(t *testing.T) {
 		t.Errorf("updated call reads %v, want /updated", ref["path"])
 	}
 
-	if got.EmailChanges.NewState != "s2" {
-		t.Errorf("newState = %q, want s2", got.EmailChanges.NewState)
+	if got.Changes.NewState != "s2" {
+		t.Errorf("newState = %q, want s2", got.Changes.NewState)
 	}
-	if len(got.EmailGet.List) != 1 || got.EmailGet.List[0].ID != "e3" {
-		t.Errorf("created emails = %+v, want e3", got.EmailGet.List)
+	if len(got.Created.List) != 1 || got.Created.List[0].ID != "e3" {
+		t.Errorf("created emails = %+v, want e3", got.Created.List)
 	}
-	if seen := got.EmailGet2.List[0].Keywords["$seen"]; !seen {
-		t.Errorf("updated email keywords = %v, want $seen", got.EmailGet2.List[0].Keywords)
+	if seen := got.Updated.List[0].Keywords["$seen"]; !seen {
+		t.Errorf("updated email keywords = %v, want $seen", got.Updated.List[0].Keywords)
 	}
 }
 
@@ -475,17 +475,17 @@ func TestSearchContacts(t *testing.T) {
 	}
 
 	// Three calls, three results, all decoded.
-	if len(got.AddressBookGet.List) != 2 {
-		t.Fatalf("got %d address books, want 2", len(got.AddressBookGet.List))
+	if len(got.Books.List) != 2 {
+		t.Fatalf("got %d address books, want 2", len(got.Books.List))
 	}
-	if got.AddressBookGet.List[0].Name != "Personal" || !got.AddressBookGet.List[0].IsDefault {
-		t.Errorf("first address book = %+v", got.AddressBookGet.List[0])
+	if got.Books.List[0].Name != "Personal" || !got.Books.List[0].IsDefault {
+		t.Errorf("first address book = %+v", got.Books.List[0])
 	}
-	if len(got.ContactCardQuery.IDs) != 1 {
-		t.Fatalf("got %d matching cards, want 1", len(got.ContactCardQuery.IDs))
+	if len(got.Search.IDs) != 1 {
+		t.Fatalf("got %d matching cards, want 1", len(got.Search.IDs))
 	}
 
-	card := got.ContactCardGet.List[0]
+	card := got.Fetch.List[0]
 	if card.UID != "urn:uuid:1234" {
 		t.Errorf("uid = %q", card.UID)
 	}
@@ -1003,11 +1003,11 @@ func TestAttachNote(t *testing.T) {
 		t.Errorf("attachment blobId = %v, want the creation id #note", blobID)
 	}
 
-	if got.BlobUpload.Created[jmapq.AttachNoteNote].ID != "blob9" {
-		t.Errorf("uploaded blob = %+v", got.BlobUpload.Created[jmapq.AttachNoteNote])
+	if got.Upload.Created[jmapq.AttachNoteNote].ID != "blob9" {
+		t.Errorf("uploaded blob = %+v", got.Upload.Created[jmapq.AttachNoteNote])
 	}
-	if got.EmailSet.Created[jmapq.AttachNoteDraft].ID != "e9" {
-		t.Errorf("created draft = %+v", got.EmailSet.Created[jmapq.AttachNoteDraft])
+	if got.Draft.Created[jmapq.AttachNoteDraft].ID != "e9" {
+		t.Errorf("created draft = %+v", got.Draft.Created[jmapq.AttachNoteDraft])
 	}
 }
 
@@ -1034,7 +1034,7 @@ func TestWhatUsesBlob(t *testing.T) {
 		t.Fatalf("WhatUsesBlob: %v", err)
 	}
 
-	uses := got.BlobLookup.List[0]
+	uses := got.Uses.List[0]
 	if len(uses.MatchedIDs["Email"]) != 2 {
 		t.Errorf("matchedIds = %v, want two emails", uses.MatchedIDs)
 	}
@@ -1042,7 +1042,7 @@ func TestWhatUsesBlob(t *testing.T) {
 		t.Errorf("matchedIds = %v, want no mailboxes", uses.MatchedIDs)
 	}
 
-	peek := got.BlobGet.List[0]
+	peek := got.Peek.List[0]
 	if peek.DataAsText == nil || *peek.DataAsText != "Nothing was decided." {
 		t.Errorf("data:asText = %v", peek.DataAsText)
 	}
@@ -1563,14 +1563,14 @@ func TestPartialResultComesBackWithTheError(t *testing.T) {
 	if res == nil {
 		t.Fatal("the response was dropped, want what the server did answer")
 	}
-	if res.MailboxSet.NewState != "m2" {
-		t.Errorf("the call that succeeded reads %+v", res.MailboxSet)
+	if res.Make.NewState != "m2" {
+		t.Errorf("the call that succeeded reads %+v", res.Make)
 	}
-	if _, made := res.MailboxSet.Created[jmapq.FileIntoNewMailboxBox]; !made {
+	if _, made := res.Make.Created[jmapq.FileIntoNewMailboxBox]; !made {
 		t.Error("the mailbox the server created is not in the result")
 	}
-	if res.EmailSet.NewState != "" || res.EmailSet.Created != nil {
-		t.Errorf("the call the server would not run is not at its zero value: %+v", res.EmailSet)
+	if res.File.NewState != "" || res.File.Created != nil {
+		t.Errorf("the call the server would not run is not at its zero value: %+v", res.File)
 	}
 }
 

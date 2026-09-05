@@ -36,10 +36,10 @@ pub const ATTACH_NOTE_DRAFT: &str = "draft";
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct AttachNoteResult {
     /// The response to the Blob/upload call, made as "upload".
-    pub blob_upload: BlobUploadResponse,
+    pub upload: BlobUploadResponse,
 
     /// The response to the Email/set call, made as "draft".
-    pub email_set: EmailSetResponse,
+    pub draft: EmailSetResponse,
 }
 
 /// AttachNote writes a note into a blob and attaches it to a draft in the
@@ -120,12 +120,12 @@ pub async fn attach_note<T: Transport>(
 
     let mut out = AttachNoteResult::default();
     match decode::<BlobUploadResponse>(&req, &res, "upload") {
-        Ok(v) => out.blob_upload = v,
+        Ok(v) => out.upload = v,
         Err(e) if failed.is_none() => return Err(e),
         Err(_) => {}
     }
     match decode::<EmailSetResponse>(&req, &res, "draft") {
-        Ok(v) => out.email_set = v,
+        Ok(v) => out.draft = v,
         Err(e) if failed.is_none() => return Err(e),
         Err(_) => {}
     }
@@ -137,16 +137,16 @@ pub async fn attach_note<T: Transport>(
     collect_set_errors(
         "Blob/upload",
         "upload",
-        &[("notCreated", out.blob_upload.not_created.as_ref())],
+        &[("notCreated", out.upload.not_created.as_ref())],
         &mut failures,
     );
     collect_set_errors(
         "Email/set",
         "draft",
         &[
-            ("notCreated", out.email_set.not_created.as_ref()),
-            ("notUpdated", out.email_set.not_updated.as_ref()),
-            ("notDestroyed", out.email_set.not_destroyed.as_ref()),
+            ("notCreated", out.draft.not_created.as_ref()),
+            ("notUpdated", out.draft.not_updated.as_ref()),
+            ("notDestroyed", out.draft.not_destroyed.as_ref()),
         ],
         &mut failures,
     );

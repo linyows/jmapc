@@ -97,9 +97,9 @@ type ReadMessageEmail struct {
 	HeaderDeliveryDateAsDate *jmapc.Date `json:"header:Delivery-Date:asDate"`
 }
 
-// ReadMessageEmailGetResponse holds the response to the Email/get call in
+// ReadMessageFetchResponse holds the response to the Email/get call in
 // ReadMessage.
-type ReadMessageEmailGetResponse struct {
+type ReadMessageFetchResponse struct {
 	// The id of the account to operate on.
 	AccountID jmapc.ID `json:"accountId"`
 
@@ -125,7 +125,7 @@ type ReadMessageEmailGetResponse struct {
 // The query does not say which account to use, so the session's primary
 // account for urn:ietf:params:jmap:mail is used, which costs a session lookup
 // on first use.
-func ReadMessage(ctx context.Context, c *jmapc.Client, p ReadMessageParams) (*ReadMessageEmailGetResponse, error) {
+func ReadMessage(ctx context.Context, c *jmapc.Client, p ReadMessageParams) (*ReadMessageFetchResponse, error) {
 	session, err := c.Session(ctx)
 	if err != nil {
 		return nil, err
@@ -158,7 +158,7 @@ func ReadMessage(ctx context.Context, c *jmapc.Client, p ReadMessageParams) (*Re
 		return nil, err
 	}
 
-	var out ReadMessageEmailGetResponse
+	var out ReadMessageFetchResponse
 	if e := resp.Decode("fetch", &out); e != nil {
 		if err != nil {
 			return nil, err

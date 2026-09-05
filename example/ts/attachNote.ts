@@ -29,10 +29,10 @@ export const attachNoteDraft: Id = "draft"
 // AttachNoteResult holds the response to each method call AttachNote makes.
 export interface AttachNoteResult {
   // The response to the Blob/upload call, made as "upload".
-  blobUpload: BlobUploadResponse
+  upload: BlobUploadResponse
 
   // The response to the Email/set call, made as "draft".
-  emailSet: EmailSetResponse
+  draft: EmailSetResponse
 }
 
 // AttachNote writes a note into a blob and attaches it to a draft in the same
@@ -96,8 +96,8 @@ export async function attachNote(client: Client, p: AttachNoteParams): Promise<A
   }
 
   const out = {
-    ...(answered(res, "upload") ? { blobUpload: decode<BlobUploadResponse>(req, res, "upload") } : {}),
-    ...(answered(res, "draft") ? { emailSet: decode<EmailSetResponse>(req, res, "draft") } : {}),
+    ...(answered(res, "upload") ? { upload: decode<BlobUploadResponse>(req, res, "upload") } : {}),
+    ...(answered(res, "draft") ? { draft: decode<EmailSetResponse>(req, res, "draft") } : {}),
   } as AttachNoteResult
   if (failed) {
     failed.result = out
@@ -106,12 +106,12 @@ export async function attachNote(client: Client, p: AttachNoteParams): Promise<A
 
   const failures: SetFailure[] = []
   collectSetErrors("Blob/upload", "upload", {
-    notCreated: out.blobUpload.notCreated,
+    notCreated: out.upload.notCreated,
   }, failures)
   collectSetErrors("Email/set", "draft", {
-    notCreated: out.emailSet.notCreated,
-    notUpdated: out.emailSet.notUpdated,
-    notDestroyed: out.emailSet.notDestroyed,
+    notCreated: out.draft.notCreated,
+    notUpdated: out.draft.notUpdated,
+    notDestroyed: out.draft.notDestroyed,
   }, failures)
   if (failures.length > 0) throw new SetErrors(failures, out)
 

@@ -38,9 +38,9 @@ export interface SearchEmailsEmail {
   receivedAt: UTCDate
 }
 
-// SearchEmailsEmailGetResponse holds the response to the Email/get call in
+// SearchEmailsFetchResponse holds the response to the Email/get call in
 // SearchEmails.
-export interface SearchEmailsEmailGetResponse {
+export interface SearchEmailsFetchResponse {
   // The id of the account to operate on.
   accountId: Id
 
@@ -59,10 +59,10 @@ export interface SearchEmailsEmailGetResponse {
 // makes.
 export interface SearchEmailsResult {
   // The response to the Email/query call, made as "search".
-  emailQuery: EmailQueryResponse
+  search: EmailQueryResponse
 
   // The response to the Email/get call, made as "fetch".
-  emailGet: SearchEmailsEmailGetResponse
+  fetch: SearchEmailsFetchResponse
 }
 
 // SearchEmails finds emails matching a phrase in one of two mailboxes, and
@@ -127,8 +127,8 @@ export async function searchEmails(client: Client, p: SearchEmailsParams): Promi
   }
 
   const out = {
-    ...(answered(res, "search") ? { emailQuery: decode<EmailQueryResponse>(req, res, "search") } : {}),
-    ...(answered(res, "fetch") ? { emailGet: decode<SearchEmailsEmailGetResponse>(req, res, "fetch") } : {}),
+    ...(answered(res, "search") ? { search: decode<EmailQueryResponse>(req, res, "search") } : {}),
+    ...(answered(res, "fetch") ? { fetch: decode<SearchEmailsFetchResponse>(req, res, "fetch") } : {}),
   } as SearchEmailsResult
   if (failed) {
     failed.result = out
@@ -153,7 +153,7 @@ export async function* searchEmailsPages(client: Client, p: SearchEmailsParams):
   for (;;) {
     p.position = start
     const res = await searchEmails(client, p)
-    const window = res.emailQuery
+    const window = res.search
     if (window.ids.length === 0) {
       return
     }

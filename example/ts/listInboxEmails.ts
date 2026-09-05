@@ -40,9 +40,9 @@ export interface ListInboxEmailsEmail {
   hasAttachment: boolean
 }
 
-// ListInboxEmailsEmailGetResponse holds the response to the Email/get call in
+// ListInboxEmailsFetchResponse holds the response to the Email/get call in
 // ListInboxEmails.
-export interface ListInboxEmailsEmailGetResponse {
+export interface ListInboxEmailsFetchResponse {
   // The id of the account to operate on.
   accountId: Id
 
@@ -67,7 +67,7 @@ export interface ListInboxEmailsEmailGetResponse {
 // The query does not say which account to use, so the session's primary
 // account for urn:ietf:params:jmap:mail is used, which costs a session lookup
 // on first use.
-export async function listInboxEmails(client: Client, p: ListInboxEmailsParams): Promise<ListInboxEmailsEmailGetResponse> {
+export async function listInboxEmails(client: Client, p: ListInboxEmailsParams): Promise<ListInboxEmailsFetchResponse> {
   const mailAccountId = await client.primaryAccountId("urn:ietf:params:jmap:mail")
 
   const req: Request = {
@@ -102,7 +102,7 @@ export async function listInboxEmails(client: Client, p: ListInboxEmailsParams):
   }
 
   if (failed && !answered(res, "fetch")) throw failed
-  const out = decode<ListInboxEmailsEmailGetResponse>(req, res, "fetch")
+  const out = decode<ListInboxEmailsFetchResponse>(req, res, "fetch")
   if (failed) {
     failed.result = out
     throw failed

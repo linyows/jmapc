@@ -117,7 +117,7 @@ func TestSearchEmailsPages(t *testing.T) {
 		if err != nil {
 			t.Fatalf("the walk failed: %v", err)
 		}
-		for _, email := range page.EmailGet.List {
+		for _, email := range page.Fetch.List {
 			subjects = append(subjects, *email.Subject)
 		}
 	}
@@ -152,7 +152,7 @@ func TestSearchEmailsPagesStopsAtAnEmptyWindow(t *testing.T) {
 		if err != nil {
 			t.Fatalf("the walk failed: %v", err)
 		}
-		if len(page.EmailGet.List) == 0 {
+		if len(page.Fetch.List) == 0 {
 			t.Error("a window with nothing in it was handed back")
 		}
 		pages++

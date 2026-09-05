@@ -26,10 +26,10 @@ export const fileIntoNewMailboxBox: Id = "box"
 // FileIntoNewMailbox makes.
 export interface FileIntoNewMailboxResult {
   // The response to the Mailbox/set call, made as "make".
-  mailboxSet: MailboxSetResponse
+  make: MailboxSetResponse
 
   // The response to the Email/set call, made as "file".
-  emailSet: EmailSetResponse
+  file: EmailSetResponse
 
   // The creation ids of everything created by this request, together with
   // those carried in. Pass it to the next request so that a reference to any
@@ -94,8 +94,8 @@ export async function fileIntoNewMailbox(client: Client, p: FileIntoNewMailboxPa
   }
 
   const out = {
-    ...(answered(res, "make") ? { mailboxSet: decode<MailboxSetResponse>(req, res, "make") } : {}),
-    ...(answered(res, "file") ? { emailSet: decode<EmailSetResponse>(req, res, "file") } : {}),
+    ...(answered(res, "make") ? { make: decode<MailboxSetResponse>(req, res, "make") } : {}),
+    ...(answered(res, "file") ? { file: decode<EmailSetResponse>(req, res, "file") } : {}),
     createdIds: res.createdIds ?? {},
   } as FileIntoNewMailboxResult
   if (failed) {
@@ -105,14 +105,14 @@ export async function fileIntoNewMailbox(client: Client, p: FileIntoNewMailboxPa
 
   const failures: SetFailure[] = []
   collectSetErrors("Mailbox/set", "make", {
-    notCreated: out.mailboxSet.notCreated,
-    notUpdated: out.mailboxSet.notUpdated,
-    notDestroyed: out.mailboxSet.notDestroyed,
+    notCreated: out.make.notCreated,
+    notUpdated: out.make.notUpdated,
+    notDestroyed: out.make.notDestroyed,
   }, failures)
   collectSetErrors("Email/set", "file", {
-    notCreated: out.emailSet.notCreated,
-    notUpdated: out.emailSet.notUpdated,
-    notDestroyed: out.emailSet.notDestroyed,
+    notCreated: out.file.notCreated,
+    notUpdated: out.file.notUpdated,
+    notDestroyed: out.file.notDestroyed,
   }, failures)
   if (failures.length > 0) throw new SetErrors(failures, out)
 

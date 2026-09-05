@@ -34,9 +34,9 @@ type WhatUsesBlobBlobData struct {
 	DigestSha256 json.RawMessage `json:"digest:sha-256"`
 }
 
-// WhatUsesBlobBlobGetResponse holds the response to the Blob/get call in
+// WhatUsesBlobPeekResponse holds the response to the Blob/get call in
 // WhatUsesBlob.
-type WhatUsesBlobBlobGetResponse struct {
+type WhatUsesBlobPeekResponse struct {
 	// The id of the account to operate on.
 	AccountID jmapc.ID `json:"accountId"`
 
@@ -51,10 +51,10 @@ type WhatUsesBlobBlobGetResponse struct {
 // makes.
 type WhatUsesBlobResult struct {
 	// The response to the Blob/lookup call, made as "uses".
-	BlobLookup jmapc.BlobLookupResponse
+	Uses jmapc.BlobLookupResponse
 
 	// The response to the Blob/get call, made as "peek".
-	BlobGet WhatUsesBlobBlobGetResponse
+	Peek WhatUsesBlobPeekResponse
 }
 
 // WhatUsesBlob reports which records refer to a blob and reads a little of
@@ -104,10 +104,10 @@ func WhatUsesBlob(ctx context.Context, c *jmapc.Client, p WhatUsesBlobParams) (*
 	}
 
 	var out WhatUsesBlobResult
-	if e := resp.Decode("uses", &out.BlobLookup); e != nil && err == nil {
+	if e := resp.Decode("uses", &out.Uses); e != nil && err == nil {
 		return nil, e
 	}
-	if e := resp.Decode("peek", &out.BlobGet); e != nil && err == nil {
+	if e := resp.Decode("peek", &out.Peek); e != nil && err == nil {
 		return nil, e
 	}
 	return &out, err

@@ -46,11 +46,11 @@ pub struct SearchEmailsEmail {
     pub received_at: UtcDate,
 }
 
-/// SearchEmailsEmailGetResponse holds the response to the Email/get call in
+/// SearchEmailsFetchResponse holds the response to the Email/get call in
 /// SearchEmails.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SearchEmailsEmailGetResponse {
+pub struct SearchEmailsFetchResponse {
     /// The id of the account to operate on.
     pub account_id: Id,
 
@@ -72,10 +72,10 @@ pub struct SearchEmailsEmailGetResponse {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct SearchEmailsResult {
     /// The response to the Email/query call, made as "search".
-    pub email_query: EmailQueryResponse,
+    pub search: EmailQueryResponse,
 
     /// The response to the Email/get call, made as "fetch".
-    pub email_get: SearchEmailsEmailGetResponse,
+    pub fetch: SearchEmailsFetchResponse,
 }
 
 /// SearchEmails finds emails matching a phrase in one of two mailboxes, and
@@ -154,12 +154,12 @@ pub async fn search_emails<T: Transport>(
 
     let mut out = SearchEmailsResult::default();
     match decode::<EmailQueryResponse>(&req, &res, "search") {
-        Ok(v) => out.email_query = v,
+        Ok(v) => out.search = v,
         Err(e) if failed.is_none() => return Err(e),
         Err(_) => {}
     }
-    match decode::<SearchEmailsEmailGetResponse>(&req, &res, "fetch") {
-        Ok(v) => out.email_get = v,
+    match decode::<SearchEmailsFetchResponse>(&req, &res, "fetch") {
+        Ok(v) => out.fetch = v,
         Err(e) if failed.is_none() => return Err(e),
         Err(_) => {}
     }
@@ -204,7 +204,7 @@ impl SearchEmailsPages {
         }
         self.params.position = self.start.clone();
         let res = search_emails(client, self.params.clone()).await?;
-        let window = &res.email_query;
+        let window = &res.search;
         if window.ids.is_empty() {
             self.done = true;
             return Ok(None);

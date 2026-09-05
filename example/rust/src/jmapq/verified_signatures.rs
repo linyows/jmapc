@@ -64,11 +64,11 @@ pub struct VerifiedSignaturesEmail {
     pub smime_verified_at: Option<UtcDate>,
 }
 
-/// VerifiedSignaturesEmailGetResponse holds the response to the Email/get
-/// call in VerifiedSignatures.
+/// VerifiedSignaturesFetchResponse holds the response to the Email/get call
+/// in VerifiedSignatures.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct VerifiedSignaturesEmailGetResponse {
+pub struct VerifiedSignaturesFetchResponse {
     /// The id of the account to operate on.
     pub account_id: Id,
 
@@ -100,7 +100,7 @@ pub struct VerifiedSignaturesEmailGetResponse {
 pub async fn verified_signatures<T: Transport>(
     client: &Client<T>,
     p: VerifiedSignaturesParams,
-) -> Result<VerifiedSignaturesEmailGetResponse, Error> {
+) -> Result<VerifiedSignaturesFetchResponse, Error> {
     let mail_account_id = client
         .primary_account_id("urn:ietf:params:jmap:mail")
         .await?;
@@ -149,7 +149,7 @@ pub async fn verified_signatures<T: Transport>(
         Err(e) => return Err(e),
     };
 
-    let out = match decode::<VerifiedSignaturesEmailGetResponse>(&req, &res, "fetch") {
+    let out = match decode::<VerifiedSignaturesFetchResponse>(&req, &res, "fetch") {
         Ok(out) => out,
         Err(e) => return Err(failed.map(Error::Method).unwrap_or(e)),
     };

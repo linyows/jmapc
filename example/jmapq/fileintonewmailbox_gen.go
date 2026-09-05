@@ -32,10 +32,10 @@ const FileIntoNewMailboxBox jmapc.ID = "box"
 // FileIntoNewMailbox makes.
 type FileIntoNewMailboxResult struct {
 	// The response to the Mailbox/set call, made as "make".
-	MailboxSet jmapc.MailboxSetResponse
+	Make jmapc.MailboxSetResponse
 
 	// The response to the Email/set call, made as "file".
-	EmailSet jmapc.EmailSetResponse
+	File jmapc.EmailSetResponse
 
 	// The creation ids of everything created by this request, together with
 	// those carried in. Pass it to the next request so that a reference to any
@@ -102,24 +102,24 @@ func FileIntoNewMailbox(ctx context.Context, c *jmapc.Client, p FileIntoNewMailb
 	}
 
 	var out FileIntoNewMailboxResult
-	if e := resp.Decode("make", &out.MailboxSet); e != nil && err == nil {
+	if e := resp.Decode("make", &out.Make); e != nil && err == nil {
 		return nil, e
 	}
-	if e := resp.Decode("file", &out.EmailSet); e != nil && err == nil {
+	if e := resp.Decode("file", &out.File); e != nil && err == nil {
 		return nil, e
 	}
 	out.CreatedIDs = resp.CreatedIDs
 
 	var failures jmapc.SetErrors
 	failures.Collect("Mailbox/set", "make", map[string]map[jmapc.ID]jmapc.SetError{
-		"notCreated":   out.MailboxSet.NotCreated,
-		"notUpdated":   out.MailboxSet.NotUpdated,
-		"notDestroyed": out.MailboxSet.NotDestroyed,
+		"notCreated":   out.Make.NotCreated,
+		"notUpdated":   out.Make.NotUpdated,
+		"notDestroyed": out.Make.NotDestroyed,
 	})
 	failures.Collect("Email/set", "file", map[string]map[jmapc.ID]jmapc.SetError{
-		"notCreated":   out.EmailSet.NotCreated,
-		"notUpdated":   out.EmailSet.NotUpdated,
-		"notDestroyed": out.EmailSet.NotDestroyed,
+		"notCreated":   out.File.NotCreated,
+		"notUpdated":   out.File.NotUpdated,
+		"notDestroyed": out.File.NotDestroyed,
 	})
 	if e := failures.Err(); e != nil {
 		return &out, errors.Join(err, e)

@@ -88,8 +88,23 @@ func assignFieldNames(q *Query) {
 	}
 	fields := make(map[string]bool)
 	for _, call := range q.Calls {
-		call.Field = unique(fields, call.Method.TypeNamePrefix())
+		call.Field = unique(fields, callFieldName(call))
 	}
+}
+
+// callFieldName is the name a call goes by in the generated code: the id the
+// query gave it, which is unique within a request by definition and stays put
+// when a call is inserted ahead of it. Numbering by position instead would
+// mean a name that pointed at one call yesterday pointing at another today.
+//
+// A call id is any string RFC 8620 allows, so one that does not make an
+// identifier falls back to the method it invokes, which is what every call
+// went by before.
+func callFieldName(call *Call) string {
+	if name := spec.ExportedName(call.ID); isGoIdentifier(name) {
+		return name
+	}
+	return call.Method.TypeNamePrefix()
 }
 
 // unique returns name, or name with a number appended, so that it has not been

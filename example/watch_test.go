@@ -110,12 +110,12 @@ func TestSyncEmailsWatch(t *testing.T) {
 	var subjects []string
 	err := jmapq.SyncEmailsWatch(ctx, c, jmapq.SyncEmailsParams{SinceState: "s1"},
 		func(ctx context.Context, res *jmapq.SyncEmailsResult) error {
-			for _, email := range res.EmailGet.List {
+			for _, email := range res.Created.List {
 				subjects = append(subjects, *email.Subject)
 			}
 			// The second catch-up is the one the event caused, and there is
 			// nothing further to wait for.
-			if res.EmailChanges.NewState == "s2" {
+			if res.Changes.NewState == "s2" {
 				cancel()
 			}
 			return nil

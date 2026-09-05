@@ -187,11 +187,27 @@ for _, email := range res.List {
 | 関数 | `ListInboxEmails` |
 | パラメータ。クエリが値を開けている場合に生成されます | `ListInboxEmailsParams` |
 | プロパティを絞り込んだレコード | `ListInboxEmailsEmail`。ボディパートを絞り込めば `ListInboxEmailsEmailBodyPart` も生成されます |
-| そのレコードを返す呼び出しのレスポンス | `ListInboxEmailsEmailGetResponse` |
+| そのレコードを返す呼び出しのレスポンス | `ListInboxEmailsFetchResponse`（call id の `fetch` から） |
 | 結果。`_returns` が呼び出しを指定しない場合に生成されます | `ListInboxEmailsResult` |
 | 変更を追う関数。クエリが `_watches` を持つ場合に生成されます | `SyncEmailsWatch` |
 | 答えを最後まで読み通すもの。クエリが `_pages` を持つ場合に生成されます | `SearchEmailsPages` |
 | ファイル | `listinboxemails_gen.go` |
+
+生成されるコードの名前は call id から決まります。
+結果は呼び出しごとに一つのフィールドを持ち、その名前はクエリが付けた id です。絞り込みのある呼び出しのレスポンス型も同じ名前から作られます。
+位置による連番は使いません。call id はリクエスト内で一意だと決まっており、連番にすると呼び出しを前に挿したときに名前が別の呼び出しを指してしまうからです。
+
+```json
+["Email/query", {...}, "search"],
+["Email/get",   {...}, "fetch"]
+```
+
+```go
+res.Search.IDs      // Email/query のレスポンス
+res.Fetch.List      // Email/get のレスポンス
+```
+
+RFC 8620 は call id に任意の文字列を許しているので、識別子にならない call id の場合は、呼び出すメソッド名にフォールバックします。
 
 絞り込みのない呼び出しは、クエリごとの型ではなく共有の型で返ります。
 `SendEmail` の戻り値が `*jmapc.EmailSubmissionSetResponse` なのはそのためです。

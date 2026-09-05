@@ -120,11 +120,11 @@ pub struct ReadMessageEmail {
     pub header_delivery_date_as_date: Option<Date>,
 }
 
-/// ReadMessageEmailGetResponse holds the response to the Email/get call in
+/// ReadMessageFetchResponse holds the response to the Email/get call in
 /// ReadMessage.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ReadMessageEmailGetResponse {
+pub struct ReadMessageFetchResponse {
     /// The id of the account to operate on.
     pub account_id: Id,
 
@@ -155,7 +155,7 @@ pub struct ReadMessageEmailGetResponse {
 pub async fn read_message<T: Transport>(
     client: &Client<T>,
     p: ReadMessageParams,
-) -> Result<ReadMessageEmailGetResponse, Error> {
+) -> Result<ReadMessageFetchResponse, Error> {
     let mail_account_id = client
         .primary_account_id("urn:ietf:params:jmap:mail")
         .await?;
@@ -192,7 +192,7 @@ pub async fn read_message<T: Transport>(
         Err(e) => return Err(e),
     };
 
-    let out = match decode::<ReadMessageEmailGetResponse>(&req, &res, "fetch") {
+    let out = match decode::<ReadMessageFetchResponse>(&req, &res, "fetch") {
         Ok(out) => out,
         Err(e) => return Err(failed.map(Error::Method).unwrap_or(e)),
     };

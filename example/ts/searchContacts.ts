@@ -57,9 +57,9 @@ export interface SearchContactsContactCard {
   organizations: { [key: Id]: ContactOrganization }
 }
 
-// SearchContactsAddressBookGetResponse holds the response to the
-// AddressBook/get call in SearchContacts.
-export interface SearchContactsAddressBookGetResponse {
+// SearchContactsBooksResponse holds the response to the AddressBook/get call
+// in SearchContacts.
+export interface SearchContactsBooksResponse {
   // The id of the account to operate on.
   accountId: Id
 
@@ -74,9 +74,9 @@ export interface SearchContactsAddressBookGetResponse {
   notFound: Id[]
 }
 
-// SearchContactsContactCardGetResponse holds the response to the
-// ContactCard/get call in SearchContacts.
-export interface SearchContactsContactCardGetResponse {
+// SearchContactsFetchResponse holds the response to the ContactCard/get call
+// in SearchContacts.
+export interface SearchContactsFetchResponse {
   // The id of the account to operate on.
   accountId: Id
 
@@ -95,13 +95,13 @@ export interface SearchContactsContactCardGetResponse {
 // makes.
 export interface SearchContactsResult {
   // The response to the AddressBook/get call, made as "books".
-  addressBookGet: SearchContactsAddressBookGetResponse
+  books: SearchContactsBooksResponse
 
   // The response to the ContactCard/query call, made as "search".
-  contactCardQuery: ContactCardQueryResponse
+  search: ContactCardQueryResponse
 
   // The response to the ContactCard/get call, made as "fetch".
-  contactCardGet: SearchContactsContactCardGetResponse
+  fetch: SearchContactsFetchResponse
 }
 
 // SearchContacts lists the address books and searches one of them in the same
@@ -164,9 +164,9 @@ export async function searchContacts(client: Client, p: SearchContactsParams): P
   }
 
   const out = {
-    ...(answered(res, "books") ? { addressBookGet: decode<SearchContactsAddressBookGetResponse>(req, res, "books") } : {}),
-    ...(answered(res, "search") ? { contactCardQuery: decode<ContactCardQueryResponse>(req, res, "search") } : {}),
-    ...(answered(res, "fetch") ? { contactCardGet: decode<SearchContactsContactCardGetResponse>(req, res, "fetch") } : {}),
+    ...(answered(res, "books") ? { books: decode<SearchContactsBooksResponse>(req, res, "books") } : {}),
+    ...(answered(res, "search") ? { search: decode<ContactCardQueryResponse>(req, res, "search") } : {}),
+    ...(answered(res, "fetch") ? { fetch: decode<SearchContactsFetchResponse>(req, res, "fetch") } : {}),
   } as SearchContactsResult
   if (failed) {
     failed.result = out
