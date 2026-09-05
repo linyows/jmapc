@@ -477,6 +477,17 @@ queries/BadQuery.jmap.json: methodCalls[1].arguments.#ids.name: the referenced c
 	call "c0" invokes Email/query
 ```
 
+Two queries that differ only in what they call their parameters and their
+calls are one query written twice, and jmapc says so rather than failing:
+
+```
+jmapc: ListArchiveEmails, ListInboxEmails are the same query under different names; one of them would do for all of them
+```
+
+Both are generated all the same, since a project may want two names for one
+request. It is worth knowing about because each name brings a set of generated
+types with it.
+
 `jmapc check` runs the checks without writing anything.
 
 ### What only the server knows

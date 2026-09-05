@@ -446,6 +446,16 @@ queries/BadQuery.jmap.json: methodCalls[1].arguments.#ids.name: the referenced c
 	call "c0" invokes Email/query
 ```
 
+パラメータや call id の名前だけが違う二つのクエリは、同じクエリを二度書いたものです。
+jmapc はこれを失敗ではなく通知として伝えます。
+
+```
+jmapc: ListArchiveEmails, ListInboxEmails are the same query under different names; one of them would do for all of them
+```
+
+両方とも生成はされます。一つのリクエストに二つの名前を付けたいこともあるからです。
+知らせるのは、名前の数だけ生成される型が増えるためです。
+
 `jmapc check` は、何も書き出さずに検証だけを実行します。
 
 ### サーバだけが知っていること
