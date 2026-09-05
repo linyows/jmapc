@@ -37,8 +37,9 @@ type SendReadReceiptParams struct {
 // It makes one MDN/send call in a single request, so that the server is asked
 // once. It returns the response to the MDN/send call.
 //
-// The query does not say which account to use, so the primary account of the
-// session is used, which costs a session lookup on first use.
+// The query does not say which account to use, so the session's primary
+// account for urn:ietf:params:jmap:mdn is used, which costs a session lookup
+// on first use.
 func SendReadReceipt(ctx context.Context, c *jmapc.Client, p SendReadReceiptParams) (*jmapc.MDNSendResponse, error) {
 	session, err := c.Session(ctx)
 	if err != nil {

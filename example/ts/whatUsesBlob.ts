@@ -58,8 +58,9 @@ export interface WhatUsesBlobResult {
 // It makes Blob/lookup and Blob/get calls in a single request, so that 2
 // dependent calls cost one round trip.
 //
-// The query does not say which account to use, so the primary account of the
-// session is used, which costs a session lookup on first use.
+// The query does not say which account to use, so the session's primary
+// account for urn:ietf:params:jmap:blob is used, which costs a session lookup
+// on first use.
 export async function whatUsesBlob(client: Client, p: WhatUsesBlobParams): Promise<WhatUsesBlobResult> {
   const blobAccountId = await client.primaryAccountId("urn:ietf:params:jmap:blob")
 

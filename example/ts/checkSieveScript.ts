@@ -18,8 +18,10 @@ export interface CheckSieveScriptParams {
 // that 2 dependent calls cost one round trip. It returns the response to the
 // SieveScript/validate call.
 //
-// The query does not say which account to use, so the primary account of the
-// session is used, which costs a session lookup on first use.
+// The query does not say which account to use, so the session's primary
+// account is used for each of urn:ietf:params:jmap:blob and
+// urn:ietf:params:jmap:sieve, which costs a session lookup on first use. They
+// need not be the same account.
 export async function checkSieveScript(client: Client, p: CheckSieveScriptParams): Promise<SieveScriptValidateResponse> {
   const blobAccountId = await client.primaryAccountId("urn:ietf:params:jmap:blob")
   const sieveAccountId = await client.primaryAccountId("urn:ietf:params:jmap:sieve")

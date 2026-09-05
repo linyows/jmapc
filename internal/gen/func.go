@@ -157,7 +157,7 @@ func (g *QueryGenerator) writeFuncDoc(buf *bytes.Buffer, p *plan) {
 		doc += fmt.Sprintf(" It returns the response to the %s call.", p.q.Returns.Method.Name)
 	}
 	if len(p.sessionCapabilities) > 0 {
-		doc += "\n\nThe query does not say which account to use, so the primary account of the session is used, which costs a session lookup on first use."
+		doc += "\n\n" + shared.PrimaryAccountPhrase(p.sessionCapabilities)
 	}
 	if p.q.CreatedIDs {
 		doc += "\n\nIt takes the creation ids of an earlier request and reports its own, so that a reference to something created there still resolves here. " +

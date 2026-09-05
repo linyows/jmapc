@@ -72,3 +72,29 @@ func DynamicPropertyDoc(name string) string {
 	}
 	return "The " + name + " property, whose meaning the server decides."
 }
+
+// PrimaryAccountPhrase describes the account a query is sent to where the
+// query does not say. A session has a primary account for each capability
+// rather than one for everything, so the capability is named: a query reading
+// identities and one creating a mailbox may be talking to two different
+// accounts, and the only place that shows is here.
+func PrimaryAccountPhrase(capabilities []string) string {
+	const cost = ", which costs a session lookup on first use."
+	switch len(capabilities) {
+	case 0:
+		return ""
+	case 1:
+		return "The query does not say which account to use, so the session's primary account for " +
+			capabilities[0] + " is used" + cost
+	}
+	return "The query does not say which account to use, so the session's primary account is used for each of " +
+		joinURIs(capabilities) + cost + " They need not be the same account."
+}
+
+// joinURIs renders a list of capability URIs for prose.
+func joinURIs(uris []string) string {
+	if len(uris) == 2 {
+		return uris[0] + " and " + uris[1]
+	}
+	return strings.Join(uris[:len(uris)-1], ", ") + ", and " + uris[len(uris)-1]
+}

@@ -45,8 +45,10 @@ type SendEmailParams struct {
 // that 2 dependent calls cost one round trip. It returns the response to the
 // EmailSubmission/set call.
 //
-// The query does not say which account to use, so the primary account of the
-// session is used, which costs a session lookup on first use.
+// The query does not say which account to use, so the session's primary
+// account is used for each of urn:ietf:params:jmap:mail and
+// urn:ietf:params:jmap:submission, which costs a session lookup on first use.
+// They need not be the same account.
 func SendEmail(ctx context.Context, c *jmapc.Client, p SendEmailParams) (*jmapc.EmailSubmissionSetResponse, error) {
 	session, err := c.Session(ctx)
 	if err != nil {

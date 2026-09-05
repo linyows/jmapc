@@ -24,8 +24,9 @@ pub struct RecentlySharedParams {
 /// single request, so that 2 dependent calls cost one round trip. It returns
 /// the response to the ShareNotification/get call.
 ///
-/// The query does not say which account to use, so the primary account of the
-/// session is used, which costs a session lookup on first use.
+/// The query does not say which account to use, so the session's primary
+/// account for urn:ietf:params:jmap:principals is used, which costs a session
+/// lookup on first use.
 pub async fn recently_shared<T: Transport>(
     client: &Client<T>,
     p: RecentlySharedParams,

@@ -78,8 +78,9 @@ export interface AgendaCalendarEventGetResponse {
 // request, so that 2 dependent calls cost one round trip. It returns the
 // response to the CalendarEvent/get call.
 //
-// The query does not say which account to use, so the primary account of the
-// session is used, which costs a session lookup on first use.
+// The query does not say which account to use, so the session's primary
+// account for urn:ietf:params:jmap:calendars is used, which costs a session
+// lookup on first use.
 export async function agenda(client: Client, p: AgendaParams): Promise<AgendaCalendarEventGetResponse> {
   const calendarsAccountId = await client.primaryAccountId("urn:ietf:params:jmap:calendars")
 

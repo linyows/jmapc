@@ -84,8 +84,9 @@ pub struct SearchEmailsResult {
 /// It makes Email/query and Email/get calls in a single request, so that 2
 /// dependent calls cost one round trip.
 ///
-/// The query does not say which account to use, so the primary account of the
-/// session is used, which costs a session lookup on first use.
+/// The query does not say which account to use, so the session's primary
+/// account for urn:ietf:params:jmap:mail is used, which costs a session
+/// lookup on first use.
 pub async fn search_emails<T: Transport>(
     client: &Client<T>,
     p: SearchEmailsParams,

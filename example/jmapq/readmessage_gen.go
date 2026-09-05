@@ -122,8 +122,9 @@ type ReadMessageEmailGetResponse struct {
 // It makes one Email/get call in a single request, so that the server is
 // asked once. It returns the response to the Email/get call.
 //
-// The query does not say which account to use, so the primary account of the
-// session is used, which costs a session lookup on first use.
+// The query does not say which account to use, so the session's primary
+// account for urn:ietf:params:jmap:mail is used, which costs a session lookup
+// on first use.
 func ReadMessage(ctx context.Context, c *jmapc.Client, p ReadMessageParams) (*ReadMessageEmailGetResponse, error) {
 	session, err := c.Session(ctx)
 	if err != nil {

@@ -134,3 +134,46 @@ func TestRecordPropertiesLeavesItsInputAlone(t *testing.T) {
 		t.Errorf("the input became %v", props)
 	}
 }
+
+// TestPrimaryAccountPhrase checks what a generated function says about the
+// account it is sent to. A session has a primary account for each capability
+// rather than one for everything, so the capability is named: two queries in
+// one package may be talking to two different accounts, and this is the only
+// place that shows.
+func TestPrimaryAccountPhrase(t *testing.T) {
+	tests := []struct {
+		name         string
+		capabilities []string
+		want         string
+	}{{
+		name:         "none",
+		capabilities: nil,
+		want:         "",
+	}, {
+		name:         "one",
+		capabilities: []string{"urn:ietf:params:jmap:mail"},
+		want: "The query does not say which account to use, so the session's primary account for " +
+			"urn:ietf:params:jmap:mail is used, which costs a session lookup on first use.",
+	}, {
+		name:         "two",
+		capabilities: []string{"urn:ietf:params:jmap:blob", "urn:ietf:params:jmap:mail"},
+		want: "The query does not say which account to use, so the session's primary account is used for each of " +
+			"urn:ietf:params:jmap:blob and urn:ietf:params:jmap:mail, which costs a session lookup on first use. " +
+			"They need not be the same account.",
+	}, {
+		name: "three",
+		capabilities: []string{
+			"urn:ietf:params:jmap:blob", "urn:ietf:params:jmap:mail", "urn:ietf:params:jmap:submission",
+		},
+		want: "The query does not say which account to use, so the session's primary account is used for each of " +
+			"urn:ietf:params:jmap:blob, urn:ietf:params:jmap:mail, and urn:ietf:params:jmap:submission, " +
+			"which costs a session lookup on first use. They need not be the same account.",
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := PrimaryAccountPhrase(tt.capabilities); got != tt.want {
+				t.Errorf("PrimaryAccountPhrase() =\n%q\nwant\n%q", got, tt.want)
+			}
+		})
+	}
+}
