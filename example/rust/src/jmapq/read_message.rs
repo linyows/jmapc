@@ -20,7 +20,7 @@ pub struct ReadMessageParams {
 
 /// ReadMessageEmailBodyPart holds the properties of EmailBodyPart that the
 /// Email/get call in ReadMessage asks for.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadMessageEmailBodyPart {
     /// Identifies the part's content within the bodyValues map, or null if
@@ -62,7 +62,7 @@ pub struct ReadMessageEmailBodyPart {
 
 /// ReadMessageEmail holds the properties of Email that the Email/get call in
 /// ReadMessage asks for.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadMessageEmail {
     /// The id of the email.
@@ -122,7 +122,7 @@ pub struct ReadMessageEmail {
 
 /// ReadMessageEmailGetResponse holds the response to the Email/get call in
 /// ReadMessage.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadMessageEmailGetResponse {
     /// The id of the account to operate on.
@@ -185,7 +185,19 @@ pub async fn read_message<T: Transport>(
         created_ids: None,
     };
 
-    let res = client.request(&req).await?;
+    let (res, failed) = match client.request(&req).await {
+        Ok(res) => (res, None),
+        Err(Error::Method(errs)) => (errs.response.clone(), Some(errs)),
+        Err(e) => return Err(e),
+    };
 
-    decode::<ReadMessageEmailGetResponse>(&req, &res, "fetch")
+    let out = match decode::<ReadMessageEmailGetResponse>(&req, &res, "fetch") {
+        Ok(out) => out,
+        Err(e) => return Err(failed.map(Error::Method).unwrap_or(e)),
+    };
+    if let Some(errs) = failed {
+        return Err(Error::Method(errs.with_result(out)));
+    }
+
+    Ok(out)
 }

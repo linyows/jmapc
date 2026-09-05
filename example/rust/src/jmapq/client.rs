@@ -213,10 +213,43 @@ impl fmt::Display for MethodError {
 
 /// The method-level failures in one response, together with the response
 /// itself, since the calls that did run still have results.
-#[derive(Debug, Clone, PartialEq)]
 pub struct MethodErrors {
     pub errors: Vec<MethodError>,
     pub response: Response,
+    result: Option<Box<dyn Any + Send + Sync>>,
+}
+
+impl MethodErrors {
+    pub fn new(errors: Vec<MethodError>, response: Response) -> Self {
+        Self {
+            errors,
+            response,
+            result: None,
+        }
+    }
+
+    /// Carry what the calls the server did run answered with, which a
+    /// generated query reads out of the response before it hands the error on.
+    pub fn with_result(mut self, result: impl Any + Send + Sync) -> Self {
+        self.result = Some(Box::new(result));
+        self
+    }
+
+    /// What the calls that ran answered with. The type is the one the
+    /// generated function would have returned, and a call the server would not
+    /// run is at its default in it.
+    pub fn result<T: Any>(&self) -> Option<&T> {
+        self.result.as_ref()?.downcast_ref::<T>()
+    }
+}
+
+impl fmt::Debug for MethodErrors {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MethodErrors")
+            .field("errors", &self.errors)
+            .field("response", &self.response)
+            .finish_non_exhaustive()
+    }
 }
 
 impl fmt::Display for MethodErrors {
@@ -506,7 +539,7 @@ impl<T: Transport> Client<T> {
         let response: Response = serde_json::from_slice(&res.body).map_err(Error::Decode)?;
         let errors = method_errors(req, &response);
         if !errors.is_empty() {
-            return Err(Error::Method(MethodErrors { errors, response }));
+            return Err(Error::Method(MethodErrors::new(errors, response)));
         }
         Ok(response)
     }
@@ -650,14 +683,14 @@ pub fn decode<T: serde::de::DeserializeOwned>(
             continue;
         }
         if name == "error" {
-            return Err(Error::Method(MethodErrors {
-                errors: vec![MethodError::new(
+            return Err(Error::Method(MethodErrors::new(
+                vec![MethodError::new(
                     call_id,
                     &requested_method(req, call_id),
                     args.clone(),
                 )],
-                response: res.clone(),
-            }));
+                res.clone(),
+            )));
         }
         return serde_json::from_value(args.clone()).map_err(Error::Decode);
     }

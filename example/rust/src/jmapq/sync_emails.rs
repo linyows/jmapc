@@ -19,7 +19,7 @@ pub struct SyncEmailsParams {
 
 /// SyncEmailsEmail holds the properties of Email that the Email/get call in
 /// SyncEmails asks for.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncEmailsEmail {
     /// The id of the email.
@@ -48,7 +48,7 @@ pub struct SyncEmailsEmail {
 
 /// SyncEmailsEmail2 holds the properties of Email that the Email/get call in
 /// SyncEmails asks for.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncEmailsEmail2 {
     /// The id of the email.
@@ -66,7 +66,7 @@ pub struct SyncEmailsEmail2 {
 
 /// SyncEmailsEmailGetResponse holds the response to the Email/get call in
 /// SyncEmails.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncEmailsEmailGetResponse {
     /// The id of the account to operate on.
@@ -87,7 +87,7 @@ pub struct SyncEmailsEmailGetResponse {
 
 /// SyncEmailsEmailGet2Response holds the response to the Email/get call in
 /// SyncEmails.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncEmailsEmailGet2Response {
     /// The id of the account to operate on.
@@ -107,7 +107,7 @@ pub struct SyncEmailsEmailGet2Response {
 }
 
 /// SyncEmailsResult holds the response to each method call SyncEmails makes.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct SyncEmailsResult {
     /// The response to the Email/changes call, made as "changes".
     pub email_changes: EmailChangesResponse,
@@ -172,13 +172,31 @@ pub async fn sync_emails<T: Transport>(
         created_ids: None,
     };
 
-    let res = client.request(&req).await?;
-
-    let out = SyncEmailsResult {
-        email_changes: decode::<EmailChangesResponse>(&req, &res, "changes")?,
-        email_get: decode::<SyncEmailsEmailGetResponse>(&req, &res, "created")?,
-        email_get_2: decode::<SyncEmailsEmailGet2Response>(&req, &res, "updated")?,
+    let (res, failed) = match client.request(&req).await {
+        Ok(res) => (res, None),
+        Err(Error::Method(errs)) => (errs.response.clone(), Some(errs)),
+        Err(e) => return Err(e),
     };
+
+    let mut out = SyncEmailsResult::default();
+    match decode::<EmailChangesResponse>(&req, &res, "changes") {
+        Ok(v) => out.email_changes = v,
+        Err(e) if failed.is_none() => return Err(e),
+        Err(_) => {}
+    }
+    match decode::<SyncEmailsEmailGetResponse>(&req, &res, "created") {
+        Ok(v) => out.email_get = v,
+        Err(e) if failed.is_none() => return Err(e),
+        Err(_) => {}
+    }
+    match decode::<SyncEmailsEmailGet2Response>(&req, &res, "updated") {
+        Ok(v) => out.email_get_2 = v,
+        Err(e) if failed.is_none() => return Err(e),
+        Err(_) => {}
+    }
+    if let Some(errs) = failed {
+        return Err(Error::Method(errs.with_result(out)));
+    }
 
     Ok(out)
 }

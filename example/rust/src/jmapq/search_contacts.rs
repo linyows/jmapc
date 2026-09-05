@@ -28,7 +28,7 @@ pub struct SearchContactsParams {
 
 /// SearchContactsAddressBook holds the properties of AddressBook that the
 /// AddressBook/get call in SearchContacts asks for.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchContactsAddressBook {
     /// The id of the address book.
@@ -45,7 +45,7 @@ pub struct SearchContactsAddressBook {
 
 /// SearchContactsContactCard holds the properties of ContactCard that the
 /// ContactCard/get call in SearchContacts asks for.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchContactsContactCard {
     /// The id of the card.
@@ -76,7 +76,7 @@ pub struct SearchContactsContactCard {
 
 /// SearchContactsAddressBookGetResponse holds the response to the
 /// AddressBook/get call in SearchContacts.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchContactsAddressBookGetResponse {
     /// The id of the account to operate on.
@@ -97,7 +97,7 @@ pub struct SearchContactsAddressBookGetResponse {
 
 /// SearchContactsContactCardGetResponse holds the response to the
 /// ContactCard/get call in SearchContacts.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchContactsContactCardGetResponse {
     /// The id of the account to operate on.
@@ -118,7 +118,7 @@ pub struct SearchContactsContactCardGetResponse {
 
 /// SearchContactsResult holds the response to each method call SearchContacts
 /// makes.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct SearchContactsResult {
     /// The response to the AddressBook/get call, made as "books".
     pub address_book_get: SearchContactsAddressBookGetResponse,
@@ -200,13 +200,31 @@ pub async fn search_contacts<T: Transport>(
         created_ids: None,
     };
 
-    let res = client.request(&req).await?;
-
-    let out = SearchContactsResult {
-        address_book_get: decode::<SearchContactsAddressBookGetResponse>(&req, &res, "books")?,
-        contact_card_query: decode::<ContactCardQueryResponse>(&req, &res, "search")?,
-        contact_card_get: decode::<SearchContactsContactCardGetResponse>(&req, &res, "fetch")?,
+    let (res, failed) = match client.request(&req).await {
+        Ok(res) => (res, None),
+        Err(Error::Method(errs)) => (errs.response.clone(), Some(errs)),
+        Err(e) => return Err(e),
     };
+
+    let mut out = SearchContactsResult::default();
+    match decode::<SearchContactsAddressBookGetResponse>(&req, &res, "books") {
+        Ok(v) => out.address_book_get = v,
+        Err(e) if failed.is_none() => return Err(e),
+        Err(_) => {}
+    }
+    match decode::<ContactCardQueryResponse>(&req, &res, "search") {
+        Ok(v) => out.contact_card_query = v,
+        Err(e) if failed.is_none() => return Err(e),
+        Err(_) => {}
+    }
+    match decode::<SearchContactsContactCardGetResponse>(&req, &res, "fetch") {
+        Ok(v) => out.contact_card_get = v,
+        Err(e) if failed.is_none() => return Err(e),
+        Err(_) => {}
+    }
+    if let Some(errs) = failed {
+        return Err(Error::Method(errs.with_result(out)));
+    }
 
     Ok(out)
 }

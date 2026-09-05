@@ -101,9 +101,19 @@ pub async fn create_event<T: Transport>(
         created_ids: None,
     };
 
-    let res = client.request(&req).await?;
+    let (res, failed) = match client.request(&req).await {
+        Ok(res) => (res, None),
+        Err(Error::Method(errs)) => (errs.response.clone(), Some(errs)),
+        Err(e) => return Err(e),
+    };
 
-    let out = decode::<CalendarEventSetResponse>(&req, &res, "create")?;
+    let out = match decode::<CalendarEventSetResponse>(&req, &res, "create") {
+        Ok(out) => out,
+        Err(e) => return Err(failed.map(Error::Method).unwrap_or(e)),
+    };
+    if let Some(errs) = failed {
+        return Err(Error::Method(errs.with_result(out)));
+    }
 
     let mut failures: Vec<SetFailure> = Vec::new();
     collect_set_errors(

@@ -304,7 +304,7 @@ func (g *QueryGenerator) writeNestedTypes(buf *bytes.Buffer, p *plan) {
 		}
 		writeDoc(buf, "", fmt.Sprintf("%s holds the properties of %s that the %s call in %s asks for.",
 			info.nestedType, nested.Name, c.Method.Name, p.q.Name))
-		writeDerive(buf, false)
+		writeDerive(buf)
 		buf.WriteString("#[serde(rename_all = \"camelCase\")]\n")
 		fmt.Fprintf(buf, "pub struct %s {\n", info.nestedType)
 		for i, name := range c.NestedProperties {
@@ -330,7 +330,7 @@ func (g *QueryGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 		}
 		writeDoc(buf, "", fmt.Sprintf("%s holds the properties of %s that the %s call in %s asks for.",
 			info.recordType, dataType.Name, c.Method.Name, p.q.Name))
-		writeDerive(buf, false)
+		writeDerive(buf)
 		buf.WriteString("#[serde(rename_all = \"camelCase\")]\n")
 		fmt.Fprintf(buf, "pub struct %s {\n", info.recordType)
 		properties := c.Properties
@@ -409,7 +409,7 @@ func (g *QueryGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 		}
 		writeDoc(buf, "", fmt.Sprintf("%s holds the response to the %s call in %s.",
 			info.responseType, c.Method.Name, p.q.Name))
-		writeDerive(buf, false)
+		writeDerive(buf)
 		buf.WriteString("#[serde(rename_all = \"camelCase\")]\n")
 		fmt.Fprintf(buf, "pub struct %s {\n", info.responseType)
 		for i, field := range respType.Fields {
@@ -436,7 +436,9 @@ func (g *QueryGenerator) writeResultType(buf *bytes.Buffer, p *plan) {
 		return
 	}
 	writeDoc(buf, "", fmt.Sprintf("%s holds the response to each method call %s makes.", p.resultType, p.q.Name))
-	buf.WriteString("#[derive(Debug, Clone, PartialEq)]\n")
+	// Default is what a call the server would not run leaves behind, so that
+	// the calls it did answer are not lost with it.
+	buf.WriteString("#[derive(Debug, Clone, PartialEq, Default)]\n")
 	fmt.Fprintf(buf, "pub struct %s {\n", p.resultType)
 	for i, c := range p.q.Calls {
 		if i > 0 {

@@ -20,7 +20,7 @@ pub struct FindPeopleParams {
 
 /// FindPeoplePrincipal holds the properties of Principal that the
 /// Principal/get call in FindPeople asks for.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FindPeoplePrincipal {
     /// The id of the principal.
@@ -45,7 +45,7 @@ pub struct FindPeoplePrincipal {
 
 /// FindPeoplePrincipalGetResponse holds the response to the Principal/get
 /// call in FindPeople.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FindPeoplePrincipalGetResponse {
     /// The id of the account to operate on.
@@ -124,7 +124,19 @@ pub async fn find_people<T: Transport>(
         created_ids: None,
     };
 
-    let res = client.request(&req).await?;
+    let (res, failed) = match client.request(&req).await {
+        Ok(res) => (res, None),
+        Err(Error::Method(errs)) => (errs.response.clone(), Some(errs)),
+        Err(e) => return Err(e),
+    };
 
-    decode::<FindPeoplePrincipalGetResponse>(&req, &res, "fetch")
+    let out = match decode::<FindPeoplePrincipalGetResponse>(&req, &res, "fetch") {
+        Ok(out) => out,
+        Err(e) => return Err(failed.map(Error::Method).unwrap_or(e)),
+    };
+    if let Some(errs) = failed {
+        return Err(Error::Method(errs.with_result(out)));
+    }
+
+    Ok(out)
 }
