@@ -677,6 +677,25 @@ The exception is a query naming one call in `_returns`: that call is the whole
 of the answer, so if it is the one that failed, there is nothing to hand back
 and the result is nil.
 
+TypeScript throws rather than returning, so what it read rides on the error.
+`MethodErrors` carries the response it came from, and `result` holds as much of
+what the query returns as the server answered. Read it as a `Partial`, since a
+call the server would not run is not in it at all:
+
+```ts
+try {
+  await destroyThread(client, params)
+} catch (e) {
+  if (e instanceof MethodErrors) {
+    const partial = e.result as Partial<DestroyThreadResult>
+    if (partial.threadGet?.notFound?.length) {
+      throw new Error(`no such thread: ${partial.threadGet.notFound[0]}`)
+    }
+  }
+  throw e
+}
+```
+
 There is a third level, and it is the one that gets missed. A `/set` answers
 **200 with no error in it** and lists the records it would not act on:
 
