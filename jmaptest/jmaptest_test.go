@@ -236,3 +236,49 @@ func TestPushReachesAWatcher(t *testing.T) {
 		t.Errorf("the event said %q (present %v), want s2", state, ok)
 	}
 }
+
+// TestPathsOfYourOwnBesideThePathsItServes covers a client half converted to
+// jmapc: the generated half reaches the server through Client, and the half
+// still written by hand reaches paths of its own. Both have to answer in one
+// test, which is what BaseURL and Mux are for.
+func TestPathsOfYourOwnBesideThePathsItServes(t *testing.T) {
+	srv := New(t)
+	srv.Reply("Email/query", jmapc.EmailQueryResponse{
+		AccountID: AccountID,
+		IDs:       []jmapc.ID{"m1"},
+	})
+
+	// Where the half that has not been converted yet looks for the API,
+	// wherever the project happened to put it.
+	var oldCalls int
+	srv.Mux().HandleFunc("/jmap", func(w http.ResponseWriter, r *http.Request) {
+		oldCalls++
+		fmt.Fprint(w, `{"sessionState":"old","methodResponses":[["Email/get",{},"r1"]]}`)
+	})
+
+	// The generated half.
+	if _, err := send(t, srv.Client(), jmapc.Invocation{Name: "Email/query", CallID: "c0"}); err != nil {
+		t.Fatalf("the generated half: %v", err)
+	}
+
+	// The half still written by hand, which knows nothing of jmapc and is
+	// pointed at the same server by BaseURL.
+	resp, err := http.Post(srv.BaseURL()+"/jmap", "application/json", strings.NewReader(`{}`))
+	if err != nil {
+		t.Fatalf("the half not converted yet: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("the path of the test's own answered %s", resp.Status)
+	}
+
+	if oldCalls != 1 {
+		t.Errorf("the path of the test's own answered %d requests, want 1", oldCalls)
+	}
+	if got := srv.Requests(); got != 1 {
+		t.Errorf("jmaptest answered %d requests, want the 1 the generated half made", got)
+	}
+	if srv.Call("Email/query") == nil {
+		t.Error("jmaptest did not record the call the generated half made")
+	}
+}

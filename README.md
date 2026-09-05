@@ -726,6 +726,23 @@ What it does not do is store anything. It is a server to test a client against
 rather than an implementation of JMAP: nothing a `/set` creates comes back from
 a later `/get` unless the test says it does.
 
+A client is rarely converted all at once, and a half-converted one has two
+halves to answer in the same test: the generated half, which reaches the
+server through `srv.Client()`, and the half still written by hand, which posts
+to paths of its own. `srv.Mux()` is where those paths go, and `srv.BaseURL()`
+is what the other half is pointed at:
+
+```go
+srv := jmaptest.New(t)
+srv.Mux().HandleFunc("/jmap", myOldAPIHandler)
+srv.Mux().HandleFunc("/jmap/session", myOldSessionHandler)
+
+old := myOldClient(srv.BaseURL())
+```
+
+So jmaptest is worth adopting on the first method converted rather than the
+last.
+
 ## Blobs
 
 Attachments do not travel through the API endpoint. They are uploaded and

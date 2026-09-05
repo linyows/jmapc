@@ -56,6 +56,7 @@ type Handler func(*Call) (any, error)
 type Server struct {
 	t    testing.TB
 	http *httptest.Server
+	mux  *http.ServeMux
 
 	mu       sync.Mutex
 	handlers map[string]Handler
@@ -93,11 +94,11 @@ func New(t testing.TB, opts ...Option) *Server {
 		checks:   true,
 		watchers: map[chan string]bool{},
 	}
-	mux := http.NewServeMux()
-	mux.HandleFunc("/.well-known/jmap", s.serveSession)
-	mux.HandleFunc("/api", s.serveAPI)
-	mux.HandleFunc("/events", s.serveEvents)
-	s.http = httptest.NewServer(mux)
+	s.mux = http.NewServeMux()
+	s.mux.HandleFunc("/.well-known/jmap", s.serveSession)
+	s.mux.HandleFunc("/api", s.serveAPI)
+	s.mux.HandleFunc("/events", s.serveEvents)
+	s.http = httptest.NewServer(s.mux)
 	t.Cleanup(s.http.Close)
 
 	s.session = &jmapc.Session{
@@ -117,6 +118,29 @@ func New(t testing.TB, opts ...Option) *Server {
 
 // URL is the session resource to point a client at.
 func (s *Server) URL() string { return s.http.URL + "/.well-known/jmap" }
+
+// BaseURL is the address the server answers on, without the session path. It
+// is what a client that is not the generated one is pointed at, since such a
+// client has its own idea of where the session and the API live.
+func (s *Server) BaseURL() string { return s.http.URL }
+
+// Mux is where the server's paths are registered, so that a test can add its
+// own beside them.
+//
+// A migration is the reason this is here. A client half converted to jmapc
+// has a generated half that reaches this server through Client, and a
+// hand-written half still posting to paths of its own. Both halves have to
+// answer in one test, and this is where the paths the other half wants are
+// mounted:
+//
+//	srv := jmaptest.New(t)
+//	srv.Mux().HandleFunc("/jmap", myOldAPIHandler)
+//	srv.Mux().HandleFunc("/jmap/session", myOldSessionHandler)
+//	old := myOldClient(srv.BaseURL())
+//
+// The paths jmaptest serves are taken already, and registering one of those
+// again panics, as registering any pattern twice on a ServeMux does.
+func (s *Server) Mux() *http.ServeMux { return s.mux }
 
 // Client returns a client pointed at the server, carrying a token it does not
 // check.
