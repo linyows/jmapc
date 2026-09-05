@@ -227,17 +227,23 @@ func serdeCamelCase(ident string) string {
 // name its enum will take, so that one enum is written per distinct union
 // however many properties use it.
 func CollectUnions(t *Type, into map[string]*Type) {
+	CollectUnionsBy(t, RustUnionName, into)
+}
+
+// CollectUnionsBy is CollectUnions under a naming of the caller's own, since
+// the same union is a Rust enum in one generator and a Go struct in another.
+func CollectUnionsBy(t *Type, name func(*Type) string, into map[string]*Type) {
 	switch {
 	case t == nil:
 	case t.IsArray():
-		CollectUnions(t.Elem, into)
+		CollectUnionsBy(t.Elem, name, into)
 	case t.IsMap():
-		CollectUnions(t.Key, into)
-		CollectUnions(t.Value, into)
+		CollectUnionsBy(t.Key, name, into)
+		CollectUnionsBy(t.Value, name, into)
 	case t.IsUnion():
-		into[RustUnionName(t)] = t
+		into[name(t)] = t
 		for _, m := range t.Union {
-			CollectUnions(m, into)
+			CollectUnionsBy(m, name, into)
 		}
 	}
 }

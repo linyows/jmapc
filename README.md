@@ -298,8 +298,8 @@ platform is `fetch`.
 
 TypeScript says some things more precisely than Go can. A nullable property is
 a union rather than a pointer, so `subject` is `string | null`. A union of
-shapes stays a union: a filter is `FilterOperator | EmailFilterCondition | null`
-rather than the `any` Go falls back on. And the primitives that carry a format
+shapes is written as one: a filter is `FilterOperator | EmailFilterCondition |
+null`, where Go has a struct with a field per shape. And the primitives that carry a format
 rather than a shape are named aliases of `string`, so an `Id` and a
 `TimeZoneId` cannot be swapped by accident.
 
@@ -366,8 +366,9 @@ a signature over the request, a token refreshed on expiry — since the transpor
 is the last thing to see a request before it goes.
 
 A nullable property is an `Option`, so `subject` is `Option<String>`. A union of
-shapes stays a union: a filter is `Option<FilterOperatorOrEmailFilterCondition>`,
-an untagged enum, rather than the `any` Go falls back on. The primitives that
+shapes is an enum: a filter is `Option<FilterOperatorOrEmailFilterCondition>`,
+untagged, where Go has a struct of the same name with a field per shape. The
+primitives that
 carry a format rather than a shape are named aliases of `String`, so an `Id` and
 a `TimeZoneId` read apart in a signature. And a record derives `Default`, which
 is what makes a type with fifty optional properties bearable to build: name the
@@ -405,6 +406,25 @@ Write `{{name}}` where a value is left to the caller. Its Go type comes from the
 argument it stands in for, so `{{limit}}` in `limit` is a `jmapc.UnsignedInt`
 and `{{mailboxId}}` in `inMailbox` is a `jmapc.ID`. Use the same name twice and
 it becomes one field, checked for agreeing on its type.
+
+An argument that may take either of two shapes becomes a struct with a field
+per shape, of which exactly one is set. A filter is where that matters, since
+it is either a boolean operator or a condition on the type being queried:
+`{{filter}}` in `filter` is a `jmapc.FilterOperatorOrEmailFilterCondition`.
+
+```go
+jmapq.Search(ctx, c, jmapq.SearchParams{
+	Filter: jmapc.FilterOperatorOrEmailFilterCondition{
+		EmailFilterCondition: &jmapc.EmailFilterCondition{Text: "invoice"},
+	},
+})
+```
+
+Setting no field, or more than one, is an error where the request is encoded
+rather than something the server has to refuse. The conditions a
+`FilterOperator` combines stay `[]any`: which condition type they hold depends
+on the type being queried, and the operator itself is written once for all of
+them.
 
 A map key may be a parameter too, which is how a `/set` names the record to
 change:

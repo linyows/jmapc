@@ -259,7 +259,7 @@ func (t *Type) String() string {
 //
 // Nullability is carried by a pointer, except where the Go representation
 // already has a nil form: a null array or map is simply the nil slice or map.
-// A union becomes any, because Go has no way to spell "one of these shapes".
+// A union becomes the struct GoUnionName names, one field per shape.
 func (t *Type) GoType(qualifier string) string {
 	if t == nil {
 		return "any"
@@ -271,7 +271,7 @@ func (t *Type) GoType(qualifier string) string {
 	case t.IsMap():
 		base = "map[" + t.Key.GoType(qualifier) + "]" + t.Value.GoType(qualifier)
 	case t.IsUnion():
-		base = "any"
+		base = qualifier + GoUnionName(t)
 	default:
 		if p, ok := primitives[t.Name]; ok {
 			base = p.goName
@@ -292,7 +292,7 @@ func (t *Type) GoType(qualifier string) string {
 // indistinguishable from the Go zero value.
 func (t *Type) needsPointerForNull() bool {
 	switch {
-	case t.IsArray(), t.IsMap(), t.IsUnion():
+	case t.IsArray(), t.IsMap():
 		return false
 	case t.Name == Any:
 		return false
@@ -304,4 +304,32 @@ func (t *Type) needsPointerForNull() bool {
 // the Go zero value already covers.
 func (t *Type) IsNullableSlice() bool {
 	return t.Nullable && (t.IsArray() || t.IsMap())
+}
+
+// GoUnionName names the struct standing for a union of shapes. Like the Rust
+// enum, it is built from the members, so that the same union written in two
+// places names one type: a filter that may be an operator or a condition is a
+// FilterOperatorOrEmailFilterCondition wherever it appears.
+func GoUnionName(t *Type) string {
+	parts := make([]string, len(t.Union))
+	for i, m := range t.Union {
+		parts[i] = GoUnionMemberName(m)
+	}
+	return strings.Join(parts, "Or")
+}
+
+// GoUnionMemberName names one alternative of a union, both as the field
+// holding it and as its part of the struct's name.
+func GoUnionMemberName(t *Type) string {
+	switch {
+	case t.IsArray():
+		return GoUnionMemberName(t.Elem) + "List"
+	case t.IsMap():
+		return GoUnionMemberName(t.Value) + "Map"
+	case t.IsUnion():
+		return GoUnionName(t)
+	}
+	// A primitive names its field after the JMAP type rather than after the Go
+	// one, so that a field is Number rather than Float64.
+	return ExportedName(t.Name)
 }

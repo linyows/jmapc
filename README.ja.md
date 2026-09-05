@@ -280,8 +280,8 @@ for (const email of res.list) {
 
 TypeScript のほうが正確に言えることもあります。
 null を取りうるプロパティはポインタではなく union なので、`subject` は `string | null` です。
-複数の形を取る値も union のままです。
-フィルタは `FilterOperator | EmailFilterCondition | null` であり、Go で `any` に落ちていたものが型として残ります。
+複数の形を取る値も union で書けます。
+フィルタは `FilterOperator | EmailFilterCondition | null` で、Go では形ごとにフィールドを持つ構造体になるところです。
 形ではなく書式を持つプリミティブは `string` の名前付き別名になるので、`Id` と `TimeZoneId` を取り違えることがありません。
 
 ## Rust
@@ -346,8 +346,8 @@ impl Transport for Http {
 トランスポートは、リクエストが出ていく前の最後の通過点だからです。
 
 null を取りうるプロパティは `Option` なので、`subject` は `Option<String>` です。
-複数の形を取る値も union のままです。
-フィルタは `Option<FilterOperatorOrEmailFilterCondition>` という untagged な enum であり、Go で `any` に落ちていたものが型として残ります。
+複数の形を取る値は enum になります。
+フィルタは `Option<FilterOperatorOrEmailFilterCondition>` という untagged な enum で、Go では同じ名前の、形ごとにフィールドを持つ構造体になります。
 形ではなく書式を持つプリミティブは `String` の名前付き別名になるので、シグネチャの上で `Id` と `TimeZoneId` が読み分けられます。
 そしてレコードは `Default` を導出します。
 省略可能なプロパティを五十個持つ型を組み立てられるのはこれのおかげで、必要な二つだけを名指しして残りは任せられます。
@@ -382,6 +382,24 @@ null を取りうるプロパティは `Option` なので、`subject` は `Optio
 Go の型は、その値が埋まる引数から決まります。
 `limit` に置いた `{{limit}}` は `jmapc.UnsignedInt` になり、`inMailbox` に置いた `{{mailboxId}}` は `jmapc.ID` になります。
 同じ名前を二箇所で使えば一つのフィールドにまとまり、型が一致しているかが検証されます。
+
+二つの形のどちらかを取りうる引数は、形ごとにフィールドを持つ構造体になります。
+設定するフィールドはそのうちの一つだけです。
+これが効くのはフィルタで、フィルタは論理演算子か、問い合わせ対象の型に対する条件か、そのどちらかだからです。
+`filter` に置いた `{{filter}}` は `jmapc.FilterOperatorOrEmailFilterCondition` になります。
+
+```go
+jmapq.Search(ctx, c, jmapq.SearchParams{
+	Filter: jmapc.FilterOperatorOrEmailFilterCondition{
+		EmailFilterCondition: &jmapc.EmailFilterCondition{Text: "invoice"},
+	},
+})
+```
+
+どのフィールドも設定しなかった場合と、二つ以上設定した場合は、リクエストを符号化する時点でエラーになります。
+サーバに拒否させるまでもありません。
+`FilterOperator` がまとめる条件は `[]any` のままです。
+どの条件型が入るかは問い合わせ対象の型によって変わるのに対し、演算子自体はすべての型に共通で一度だけ定義されているからです。
 
 マップのキーもパラメータにできます。
 `/set` が変更対象のレコードを指定する方法がこれです。
