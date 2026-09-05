@@ -31,6 +31,7 @@ type Client struct {
 	strict     bool
 	retry      RetryPolicy
 	observer   *Observer
+	tokens     *tokenHolder
 
 	// api and uploads limit the client to the number of each the server
 	// accepts at once.
@@ -51,7 +52,7 @@ func WithHTTPClient(hc *http.Client) Option {
 }
 
 // WithBearerToken authenticates with an OAuth 2.0 bearer token or an
-// equivalent API token.
+// equivalent API token. Use WithTokenSource for a token that expires.
 func WithBearerToken(token string) Option {
 	return WithRequestEditor(func(r *http.Request) error {
 		r.Header.Set("Authorization", "Bearer "+token)
@@ -299,6 +300,11 @@ func (c *Client) send(req *http.Request, kind RequestKind, attempt int) (*http.R
 		if err := edit(req); err != nil {
 			return nil, fmt.Errorf("jmapc: preparing request: %w", err)
 		}
+	}
+	// After the editors, so that the token sent is the one the source last
+	// returned rather than one an editor set from a value captured earlier.
+	if err := c.authorize(req); err != nil {
+		return nil, err
 	}
 	req, came := c.observeAttempt(req, kind, attempt)
 	resp, err := c.httpClient.Do(req)

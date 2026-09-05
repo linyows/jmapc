@@ -799,6 +799,35 @@ In TypeScript the same failure is a thrown `SetErrors`, with the response on
 `err.result`. In Rust it is an `Error::Set`, and the response is retrieved with
 the type the function would have returned, through `err.result::<T>()`.
 
+### Tokens that expire
+
+`WithBearerToken` holds one string for the life of the client. An OAuth 2.0
+access token does not last that long, and replacing it means building another
+client, which discards the cached session and the count of the requests in
+flight along with it. `WithTokenSource` takes a function instead:
+
+```go
+c := jmapc.New(url, jmapc.WithTokenSource(func(ctx context.Context) (jmapc.Token, error) {
+	tok, err := oauthConfig.TokenSource(ctx, refreshToken).Token()
+	if err != nil {
+		return jmapc.Token{}, err
+	}
+	return jmapc.Token{Value: tok.AccessToken, Expiry: tok.Expiry}, nil
+}))
+```
+
+The token is held until it expires. A source that reports an `Expiry` is called
+again shortly before it; one that reports none is called again only when a
+server answers 401. Requests arriving together share one call, so a source that
+exchanges a refresh token is not asked to do so several times at once — some
+servers accept a refresh token only once.
+
+A 401 also sends that one request again, once, with a newly fetched token. A
+second 401 is reported to the caller, since a source returning a token the
+server does not accept is not resolved by sending the request again. This is
+separate from `WithRetry`, which retries what a server reported it did not
+carry out.
+
 ### Retries
 
 `WithRetry` retries when the server answers with HTTP 429 or 503.

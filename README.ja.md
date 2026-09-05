@@ -743,6 +743,34 @@ if err != nil {
 TypeScript では同じ失敗が `SetErrors` の throw になり、レスポンスは `err.result` に載ります。
 Rust では `Error::Set` になり、レスポンスは関数が返すはずだった型を指定して `err.result::<T>()` で取り出します。
 
+### 期限切れのあるトークン
+
+`WithBearerToken` は、クライアントの生存期間中ずっと一つの文字列を保持します。
+OAuth 2.0 のアクセストークンはそこまで長く有効ではなく、差し替えるにはクライアントを作り直すことになります。
+作り直すと、キャッシュしたセッションと、実行中のリクエスト数の管理も一緒に失われます。
+`WithTokenSource` は、文字列の代わりに関数を受け取ります。
+
+```go
+c := jmapc.New(url, jmapc.WithTokenSource(func(ctx context.Context) (jmapc.Token, error) {
+	tok, err := oauthConfig.TokenSource(ctx, refreshToken).Token()
+	if err != nil {
+		return jmapc.Token{}, err
+	}
+	return jmapc.Token{Value: tok.AccessToken, Expiry: tok.Expiry}, nil
+}))
+```
+
+取得したトークンは、期限が切れるまで保持されます。
+`Expiry` を返すソースは期限の少し前に再度呼ばれ、`Expiry` を返さないソースはサーバが 401 を返したときにだけ再度呼ばれます。
+同時に発生したリクエストは一回の呼び出しを共有します。
+リフレッシュトークンを交換するソースを同時に何度も実行しないためで、リフレッシュトークンを一度しか受け付けないサーバがあるからです。
+
+401 を受けたときは、そのリクエストを新しいトークンで一度だけ送り直します。
+二度目の 401 は呼び出し側に返します。
+サーバが受け付けないトークンをソースが返している状態は、送り直しても解決しないからです。
+これは `WithRetry` とは別の仕組みです。
+`WithRetry` が送り直すのは、サーバが処理しなかったと報告したリクエストです。
+
 ### 再送
 
 サーバがHTTP 429 と 503 を返す場合、`WithRetry` は再送を行います。

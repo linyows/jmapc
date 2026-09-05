@@ -128,28 +128,43 @@ func retryAfter(resp *http.Response, now time.Time) time.Duration {
 }
 
 // sendWithRetry sends a request, and sends it again while the policy reports
-// the response is worth another attempt.
+// the response is worth another attempt, or where a server has refused the
+// token that was sent.
 //
 // A request can only be sent again if its body can be read again, which the
 // standard library provides for a body whose length it knows. An upload
 // reading from a file or a network stream has no such body, and is sent once.
 func (c *Client) sendWithRetry(req *http.Request, kind RequestKind) (*http.Response, error) {
-	attempts := c.retry.Attempts
-	if attempts < 2 || (req.Body != nil && req.GetBody == nil) {
+	if req.Body != nil && req.GetBody == nil {
 		return c.send(req, kind, 1)
+	}
+	// A refused token is replaced once. Twice would mean the source keeps
+	// returning a token the server does not accept, which sending the request
+	// again will not resolve.
+	tokensLeft := 0
+	if c.tokens != nil {
+		tokensLeft = 1
 	}
 	for attempt := 1; ; attempt++ {
 		resp, err := c.send(req, kind, attempt)
-		if attempt >= attempts || !c.retry.worthRetrying(resp, err) {
+
+		var delay time.Duration
+		switch {
+		case tokensLeft > 0 && c.refusedToken(resp):
+			tokensLeft--
+			c.tokens.discard()
+		case attempt < c.retry.Attempts && c.retry.worthRetrying(resp, err):
+			after := retryAfter(resp, time.Now())
+			if after > maxRetryAfter {
+				// A delay this long is not one to wait out; the caller is
+				// expected to retry later.
+				return resp, err
+			}
+			delay = c.retry.wait(attempt+1, after)
+		default:
 			return resp, err
 		}
-		after := retryAfter(resp, time.Now())
-		if after > maxRetryAfter {
-			// A delay this long is not one to wait out; the caller is
-			// expected to retry later.
-			return resp, err
-		}
-		delay := c.retry.wait(attempt+1, after)
+
 		// The response is discarded, so the connection is released rather than
 		// left to the finaliser.
 		if resp != nil {
