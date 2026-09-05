@@ -116,8 +116,9 @@ func registerCore(s *Spec) {
 	s.AddObject(&Object{
 		Name:       "PatchObject",
 		Capability: CapabilityCore,
-		Doc:        "PatchObject is a set of changes to apply to a record, keyed by JSON pointer into it.",
-		Fields:     nil,
+		Doc: "PatchObject is a set of changes to apply to a record, keyed by JSON pointer into it. " +
+			"The leading \"/\" of the pointer is implicit, so a keyword is set at \"keywords/$seen\".",
+		Fields: nil,
 	})
 
 	s.AddObject(&Object{

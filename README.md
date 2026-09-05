@@ -456,7 +456,9 @@ Everything below is a compile-time failure rather than a server round trip:
   defines, so `header:List-Id:asText` is a string and `header:To:asAddresses` a
   list of addresses
 - a `PatchObject` points at properties the record being patched actually has,
-  and sets them to values of the right type
+  and sets them to values of the right type, its keys written the way RFC 8620
+  writes them: the leading `/` of the pointer is implicit, so a keyword is set
+  at `keywords/$seen` rather than at `/keywords/$seen`
 - `sort` names properties the type can actually be sorted by, and supplies the
   extra member a comparator like `hasKeyword` needs
 - a property whose specification fixes the values it may take is given one of

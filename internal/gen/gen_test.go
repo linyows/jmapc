@@ -238,6 +238,26 @@ func TestQueriesWithoutOptionalArgumentsStateTheirArguments(t *testing.T) {
 	}
 }
 
+// TestPatchKeysGoOutAsWritten checks that the key the generated code sends is
+// the key the checker resolved, whether or not a parameter stands in part of
+// it. A patch key is a JSON pointer with the leading "/" already there, and a
+// key spelled with one is refused rather than trimmed, so these two agree.
+func TestPatchKeysGoOutAsWritten(t *testing.T) {
+	stated := generateOne(t, "MarkRead", `{
+	  "methodCalls": [["Email/set", {"update": {"e1": {"keywords/$seen": true}}}, "c0"]]
+	}`)
+	if !strings.Contains(stated, `{"keywords/$seen":true}`) {
+		t.Errorf("the patch does not go out as it was written:\n%s", stated)
+	}
+
+	built := generateOne(t, "MarkKeyword", `{
+	  "methodCalls": [["Email/set", {"update": {"e1": {"keywords/{{keyword}}": true}}}, "c0"]]
+	}`)
+	if !strings.Contains(built, `"keywords/" + p.Keyword`) {
+		t.Errorf("the patch key built from a parameter is not the one that was checked:\n%s", built)
+	}
+}
+
 // TestWatchTakesTheAccountFromTheQuery checks the two ways a query names the
 // account itself, neither of which costs a session lookup.
 func TestWatchTakesTheAccountFromTheQuery(t *testing.T) {

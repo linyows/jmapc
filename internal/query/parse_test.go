@@ -195,6 +195,18 @@ func TestParseErrors(t *testing.T) {
 		src:  `{"methodCalls": [["Email/query", {"accountId": "acct-{{x}}"}, "c0"]]}`,
 		want: `a parameter cannot be embedded in a larger string`,
 	}, {
+		name: "patch key written with the leading slash it already has",
+		src: `{"methodCalls": [
+			["Email/set", {"update": {"e1": {"/keywords/$seen": true}}}, "c0"]
+		]}`,
+		want: `the leading "/" of a patch key is there already`,
+	}, {
+		name: "patch key with a leading slash and a parameter in it",
+		src: `{"methodCalls": [
+			["Email/set", {"update": {"e1": {"/keywords/{{keyword}}": true}}}, "c0"]
+		]}`,
+		want: `asks for a property with no name`,
+	}, {
 		name: "argument left out from inside another value",
 		src:  `{"methodCalls": [["Email/query", {"filter": {"inMailbox": "{{mailboxId?}}"}}, "c0"]]}`,
 		want: `only an argument of a method call may be left out`,
