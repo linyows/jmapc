@@ -700,6 +700,14 @@ srv.Mux().HandleFunc("/jmap/session", myOldSessionHandler)
 old := myOldClient(srv.BaseURL())
 ```
 
+まだ移していない側も JMAP を話していて、ただ探す場所が違うだけ（セッションと API を自前のベース URL から導いている）という場合は、jmaptest 自身のハンドラをそこに載せます。
+両方の名前で応答するようになります。
+
+```go
+srv.Mux().HandleFunc("/jmap/session", srv.ServeSession)
+srv.Mux().HandleFunc("/jmap", srv.ServeAPI)
+```
+
 ですから jmaptest は、最後のメソッドを移し終えてからではなく、最初の一つを移した時点から使えます。
 
 ## Blob

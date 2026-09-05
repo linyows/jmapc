@@ -282,3 +282,41 @@ func TestPathsOfYourOwnBesideThePathsItServes(t *testing.T) {
 		t.Error("jmaptest did not record the call the generated half made")
 	}
 }
+
+// TestServedWhereAClientLooks covers the other half of a migration: a client
+// that speaks JMAP already but looks for it at addresses of its own, deriving
+// both from a base URL. Mounting the handlers there serves them under both
+// names, so such a client reaches this server without being rewritten first.
+func TestServedWhereAClientLooks(t *testing.T) {
+	srv := New(t)
+	srv.Mux().HandleFunc("/jmap/session", srv.ServeSession)
+	srv.Mux().HandleFunc("/jmap", srv.ServeAPI)
+	srv.Reply("Email/query", jmapc.EmailQueryResponse{
+		AccountID: AccountID,
+		IDs:       []jmapc.ID{"m1"},
+	})
+
+	own := jmapc.New(srv.BaseURL()+"/jmap/session", jmapc.WithBearerToken("token"))
+	if _, err := send(t, own, jmapc.Invocation{Name: "Email/query", CallID: "c0"}); err != nil {
+		t.Fatalf("a client looking for the session at its own address: %v", err)
+	}
+	if srv.Call("Email/query") == nil {
+		t.Error("the call did not reach the server")
+	}
+
+	// The API answers under its own name too, which is what a client that
+	// posts straight to it uses.
+	resp, err := http.Post(srv.BaseURL()+"/jmap", "application/json",
+		strings.NewReader(`{"using":["urn:ietf:params:jmap:core","urn:ietf:params:jmap:mail"],`+
+			`"methodCalls":[["Email/query",{"accountId":"account"},"c1"]]}`))
+	if err != nil {
+		t.Fatalf("posting to the API under its other name: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("the API under its other name answered %s", resp.Status)
+	}
+	if got := srv.Requests(); got != 2 {
+		t.Errorf("the server answered %d requests, want 2", got)
+	}
+}

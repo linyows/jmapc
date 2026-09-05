@@ -95,9 +95,9 @@ func New(t testing.TB, opts ...Option) *Server {
 		watchers: map[chan string]bool{},
 	}
 	s.mux = http.NewServeMux()
-	s.mux.HandleFunc("/.well-known/jmap", s.serveSession)
-	s.mux.HandleFunc("/api", s.serveAPI)
-	s.mux.HandleFunc("/events", s.serveEvents)
+	s.mux.HandleFunc("/.well-known/jmap", s.ServeSession)
+	s.mux.HandleFunc("/api", s.ServeAPI)
+	s.mux.HandleFunc("/events", s.ServeEvents)
 	s.http = httptest.NewServer(s.mux)
 	t.Cleanup(s.http.Close)
 
@@ -129,14 +129,20 @@ func (s *Server) BaseURL() string { return s.http.URL }
 //
 // A migration is the reason this is here. A client half converted to jmapc
 // has a generated half that reaches this server through Client, and a
-// hand-written half still posting to paths of its own. Both halves have to
+// hand-written half still going to paths of its own. Both halves have to
 // answer in one test, and this is where the paths the other half wants are
 // mounted:
 //
 //	srv := jmaptest.New(t)
 //	srv.Mux().HandleFunc("/jmap", myOldAPIHandler)
-//	srv.Mux().HandleFunc("/jmap/session", myOldSessionHandler)
 //	old := myOldClient(srv.BaseURL())
+//
+// Where the other half speaks JMAP too and only looks for it elsewhere, the
+// handlers themselves are what to mount, and this server answers on both
+// names:
+//
+//	srv.Mux().HandleFunc("/jmap/session", srv.ServeSession)
+//	srv.Mux().HandleFunc("/jmap", srv.ServeAPI)
 //
 // The paths jmaptest serves are taken already, and registering one of those
 // again panics, as registering any pattern twice on a ServeMux does.
@@ -235,8 +241,12 @@ func (s *Server) Push(accountID jmapc.ID, states map[string]string) {
 	}
 }
 
-// serveSession answers the session resource.
-func (s *Server) serveSession(w http.ResponseWriter, r *http.Request) {
+// ServeSession answers the session resource, and is mounted at
+// /.well-known/jmap. Mount it where a client of your own looks for the
+// session as well, and it is served under both names; the session it hands
+// back names the addresses this server already advertises, which a client
+// reaching either name can reach too.
+func (s *Server) ServeSession(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	session := *s.session
 	s.mu.Unlock()
@@ -246,8 +256,10 @@ func (s *Server) serveSession(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// serveEvents holds a connection open and writes what Push sends it.
-func (s *Server) serveEvents(w http.ResponseWriter, r *http.Request) {
+// ServeEvents is the push endpoint, mounted at /events. Mount it where a
+// client of your own listens. It holds the connection open and writes what
+// Push sends it.
+func (s *Server) ServeEvents(w http.ResponseWriter, r *http.Request) {
 	events := make(chan string, 8)
 	s.mu.Lock()
 	s.watchers[events] = true
@@ -287,8 +299,9 @@ type request struct {
 	CreatedIDs  map[jmapc.ID]jmapc.ID `json:"createdIds"`
 }
 
-// serveAPI answers one request.
-func (s *Server) serveAPI(w http.ResponseWriter, r *http.Request) {
+// ServeAPI answers one JMAP request, and is mounted at /api. Mount it where a
+// client that has not been converted yet posts instead.
+func (s *Server) ServeAPI(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	fail := s.fail
 	s.sent++
