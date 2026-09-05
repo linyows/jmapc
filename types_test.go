@@ -2,6 +2,7 @@ package jmapc
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -107,5 +108,41 @@ func TestWellKnownURL(t *testing.T) {
 		if got := WellKnownURL(tt.in); got != tt.want {
 			t.Errorf("WellKnownURL(%q) = %q, want %q", tt.in, got, tt.want)
 		}
+	}
+}
+
+// TestDatesReadAsText covers the date a client keeps as the text it arrived
+// as. The layout is the one the wire carries, and it is the one MarshalJSON
+// uses, so the two cannot drift apart.
+func TestDatesReadAsText(t *testing.T) {
+	utc := NewUTCDate(time.Date(2024, 5, 1, 9, 0, 0, 500, time.FixedZone("JST", 9*3600)))
+	if got, want := utc.String(), "2024-05-01T00:00:00Z"; got != want {
+		t.Errorf("UTCDate reads as %q, want %q", got, want)
+	}
+	encoded, err := json.Marshal(utc)
+	if err != nil {
+		t.Fatalf("marshalling: %v", err)
+	}
+	if got, want := string(encoded), `"`+utc.String()+`"`; got != want {
+		t.Errorf("marshalled to %s, want the text it reads as, %s", got, want)
+	}
+
+	// A Date keeps the offset it was given, where a UTCDate has none.
+	date := NewDate(time.Date(2024, 5, 1, 9, 0, 0, 0, time.FixedZone("JST", 9*3600)))
+	if got, want := date.String(), "2024-05-01T09:00:00+09:00"; got != want {
+		t.Errorf("Date reads as %q, want %q", got, want)
+	}
+	encoded, err = json.Marshal(date)
+	if err != nil {
+		t.Fatalf("marshalling: %v", err)
+	}
+	if got, want := string(encoded), `"`+date.String()+`"`; got != want {
+		t.Errorf("marshalled to %s, want the text it reads as, %s", got, want)
+	}
+
+	// fmt asks String rather than the embedded time.Time, which would answer
+	// in a form no JMAP server wrote.
+	if got, want := fmt.Sprintf("%v", utc), "2024-05-01T00:00:00Z"; got != want {
+		t.Errorf("printed as %q, want %q", got, want)
 	}
 }

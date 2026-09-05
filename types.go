@@ -56,8 +56,18 @@ func NewUTCDate(t time.Time) UTCDate {
 
 const utcDateLayout = "2006-01-02T15:04:05Z"
 
+// String returns the date as the wire carries it. A client keeping a JMAP date
+// as the text it arrived as — for a response of its own, or a column — would
+// otherwise have to know the layout, and a copy of it is a copy that can drift
+// from this one without saying so. It also settles what fmt prints, which the
+// embedded time.Time would otherwise answer for in a form no JMAP server
+// wrote.
+func (d UTCDate) String() string {
+	return d.Time.UTC().Format(utcDateLayout)
+}
+
 func (d UTCDate) MarshalJSON() ([]byte, error) {
-	return json.Marshal(d.Time.UTC().Format(utcDateLayout))
+	return json.Marshal(d.String())
 }
 
 func (d *UTCDate) UnmarshalJSON(b []byte) error {
@@ -89,8 +99,14 @@ func NewDate(t time.Time) Date {
 	return Date{Time: t.Truncate(time.Second)}
 }
 
+// String returns the date as the wire carries it, offset and all, for the same
+// reason UTCDate has one.
+func (d Date) String() string {
+	return d.Time.Format(time.RFC3339)
+}
+
 func (d Date) MarshalJSON() ([]byte, error) {
-	return json.Marshal(d.Time.Format(time.RFC3339))
+	return json.Marshal(d.String())
 }
 
 func (d *Date) UnmarshalJSON(b []byte) error {
