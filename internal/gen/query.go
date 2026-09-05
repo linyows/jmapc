@@ -51,6 +51,8 @@ type call struct {
 // plan is the naming decided for one query before any code is written.
 type plan struct {
 	q *query.Query
+	// creations are the constants naming the creation ids the query invents.
+	creations []shared.Creation
 	// paramsType is the generated parameter struct, empty when the query takes
 	// no parameters.
 	paramsType string
@@ -115,6 +117,7 @@ func (g *QueryGenerator) plan() ([]*plan, error) {
 		if len(q.Params) > 0 {
 			p.paramsType = shared.Unique(taken, q.Name+"Params")
 		}
+		p.creations = shared.Creations(taken, q.Name, q.Creations, spec.ExportedName)
 		same := shared.SameNarrowing(q.Calls)
 		for _, c := range q.Calls {
 			info := &call{}
@@ -189,6 +192,7 @@ func accountIDVar(capability string) string {
 func (g *QueryGenerator) file(p *plan) ([]byte, error) {
 	var body bytes.Buffer
 	g.writeParams(&body, p)
+	g.writeCreations(&body, p)
 	g.writeRecordTypes(&body, p)
 	g.writeResponseTypes(&body, p)
 	g.writeResultType(&body, p)
@@ -232,6 +236,19 @@ func (g *QueryGenerator) writeImports(buf *bytes.Buffer, body []byte) {
 	}
 	fmt.Fprintf(buf, "\n\t%q\n", "github.com/linyows/jmapc")
 	buf.WriteString(")\n")
+}
+
+// writeCreations writes a constant for each creation id the query invents. A
+// /set reports what it created under the name the query gave it, and without
+// this the caller spells that name a second time, in another file, with
+// nothing holding the two together.
+func (g *QueryGenerator) writeCreations(buf *bytes.Buffer, p *plan) {
+	for _, c := range p.creations {
+		shared.WriteComment(buf, "", fmt.Sprintf(
+			"%s is the creation id %s gives a record it creates, which the response reports it under.",
+			c.Name, p.q.Name))
+		fmt.Fprintf(buf, "const %s %sID = %q\n\n", c.Name, g.Qualifier, c.ID)
+	}
 }
 
 // writeParams writes the struct holding the values the caller supplies.

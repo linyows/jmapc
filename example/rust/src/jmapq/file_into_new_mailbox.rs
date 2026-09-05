@@ -26,6 +26,10 @@ pub struct FileIntoNewMailboxParams {
     pub from_mailbox_id: Id,
 }
 
+/// FILE_INTO_NEW_MAILBOX_BOX is the creation id FileIntoNewMailbox gives a
+/// record it creates, which the response reports it under.
+pub const FILE_INTO_NEW_MAILBOX_BOX: &str = "box";
+
 /// FileIntoNewMailboxResult holds the response to each method call
 /// FileIntoNewMailbox makes.
 #[derive(Debug, Clone, PartialEq, Default)]

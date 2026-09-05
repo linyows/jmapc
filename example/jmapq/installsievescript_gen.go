@@ -20,6 +20,14 @@ type InstallSieveScriptParams struct {
 	Name string
 }
 
+// InstallSieveScriptText is the creation id InstallSieveScript gives a record
+// it creates, which the response reports it under.
+const InstallSieveScriptText jmapc.ID = "text"
+
+// InstallSieveScriptFilter is the creation id InstallSieveScript gives a
+// record it creates, which the response reports it under.
+const InstallSieveScriptFilter jmapc.ID = "filter"
+
 // InstallSieveScript uploads a filtering script, stores it, and puts it into
 // service, in one request. If the script does not parse, nothing is stored
 // and whatever was running keeps running: the activation only happens once

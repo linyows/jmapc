@@ -2,7 +2,7 @@
 // Source: queries/RegisterPush.jmap.json
 
 import { type Client, type Request, type Response, type SetFailure, MethodErrors, answered, decode, SetErrors, collectSetErrors } from "./client.js"
-import type { PushSubscriptionSetResponse } from "./types.js"
+import type { Id, PushSubscriptionSetResponse } from "./types.js"
 
 // RegisterPushParams holds the values RegisterPush leaves open.
 export interface RegisterPushParams {
@@ -22,6 +22,10 @@ export interface RegisterPushParams {
   // The authentication secret, in URL-safe base64.
   authSecret: string
 }
+
+// registerPushDevice is the creation id RegisterPush gives a record it
+// creates, which the response reports it under.
+export const registerPushDevice: Id = "device"
 
 // RegisterPush asks the server to post to a URL when something changes, which
 // is how a client that cannot hold a connection open — an app on a phone,

@@ -202,6 +202,24 @@ for _, email := range res.List {
 そのため型は一つになります。
 同じ形に二つの名前が付くと、片方の呼び出しが返したレコードを、もう片方のために書いた関数に渡すのに変換が要ることになります。
 
+レコードを作る `/set` には、そのレコードに付けた名前ごとに定数が生成されます。
+レスポンスはその名前でレコードを返してくるからです。
+
+```json
+["Mailbox/set", {"create": {"newMailbox": {"name": "{{name}}"}}}, "make"]
+```
+
+```go
+res, err := jmapq.CreateMailbox(ctx, c, jmapq.CreateMailboxParams{Name: name})
+...
+created := res.Created[jmapq.CreateMailboxNewMailbox]
+```
+
+これがないと、同じ名前が二つのファイルに何の繋がりもなく存在することになります。
+クエリ側で改名してもビルドは通り、実行時にルックアップが外れるだけです。
+TypeScript では `createMailboxNewMailbox`、Rust では `CREATE_MAILBOX_NEW_MAILBOX` になります。
+`{"{{creationId}}": ...}` のように呼び出し側に名前を委ねた場合は、呼び出し側がすでに名前を持っているので定数は作られません。
+
 パラメータを持たないクエリは、Params 引数自体を取りません。
 `MailQuota(ctx, c, MailQuotaParams{})` ではなく `MailQuota(ctx, c)` になります。
 そのため、すでに使われているクエリに最初の `{{param}}` を追加すると、生成される関数の引数の数が変わり、呼び出し箇所がすべて壊れます。

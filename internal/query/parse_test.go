@@ -1792,3 +1792,32 @@ func TestShapeCountsHowManyParametersThereAre(t *testing.T) {
 		t.Errorf("a query taking one parameter has the shape of one taking two:\n%s", one.Shape)
 	}
 }
+
+// TestCreationIDsAreCollected checks what a query says it creates. The names
+// are the query's to invent, and a caller reads the created records back under
+// them, so the generator needs them; the keys of an update are record ids the
+// caller already has and are not among them.
+func TestCreationIDsAreCollected(t *testing.T) {
+	q := parse(t, "MakeAndMove"+Extension, `{"methodCalls": [
+	  ["Mailbox/set", {
+	    "create": {"first": {"name": "a"}, "second": {"name": "b"}},
+	    "update": {"mbx1": {"name": "c"}},
+	    "destroy": ["mbx2"]
+	  }, "c0"]
+	]}`)
+	if got := strings.Join(q.Creations, ", "); got != "first, second" {
+		t.Errorf("creations = %q, want %q", got, "first, second")
+	}
+}
+
+// TestCreationIDsLeftToTheCallerAreNotNamed checks a creation id the query
+// does not settle: there is no name to give in code, since the caller supplies
+// it at run time.
+func TestCreationIDsLeftToTheCallerAreNotNamed(t *testing.T) {
+	q := parse(t, "MakeOne"+Extension, `{"methodCalls": [
+	  ["Mailbox/set", {"create": {"{{creationId}}": {"name": "{{name}}"}}}, "c0"]
+	]}`)
+	if len(q.Creations) != 0 {
+		t.Errorf("creations = %v, want none: the caller names it", q.Creations)
+	}
+}

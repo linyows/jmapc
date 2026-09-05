@@ -42,6 +42,10 @@ type CreateEventParams struct {
 	OrganiserSendTo string
 }
 
+// CreateEventMeeting is the creation id CreateEvent gives a record it
+// creates, which the response reports it under.
+const CreateEventMeeting jmapc.ID = "meeting"
+
 // CreateEvent puts a weekly meeting in a calendar, with a reminder a quarter
 // of an hour beforehand. An event's time is local, and the time zone is a
 // property of its own, so that the meeting stays at nine when the clocks

@@ -2,13 +2,17 @@
 // Source: queries/CheckSieveScript.jmap.json
 
 import { type Client, type Request, type Response, type SetFailure, MethodErrors, answered, decode, SetErrors, collectSetErrors } from "./client.js"
-import type { BlobUploadResponse, SieveScriptValidateResponse } from "./types.js"
+import type { BlobUploadResponse, Id, SieveScriptValidateResponse } from "./types.js"
 
 // CheckSieveScriptParams holds the values CheckSieveScript leaves open.
 export interface CheckSieveScriptParams {
   // The octets as text, which the server encodes as UTF-8.
   script: string
 }
+
+// checkSieveScriptDraft is the creation id CheckSieveScript gives a record it
+// creates, which the response reports it under.
+export const checkSieveScriptDraft: Id = "draft"
 
 // CheckSieveScript reports whether a script would parse and whether the
 // server supports what it asks for, without storing it. It is what an editor

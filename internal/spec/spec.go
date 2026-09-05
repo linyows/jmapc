@@ -108,6 +108,12 @@ type Field struct {
 	// ServerSet marks a property the server assigns and the client may not
 	// include when creating or updating a record.
 	ServerSet bool
+	// CreationIDs marks an argument whose keys are creation ids: names the
+	// query invents for the records it creates, which the rest of the request
+	// refers to as "#" followed by the id, and which the response reports the
+	// created records under. A caller reading one of those records back has to
+	// spell the name again, so a generator gives it one in code.
+	CreationIDs bool
 	// Immutable marks a property that may be set on create but never changed.
 	Immutable bool
 	// Default records the value the server assumes when the property is

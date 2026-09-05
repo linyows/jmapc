@@ -24,6 +24,14 @@ pub struct AttachNoteParams {
     pub subject: String,
 }
 
+/// ATTACH_NOTE_NOTE is the creation id AttachNote gives a record it creates,
+/// which the response reports it under.
+pub const ATTACH_NOTE_NOTE: &str = "note";
+
+/// ATTACH_NOTE_DRAFT is the creation id AttachNote gives a record it creates,
+/// which the response reports it under.
+pub const ATTACH_NOTE_DRAFT: &str = "draft";
+
 /// AttachNoteResult holds the response to each method call AttachNote makes.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct AttachNoteResult {

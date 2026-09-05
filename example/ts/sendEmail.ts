@@ -30,6 +30,14 @@ export interface SendEmailParams {
   sentMailboxId: Id
 }
 
+// sendEmailDraft is the creation id SendEmail gives a record it creates,
+// which the response reports it under.
+export const sendEmailDraft: Id = "draft"
+
+// sendEmailSend is the creation id SendEmail gives a record it creates, which
+// the response reports it under.
+export const sendEmailSend: Id = "send"
+
 // SendEmail writes a message, hands it to the submission server, and files it
 // under Sent once the send succeeds — all in one request, so the draft can
 // never be left behind in Drafts by a call that failed halfway.

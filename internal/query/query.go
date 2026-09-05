@@ -31,6 +31,11 @@ type Query struct {
 	// Params are the parameters the query takes, in the order they first
 	// appear.
 	Params []*Param
+	// Creations are the creation ids the query invents, in the order they were
+	// written. A record created under one of these is reported back under the
+	// same name, so a generator gives the name to the caller rather than
+	// leaving it to be spelled again.
+	Creations []string
 	// Returns is the call whose result the generated function returns, or nil
 	// when it returns all of them.
 	Returns *Call

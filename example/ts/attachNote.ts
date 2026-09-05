@@ -18,6 +18,14 @@ export interface AttachNoteParams {
   subject: string
 }
 
+// attachNoteNote is the creation id AttachNote gives a record it creates,
+// which the response reports it under.
+export const attachNoteNote: Id = "note"
+
+// attachNoteDraft is the creation id AttachNote gives a record it creates,
+// which the response reports it under.
+export const attachNoteDraft: Id = "draft"
+
 // AttachNoteResult holds the response to each method call AttachNote makes.
 export interface AttachNoteResult {
   // The response to the Blob/upload call, made as "upload".

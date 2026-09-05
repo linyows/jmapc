@@ -19,6 +19,7 @@ import (
 func (g *QueryGenerator) file(p *plan) []byte {
 	var body bytes.Buffer
 	g.writeParams(&body, p)
+	g.writeCreations(&body, p)
 	g.writeNestedTypes(&body, p)
 	g.writeRecordTypes(&body, p)
 	g.writeResponseTypes(&body, p)
@@ -270,6 +271,19 @@ func isAliasName(s string) bool {
 		}
 	}
 	return false
+}
+
+// writeCreations writes a constant for each creation id the query invents. A
+// /set reports what it created under the name the query gave it, and without
+// this the caller spells that name a second time, in another file, with
+// nothing holding the two together.
+func (g *QueryGenerator) writeCreations(buf *bytes.Buffer, p *plan) {
+	for _, c := range p.creations {
+		writeDoc(buf, "", fmt.Sprintf(
+			"%s is the creation id %s gives a record it creates, which the response reports it under.",
+			c.Name, p.q.Name))
+		fmt.Fprintf(buf, "pub const %s: &str = %s;\n\n", c.Name, quote(c.ID))
+	}
 }
 
 // writeParams writes the struct holding what the caller supplies.

@@ -36,6 +36,14 @@ pub struct SendEmailParams {
     pub sent_mailbox_id: Id,
 }
 
+/// SEND_EMAIL_DRAFT is the creation id SendEmail gives a record it creates,
+/// which the response reports it under.
+pub const SEND_EMAIL_DRAFT: &str = "draft";
+
+/// SEND_EMAIL_SEND is the creation id SendEmail gives a record it creates,
+/// which the response reports it under.
+pub const SEND_EMAIL_SEND: &str = "send";
+
 /// SendEmail writes a message, hands it to the submission server, and files
 /// it under Sent once the send succeeds — all in one request, so the draft
 /// can never be left behind in Drafts by a call that failed halfway.

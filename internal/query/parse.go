@@ -178,6 +178,7 @@ func (p *Parser) Parse(path string, src []byte) (*Query, error) {
 
 	q.Using = c.resolveUsing(f.Using, q.Calls)
 	q.Params = c.params.all()
+	q.Creations = c.creations
 	if f.Returns != "" && f.CreatedIDs {
 		c.errorf(ReturnsMember, "",
 			"a query carrying %s returns every response, since the creation ids belong to the request rather than to any one call",
@@ -432,6 +433,16 @@ type checker struct {
 	// soon as the value is reached, so that nothing nested inside inherits it.
 	argumentValue bool
 
+	// creationIDs says that the keys of the map about to be checked are the
+	// creation ids the query invents. It travels one level, from the argument
+	// that holds them to the map itself.
+	creationIDs bool
+
+	// creations collects the creation ids the query invents, in the order they
+	// were written, so that a caller reading a created record back has the
+	// name in code rather than spelling it again.
+	creations []string
+
 	// used collects the capabilities the query turned out to need beyond those
 	// its methods imply, for properties that belong to a specification other
 	// than their type's own.
@@ -573,10 +584,11 @@ func (c *checker) arguments(call *Call, argsType *spec.Object, raw json.RawMessa
 			c.sortTarget = field.SortTarget
 		}
 		c.enum = field.Enum
+		c.creationIDs = field.CreationIDs
 		c.useCapability(field)
 		c.argumentValue = true
 		node := c.value(field.ParsedType(), members[key], where+"."+key, field.Doc)
-		c.patchTarget, c.sortTarget, c.enum = savedPatch, savedSort, savedEnum
+		c.patchTarget, c.sortTarget, c.enum, c.creationIDs = savedPatch, savedSort, savedEnum, false
 		if ref, isParam := node.(*ParamRef); isParam && ref.Param.Optional && name == AccountIDArgument {
 			c.errorf(where+"."+key, "leave "+AccountIDArgument+" out altogether, and it is filled in from the primary account",
 				"%s cannot be left out on its own, since a method call is made against an account",

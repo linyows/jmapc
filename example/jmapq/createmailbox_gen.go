@@ -16,6 +16,10 @@ type CreateMailboxParams struct {
 	Name string
 }
 
+// CreateMailboxNew is the creation id CreateMailbox gives a record it
+// creates, which the response reports it under.
+const CreateMailboxNew jmapc.ID = "new"
+
 // CreateMailbox creates a top-level mailbox and subscribes to it.
 //
 // It makes one Mailbox/set call in a single request, so that the server is

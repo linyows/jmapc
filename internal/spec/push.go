@@ -139,9 +139,10 @@ func registerPushSubscription(s *Spec) {
 		Doc:        "PushSubscriptionSetArguments holds the arguments of the PushSubscription/set method.",
 		Fields: []*Field{
 			{
-				Name: "create",
-				Type: "Id[PushSubscription]|null",
-				Doc:  "The subscriptions to create, keyed by creation id.",
+				Name:        "create",
+				Type:        "Id[PushSubscription]|null",
+				Doc:         "The subscriptions to create, keyed by creation id.",
+				CreationIDs: true,
 			},
 			{
 				Name:        "update",

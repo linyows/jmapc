@@ -190,3 +190,26 @@ func TestTheResponseIsNotDropped(t *testing.T) {
 		}
 	}
 }
+
+// TestACreationIDGetsAName checks that the name a query gives a record it
+// creates reaches the caller here too, rather than being a string to repeat.
+func TestACreationIDGetsAName(t *testing.T) {
+	q, err := query.NewParser(spec.Standard()).Parse("CreateMailbox"+query.Extension, []byte(`{
+	  "_returns": "make",
+	  "methodCalls": [["Mailbox/set", {"create": {"newMailbox": {"name": "{{name}}"}}}, "make"]]
+	}`))
+	if err != nil {
+		t.Fatalf("checking the query:\n%v", err)
+	}
+	files, err := (&QueryGenerator{Spec: spec.Standard(), Queries: []*query.Query{q}}).Generate()
+	if err != nil {
+		t.Fatalf("generating: %v", err)
+	}
+	src := string(files["createMailbox.ts"])
+	if want := `export const createMailboxNewMailbox: Id = "newMailbox"`; !strings.Contains(src, want) {
+		t.Errorf("the generated query does not contain %q:\n%s", want, src)
+	}
+	if !strings.Contains(src, "import type { Id") && !strings.Contains(src, ", Id ") && !strings.Contains(src, ", Id,") {
+		t.Errorf("the module does not bring in the type of the constant:\n%s", src)
+	}
+}

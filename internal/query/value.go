@@ -230,11 +230,20 @@ func (c *checker) mapValue(t *spec.Type, raw json.RawMessage, where, doc string)
 	if !ok {
 		return &Literal{JSON: raw}
 	}
+	// The keys of a create argument are the names the query gives the records
+	// it makes, and nothing under them is one, so the permission does not
+	// travel down.
+	creationIDs := c.creationIDs
+	c.creationIDs = false
+
 	out := &Object{Raw: raw}
 	for _, key := range keys {
 		keyType := t.Key
 		if keyType == nil {
 			keyType = &spec.Type{Name: spec.String}
+		}
+		if creationIDs && !embeddedParamPattern.MatchString(key) {
+			c.creations = append(c.creations, key)
 		}
 		field := ObjectField{Key: key, KeySegments: c.keySegments(key, keyType, where, doc)}
 		if field.KeySegments == nil && keyType.Name == spec.IdType &&

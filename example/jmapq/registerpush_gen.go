@@ -30,6 +30,10 @@ type RegisterPushParams struct {
 	AuthSecret string
 }
 
+// RegisterPushDevice is the creation id RegisterPush gives a record it
+// creates, which the response reports it under.
+const RegisterPushDevice jmapc.ID = "device"
+
 // RegisterPush asks the server to post to a URL when something changes, which
 // is how a client that cannot hold a connection open — an app on a phone,
 // say — hears about changes at all. The subscription is not live yet: the

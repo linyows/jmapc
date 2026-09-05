@@ -2,7 +2,7 @@
 // Source: queries/InstallSieveScript.jmap.json
 
 import { type Client, type Request, type Response, type SetFailure, MethodErrors, answered, decode, SetErrors, collectSetErrors } from "./client.js"
-import type { BlobUploadResponse, SieveScriptSetResponse } from "./types.js"
+import type { BlobUploadResponse, Id, SieveScriptSetResponse } from "./types.js"
 
 // InstallSieveScriptParams holds the values InstallSieveScript leaves open.
 export interface InstallSieveScriptParams {
@@ -13,6 +13,14 @@ export interface InstallSieveScriptParams {
   // Null asks the server to choose one.
   name: string
 }
+
+// installSieveScriptText is the creation id InstallSieveScript gives a record
+// it creates, which the response reports it under.
+export const installSieveScriptText: Id = "text"
+
+// installSieveScriptFilter is the creation id InstallSieveScript gives a
+// record it creates, which the response reports it under.
+export const installSieveScriptFilter: Id = "filter"
 
 // InstallSieveScript uploads a filtering script, stores it, and puts it into
 // service, in one request. If the script does not parse, nothing is stored

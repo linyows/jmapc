@@ -88,9 +88,10 @@ func registerBlobUpload(s *Spec) {
 		Fields: []*Field{
 			accountIDField(),
 			{
-				Name: "create",
-				Type: "Id[BlobUploadObject]",
-				Doc:  "The blobs to create, keyed by creation id, which the rest of the request may refer to as \"#\" followed by that id.",
+				Name:        "create",
+				Type:        "Id[BlobUploadObject]",
+				Doc:         "The blobs to create, keyed by creation id, which the rest of the request may refer to as \"#\" followed by that id.",
+				CreationIDs: true,
 			},
 		},
 	})

@@ -177,9 +177,10 @@ func (s *Spec) registerSet(dataType, capability string) {
 				Doc:  "The state the changes are expected to apply to. The call fails with a stateMismatch error if the server has moved on.",
 			},
 			{
-				Name: "create",
-				Type: "Id[" + dataType + "]|null",
-				Doc:  "A map of creation id to the record to create. A creation id may be referenced elsewhere in the same request as \"#\" followed by the id.",
+				Name:        "create",
+				Type:        "Id[" + dataType + "]|null",
+				Doc:         "A map of creation id to the record to create. A creation id may be referenced elsewhere in the same request as \"#\" followed by the id.",
+				CreationIDs: true,
 			},
 			{
 				Name:        "update",
@@ -259,9 +260,10 @@ func (s *Spec) registerCopy(dataType, capability string) {
 			accountIDField(),
 			{Name: "ifInState", Type: "String|null", Doc: "The state the destination account is expected to be in."},
 			{
-				Name: "create",
-				Type: "Id[" + dataType + "]",
-				Doc:  "A map of creation id to the record to copy, each of which must have an id property naming the record in the source account.",
+				Name:        "create",
+				Type:        "Id[" + dataType + "]",
+				Doc:         "A map of creation id to the record to copy, each of which must have an id property naming the record in the source account.",
+				CreationIDs: true,
 			},
 			{
 				Name:    "onSuccessDestroyOriginal",

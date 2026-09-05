@@ -158,6 +158,12 @@ func RustName(name string) string {
 	return s
 }
 
+// RustConstName converts a JMAP name to the SCREAMING_SNAKE_CASE Rust spells a
+// constant with.
+func RustConstName(name string) string {
+	return strings.ToUpper(RustName(name))
+}
+
 // rustWords splits a JMAP name into the words a Rust identifier is built from.
 //
 // It is the shared splitting, with one repair: a run of capitals made plural by

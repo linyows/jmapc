@@ -38,6 +38,10 @@ type CreateContactParams struct {
 	Organization string
 }
 
+// CreateContactCard is the creation id CreateContact gives a record it
+// creates, which the response reports it under.
+const CreateContactCard jmapc.ID = "card"
+
 // CreateContact adds a person to an address book. A contact card is a
 // JSContact object, so a name is a list of parts rather than a string, and
 // each address or number is an entry the card can refer to later.

@@ -292,8 +292,8 @@ func TestCreateMailbox(t *testing.T) {
 	if mailbox["isSubscribed"] != true {
 		t.Errorf("isSubscribed = %v, want true", mailbox["isSubscribed"])
 	}
-	if got.Created["new"].ID != "mbx9" {
-		t.Errorf("created mailbox = %+v, want id mbx9", got.Created["new"])
+	if got.Created[jmapq.CreateMailboxNew].ID != "mbx9" {
+		t.Errorf("created mailbox = %+v, want id mbx9", got.Created[jmapq.CreateMailboxNew])
 	}
 }
 
@@ -424,8 +424,8 @@ func TestSendEmail(t *testing.T) {
 		t.Errorf("patch removes $draft as %v (present %v), want an explicit null", v, present)
 	}
 
-	if got.Created["send"].UndoStatus != "final" {
-		t.Errorf("submission = %+v, want undoStatus final", got.Created["send"])
+	if got.Created[jmapq.SendEmailSend].UndoStatus != "final" {
+		t.Errorf("submission = %+v, want undoStatus final", got.Created[jmapq.SendEmailSend])
 	}
 }
 
@@ -551,8 +551,8 @@ func TestCreateContact(t *testing.T) {
 	if features := phone["features"].(map[string]any); features["mobile"] != true {
 		t.Errorf("phone features = %v", features)
 	}
-	if got.Created["card"].ID != "card9" {
-		t.Errorf("created card = %+v, want id card9", got.Created["card"])
+	if got.Created[jmapq.CreateContactCard].ID != "card9" {
+		t.Errorf("created card = %+v, want id card9", got.Created[jmapq.CreateContactCard])
 	}
 }
 
@@ -718,8 +718,8 @@ func TestCreateEvent(t *testing.T) {
 	if roles := participant["roles"].(map[string]any); roles["owner"] != true {
 		t.Errorf("participant roles = %v", roles)
 	}
-	if !got.Created["meeting"].IsOrigin {
-		t.Errorf("created event = %+v, want isOrigin", got.Created["meeting"])
+	if !got.Created[jmapq.CreateEventMeeting].IsOrigin {
+		t.Errorf("created event = %+v, want isOrigin", got.Created[jmapq.CreateEventMeeting])
 	}
 }
 
@@ -1003,11 +1003,11 @@ func TestAttachNote(t *testing.T) {
 		t.Errorf("attachment blobId = %v, want the creation id #note", blobID)
 	}
 
-	if got.BlobUpload.Created["note"].ID != "blob9" {
-		t.Errorf("uploaded blob = %+v", got.BlobUpload.Created["note"])
+	if got.BlobUpload.Created[jmapq.AttachNoteNote].ID != "blob9" {
+		t.Errorf("uploaded blob = %+v", got.BlobUpload.Created[jmapq.AttachNoteNote])
 	}
-	if got.EmailSet.Created["draft"].ID != "e9" {
-		t.Errorf("created draft = %+v", got.EmailSet.Created["draft"])
+	if got.EmailSet.Created[jmapq.AttachNoteDraft].ID != "e9" {
+		t.Errorf("created draft = %+v", got.EmailSet.Created[jmapq.AttachNoteDraft])
 	}
 }
 
@@ -1151,8 +1151,8 @@ func TestInstallSieveScript(t *testing.T) {
 		t.Errorf("onSuccessDeactivateScript = %v", install["onSuccessDeactivateScript"])
 	}
 
-	if !got.Created["filter"].IsActive {
-		t.Errorf("installed script = %+v, want it active", got.Created["filter"])
+	if !got.Created[jmapq.InstallSieveScriptFilter].IsActive {
+		t.Errorf("installed script = %+v, want it active", got.Created[jmapq.InstallSieveScriptFilter])
 	}
 }
 
@@ -1294,7 +1294,7 @@ func TestRegisterPush(t *testing.T) {
 		t.Errorf("keys = %v", keys)
 	}
 
-	created := got.Created["device"]
+	created := got.Created[jmapq.RegisterPushDevice]
 	if created.ID != "sub1" {
 		t.Errorf("created = %+v", created)
 	}
@@ -1566,7 +1566,7 @@ func TestPartialResultComesBackWithTheError(t *testing.T) {
 	if res.MailboxSet.NewState != "m2" {
 		t.Errorf("the call that succeeded reads %+v", res.MailboxSet)
 	}
-	if _, made := res.MailboxSet.Created["box"]; !made {
+	if _, made := res.MailboxSet.Created[jmapq.FileIntoNewMailboxBox]; !made {
 		t.Error("the mailbox the server created is not in the result")
 	}
 	if res.EmailSet.NewState != "" || res.EmailSet.Created != nil {

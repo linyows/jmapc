@@ -130,3 +130,24 @@ func SameNarrowing(calls []*query.Call) map[*query.Call]*query.Call {
 	}
 	return out
 }
+
+// Creation is the name a generated file gives one creation id, so that a
+// caller reading back what a /set created spells it once rather than twice.
+type Creation struct {
+	// Name is the identifier the constant goes by.
+	Name string
+	// ID is the creation id as the query wrote it.
+	ID string
+}
+
+// Creations names the creation ids a query invents, keeping the names unique
+// among everything else the file declares. Renaming one in the query renames
+// the constant with it, which is what turns a rename into a compile error
+// rather than a lookup that quietly misses.
+func Creations(taken map[string]bool, prefix string, ids []string, name func(string) string) []Creation {
+	out := make([]Creation, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, Creation{Name: Unique(taken, prefix+name(id)), ID: id})
+	}
+	return out
+}

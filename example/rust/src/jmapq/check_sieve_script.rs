@@ -16,6 +16,10 @@ pub struct CheckSieveScriptParams {
     pub script: String,
 }
 
+/// CHECK_SIEVE_SCRIPT_DRAFT is the creation id CheckSieveScript gives a
+/// record it creates, which the response reports it under.
+pub const CHECK_SIEVE_SCRIPT_DRAFT: &str = "draft";
+
 /// CheckSieveScript reports whether a script would parse and whether the
 /// server supports what it asks for, without storing it. It is what an editor
 /// calls while the user is still typing.
