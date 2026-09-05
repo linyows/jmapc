@@ -198,6 +198,7 @@ func run(args []string) error {
 	if failures > 0 {
 		return fmt.Errorf("%s", plural(failures, "query", "queries")+" did not check out")
 	}
+	noteSameQueries(parsed)
 
 	if command == "check" {
 		if *session != "" {
@@ -271,6 +272,36 @@ func write(cfg *Config, catalogue *spec.Spec, queries []*query.Query) error {
 		fmt.Fprintln(stdout, path)
 	}
 	return nil
+}
+
+// noteSameQueries says so where two query files hold one query. A query that
+// differs from another only in what it calls its parameters and its calls
+// makes the same request, so one of them would do for both, and the second
+// brings a second set of generated types along with it.
+//
+// It is a note rather than an error: a project may want two names for one
+// request, and jmapc is not the one to say it may not.
+func noteSameQueries(queries []*query.Query) {
+	byShape := map[string][]string{}
+	var order []string
+	for _, q := range queries {
+		if q.Shape == "" {
+			continue
+		}
+		if _, seen := byShape[q.Shape]; !seen {
+			order = append(order, q.Shape)
+		}
+		byShape[q.Shape] = append(byShape[q.Shape], q.Name)
+	}
+	for _, shape := range order {
+		names := byShape[shape]
+		if len(names) < 2 {
+			continue
+		}
+		sort.Strings(names)
+		fmt.Fprintf(stderr, "jmapc: %s are the same query under different names; one of them would do for all of them\n",
+			strings.Join(names, ", "))
+	}
 }
 
 // noteUnwatched says so where a query asks to be watched in a language that

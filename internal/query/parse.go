@@ -164,7 +164,7 @@ func (p *Parser) Parse(path string, src []byte) (*Query, error) {
 		byID:   make(map[string]*Call),
 		used:   make(map[string]bool),
 	}
-	q := &Query{Name: name, Path: path, Doc: f.Doc, CreatedIDs: f.CreatedIDs}
+	q := &Query{Name: name, Path: path, Doc: f.Doc, CreatedIDs: f.CreatedIDs, Shape: shapeOf(src)}
 
 	if len(f.MethodCalls) == 0 {
 		c.errorf("methodCalls", "", "the query makes no method calls")

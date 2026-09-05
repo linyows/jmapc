@@ -283,3 +283,62 @@ func TestUnknownCommand(t *testing.T) {
 		t.Errorf("help: %v", err)
 	}
 }
+
+// TestSameQueryUnderTwoNames covers two query files holding one query. They
+// differ only in what they call their parameters and their calls, so they make
+// the same request, and each brings a set of generated types along with it.
+func TestSameQueryUnderTwoNames(t *testing.T) {
+	dir := workspace(t, map[string]string{
+		"queries/ListInbox.jmap.json": `{
+		  "_doc": "ListInbox reads the inbox.",
+		  "methodCalls": [["Email/query", {"filter": {"inMailbox": "{{mailboxId}}"}, "limit": "{{limit}}"}, "search"]],
+		  "_returns": "search"
+		}`,
+		// The same query: other names for the parameters and the call, other
+		// documentation, and the members written in another order.
+		"queries/ListArchive.jmap.json": `{
+		  "_returns": "c0",
+		  "methodCalls": [["Email/query", {"limit": "{{howMany}}", "filter": {"inMailbox": "{{folderId}}"}}, "c0"]]
+		}`,
+		// Not the same query: it asks the server for something else.
+		"queries/ListThreads.jmap.json": `{
+		  "methodCalls": [["Email/query", {"filter": {"inMailbox": "{{mailboxId}}"}, "limit": "{{limit}}",
+		                   "collapseThreads": true}, "search"]],
+		  "_returns": "search"
+		}`,
+	})
+
+	_, errOut, err := capture(t, []string{"check", "-queries", filepath.Join(dir, "queries")})
+	if err != nil {
+		t.Fatalf("check: %v", err)
+	}
+	want := "ListArchive, ListInbox are the same query under different names"
+	if !strings.Contains(errOut, want) {
+		t.Errorf("the note does not say %q:\n%s", want, errOut)
+	}
+	if strings.Contains(errOut, "ListThreads") {
+		t.Errorf("a query asking for something else was reported as the same:\n%s", errOut)
+	}
+}
+
+// TestSameQueryIsANoteRatherThanAnError checks that two names for one query
+// still generate: a project may want both, and jmapc is not the one to say it
+// may not.
+func TestSameQueryIsANoteRatherThanAnError(t *testing.T) {
+	dir := workspace(t, map[string]string{
+		"queries/ListMailboxes.jmap.json": listMailboxes,
+		"queries/AllMailboxes.jmap.json": `{
+		  "methodCalls": [["Mailbox/get", {"ids": null, "properties": ["id", "name", "role"]}, "every"]],
+		  "_returns": "every"
+		}`,
+	})
+	out := filepath.Join(dir, "jmapq")
+	if _, _, err := capture(t, []string{"generate", "-queries", filepath.Join(dir, "queries"), "-out", out}); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	for _, name := range []string{"listmailboxes_gen.go", "allmailboxes_gen.go"} {
+		if _, err := os.Stat(filepath.Join(out, name)); err != nil {
+			t.Errorf("%s was not generated: %v", name, err)
+		}
+	}
+}

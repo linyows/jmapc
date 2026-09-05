@@ -1717,3 +1717,78 @@ func TestPagesRejects(t *testing.T) {
 		})
 	}
 }
+
+// TestShapeIgnoresTheNames checks what makes two queries one query: the names
+// given to parameters and to calls are the query's own business, and the
+// documentation says nothing about what is sent, so none of them tell two
+// queries apart.
+func TestShapeIgnoresTheNames(t *testing.T) {
+	one := parse(t, "ListInbox"+Extension, `{
+	  "_doc": "ListInbox reads the inbox.",
+	  "methodCalls": [
+	    ["Email/query", {"filter": {"inMailbox": "{{mailboxId}}"}, "limit": "{{limit}}"}, "search"],
+	    ["Email/get", {"#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"}}, "fetch"]
+	  ],
+	  "_returns": "fetch"
+	}`)
+	two := parse(t, "ListArchive"+Extension, `{
+	  "_returns": "b",
+	  "methodCalls": [
+	    ["Email/query", {"limit": "{{howMany}}", "filter": {"inMailbox": "{{folderId}}"}}, "a"],
+	    ["Email/get", {"#ids": {"resultOf": "a", "name": "Email/query", "path": "/ids"}}, "b"]
+	  ]
+	}`)
+	if one.Shape != two.Shape {
+		t.Errorf("two names for one query have different shapes:\n%s\n%s", one.Shape, two.Shape)
+	}
+}
+
+// TestShapeKeepsWhatIsAsked checks the other half: a query that asks the server
+// for anything else has a shape of its own, including where the difference is
+// only that a parameter may be left out.
+func TestShapeKeepsWhatIsAsked(t *testing.T) {
+	base := parse(t, "Changes"+Extension, `{"methodCalls": [
+	  ["Email/changes", {"sinceState": "{{state}}", "maxChanges": "{{max}}"}, "c0"]
+	]}`)
+	for _, tt := range []struct {
+		name string
+		src  string
+	}{{
+		name: "another argument",
+		src:  `{"methodCalls": [["Email/changes", {"sinceState": "{{state}}"}, "c0"]]}`,
+	}, {
+		name: "an argument that may be left out",
+		src: `{"methodCalls": [
+		  ["Email/changes", {"sinceState": "{{state}}", "maxChanges": "{{max?}}"}, "c0"]
+		]}`,
+	}, {
+		name: "another type",
+		src: `{"methodCalls": [
+		  ["Mailbox/changes", {"sinceState": "{{state}}", "maxChanges": "{{max}}"}, "c0"]
+		]}`,
+	}} {
+		t.Run(tt.name, func(t *testing.T) {
+			other := parse(t, "Other"+Extension, tt.src)
+			if base.Shape == other.Shape {
+				t.Errorf("a query asking for something else has the same shape:\n%s", other.Shape)
+			}
+		})
+	}
+}
+
+// TestShapeCountsHowManyParametersThereAre checks that a query taking one
+// parameter where another takes two is not the same query, since the caller
+// supplies a different number of values.
+func TestShapeCountsHowManyParametersThereAre(t *testing.T) {
+	two := parse(t, "TwoStates"+Extension, `{"methodCalls": [
+	  ["Email/changes", {"sinceState": "{{emailState}}"}, "c0"],
+	  ["Mailbox/changes", {"sinceState": "{{mailboxState}}"}, "c1"]
+	]}`)
+	one := parse(t, "OneState"+Extension, `{"methodCalls": [
+	  ["Email/changes", {"sinceState": "{{state}}"}, "c0"],
+	  ["Mailbox/changes", {"sinceState": "{{state}}"}, "c1"]
+	]}`)
+	if two.Shape == one.Shape {
+		t.Errorf("a query taking one parameter has the shape of one taking two:\n%s", one.Shape)
+	}
+}

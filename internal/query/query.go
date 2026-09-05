@@ -18,6 +18,10 @@ type Query struct {
 	Name string
 	// Path is the file the query was read from.
 	Path string
+	// Shape is the query with its names taken off, so that two queries that
+	// differ only in what they call things can be told apart from two that
+	// ask for different things. See shapeOf.
+	Shape string
 	// Doc is the query's documentation, carried into the generated function.
 	Doc string
 	// Using lists the capability URIs the request declares.
