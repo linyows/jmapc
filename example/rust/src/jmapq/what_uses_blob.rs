@@ -10,6 +10,8 @@ use super::types::{BlobLookupResponse, Id};
 /// WhatUsesBlobParams holds the values WhatUsesBlob leaves open.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct WhatUsesBlobParams {
+    /// One of the ids in the list.
+    ///
     /// The ids of the blobs to look for.
     pub blob_id: Id,
 }

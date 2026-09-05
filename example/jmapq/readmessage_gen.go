@@ -12,6 +12,8 @@ import (
 
 // ReadMessageParams holds the values ReadMessage leaves open.
 type ReadMessageParams struct {
+	// One of the ids in the list.
+	//
 	// The ids of the records to fetch, or null to fetch all of them.
 	EmailID jmapc.ID
 }
