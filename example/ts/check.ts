@@ -1,7 +1,8 @@
 // Hand-written, unlike the rest of this directory: what the generated runtime
 // does at run time, which tsc cannot say. It throws on a failure, and Node
 // exits non-zero, so it needs no test framework and no type packages.
-import { Client, SetErrors } from "./client.js"
+import { Client, MethodErrors, SetErrors } from "./client.js"
+import { fileIntoNewMailbox, type FileIntoNewMailboxResult } from "./fileIntoNewMailbox.js"
 import { searchEmailsPages } from "./searchEmails.js"
 import { sendEmail } from "./sendEmail.js"
 
@@ -200,6 +201,49 @@ const session = {
 
   assert(subjects.length === 3, `the walk found ${subjects.length} messages, want 3`)
   assert(asked.join(",") === "0,2", `the walk asked from ${asked.join(",")}, want 0,2`)
+}
+
+// A call the server would not run does not take the answers to the others
+// with it: what the response did carry is on the error, as much of the result
+// as the server answered.
+{
+  const mailSession = {
+    ...session,
+    primaryAccounts: { "urn:ietf:params:jmap:mail": "acct1" },
+    capabilities: { "urn:ietf:params:jmap:core": {}, "urn:ietf:params:jmap:mail": {} },
+  }
+  const serve = (async (url: string | URL, init?: RequestInit) => {
+    if (!String(url).endsWith("/api")) {
+      return new Response(JSON.stringify(mailSession), {
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+    return new Response(JSON.stringify({
+      sessionState: "s1",
+      methodResponses: [
+        ["Mailbox/set", { accountId: "acct1", newState: "m2", created: { box: { id: "mbx9" } } }, "make"],
+        ["error", { type: "invalidResultReference" }, "file"],
+      ],
+    }), { headers: { "Content-Type": "application/json" } })
+  }) as unknown as typeof fetch
+
+  const c = new Client("https://example.com/.well-known/jmap", { fetch: serve })
+  let thrown: unknown
+  try {
+    await fileIntoNewMailbox(c, { name: "Archive", emailId: "e1", fromMailboxId: "mbx1" })
+  } catch (e) {
+    thrown = e
+  }
+  assert(thrown instanceof MethodErrors, `threw ${thrown}, want MethodErrors`)
+  const failed = thrown as MethodErrors
+  assert(failed.errors.length === 1 && failed.errors[0].callId === "file",
+    `the error names ${failed.errors.map((e) => e.callId).join(",")}, want the call that failed`)
+
+  const partial = failed.result as Partial<FileIntoNewMailboxResult>
+  assert(partial?.mailboxSet?.newState === "m2",
+    "the call that succeeded is not on the error")
+  assert(partial?.emailSet === undefined,
+    "the call the server would not run was made up rather than left out")
 }
 
 console.log("ok")

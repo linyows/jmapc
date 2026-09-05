@@ -36,32 +36,46 @@ func (g *QueryGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
 
 	g.writeRequest(buf, p)
 
-	buf.WriteString("  const res = await client.request(req)\n\n")
-	// Where nothing can be refused there is nothing to hold the response for,
-	// so the value is returned as it is decoded.
+	// A method call the server would not run does not take the answers to the
+	// others with it: the response is read either way, and what came of it is
+	// put on the error before it goes on.
+	buf.WriteString("  let res: Response\n")
+	buf.WriteString("  let failed: MethodErrors | undefined\n")
+	buf.WriteString("  try {\n")
+	buf.WriteString("    res = await client.request(req)\n")
+	buf.WriteString("  } catch (e) {\n")
+	buf.WriteString("    if (!(e instanceof MethodErrors)) throw e\n")
+	buf.WriteString("    res = e.response\n")
+	buf.WriteString("    failed = e\n")
+	buf.WriteString("  }\n\n")
+
 	checks := g.setErrorChecks(p)
-	bind := "return "
-	if len(checks) > 0 {
-		bind = "const out = "
-	}
 	if p.q.Returns != nil {
-		fmt.Fprintf(buf, "  %sdecode<%s>(req, res, %s)\n",
-			bind, p.returnType, strconv.Quote(p.q.Returns.ID))
+		// The one call this returns is the whole of the answer, so a failure
+		// there leaves nothing to hand back.
+		fmt.Fprintf(buf, "  if (failed && !answered(res, %s)) throw failed\n",
+			strconv.Quote(p.q.Returns.ID))
+		fmt.Fprintf(buf, "  const out = decode<%s>(req, res, %s)\n",
+			p.returnType, strconv.Quote(p.q.Returns.ID))
 	} else {
-		fmt.Fprintf(buf, "  %s{\n", bind)
+		// A call the server would not run is left out rather than taking the
+		// others with it, so what reaches a caller reading the error is a
+		// Partial of this.
+		fmt.Fprintf(buf, "  const out = {\n")
 		for _, c := range p.q.Calls {
-			fmt.Fprintf(buf, "    %s: decode<%s>(req, res, %s),\n",
-				tsMemberName(c.Field), p.calls[c].responseType, strconv.Quote(c.ID))
+			fmt.Fprintf(buf, "    ...(answered(res, %[1]s) ? { %[2]s: decode<%[3]s>(req, res, %[1]s) } : {}),\n",
+				strconv.Quote(c.ID), tsMemberName(c.Field), p.calls[c].responseType)
 		}
 		if p.q.CreatedIDs {
 			buf.WriteString("    createdIds: res.createdIds ?? {},\n")
 		}
-		buf.WriteString("  }\n")
+		fmt.Fprintf(buf, "  } as %s\n", p.returnType)
 	}
+	buf.WriteString("  if (failed) {\n    failed.result = out\n    throw failed\n  }\n")
 	if len(checks) > 0 {
 		g.writeSetErrorChecks(buf, checks)
-		buf.WriteString("  return out\n")
 	}
+	buf.WriteString("  return out\n")
 	buf.WriteString("}\n")
 }
 

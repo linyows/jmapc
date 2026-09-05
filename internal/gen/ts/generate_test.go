@@ -158,3 +158,35 @@ func TestOneShapeIsOneType(t *testing.T) {
 		t.Errorf("the record type is declared %d times, want 1:\n%s", n, src)
 	}
 }
+
+// TestTheResponseIsNotDropped checks that a generated query reads the response
+// even where the server would not run one of the calls, and puts what it read
+// on the error. JMAP runs the calls it can, so throwing the whole answer away
+// loses the part that usually says why.
+func TestTheResponseIsNotDropped(t *testing.T) {
+	q, err := query.NewParser(spec.Standard()).Parse("DestroyThread"+query.Extension, []byte(`{
+	  "methodCalls": [
+	    ["Thread/get", {"ids": ["{{threadId}}"]}, "thread"],
+	    ["Email/set", {"#destroy": {"resultOf": "thread", "name": "Thread/get",
+	                                "path": "/list/0/emailIds"}}, "destroy"]
+	  ]
+	}`))
+	if err != nil {
+		t.Fatalf("checking the query:\n%v", err)
+	}
+	files, err := (&QueryGenerator{Spec: spec.Standard(), Queries: []*query.Query{q}}).Generate()
+	if err != nil {
+		t.Fatalf("generating: %v", err)
+	}
+	src := string(files["destroyThread.ts"])
+	for _, want := range []string{
+		"if (!(e instanceof MethodErrors)) throw e",
+		"res = e.response",
+		`...(answered(res, "thread") ? { threadGet: decode<ThreadGetResponse>(req, res, "thread") } : {}),`,
+		"failed.result = out",
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("the generated query does not contain %q:\n%s", want, src)
+		}
+	}
+}
