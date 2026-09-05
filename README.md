@@ -696,6 +696,19 @@ try {
 }
 ```
 
+Rust returns an `Err`, so it rides there too: `MethodErrors::result` hands back
+the result the query would have returned, with a call the server would not run
+left at its default rather than missing, since Rust has a default to leave it
+at:
+
+```rust
+if let Error::Method(failed) = &err {
+    if let Some(out) = failed.result::<DestroyThreadResult>() {
+        if !out.thread_get.not_found.is_empty() { /* which thread was missing */ }
+    }
+}
+```
+
 There is a third level, and it is the one that gets missed. A `/set` answers
 **200 with no error in it** and lists the records it would not act on:
 

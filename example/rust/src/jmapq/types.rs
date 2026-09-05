@@ -344,7 +344,7 @@ pub struct AddressBookChangesArguments {
 /// method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:contacts.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AddressBookChangesResponse {
     /// The id of the account to operate on.
@@ -396,7 +396,7 @@ pub struct AddressBookGetArguments {
 /// AddressBookGetResponse holds the response to the AddressBook/get method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:contacts.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AddressBookGetResponse {
     /// The id of the account to operate on.
@@ -484,7 +484,7 @@ pub struct AddressBookSetArguments {
 /// AddressBookSetResponse holds the response to the AddressBook/set method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:contacts.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AddressBookSetResponse {
     /// The id of the account to operate on.
@@ -542,7 +542,7 @@ pub struct BlobCopyArguments {
 }
 
 /// BlobCopyResponse holds the response to the Blob/copy method.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BlobCopyResponse {
     /// The id of the account the blobs were copied from.
@@ -679,7 +679,7 @@ pub struct BlobGetArguments {
 /// BlobGetResponse holds the response to the Blob/get method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:blob.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BlobGetResponse {
     /// The id of the account to operate on.
@@ -734,7 +734,7 @@ pub struct BlobLookupInfo {
 /// BlobLookupResponse holds the response to the Blob/lookup method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:blob.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BlobLookupResponse {
     /// The id of the account to operate on.
@@ -786,7 +786,7 @@ pub struct BlobUploadObject {
 /// BlobUploadResponse holds the response to the Blob/upload method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:blob.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BlobUploadResponse {
     /// The id of the account to operate on.
@@ -805,7 +805,7 @@ pub struct BlobUploadResponse {
 /// create.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:blob.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BlobUploadResult {
     /// The id of the blob, to refer to it by from here on.
@@ -948,7 +948,7 @@ pub struct CalendarChangesArguments {
 /// CalendarChangesResponse holds the response to the Calendar/changes method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:calendars.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CalendarChangesResponse {
     /// The id of the account to operate on.
@@ -1276,7 +1276,7 @@ pub struct CalendarEventChangesArguments {
 /// CalendarEvent/changes method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:calendars.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CalendarEventChangesResponse {
     /// The id of the account to operate on.
@@ -1349,7 +1349,7 @@ pub struct CalendarEventCopyArguments {
 /// method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:calendars.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CalendarEventCopyResponse {
     /// The id of the account the records were copied from.
@@ -1471,7 +1471,7 @@ pub struct CalendarEventGetArguments {
 /// method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:calendars.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CalendarEventGetResponse {
     /// The id of the account to operate on.
@@ -1568,7 +1568,7 @@ pub struct CalendarEventNotificationChangesArguments {
 /// CalendarEventNotification/changes method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:calendars.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CalendarEventNotificationChangesResponse {
     /// The id of the account to operate on.
@@ -1646,7 +1646,7 @@ pub struct CalendarEventNotificationGetArguments {
 /// CalendarEventNotification/get method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:calendars.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CalendarEventNotificationGetResponse {
     /// The id of the account to operate on.
@@ -1759,7 +1759,7 @@ pub struct CalendarEventNotificationQueryChangesArguments {
 /// CalendarEventNotification/queryChanges method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:calendars.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CalendarEventNotificationQueryChangesResponse {
     /// The id of the account to operate on.
@@ -1789,7 +1789,7 @@ pub struct CalendarEventNotificationQueryChangesResponse {
 /// CalendarEventNotification/query method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:calendars.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CalendarEventNotificationQueryResponse {
     /// The id of the account to operate on.
@@ -1852,7 +1852,7 @@ pub struct CalendarEventNotificationSetArguments {
 /// CalendarEventNotification/set method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:calendars.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CalendarEventNotificationSetResponse {
     /// The id of the account to operate on.
@@ -1919,7 +1919,7 @@ pub struct CalendarEventParseArguments {
 ///
 /// A request using this type must declare
 /// urn:ietf:params:jmap:calendars:parse.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CalendarEventParseResponse {
     /// The id of the account to operate on.
@@ -2060,7 +2060,7 @@ pub struct CalendarEventQueryChangesArguments {
 /// CalendarEvent/queryChanges method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:calendars.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CalendarEventQueryChangesResponse {
     /// The id of the account to operate on.
@@ -2090,7 +2090,7 @@ pub struct CalendarEventQueryChangesResponse {
 /// method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:calendars.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CalendarEventQueryResponse {
     /// The id of the account to operate on.
@@ -2160,7 +2160,7 @@ pub struct CalendarEventSetArguments {
 /// method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:calendars.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CalendarEventSetResponse {
     /// The id of the account to operate on.
@@ -2223,7 +2223,7 @@ pub struct CalendarGetArguments {
 /// CalendarGetResponse holds the response to the Calendar/get method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:calendars.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CalendarGetResponse {
     /// The id of the account to operate on.
@@ -2352,7 +2352,7 @@ pub struct CalendarSetArguments {
 /// CalendarSetResponse holds the response to the Calendar/set method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:calendars.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CalendarSetResponse {
     /// The id of the account to operate on.
@@ -2773,7 +2773,7 @@ pub struct ContactCardChangesArguments {
 /// method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:contacts.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContactCardChangesResponse {
     /// The id of the account to operate on.
@@ -2845,7 +2845,7 @@ pub struct ContactCardCopyArguments {
 /// ContactCardCopyResponse holds the response to the ContactCard/copy method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:contacts.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContactCardCopyResponse {
     /// The id of the account the records were copied from.
@@ -2997,7 +2997,7 @@ pub struct ContactCardGetArguments {
 /// ContactCardGetResponse holds the response to the ContactCard/get method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:contacts.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContactCardGetResponse {
     /// The id of the account to operate on.
@@ -3110,7 +3110,7 @@ pub struct ContactCardQueryChangesArguments {
 /// ContactCard/queryChanges method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:contacts.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContactCardQueryChangesResponse {
     /// The id of the account to operate on.
@@ -3140,7 +3140,7 @@ pub struct ContactCardQueryChangesResponse {
 /// method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:contacts.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContactCardQueryResponse {
     /// The id of the account to operate on.
@@ -3201,7 +3201,7 @@ pub struct ContactCardSetArguments {
 /// ContactCardSetResponse holds the response to the ContactCard/set method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:contacts.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContactCardSetResponse {
     /// The id of the account to operate on.
@@ -3917,7 +3917,7 @@ pub struct CoreEchoArguments {}
 
 /// CoreEchoResponse holds the response to the Core/echo method, which is the
 /// arguments it was given.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CoreEchoResponse {}
 
@@ -4250,7 +4250,7 @@ pub struct EmailChangesArguments {
 /// EmailChangesResponse holds the response to the Email/changes method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:mail.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EmailChangesResponse {
     /// The id of the account to operate on.
@@ -4321,7 +4321,7 @@ pub struct EmailCopyArguments {
 /// EmailCopyResponse holds the response to the Email/copy method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:mail.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EmailCopyResponse {
     /// The id of the account the records were copied from.
@@ -4513,7 +4513,7 @@ pub struct EmailGetArguments {
 /// EmailGetResponse holds the response to the Email/get method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:mail.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EmailGetResponse {
     /// The id of the account to operate on.
@@ -4596,7 +4596,7 @@ pub struct EmailImportArguments {
 /// EmailImportResponse holds the response to the Email/import method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:mail.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EmailImportResponse {
     /// The id of the account to operate on.
@@ -4673,7 +4673,7 @@ pub struct EmailParseArguments {
 /// EmailParseResponse holds the response to the Email/parse method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:mail.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EmailParseResponse {
     /// The id of the account to operate on.
@@ -4802,7 +4802,7 @@ pub struct EmailQueryChangesArguments {
 /// method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:mail.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EmailQueryChangesResponse {
     /// The id of the account to operate on.
@@ -4831,7 +4831,7 @@ pub struct EmailQueryChangesResponse {
 /// EmailQueryResponse holds the response to the Email/query method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:mail.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EmailQueryResponse {
     /// The id of the account to operate on.
@@ -4892,7 +4892,7 @@ pub struct EmailSetArguments {
 /// EmailSetResponse holds the response to the Email/set method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:mail.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EmailSetResponse {
     /// The id of the account to operate on.
@@ -5032,7 +5032,7 @@ pub struct EmailSubmissionChangesArguments {
 /// EmailSubmission/changes method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:submission.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EmailSubmissionChangesResponse {
     /// The id of the account to operate on.
@@ -5118,7 +5118,7 @@ pub struct EmailSubmissionGetArguments {
 /// method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:submission.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EmailSubmissionGetResponse {
     /// The id of the account to operate on.
@@ -5231,7 +5231,7 @@ pub struct EmailSubmissionQueryChangesArguments {
 /// EmailSubmission/queryChanges method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:submission.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EmailSubmissionQueryChangesResponse {
     /// The id of the account to operate on.
@@ -5261,7 +5261,7 @@ pub struct EmailSubmissionQueryChangesResponse {
 /// EmailSubmission/query method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:submission.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EmailSubmissionQueryResponse {
     /// The id of the account to operate on.
@@ -5334,7 +5334,7 @@ pub struct EmailSubmissionSetArguments {
 /// method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:submission.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EmailSubmissionSetResponse {
     /// The id of the account to operate on.
@@ -5997,7 +5997,7 @@ pub struct IdentityChangesArguments {
 /// IdentityChangesResponse holds the response to the Identity/changes method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:submission.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IdentityChangesResponse {
     /// The id of the account to operate on.
@@ -6049,7 +6049,7 @@ pub struct IdentityGetArguments {
 /// IdentityGetResponse holds the response to the Identity/get method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:submission.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IdentityGetResponse {
     /// The id of the account to operate on.
@@ -6100,7 +6100,7 @@ pub struct IdentitySetArguments {
 /// IdentitySetResponse holds the response to the Identity/set method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:submission.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IdentitySetResponse {
     /// The id of the account to operate on.
@@ -6262,7 +6262,7 @@ pub struct MdnParseArguments {
 /// MDNParseResponse holds the response to the MDN/parse method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:mdn.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MdnParseResponse {
     /// The id of the account to operate on.
@@ -6311,7 +6311,7 @@ pub struct MdnSendArguments {
 /// MDNSendResponse holds the response to the MDN/send method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:mdn.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MdnSendResponse {
     /// The id of the account to operate on.
@@ -6417,7 +6417,7 @@ pub struct MailboxChangesArguments {
 /// MailboxChangesResponse holds the response to the Mailbox/changes method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:mail.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MailboxChangesResponse {
     /// The id of the account to operate on.
@@ -6497,7 +6497,7 @@ pub struct MailboxGetArguments {
 /// MailboxGetResponse holds the response to the Mailbox/get method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:mail.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MailboxGetResponse {
     /// The id of the account to operate on.
@@ -6633,7 +6633,7 @@ pub struct MailboxQueryChangesArguments {
 /// method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:mail.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MailboxQueryChangesResponse {
     /// The id of the account to operate on.
@@ -6662,7 +6662,7 @@ pub struct MailboxQueryChangesResponse {
 /// MailboxQueryResponse holds the response to the Mailbox/query method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:mail.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MailboxQueryResponse {
     /// The id of the account to operate on.
@@ -6773,7 +6773,7 @@ pub struct MailboxSetArguments {
 /// MailboxSetResponse holds the response to the Mailbox/set method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:mail.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MailboxSetResponse {
     /// The id of the account to operate on.
@@ -6872,7 +6872,7 @@ pub struct ParticipantIdentityChangesArguments {
 /// ParticipantIdentity/changes method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:calendars.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ParticipantIdentityChangesResponse {
     /// The id of the account to operate on.
@@ -6926,7 +6926,7 @@ pub struct ParticipantIdentityGetArguments {
 /// ParticipantIdentity/get method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:calendars.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ParticipantIdentityGetResponse {
     /// The id of the account to operate on.
@@ -6979,7 +6979,7 @@ pub struct ParticipantIdentitySetArguments {
 /// ParticipantIdentity/set method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:calendars.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ParticipantIdentitySetResponse {
     /// The id of the account to operate on.
@@ -7097,7 +7097,7 @@ pub struct PrincipalChangesArguments {
 /// method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:principals.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PrincipalChangesResponse {
     /// The id of the account to operate on.
@@ -7222,7 +7222,7 @@ pub struct PrincipalGetAvailabilityArguments {
 ///
 /// A request using this type must declare
 /// urn:ietf:params:jmap:principals:availability.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PrincipalGetAvailabilityResponse {
     /// The periods the principal is busy in, merged and in no particular
@@ -7234,7 +7234,7 @@ pub struct PrincipalGetAvailabilityResponse {
 /// PrincipalGetResponse holds the response to the Principal/get method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:principals.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PrincipalGetResponse {
     /// The id of the account to operate on.
@@ -7346,7 +7346,7 @@ pub struct PrincipalQueryChangesArguments {
 /// Principal/queryChanges method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:principals.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PrincipalQueryChangesResponse {
     /// The id of the account to operate on.
@@ -7375,7 +7375,7 @@ pub struct PrincipalQueryChangesResponse {
 /// PrincipalQueryResponse holds the response to the Principal/query method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:principals.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PrincipalQueryResponse {
     /// The id of the account to operate on.
@@ -7436,7 +7436,7 @@ pub struct PrincipalSetArguments {
 /// PrincipalSetResponse holds the response to the Principal/set method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:principals.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PrincipalSetResponse {
     /// The id of the account to operate on.
@@ -7554,7 +7554,7 @@ pub struct PushSubscriptionGetArguments {
 
 /// PushSubscriptionGetResponse holds the response to the PushSubscription/get
 /// method.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PushSubscriptionGetResponse {
     /// The subscriptions that were found, which are only those the current
@@ -7605,7 +7605,7 @@ pub struct PushSubscriptionSetArguments {
 
 /// PushSubscriptionSetResponse holds the response to the PushSubscription/set
 /// method.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PushSubscriptionSetResponse {
     /// A map of creation id to the properties the server assigned to each
@@ -7730,7 +7730,7 @@ pub struct QuotaChangesArguments {
 /// QuotaChangesResponse holds the response to the Quota/changes method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:quota.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QuotaChangesResponse {
     /// The id of the account to operate on.
@@ -7812,7 +7812,7 @@ pub struct QuotaGetArguments {
 /// QuotaGetResponse holds the response to the Quota/get method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:quota.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QuotaGetResponse {
     /// The id of the account to operate on.
@@ -7924,7 +7924,7 @@ pub struct QuotaQueryChangesArguments {
 /// method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:quota.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QuotaQueryChangesResponse {
     /// The id of the account to operate on.
@@ -7953,7 +7953,7 @@ pub struct QuotaQueryChangesResponse {
 /// QuotaQueryResponse holds the response to the Quota/query method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:quota.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QuotaQueryResponse {
     /// The id of the account to operate on.
@@ -8028,7 +8028,7 @@ pub struct SearchSnippetGetArguments {
 /// method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:mail.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchSnippetGetResponse {
     /// The id of the account to operate on.
@@ -8157,7 +8157,7 @@ pub struct ShareNotificationChangesArguments {
 /// ShareNotification/changes method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:principals.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ShareNotificationChangesResponse {
     /// The id of the account to operate on.
@@ -8255,7 +8255,7 @@ pub struct ShareNotificationGetArguments {
 /// ShareNotification/get method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:principals.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ShareNotificationGetResponse {
     /// The id of the account to operate on.
@@ -8368,7 +8368,7 @@ pub struct ShareNotificationQueryChangesArguments {
 /// ShareNotification/queryChanges method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:principals.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ShareNotificationQueryChangesResponse {
     /// The id of the account to operate on.
@@ -8398,7 +8398,7 @@ pub struct ShareNotificationQueryChangesResponse {
 /// ShareNotification/query method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:principals.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ShareNotificationQueryResponse {
     /// The id of the account to operate on.
@@ -8461,7 +8461,7 @@ pub struct ShareNotificationSetArguments {
 /// ShareNotification/set method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:principals.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ShareNotificationSetResponse {
     /// The id of the account to operate on.
@@ -8574,7 +8574,7 @@ pub struct SieveScriptGetArguments {
 /// SieveScriptGetResponse holds the response to the SieveScript/get method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:sieve.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SieveScriptGetResponse {
     /// The id of the account to operate on.
@@ -8646,7 +8646,7 @@ pub struct SieveScriptQueryArguments {
 /// method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:sieve.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SieveScriptQueryResponse {
     /// The id of the account to operate on.
@@ -8720,7 +8720,7 @@ pub struct SieveScriptSetArguments {
 /// SieveScriptSetResponse holds the response to the SieveScript/set method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:sieve.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SieveScriptSetResponse {
     /// The id of the account to operate on.
@@ -8780,7 +8780,7 @@ pub struct SieveScriptValidateArguments {
 /// method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:sieve.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SieveScriptValidateResponse {
     /// The id of the account to operate on.
@@ -8835,7 +8835,7 @@ pub struct ThreadChangesArguments {
 /// ThreadChangesResponse holds the response to the Thread/changes method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:mail.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ThreadChangesResponse {
     /// The id of the account to operate on.
@@ -8887,7 +8887,7 @@ pub struct ThreadGetArguments {
 /// ThreadGetResponse holds the response to the Thread/get method.
 ///
 /// A request using this type must declare urn:ietf:params:jmap:mail.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ThreadGetResponse {
     /// The id of the account to operate on.
@@ -8976,7 +8976,7 @@ pub struct VacationResponseGetArguments {
 ///
 /// A request using this type must declare
 /// urn:ietf:params:jmap:vacationresponse.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VacationResponseGetResponse {
     /// The id of the account to operate on.
@@ -9031,7 +9031,7 @@ pub struct VacationResponseSetArguments {
 ///
 /// A request using this type must declare
 /// urn:ietf:params:jmap:vacationresponse.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VacationResponseSetResponse {
     /// The id of the account to operate on.

@@ -27,7 +27,7 @@ pub struct SearchEmailsParams {
 
 /// SearchEmailsEmail holds the properties of Email that the Email/get call in
 /// SearchEmails asks for.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchEmailsEmail {
     /// The id of the email.
@@ -48,7 +48,7 @@ pub struct SearchEmailsEmail {
 
 /// SearchEmailsEmailGetResponse holds the response to the Email/get call in
 /// SearchEmails.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchEmailsEmailGetResponse {
     /// The id of the account to operate on.
@@ -69,7 +69,7 @@ pub struct SearchEmailsEmailGetResponse {
 
 /// SearchEmailsResult holds the response to each method call SearchEmails
 /// makes.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct SearchEmailsResult {
     /// The response to the Email/query call, made as "search".
     pub email_query: EmailQueryResponse,
@@ -145,12 +145,26 @@ pub async fn search_emails<T: Transport>(
         created_ids: None,
     };
 
-    let res = client.request(&req).await?;
-
-    let out = SearchEmailsResult {
-        email_query: decode::<EmailQueryResponse>(&req, &res, "search")?,
-        email_get: decode::<SearchEmailsEmailGetResponse>(&req, &res, "fetch")?,
+    let (res, failed) = match client.request(&req).await {
+        Ok(res) => (res, None),
+        Err(Error::Method(errs)) => (errs.response.clone(), Some(errs)),
+        Err(e) => return Err(e),
     };
+
+    let mut out = SearchEmailsResult::default();
+    match decode::<EmailQueryResponse>(&req, &res, "search") {
+        Ok(v) => out.email_query = v,
+        Err(e) if failed.is_none() => return Err(e),
+        Err(_) => {}
+    }
+    match decode::<SearchEmailsEmailGetResponse>(&req, &res, "fetch") {
+        Ok(v) => out.email_get = v,
+        Err(e) if failed.is_none() => return Err(e),
+        Err(_) => {}
+    }
+    if let Some(errs) = failed {
+        return Err(Error::Method(errs.with_result(out)));
+    }
 
     Ok(out)
 }

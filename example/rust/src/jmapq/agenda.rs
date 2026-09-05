@@ -28,7 +28,7 @@ pub struct AgendaParams {
 
 /// AgendaCalendarEvent holds the properties of CalendarEvent that the
 /// CalendarEvent/get call in Agenda asks for.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgendaCalendarEvent {
     /// The id of the event.
@@ -68,7 +68,7 @@ pub struct AgendaCalendarEvent {
 
 /// AgendaCalendarEventGetResponse holds the response to the CalendarEvent/get
 /// call in Agenda.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgendaCalendarEventGetResponse {
     /// The id of the account to operate on.
@@ -153,7 +153,19 @@ pub async fn agenda<T: Transport>(
         created_ids: None,
     };
 
-    let res = client.request(&req).await?;
+    let (res, failed) = match client.request(&req).await {
+        Ok(res) => (res, None),
+        Err(Error::Method(errs)) => (errs.response.clone(), Some(errs)),
+        Err(e) => return Err(e),
+    };
 
-    decode::<AgendaCalendarEventGetResponse>(&req, &res, "fetch")
+    let out = match decode::<AgendaCalendarEventGetResponse>(&req, &res, "fetch") {
+        Ok(out) => out,
+        Err(e) => return Err(failed.map(Error::Method).unwrap_or(e)),
+    };
+    if let Some(errs) = failed {
+        return Err(Error::Method(errs.with_result(out)));
+    }
+
+    Ok(out)
 }
