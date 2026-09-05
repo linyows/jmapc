@@ -28,6 +28,7 @@ const Draft = "http://json-schema.org/draft-07/schema#"
 // The definitions the schema declares for itself, rather than for a type in
 // the catalogue.
 const (
+	patchObjectDef       = "PatchObject"
 	parameterDef         = "parameter"
 	optionalParameterDef = "optionalParameter"
 	referenceDef         = "resultReference"
@@ -238,7 +239,14 @@ func (b *builder) object(o *spec.Object) {
 	// A type with no properties is one whose members the data model cannot
 	// name: a PatchObject is keyed by JSON pointer into the record it patches.
 	if len(o.Fields) == 0 {
-		b.defs[o.Name] = map[string]any{"type": "object", "description": o.Doc}
+		def := map[string]any{"type": "object", "description": o.Doc}
+		if o.Name == patchObjectDef {
+			// The leading "/" of the pointer is implicit, so a key written
+			// with one asks for a property with no name. The generator
+			// refuses it; this is what says so while it is being typed.
+			def["propertyNames"] = map[string]any{"not": map[string]any{"pattern": `^/`}}
+		}
+		b.defs[o.Name] = def
 		return
 	}
 	b.defs[o.Name] = map[string]any{

@@ -626,8 +626,14 @@ func sortStrings(s []string) { sort.Strings(s) }
 func (c *checker) patchObject(members map[string]json.RawMessage, keys []string, raw json.RawMessage, where string) Node {
 	out := &Object{Raw: raw}
 	for _, key := range keys {
+		if strings.HasPrefix(key, "/") {
+			c.errorf(where+"."+key, fmt.Sprintf("write it as %q", strings.TrimPrefix(key, "/")),
+				"the leading %q of a patch key is there already, so %q asks for a property with no name",
+				"/", key)
+			continue
+		}
 		field := ObjectField{Key: key}
-		segments := strings.Split(strings.TrimPrefix(key, "/"), "/")
+		segments := strings.Split(key, "/")
 		unknown := make([]bool, len(segments))
 		for i, seg := range segments {
 			unknown[i] = embeddedParamPattern.MatchString(seg)

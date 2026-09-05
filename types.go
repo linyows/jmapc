@@ -109,15 +109,21 @@ func (d *Date) UnmarshalJSON(b []byte) error {
 // PatchObject is the JMAP PatchObject data type used by the update argument of
 // a /set call. Each key is a JSON pointer into the object being patched and
 // each value is the replacement, or nil to remove the pointed-at member.
+//
+// The leading "/" of the pointer is implicit, as RFC 8620, Section 5.3 has it:
+// a keyword is set at "keywords/$seen" rather than at "/keywords/$seen", and
+// writing the slash asks for a property with no name.
 type PatchObject map[string]any
 
-// Set records that the value at the given JSON pointer should be replaced.
+// Set records that the value at the given JSON pointer should be replaced. The
+// pointer is written without its leading "/", as "keywords/$seen".
 func (p PatchObject) Set(pointer string, value any) PatchObject {
 	p[pointer] = value
 	return p
 }
 
 // Remove records that the member at the given JSON pointer should be deleted.
+// The pointer is written without its leading "/", as "keywords/$seen".
 func (p PatchObject) Remove(pointer string) PatchObject {
 	p[pointer] = nil
 	return p
