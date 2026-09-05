@@ -97,13 +97,16 @@ func MailQuota(ctx context.Context, c *jmapc.Client) (*MailQuotaQuotaGetResponse
 	}
 
 	resp, err := c.Do(ctx, req)
-	if err != nil {
+	if resp == nil {
 		return nil, err
 	}
 
 	var out MailQuotaQuotaGetResponse
-	if err := resp.Decode("fetch", &out); err != nil {
-		return nil, err
+	if e := resp.Decode("fetch", &out); e != nil {
+		if err != nil {
+			return nil, err
+		}
+		return nil, e
 	}
-	return &out, nil
+	return &out, err
 }

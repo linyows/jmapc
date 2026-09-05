@@ -5,6 +5,7 @@ package jmapq
 
 import (
 	"context"
+	"errors"
 
 	"github.com/linyows/jmapc"
 )
@@ -91,16 +92,16 @@ func FileIntoNewMailbox(ctx context.Context, c *jmapc.Client, p FileIntoNewMailb
 	}
 
 	resp, err := c.Do(ctx, req)
-	if err != nil {
+	if resp == nil {
 		return nil, err
 	}
 
 	var out FileIntoNewMailboxResult
-	if err := resp.Decode("make", &out.MailboxSet); err != nil {
-		return nil, err
+	if e := resp.Decode("make", &out.MailboxSet); e != nil && err == nil {
+		return nil, e
 	}
-	if err := resp.Decode("file", &out.EmailSet); err != nil {
-		return nil, err
+	if e := resp.Decode("file", &out.EmailSet); e != nil && err == nil {
+		return nil, e
 	}
 	out.CreatedIDs = resp.CreatedIDs
 
@@ -115,8 +116,8 @@ func FileIntoNewMailbox(ctx context.Context, c *jmapc.Client, p FileIntoNewMailb
 		"notUpdated":   out.EmailSet.NotUpdated,
 		"notDestroyed": out.EmailSet.NotDestroyed,
 	})
-	if err := failures.Err(); err != nil {
-		return &out, err
+	if e := failures.Err(); e != nil {
+		return &out, errors.Join(err, e)
 	}
-	return &out, nil
+	return &out, err
 }

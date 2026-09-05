@@ -417,3 +417,51 @@ func TestDifferentShapesKeepTheirOwnTypes(t *testing.T) {
 		t.Errorf("two body shapes were given one type:\n%s", bodies)
 	}
 }
+
+// TestTheResponseIsNotDropped checks that a generated function hands back what
+// the server did answer. Do returns the response alongside a MethodErrors
+// because the calls around a failed one may still have run, and a generated
+// function that returned nil there would throw that away.
+func TestTheResponseIsNotDropped(t *testing.T) {
+	src := generateOne(t, "DestroyThread", `{
+	  "methodCalls": [
+	    ["Thread/get", {"ids": ["{{threadId}}"]}, "thread"],
+	    ["Email/set", {"#destroy": {"resultOf": "thread", "name": "Thread/get",
+	                                "path": "/list/0/emailIds"}}, "destroy"]
+	  ]
+	}`)
+	for _, want := range []string{
+		// Only a response that never arrived leaves nothing to read.
+		"if resp == nil {\n\t\treturn nil, err\n\t}",
+		// A call the server would not run keeps its zero value, and anything
+		// else wrong with the response is still reported on its own.
+		`if e := resp.Decode("thread", &out.ThreadGet); e != nil && err == nil {`,
+		`if e := resp.Decode("destroy", &out.EmailSet); e != nil && err == nil {`,
+		// Both levels of failure travel together.
+		"return &out, errors.Join(err, e)",
+		"return &out, err\n}",
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("the generated query does not contain %q:\n%s", want, src)
+		}
+	}
+}
+
+// TestTheOneCallAQueryReturnsIsAllOrNothing checks the other shape: a query
+// naming one call in "_returns" has nothing to hand back when that call is the
+// one that failed.
+func TestTheOneCallAQueryReturnsIsAllOrNothing(t *testing.T) {
+	src := generateOne(t, "ReadOne", `{
+	  "_returns": "fetch",
+	  "methodCalls": [["Email/get", {"ids": ["{{emailId}}"]}, "fetch"]]
+	}`)
+	want := "\tif e := resp.Decode(\"fetch\", &out); e != nil {\n" +
+		"\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n" +
+		"\t\treturn nil, e\n\t}\n"
+	if !strings.Contains(src, want) {
+		t.Errorf("the generated query does not contain %q:\n%s", want, src)
+	}
+	if !strings.Contains(src, "return &out, err\n}") {
+		t.Errorf("the query does not hand the error back with what it returns:\n%s", src)
+	}
+}

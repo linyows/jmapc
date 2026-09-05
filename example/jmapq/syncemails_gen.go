@@ -141,21 +141,21 @@ func SyncEmails(ctx context.Context, c *jmapc.Client, p SyncEmailsParams) (*Sync
 	}
 
 	resp, err := c.Do(ctx, req)
-	if err != nil {
+	if resp == nil {
 		return nil, err
 	}
 
 	var out SyncEmailsResult
-	if err := resp.Decode("changes", &out.EmailChanges); err != nil {
-		return nil, err
+	if e := resp.Decode("changes", &out.EmailChanges); e != nil && err == nil {
+		return nil, e
 	}
-	if err := resp.Decode("created", &out.EmailGet); err != nil {
-		return nil, err
+	if e := resp.Decode("created", &out.EmailGet); e != nil && err == nil {
+		return nil, e
 	}
-	if err := resp.Decode("updated", &out.EmailGet2); err != nil {
-		return nil, err
+	if e := resp.Decode("updated", &out.EmailGet2); e != nil && err == nil {
+		return nil, e
 	}
-	return &out, nil
+	return &out, err
 }
 
 // SyncEmailsWatch follows the changes to Email, calling SyncEmails whenever

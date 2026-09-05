@@ -5,6 +5,7 @@ package jmapq
 
 import (
 	"context"
+	"errors"
 
 	"github.com/linyows/jmapc"
 )
@@ -49,13 +50,16 @@ func CreateMailbox(ctx context.Context, c *jmapc.Client, p CreateMailboxParams) 
 	}
 
 	resp, err := c.Do(ctx, req)
-	if err != nil {
+	if resp == nil {
 		return nil, err
 	}
 
 	var out jmapc.MailboxSetResponse
-	if err := resp.Decode("create", &out); err != nil {
-		return nil, err
+	if e := resp.Decode("create", &out); e != nil {
+		if err != nil {
+			return nil, err
+		}
+		return nil, e
 	}
 
 	var failures jmapc.SetErrors
@@ -64,8 +68,8 @@ func CreateMailbox(ctx context.Context, c *jmapc.Client, p CreateMailboxParams) 
 		"notUpdated":   out.NotUpdated,
 		"notDestroyed": out.NotDestroyed,
 	})
-	if err := failures.Err(); err != nil {
-		return &out, err
+	if e := failures.Err(); e != nil {
+		return &out, errors.Join(err, e)
 	}
-	return &out, nil
+	return &out, err
 }

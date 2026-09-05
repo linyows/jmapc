@@ -5,6 +5,7 @@ package jmapq
 
 import (
 	"context"
+	"errors"
 
 	"github.com/linyows/jmapc"
 )
@@ -80,13 +81,16 @@ func InstallSieveScript(ctx context.Context, c *jmapc.Client, p InstallSieveScri
 	}
 
 	resp, err := c.Do(ctx, req)
-	if err != nil {
+	if resp == nil {
 		return nil, err
 	}
 
 	var out jmapc.SieveScriptSetResponse
-	if err := resp.Decode("install", &out); err != nil {
-		return nil, err
+	if e := resp.Decode("install", &out); e != nil {
+		if err != nil {
+			return nil, err
+		}
+		return nil, e
 	}
 
 	var refused0 jmapc.BlobUploadResponse
@@ -102,8 +106,8 @@ func InstallSieveScript(ctx context.Context, c *jmapc.Client, p InstallSieveScri
 		"notUpdated":   out.NotUpdated,
 		"notDestroyed": out.NotDestroyed,
 	})
-	if err := failures.Err(); err != nil {
-		return &out, err
+	if e := failures.Err(); e != nil {
+		return &out, errors.Join(err, e)
 	}
-	return &out, nil
+	return &out, err
 }

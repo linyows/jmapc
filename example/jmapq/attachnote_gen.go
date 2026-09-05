@@ -6,6 +6,7 @@ package jmapq
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/linyows/jmapc"
 )
@@ -92,16 +93,16 @@ func AttachNote(ctx context.Context, c *jmapc.Client, p AttachNoteParams) (*Atta
 	}
 
 	resp, err := c.Do(ctx, req)
-	if err != nil {
+	if resp == nil {
 		return nil, err
 	}
 
 	var out AttachNoteResult
-	if err := resp.Decode("upload", &out.BlobUpload); err != nil {
-		return nil, err
+	if e := resp.Decode("upload", &out.BlobUpload); e != nil && err == nil {
+		return nil, e
 	}
-	if err := resp.Decode("draft", &out.EmailSet); err != nil {
-		return nil, err
+	if e := resp.Decode("draft", &out.EmailSet); e != nil && err == nil {
+		return nil, e
 	}
 
 	var failures jmapc.SetErrors
@@ -113,8 +114,8 @@ func AttachNote(ctx context.Context, c *jmapc.Client, p AttachNoteParams) (*Atta
 		"notUpdated":   out.EmailSet.NotUpdated,
 		"notDestroyed": out.EmailSet.NotDestroyed,
 	})
-	if err := failures.Err(); err != nil {
-		return &out, err
+	if e := failures.Err(); e != nil {
+		return &out, errors.Join(err, e)
 	}
-	return &out, nil
+	return &out, err
 }

@@ -165,19 +165,19 @@ func SearchContacts(ctx context.Context, c *jmapc.Client, p SearchContactsParams
 	}
 
 	resp, err := c.Do(ctx, req)
-	if err != nil {
+	if resp == nil {
 		return nil, err
 	}
 
 	var out SearchContactsResult
-	if err := resp.Decode("books", &out.AddressBookGet); err != nil {
-		return nil, err
+	if e := resp.Decode("books", &out.AddressBookGet); e != nil && err == nil {
+		return nil, e
 	}
-	if err := resp.Decode("search", &out.ContactCardQuery); err != nil {
-		return nil, err
+	if e := resp.Decode("search", &out.ContactCardQuery); e != nil && err == nil {
+		return nil, e
 	}
-	if err := resp.Decode("fetch", &out.ContactCardGet); err != nil {
-		return nil, err
+	if e := resp.Decode("fetch", &out.ContactCardGet); e != nil && err == nil {
+		return nil, e
 	}
-	return &out, nil
+	return &out, err
 }

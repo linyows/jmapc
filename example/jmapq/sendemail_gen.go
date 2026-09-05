@@ -6,6 +6,7 @@ package jmapq
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/linyows/jmapc"
 )
@@ -116,13 +117,16 @@ func SendEmail(ctx context.Context, c *jmapc.Client, p SendEmailParams) (*jmapc.
 	}
 
 	resp, err := c.Do(ctx, req)
-	if err != nil {
+	if resp == nil {
 		return nil, err
 	}
 
 	var out jmapc.EmailSubmissionSetResponse
-	if err := resp.Decode("send", &out); err != nil {
-		return nil, err
+	if e := resp.Decode("send", &out); e != nil {
+		if err != nil {
+			return nil, err
+		}
+		return nil, e
 	}
 
 	var refused0 jmapc.EmailSetResponse
@@ -140,8 +144,8 @@ func SendEmail(ctx context.Context, c *jmapc.Client, p SendEmailParams) (*jmapc.
 		"notUpdated":   out.NotUpdated,
 		"notDestroyed": out.NotDestroyed,
 	})
-	if err := failures.Err(); err != nil {
-		return &out, err
+	if e := failures.Err(); e != nil {
+		return &out, errors.Join(err, e)
 	}
-	return &out, nil
+	return &out, err
 }
