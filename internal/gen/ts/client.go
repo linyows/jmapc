@@ -107,13 +107,21 @@ export class MethodError extends Error {
 }
 
 // Several method-level failures from one response.
+//
+// JMAP runs the calls it can, so the response is carried here too, and a
+// generated query puts what it could read out of it on result: the calls the
+// server answered, and nothing for the ones it would not run. Read it as a
+// Partial of what the query returns.
 export class MethodErrors extends Error {
   readonly errors: MethodError[]
+  readonly response: Response
+  result?: unknown
 
-  constructor(errors: MethodError[]) {
+  constructor(errors: MethodError[], response: Response) {
     super(errors.length === 1 ? errors[0].message : ` + "`" + `jmapc: ${errors.length} method calls failed` + "`" + `)
     this.name = "MethodErrors"
     this.errors = errors
+    this.response = response
   }
 }
 
@@ -274,11 +282,7 @@ export class Client {
 
     const response = (await res.json()) as Response
     const errors = methodErrors(req, response)
-    if (errors.length > 0) {
-      const err = new MethodErrors(errors)
-      ;(err as MethodErrors & { response: Response }).response = response
-      throw err
-    }
+    if (errors.length > 0) throw new MethodErrors(errors, response)
     return response
   }
 
@@ -336,6 +340,13 @@ export function decode<T>(req: Request, res: Response, callId: string): T {
   }
   const ids = res.methodResponses.map(([, , id]) => ` + "`" + `"${id}"` + "`" + `).join(", ") || "no results"
   throw new Error(` + "`" + `jmapc: response has no result for call "${callId}" (response has ${ids})` + "`" + `)
+}
+
+// Whether the server answered this call with a result. A call it would not run
+// is answered with an error instead, and one it never reached is not in the
+// response at all; neither is something to read.
+export function answered(res: Response, callId: string): boolean {
+  return res.methodResponses.some(([name, , id]) => id === callId && name !== "error")
 }
 
 // Every method-level error in a response.

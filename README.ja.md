@@ -629,6 +629,36 @@ if err != nil {
 例外は `_returns` で一つの呼び出しを指定したクエリです。
 その呼び出しが答えのすべてなので、失敗したのがそれであれば返すものがなく、結果は nil になります。
 
+TypeScript は値を返すのではなく throw するので、読み取った内容はエラーに載ります。
+`MethodErrors` は元になったレスポンスを持ち、`result` にはクエリの戻り値のうちサーバが答えた分が入ります。
+サーバが実行しなかった呼び出しはそこに存在しないので、`Partial` として読んでください。
+
+```ts
+try {
+  await destroyThread(client, params)
+} catch (e) {
+  if (e instanceof MethodErrors) {
+    const partial = e.result as Partial<DestroyThreadResult>
+    if (partial.threadGet?.notFound?.length) {
+      throw new Error(`no such thread: ${partial.threadGet.notFound[0]}`)
+    }
+  }
+  throw e
+}
+```
+
+Rust も `Err` を返すので、同じくエラーに載ります。
+`MethodErrors::result` が、そのクエリの戻り値をそのまま返します。
+サーバが実行しなかった呼び出しは、欠けるのではなく既定値のまま残ります。Rust には置いておける既定値があるからです。
+
+```rust
+if let Error::Method(failed) = &err {
+    if let Some(out) = failed.result::<DestroyThreadResult>() {
+        if !out.thread_get.not_found.is_empty() { /* どのスレッドが無かったか */ }
+    }
+}
+```
+
 第三のレベルがあり、見落とされるのはこれです。
 `/set` は**エラーを含まない 200** を返しながら、処理を拒んだレコードを列挙します。
 

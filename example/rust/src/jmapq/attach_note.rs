@@ -25,7 +25,7 @@ pub struct AttachNoteParams {
 }
 
 /// AttachNoteResult holds the response to each method call AttachNote makes.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct AttachNoteResult {
     /// The response to the Blob/upload call, made as "upload".
     pub blob_upload: BlobUploadResponse,
@@ -102,12 +102,26 @@ pub async fn attach_note<T: Transport>(
         created_ids: None,
     };
 
-    let res = client.request(&req).await?;
-
-    let out = AttachNoteResult {
-        blob_upload: decode::<BlobUploadResponse>(&req, &res, "upload")?,
-        email_set: decode::<EmailSetResponse>(&req, &res, "draft")?,
+    let (res, failed) = match client.request(&req).await {
+        Ok(res) => (res, None),
+        Err(Error::Method(errs)) => (errs.response.clone(), Some(errs)),
+        Err(e) => return Err(e),
     };
+
+    let mut out = AttachNoteResult::default();
+    match decode::<BlobUploadResponse>(&req, &res, "upload") {
+        Ok(v) => out.blob_upload = v,
+        Err(e) if failed.is_none() => return Err(e),
+        Err(_) => {}
+    }
+    match decode::<EmailSetResponse>(&req, &res, "draft") {
+        Ok(v) => out.email_set = v,
+        Err(e) if failed.is_none() => return Err(e),
+        Err(_) => {}
+    }
+    if let Some(errs) = failed {
+        return Err(Error::Method(errs.with_result(out)));
+    }
 
     let mut failures: Vec<SetFailure> = Vec::new();
     collect_set_errors(

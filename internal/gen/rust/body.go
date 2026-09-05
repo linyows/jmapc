@@ -42,29 +42,45 @@ func (g *QueryGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
 
 	g.writeRequest(buf, p)
 
-	buf.WriteString("    let res = client.request(&req).await?;\n\n")
+	// A method call the server would not run does not take the answers to the
+	// others with it: the response is read either way, and what came of it
+	// goes on the error before it is handed on.
+	buf.WriteString("    let (res, failed) = match client.request(&req).await {\n")
+	buf.WriteString("        Ok(res) => (res, None),\n")
+	buf.WriteString("        Err(Error::Method(errs)) => (errs.response.clone(), Some(errs)),\n")
+	buf.WriteString("        Err(e) => return Err(e),\n")
+	buf.WriteString("    };\n\n")
 
-	// Where nothing can be refused there is nothing to hold the response for,
-	// so it is returned as it is read.
 	checks := g.setErrorChecks(p)
 	if p.q.Returns != nil {
-		if len(checks) == 0 {
-			fmt.Fprintf(buf, "    decode::<%s>(&req, &res, %s)\n}\n", p.returnType, quote(p.q.Returns.ID))
-			return
-		}
-		fmt.Fprintf(buf, "    let out = decode::<%s>(&req, &res, %s)?;\n",
+		// The one call this returns is the whole of the answer, so a failure
+		// there leaves nothing to hand back, and what went wrong is already in
+		// the error the request came back with.
+		fmt.Fprintf(buf, "    let out = match decode::<%s>(&req, &res, %s) {\n",
 			p.returnType, quote(p.q.Returns.ID))
+		buf.WriteString("        Ok(out) => out,\n")
+		buf.WriteString("        Err(e) => return Err(failed.map(Error::Method).unwrap_or(e)),\n")
+		buf.WriteString("    };\n")
 	} else {
-		fmt.Fprintf(buf, "    let out = %s {\n", p.resultType)
+		// A call the server would not run keeps its default rather than taking
+		// the others with it. Anything else wrong with the response is still
+		// worth reporting on its own.
+		fmt.Fprintf(buf, "    let mut out = %s::default();\n", p.resultType)
 		for _, c := range p.q.Calls {
-			fmt.Fprintf(buf, "        %s: decode::<%s>(&req, &res, %s)?,\n",
-				spec.RustFieldName(c.Field), p.calls[c].responseType, quote(c.ID))
+			fmt.Fprintf(buf, "    match decode::<%s>(&req, &res, %s) {\n",
+				p.calls[c].responseType, quote(c.ID))
+			fmt.Fprintf(buf, "        Ok(v) => out.%s = v,\n", spec.RustFieldName(c.Field))
+			buf.WriteString("        Err(e) if failed.is_none() => return Err(e),\n")
+			buf.WriteString("        Err(_) => {}\n")
+			buf.WriteString("    }\n")
 		}
 		if p.q.CreatedIDs {
-			buf.WriteString("        created_ids: res.created_ids.clone().unwrap_or_default(),\n")
+			buf.WriteString("    out.created_ids = res.created_ids.clone().unwrap_or_default();\n")
 		}
-		buf.WriteString("    };\n")
 	}
+	buf.WriteString("    if let Some(errs) = failed {\n")
+	buf.WriteString("        return Err(Error::Method(errs.with_result(out)));\n")
+	buf.WriteString("    }\n")
 	g.writeSetErrorChecks(buf, checks)
 	buf.WriteString("\n    Ok(out)\n}\n")
 }

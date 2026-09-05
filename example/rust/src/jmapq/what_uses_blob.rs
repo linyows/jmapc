@@ -18,7 +18,7 @@ pub struct WhatUsesBlobParams {
 
 /// WhatUsesBlobBlobData holds the properties of BlobData that the Blob/get
 /// call in WhatUsesBlob asks for.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WhatUsesBlobBlobData {
     /// The id of the blob.
@@ -38,7 +38,7 @@ pub struct WhatUsesBlobBlobData {
 
 /// WhatUsesBlobBlobGetResponse holds the response to the Blob/get call in
 /// WhatUsesBlob.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WhatUsesBlobBlobGetResponse {
     /// The id of the account to operate on.
@@ -55,7 +55,7 @@ pub struct WhatUsesBlobBlobGetResponse {
 
 /// WhatUsesBlobResult holds the response to each method call WhatUsesBlob
 /// makes.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct WhatUsesBlobResult {
     /// The response to the Blob/lookup call, made as "uses".
     pub blob_lookup: BlobLookupResponse,
@@ -114,12 +114,26 @@ pub async fn what_uses_blob<T: Transport>(
         created_ids: None,
     };
 
-    let res = client.request(&req).await?;
-
-    let out = WhatUsesBlobResult {
-        blob_lookup: decode::<BlobLookupResponse>(&req, &res, "uses")?,
-        blob_get: decode::<WhatUsesBlobBlobGetResponse>(&req, &res, "peek")?,
+    let (res, failed) = match client.request(&req).await {
+        Ok(res) => (res, None),
+        Err(Error::Method(errs)) => (errs.response.clone(), Some(errs)),
+        Err(e) => return Err(e),
     };
+
+    let mut out = WhatUsesBlobResult::default();
+    match decode::<BlobLookupResponse>(&req, &res, "uses") {
+        Ok(v) => out.blob_lookup = v,
+        Err(e) if failed.is_none() => return Err(e),
+        Err(_) => {}
+    }
+    match decode::<WhatUsesBlobBlobGetResponse>(&req, &res, "peek") {
+        Ok(v) => out.blob_get = v,
+        Err(e) if failed.is_none() => return Err(e),
+        Err(_) => {}
+    }
+    if let Some(errs) = failed {
+        return Err(Error::Method(errs.with_result(out)));
+    }
 
     Ok(out)
 }

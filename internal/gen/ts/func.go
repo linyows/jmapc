@@ -37,8 +37,8 @@ func (g *QueryGenerator) writeImports(buf *bytes.Buffer, p *plan) {
 	// compiles and then fails to load.
 	// Types first, then values, rather than sorted: the reader is looking for
 	// what the module uses, not for a name in a list.
-	runtime := []string{"type Client", "type Request"}
-	values := []string{"decode"}
+	runtime := []string{"type Client", "type Request", "type Response"}
+	values := []string{"MethodErrors", "answered", "decode"}
 	if len(g.setErrorChecks(p)) > 0 {
 		runtime = append(runtime, "type SetFailure")
 		values = append(values, "SetErrors", "collectSetErrors")
