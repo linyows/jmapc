@@ -137,7 +137,7 @@ func (g *TypeGenerator) writeObject(buf *bytes.Buffer, o *spec.Object) {
 		doc += "\n\nA request using this type must declare " + o.Capability + "."
 	}
 	writeDoc(buf, "", doc)
-	writeDerive(buf, o.Kind != spec.KindResponse)
+	writeDerive(buf)
 	buf.WriteString("#[serde(rename_all = \"camelCase\")]\n")
 	if len(o.Fields) == 0 {
 		fmt.Fprintf(buf, "pub struct %s {}\n\n", spec.RustTypeName(o.Name))
@@ -153,15 +153,14 @@ func (g *TypeGenerator) writeObject(buf *bytes.Buffer, o *spec.Object) {
 	buf.WriteString("}\n\n")
 }
 
-// writeDerive writes the derives every generated struct carries. A struct the
-// caller builds also derives Default, so that a record with fifty optional
-// properties can be written as the two that matter and a rest.
-func writeDerive(buf *bytes.Buffer, withDefault bool) {
-	if withDefault {
-		buf.WriteString("#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]\n")
-		return
-	}
-	buf.WriteString("#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]\n")
+// writeDerive writes the derives every generated struct carries.
+//
+// Default is one of them, for two reasons. A record the caller builds can be
+// written as the two properties that matter and a rest, rather than as fifty.
+// And a query whose call the server would not run leaves that call's response
+// at its default rather than losing the ones it did answer.
+func writeDerive(buf *bytes.Buffer) {
+	buf.WriteString("#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]\n")
 }
 
 // writeField writes one field of a struct. Everything a client may leave out is

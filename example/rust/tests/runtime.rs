@@ -9,6 +9,9 @@ use futures_lite::future::block_on;
 use serde_json::json;
 
 use jmapc_example::jmapq::create_mailbox::{create_mailbox, CreateMailboxParams};
+use jmapc_example::jmapq::file_into_new_mailbox::{
+    file_into_new_mailbox, FileIntoNewMailboxParams, FileIntoNewMailboxResult,
+};
 use jmapc_example::jmapq::search_emails::{search_emails_pages, SearchEmailsParams};
 use jmapc_example::jmapq::{
     Auth, Client, ClientOptions, Error, HttpRequest, HttpResponse, Transport, TransportError,
@@ -310,4 +313,57 @@ fn a_walk_asks_for_each_window_in_turn() {
     let second: serde_json::Value = serde_json::from_slice(sent[2].body.as_ref().unwrap()).unwrap();
     assert_eq!(first["methodCalls"][0][1]["position"], 0);
     assert_eq!(second["methodCalls"][0][1]["position"], 2);
+}
+
+/// A call the server would not run does not take the answers to the others
+/// with it. JMAP runs the calls it can, so what the response did carry is on
+/// the error, with the call that failed left at its default.
+#[test]
+fn the_calls_that_ran_are_on_the_error() {
+    let stub = Stub::new(vec![
+        session(),
+        json!({
+            "methodResponses": [
+                ["Mailbox/set", {
+                    "accountId": "acct1",
+                    "newState": "m2",
+                    "created": {"box": {"id": "mbx9"}},
+                }, "make"],
+                ["error", {"type": "invalidResultReference"}, "file"],
+            ],
+            "sessionState": "s1",
+        }),
+    ]);
+    let client = Client::new("https://example.com/.well-known/jmap", &stub);
+
+    let err = block_on(file_into_new_mailbox(
+        &client,
+        FileIntoNewMailboxParams {
+            name: "Archive".to_string(),
+            email_id: "e1".to_string(),
+            from_mailbox_id: "mbx1".to_string(),
+        },
+        None,
+    ))
+    .expect_err("a call the server would not run is still a failure");
+
+    let Error::Method(failed) = err else {
+        panic!("expected the failure to be reported as Error::Method");
+    };
+    assert_eq!(failed.errors.len(), 1);
+    assert_eq!(failed.errors[0].call_id, "file");
+
+    let out = failed
+        .result::<FileIntoNewMailboxResult>()
+        .expect("what the calls that ran answered with");
+    assert_eq!(out.mailbox_set.new_state, "m2");
+    assert!(
+        out.mailbox_set.created.is_some(),
+        "the mailbox the server created is not in the result"
+    );
+    assert_eq!(
+        out.email_set,
+        Default::default(),
+        "the call the server would not run should be left at its default"
+    );
 }

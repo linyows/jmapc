@@ -647,6 +647,18 @@ try {
 }
 ```
 
+Rust も `Err` を返すので、同じくエラーに載ります。
+`MethodErrors::result` が、そのクエリの戻り値をそのまま返します。
+サーバが実行しなかった呼び出しは、欠けるのではなく既定値のまま残ります。Rust には置いておける既定値があるからです。
+
+```rust
+if let Error::Method(failed) = &err {
+    if let Some(out) = failed.result::<DestroyThreadResult>() {
+        if !out.thread_get.not_found.is_empty() { /* どのスレッドが無かったか */ }
+    }
+}
+```
+
 第三のレベルがあり、見落とされるのはこれです。
 `/set` は**エラーを含まない 200** を返しながら、処理を拒んだレコードを列挙します。
 

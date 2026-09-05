@@ -9,7 +9,7 @@ use super::types::Id;
 
 /// MailQuotaQuota holds the properties of Quota that the Quota/get call in
 /// MailQuota asks for.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MailQuotaQuota {
     /// The id of the quota.
@@ -49,7 +49,7 @@ pub struct MailQuotaQuota {
 
 /// MailQuotaQuotaGetResponse holds the response to the Quota/get call in
 /// MailQuota.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MailQuotaQuotaGetResponse {
     /// The id of the account to operate on.
@@ -113,7 +113,19 @@ pub async fn mail_quota<T: Transport>(
         created_ids: None,
     };
 
-    let res = client.request(&req).await?;
+    let (res, failed) = match client.request(&req).await {
+        Ok(res) => (res, None),
+        Err(Error::Method(errs)) => (errs.response.clone(), Some(errs)),
+        Err(e) => return Err(e),
+    };
 
-    decode::<MailQuotaQuotaGetResponse>(&req, &res, "fetch")
+    let out = match decode::<MailQuotaQuotaGetResponse>(&req, &res, "fetch") {
+        Ok(out) => out,
+        Err(e) => return Err(failed.map(Error::Method).unwrap_or(e)),
+    };
+    if let Some(errs) = failed {
+        return Err(Error::Method(errs.with_result(out)));
+    }
+
+    Ok(out)
 }

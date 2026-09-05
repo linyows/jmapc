@@ -28,7 +28,7 @@ pub struct FileIntoNewMailboxParams {
 
 /// FileIntoNewMailboxResult holds the response to each method call
 /// FileIntoNewMailbox makes.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct FileIntoNewMailboxResult {
     /// The response to the Mailbox/set call, made as "make".
     pub mailbox_set: MailboxSetResponse,
@@ -104,13 +104,27 @@ pub async fn file_into_new_mailbox<T: Transport>(
         created_ids,
     };
 
-    let res = client.request(&req).await?;
-
-    let out = FileIntoNewMailboxResult {
-        mailbox_set: decode::<MailboxSetResponse>(&req, &res, "make")?,
-        email_set: decode::<EmailSetResponse>(&req, &res, "file")?,
-        created_ids: res.created_ids.clone().unwrap_or_default(),
+    let (res, failed) = match client.request(&req).await {
+        Ok(res) => (res, None),
+        Err(Error::Method(errs)) => (errs.response.clone(), Some(errs)),
+        Err(e) => return Err(e),
     };
+
+    let mut out = FileIntoNewMailboxResult::default();
+    match decode::<MailboxSetResponse>(&req, &res, "make") {
+        Ok(v) => out.mailbox_set = v,
+        Err(e) if failed.is_none() => return Err(e),
+        Err(_) => {}
+    }
+    match decode::<EmailSetResponse>(&req, &res, "file") {
+        Ok(v) => out.email_set = v,
+        Err(e) if failed.is_none() => return Err(e),
+        Err(_) => {}
+    }
+    out.created_ids = res.created_ids.clone().unwrap_or_default();
+    if let Some(errs) = failed {
+        return Err(Error::Method(errs.with_result(out)));
+    }
 
     let mut failures: Vec<SetFailure> = Vec::new();
     collect_set_errors(
