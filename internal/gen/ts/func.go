@@ -19,6 +19,7 @@ func (g *QueryGenerator) file(p *plan) []byte {
 	writeHeader(&buf, p.q.Path)
 	g.writeImports(&buf, p)
 	g.writeParams(&buf, p)
+	g.writeCreations(&buf, p)
 	g.writeNestedTypes(&buf, p)
 	g.writeRecordTypes(&buf, p)
 	g.writeResponseTypes(&buf, p)
@@ -66,7 +67,7 @@ func (g *QueryGenerator) writeImports(buf *bytes.Buffer, p *plan) {
 		}
 		g.collectRecordTypeNames(c, info, names)
 	}
-	if p.q.CreatedIDs {
+	if p.q.CreatedIDs || len(p.creations) > 0 {
 		names["Id"] = true
 	}
 
@@ -147,6 +148,19 @@ func isAliasName(s string) bool {
 		}
 	}
 	return false
+}
+
+// writeCreations writes a constant for each creation id the query invents. A
+// /set reports what it created under the name the query gave it, and without
+// this the caller spells that name a second time, in another file, with
+// nothing holding the two together.
+func (g *QueryGenerator) writeCreations(buf *bytes.Buffer, p *plan) {
+	for _, c := range p.creations {
+		shared.WriteComment(buf, "", fmt.Sprintf(
+			"%s is the creation id %s gives a record it creates, which the response reports it under.",
+			c.Name, p.q.Name))
+		fmt.Fprintf(buf, "export const %s: Id = %s\n\n", c.Name, strconv.Quote(c.ID))
+	}
 }
 
 // writeParams writes the interface holding what the caller supplies.

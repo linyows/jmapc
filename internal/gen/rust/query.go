@@ -36,6 +36,7 @@ type plan struct {
 	q                   *query.Query
 	module              string
 	funcName            string
+	creations           []shared.Creation
 	paramsType          string
 	resultType          string
 	returnType          string
@@ -91,6 +92,7 @@ func (g *QueryGenerator) plan() ([]*plan, error) {
 		if len(q.Params) > 0 {
 			p.paramsType = shared.Unique(taken, prefix+"Params")
 		}
+		p.creations = shared.Creations(taken, spec.RustConstName(q.Name)+"_", q.Creations, spec.RustConstName)
 		same := shared.SameNarrowing(q.Calls)
 		for _, c := range q.Calls {
 			info := &call{}

@@ -2,13 +2,17 @@
 // Source: queries/CreateMailbox.jmap.json
 
 import { type Client, type Request, type Response, type SetFailure, MethodErrors, answered, decode, SetErrors, collectSetErrors } from "./client.js"
-import type { MailboxSetResponse } from "./types.js"
+import type { Id, MailboxSetResponse } from "./types.js"
 
 // CreateMailboxParams holds the values CreateMailbox leaves open.
 export interface CreateMailboxParams {
   // The user-visible name of the mailbox, unique among its siblings.
   name: string
 }
+
+// createMailboxNew is the creation id CreateMailbox gives a record it
+// creates, which the response reports it under.
+export const createMailboxNew: Id = "new"
 
 // CreateMailbox creates a top-level mailbox and subscribes to it.
 //

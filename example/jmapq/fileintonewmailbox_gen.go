@@ -24,6 +24,10 @@ type FileIntoNewMailboxParams struct {
 	FromMailboxID jmapc.ID
 }
 
+// FileIntoNewMailboxBox is the creation id FileIntoNewMailbox gives a record
+// it creates, which the response reports it under.
+const FileIntoNewMailboxBox jmapc.ID = "box"
+
 // FileIntoNewMailboxResult holds the response to each method call
 // FileIntoNewMailbox makes.
 type FileIntoNewMailboxResult struct {

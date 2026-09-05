@@ -18,6 +18,10 @@ export interface FileIntoNewMailboxParams {
   fromMailboxId: Id
 }
 
+// fileIntoNewMailboxBox is the creation id FileIntoNewMailbox gives a record
+// it creates, which the response reports it under.
+export const fileIntoNewMailboxBox: Id = "box"
+
 // FileIntoNewMailboxResult holds the response to each method call
 // FileIntoNewMailbox makes.
 export interface FileIntoNewMailboxResult {

@@ -31,6 +31,10 @@ pub struct RegisterPushParams {
     pub auth_secret: String,
 }
 
+/// REGISTER_PUSH_DEVICE is the creation id RegisterPush gives a record it
+/// creates, which the response reports it under.
+pub const REGISTER_PUSH_DEVICE: &str = "device";
+
 /// RegisterPush asks the server to post to a URL when something changes,
 /// which is how a client that cannot hold a connection open — an app on a
 /// phone, say — hears about changes at all. The subscription is not live

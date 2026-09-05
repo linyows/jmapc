@@ -465,3 +465,35 @@ func TestTheOneCallAQueryReturnsIsAllOrNothing(t *testing.T) {
 		t.Errorf("the query does not hand the error back with what it returns:\n%s", src)
 	}
 }
+
+// TestACreationIDGetsAName checks the one string a caller had to repeat by
+// hand. A /set reports what it created under the name the query gave it, so
+// the caller wrote that name again in Go, in another file, with nothing
+// holding the two together: renaming it in the query left the build green and
+// the lookup missing.
+func TestACreationIDGetsAName(t *testing.T) {
+	src := generateOne(t, "CreateMailbox", `{
+	  "_returns": "make",
+	  "methodCalls": [["Mailbox/set", {"create": {"newMailbox": {"name": "{{name}}"}}}, "make"]]
+	}`)
+	for _, want := range []string{
+		"// CreateMailboxNewMailbox is the creation id CreateMailbox gives a record it",
+		`const CreateMailboxNewMailbox jmapc.ID = "newMailbox"`,
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("the generated query does not contain %q:\n%s", want, src)
+		}
+	}
+}
+
+// TestARecordIDIsNotACreationID checks that the keys of an update are left
+// alone: they are record ids the caller already has, not names the query
+// invents.
+func TestARecordIDIsNotACreationID(t *testing.T) {
+	src := generateOne(t, "MarkRead", `{
+	  "methodCalls": [["Email/set", {"update": {"e1": {"keywords/$seen": true}}}, "mark"]]
+	}`)
+	if strings.Contains(src, "const MarkRead") {
+		t.Errorf("a record id was named as though the query had invented it:\n%s", src)
+	}
+}

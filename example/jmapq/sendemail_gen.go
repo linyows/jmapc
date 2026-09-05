@@ -37,6 +37,14 @@ type SendEmailParams struct {
 	SentMailboxID jmapc.ID
 }
 
+// SendEmailDraft is the creation id SendEmail gives a record it creates,
+// which the response reports it under.
+const SendEmailDraft jmapc.ID = "draft"
+
+// SendEmailSend is the creation id SendEmail gives a record it creates, which
+// the response reports it under.
+const SendEmailSend jmapc.ID = "send"
+
 // SendEmail writes a message, hands it to the submission server, and files it
 // under Sent once the send succeeds — all in one request, so the draft can
 // never be left behind in Drafts by a call that failed halfway.

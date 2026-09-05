@@ -25,6 +25,14 @@ type AttachNoteParams struct {
 	Subject string
 }
 
+// AttachNoteNote is the creation id AttachNote gives a record it creates,
+// which the response reports it under.
+const AttachNoteNote jmapc.ID = "note"
+
+// AttachNoteDraft is the creation id AttachNote gives a record it creates,
+// which the response reports it under.
+const AttachNoteDraft jmapc.ID = "draft"
+
 // AttachNoteResult holds the response to each method call AttachNote makes.
 type AttachNoteResult struct {
 	// The response to the Blob/upload call, made as "upload".

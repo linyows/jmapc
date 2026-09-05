@@ -20,6 +20,14 @@ pub struct InstallSieveScriptParams {
     pub name: String,
 }
 
+/// INSTALL_SIEVE_SCRIPT_TEXT is the creation id InstallSieveScript gives a
+/// record it creates, which the response reports it under.
+pub const INSTALL_SIEVE_SCRIPT_TEXT: &str = "text";
+
+/// INSTALL_SIEVE_SCRIPT_FILTER is the creation id InstallSieveScript gives a
+/// record it creates, which the response reports it under.
+pub const INSTALL_SIEVE_SCRIPT_FILTER: &str = "filter";
+
 /// InstallSieveScript uploads a filtering script, stores it, and puts it into
 /// service, in one request. If the script does not parse, nothing is stored
 /// and whatever was running keeps running: the activation only happens once

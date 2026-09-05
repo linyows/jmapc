@@ -16,6 +16,10 @@ type CheckSieveScriptParams struct {
 	Script string
 }
 
+// CheckSieveScriptDraft is the creation id CheckSieveScript gives a record it
+// creates, which the response reports it under.
+const CheckSieveScriptDraft jmapc.ID = "draft"
+
 // CheckSieveScript reports whether a script would parse and whether the
 // server supports what it asks for, without storing it. It is what an editor
 // calls while the user is still typing.

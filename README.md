@@ -210,6 +210,26 @@ for the same properties describe one record, so they share one type. Two names
 for one shape would make a caller convert between them to hand a record from
 one call to a function written for the other.
 
+A `/set` that creates gets a constant for each name it gives a record, since
+the response reports the record back under that name:
+
+```json
+["Mailbox/set", {"create": {"newMailbox": {"name": "{{name}}"}}}, "make"]
+```
+
+```go
+res, err := jmapq.CreateMailbox(ctx, c, jmapq.CreateMailboxParams{Name: name})
+...
+created := res.Created[jmapq.CreateMailboxNewMailbox]
+```
+
+Without it the name lives in two files with nothing tying them together, and
+renaming it in the query still builds: the lookup misses at run time instead.
+TypeScript writes `createMailboxNewMailbox` and Rust
+`CREATE_MAILBOX_NEW_MAILBOX`. A creation id the query leaves to the caller —
+`{"{{creationId}}": ...}` — has no constant, since the caller already has the
+name.
+
 A query with no open parameters takes no `Params` argument at all —
 `MailQuota(ctx, c)`, not `MailQuota(ctx, c, MailQuotaParams{})` — so adding
 the first `{{param}}` to a query already in use changes the generated
