@@ -779,6 +779,15 @@ srv.Mux().HandleFunc("/jmap/session", myOldSessionHandler)
 old := myOldClient(srv.BaseURL())
 ```
 
+Where the other half speaks JMAP already and only looks for it elsewhere —
+deriving the session and the API from a base URL of its own — mount jmaptest's
+own handlers there instead, and it answers under both names:
+
+```go
+srv.Mux().HandleFunc("/jmap/session", srv.ServeSession)
+srv.Mux().HandleFunc("/jmap", srv.ServeAPI)
+```
+
 So jmaptest is worth adopting on the first method converted rather than the
 last.
 
