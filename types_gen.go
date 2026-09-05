@@ -3,6 +3,446 @@
 
 package jmapc
 
+// ContactPartialDateOrContactTimestamp is a value that is a
+// ContactPartialDate or a ContactTimestamp.
+//
+// Exactly one field is set. Setting none, or more than one, is an error when
+// the value is encoded.
+type ContactPartialDateOrContactTimestamp struct {
+	// ContactPartialDate holds the value where it is a ContactPartialDate.
+	ContactPartialDate *ContactPartialDate
+
+	// ContactTimestamp holds the value where it is a ContactTimestamp.
+	ContactTimestamp *ContactTimestamp
+}
+
+// MarshalJSON writes whichever shape the value holds.
+func (u ContactPartialDateOrContactTimestamp) MarshalJSON() ([]byte, error) {
+	var set []any
+	if u.ContactPartialDate != nil {
+		set = append(set, u.ContactPartialDate)
+	}
+	if u.ContactTimestamp != nil {
+		set = append(set, u.ContactTimestamp)
+	}
+	return marshalUnion("ContactPartialDateOrContactTimestamp", set)
+}
+
+// UnmarshalJSON fills the first shape the value fits.
+func (u *ContactPartialDateOrContactTimestamp) UnmarshalJSON(data []byte) error {
+	*u = ContactPartialDateOrContactTimestamp{}
+	var v0 ContactPartialDate
+	var v1 ContactTimestamp
+	return unmarshalUnion("ContactPartialDateOrContactTimestamp", data, []unionAlt{
+		{Required: nil, Into: &v0, Set: func() { u.ContactPartialDate = &v0 }},
+		{Required: nil, Into: &v1, Set: func() { u.ContactTimestamp = &v1 }},
+	})
+}
+
+// EventOffsetTriggerOrEventAbsoluteTrigger is a value that is an
+// EventOffsetTrigger or an EventAbsoluteTrigger.
+//
+// Exactly one field is set. Setting none, or more than one, is an error when
+// the value is encoded.
+type EventOffsetTriggerOrEventAbsoluteTrigger struct {
+	// EventOffsetTrigger holds the value where it is an EventOffsetTrigger.
+	EventOffsetTrigger *EventOffsetTrigger
+
+	// EventAbsoluteTrigger holds the value where it is an EventAbsoluteTrigger.
+	EventAbsoluteTrigger *EventAbsoluteTrigger
+}
+
+// MarshalJSON writes whichever shape the value holds.
+func (u EventOffsetTriggerOrEventAbsoluteTrigger) MarshalJSON() ([]byte, error) {
+	var set []any
+	if u.EventOffsetTrigger != nil {
+		set = append(set, u.EventOffsetTrigger)
+	}
+	if u.EventAbsoluteTrigger != nil {
+		set = append(set, u.EventAbsoluteTrigger)
+	}
+	return marshalUnion("EventOffsetTriggerOrEventAbsoluteTrigger", set)
+}
+
+// UnmarshalJSON fills the first shape the value fits.
+func (u *EventOffsetTriggerOrEventAbsoluteTrigger) UnmarshalJSON(data []byte) error {
+	*u = EventOffsetTriggerOrEventAbsoluteTrigger{}
+	var v0 EventOffsetTrigger
+	var v1 EventAbsoluteTrigger
+	return unmarshalUnion("EventOffsetTriggerOrEventAbsoluteTrigger", data, []unionAlt{
+		{Required: []string{"offset"}, Into: &v0, Set: func() { u.EventOffsetTrigger = &v0 }},
+		{Required: []string{"when"}, Into: &v1, Set: func() { u.EventAbsoluteTrigger = &v1 }},
+	})
+}
+
+// FilterOperatorOrCalendarEventFilterCondition is a value that is a
+// FilterOperator or a CalendarEventFilterCondition.
+//
+// Exactly one field is set. Setting none, or more than one, is an error when
+// the value is encoded.
+type FilterOperatorOrCalendarEventFilterCondition struct {
+	// FilterOperator holds the value where it is a FilterOperator.
+	FilterOperator *FilterOperator
+
+	// CalendarEventFilterCondition holds the value where it is a
+	// CalendarEventFilterCondition.
+	CalendarEventFilterCondition *CalendarEventFilterCondition
+}
+
+// MarshalJSON writes whichever shape the value holds.
+func (u FilterOperatorOrCalendarEventFilterCondition) MarshalJSON() ([]byte, error) {
+	var set []any
+	if u.FilterOperator != nil {
+		set = append(set, u.FilterOperator)
+	}
+	if u.CalendarEventFilterCondition != nil {
+		set = append(set, u.CalendarEventFilterCondition)
+	}
+	return marshalUnion("FilterOperatorOrCalendarEventFilterCondition", set)
+}
+
+// UnmarshalJSON fills the first shape the value fits.
+func (u *FilterOperatorOrCalendarEventFilterCondition) UnmarshalJSON(data []byte) error {
+	*u = FilterOperatorOrCalendarEventFilterCondition{}
+	var v0 FilterOperator
+	var v1 CalendarEventFilterCondition
+	return unmarshalUnion("FilterOperatorOrCalendarEventFilterCondition", data, []unionAlt{
+		{Required: []string{"operator", "conditions"}, Into: &v0, Set: func() { u.FilterOperator = &v0 }},
+		{Required: nil, Into: &v1, Set: func() { u.CalendarEventFilterCondition = &v1 }},
+	})
+}
+
+// FilterOperatorOrCalendarEventNotificationFilterCondition is a value that is
+// a FilterOperator or a CalendarEventNotificationFilterCondition.
+//
+// Exactly one field is set. Setting none, or more than one, is an error when
+// the value is encoded.
+type FilterOperatorOrCalendarEventNotificationFilterCondition struct {
+	// FilterOperator holds the value where it is a FilterOperator.
+	FilterOperator *FilterOperator
+
+	// CalendarEventNotificationFilterCondition holds the value where it is a
+	// CalendarEventNotificationFilterCondition.
+	CalendarEventNotificationFilterCondition *CalendarEventNotificationFilterCondition
+}
+
+// MarshalJSON writes whichever shape the value holds.
+func (u FilterOperatorOrCalendarEventNotificationFilterCondition) MarshalJSON() ([]byte, error) {
+	var set []any
+	if u.FilterOperator != nil {
+		set = append(set, u.FilterOperator)
+	}
+	if u.CalendarEventNotificationFilterCondition != nil {
+		set = append(set, u.CalendarEventNotificationFilterCondition)
+	}
+	return marshalUnion("FilterOperatorOrCalendarEventNotificationFilterCondition", set)
+}
+
+// UnmarshalJSON fills the first shape the value fits.
+func (u *FilterOperatorOrCalendarEventNotificationFilterCondition) UnmarshalJSON(data []byte) error {
+	*u = FilterOperatorOrCalendarEventNotificationFilterCondition{}
+	var v0 FilterOperator
+	var v1 CalendarEventNotificationFilterCondition
+	return unmarshalUnion("FilterOperatorOrCalendarEventNotificationFilterCondition", data, []unionAlt{
+		{Required: []string{"operator", "conditions"}, Into: &v0, Set: func() { u.FilterOperator = &v0 }},
+		{Required: nil, Into: &v1, Set: func() { u.CalendarEventNotificationFilterCondition = &v1 }},
+	})
+}
+
+// FilterOperatorOrContactCardFilterCondition is a value that is a
+// FilterOperator or a ContactCardFilterCondition.
+//
+// Exactly one field is set. Setting none, or more than one, is an error when
+// the value is encoded.
+type FilterOperatorOrContactCardFilterCondition struct {
+	// FilterOperator holds the value where it is a FilterOperator.
+	FilterOperator *FilterOperator
+
+	// ContactCardFilterCondition holds the value where it is a
+	// ContactCardFilterCondition.
+	ContactCardFilterCondition *ContactCardFilterCondition
+}
+
+// MarshalJSON writes whichever shape the value holds.
+func (u FilterOperatorOrContactCardFilterCondition) MarshalJSON() ([]byte, error) {
+	var set []any
+	if u.FilterOperator != nil {
+		set = append(set, u.FilterOperator)
+	}
+	if u.ContactCardFilterCondition != nil {
+		set = append(set, u.ContactCardFilterCondition)
+	}
+	return marshalUnion("FilterOperatorOrContactCardFilterCondition", set)
+}
+
+// UnmarshalJSON fills the first shape the value fits.
+func (u *FilterOperatorOrContactCardFilterCondition) UnmarshalJSON(data []byte) error {
+	*u = FilterOperatorOrContactCardFilterCondition{}
+	var v0 FilterOperator
+	var v1 ContactCardFilterCondition
+	return unmarshalUnion("FilterOperatorOrContactCardFilterCondition", data, []unionAlt{
+		{Required: []string{"operator", "conditions"}, Into: &v0, Set: func() { u.FilterOperator = &v0 }},
+		{Required: nil, Into: &v1, Set: func() { u.ContactCardFilterCondition = &v1 }},
+	})
+}
+
+// FilterOperatorOrEmailFilterCondition is a value that is a FilterOperator or
+// an EmailFilterCondition.
+//
+// Exactly one field is set. Setting none, or more than one, is an error when
+// the value is encoded.
+type FilterOperatorOrEmailFilterCondition struct {
+	// FilterOperator holds the value where it is a FilterOperator.
+	FilterOperator *FilterOperator
+
+	// EmailFilterCondition holds the value where it is an EmailFilterCondition.
+	EmailFilterCondition *EmailFilterCondition
+}
+
+// MarshalJSON writes whichever shape the value holds.
+func (u FilterOperatorOrEmailFilterCondition) MarshalJSON() ([]byte, error) {
+	var set []any
+	if u.FilterOperator != nil {
+		set = append(set, u.FilterOperator)
+	}
+	if u.EmailFilterCondition != nil {
+		set = append(set, u.EmailFilterCondition)
+	}
+	return marshalUnion("FilterOperatorOrEmailFilterCondition", set)
+}
+
+// UnmarshalJSON fills the first shape the value fits.
+func (u *FilterOperatorOrEmailFilterCondition) UnmarshalJSON(data []byte) error {
+	*u = FilterOperatorOrEmailFilterCondition{}
+	var v0 FilterOperator
+	var v1 EmailFilterCondition
+	return unmarshalUnion("FilterOperatorOrEmailFilterCondition", data, []unionAlt{
+		{Required: []string{"operator", "conditions"}, Into: &v0, Set: func() { u.FilterOperator = &v0 }},
+		{Required: nil, Into: &v1, Set: func() { u.EmailFilterCondition = &v1 }},
+	})
+}
+
+// FilterOperatorOrEmailSubmissionFilterCondition is a value that is a
+// FilterOperator or an EmailSubmissionFilterCondition.
+//
+// Exactly one field is set. Setting none, or more than one, is an error when
+// the value is encoded.
+type FilterOperatorOrEmailSubmissionFilterCondition struct {
+	// FilterOperator holds the value where it is a FilterOperator.
+	FilterOperator *FilterOperator
+
+	// EmailSubmissionFilterCondition holds the value where it is an
+	// EmailSubmissionFilterCondition.
+	EmailSubmissionFilterCondition *EmailSubmissionFilterCondition
+}
+
+// MarshalJSON writes whichever shape the value holds.
+func (u FilterOperatorOrEmailSubmissionFilterCondition) MarshalJSON() ([]byte, error) {
+	var set []any
+	if u.FilterOperator != nil {
+		set = append(set, u.FilterOperator)
+	}
+	if u.EmailSubmissionFilterCondition != nil {
+		set = append(set, u.EmailSubmissionFilterCondition)
+	}
+	return marshalUnion("FilterOperatorOrEmailSubmissionFilterCondition", set)
+}
+
+// UnmarshalJSON fills the first shape the value fits.
+func (u *FilterOperatorOrEmailSubmissionFilterCondition) UnmarshalJSON(data []byte) error {
+	*u = FilterOperatorOrEmailSubmissionFilterCondition{}
+	var v0 FilterOperator
+	var v1 EmailSubmissionFilterCondition
+	return unmarshalUnion("FilterOperatorOrEmailSubmissionFilterCondition", data, []unionAlt{
+		{Required: []string{"operator", "conditions"}, Into: &v0, Set: func() { u.FilterOperator = &v0 }},
+		{Required: nil, Into: &v1, Set: func() { u.EmailSubmissionFilterCondition = &v1 }},
+	})
+}
+
+// FilterOperatorOrMailboxFilterCondition is a value that is a FilterOperator
+// or a MailboxFilterCondition.
+//
+// Exactly one field is set. Setting none, or more than one, is an error when
+// the value is encoded.
+type FilterOperatorOrMailboxFilterCondition struct {
+	// FilterOperator holds the value where it is a FilterOperator.
+	FilterOperator *FilterOperator
+
+	// MailboxFilterCondition holds the value where it is a
+	// MailboxFilterCondition.
+	MailboxFilterCondition *MailboxFilterCondition
+}
+
+// MarshalJSON writes whichever shape the value holds.
+func (u FilterOperatorOrMailboxFilterCondition) MarshalJSON() ([]byte, error) {
+	var set []any
+	if u.FilterOperator != nil {
+		set = append(set, u.FilterOperator)
+	}
+	if u.MailboxFilterCondition != nil {
+		set = append(set, u.MailboxFilterCondition)
+	}
+	return marshalUnion("FilterOperatorOrMailboxFilterCondition", set)
+}
+
+// UnmarshalJSON fills the first shape the value fits.
+func (u *FilterOperatorOrMailboxFilterCondition) UnmarshalJSON(data []byte) error {
+	*u = FilterOperatorOrMailboxFilterCondition{}
+	var v0 FilterOperator
+	var v1 MailboxFilterCondition
+	return unmarshalUnion("FilterOperatorOrMailboxFilterCondition", data, []unionAlt{
+		{Required: []string{"operator", "conditions"}, Into: &v0, Set: func() { u.FilterOperator = &v0 }},
+		{Required: nil, Into: &v1, Set: func() { u.MailboxFilterCondition = &v1 }},
+	})
+}
+
+// FilterOperatorOrPrincipalFilterCondition is a value that is a
+// FilterOperator or a PrincipalFilterCondition.
+//
+// Exactly one field is set. Setting none, or more than one, is an error when
+// the value is encoded.
+type FilterOperatorOrPrincipalFilterCondition struct {
+	// FilterOperator holds the value where it is a FilterOperator.
+	FilterOperator *FilterOperator
+
+	// PrincipalFilterCondition holds the value where it is a
+	// PrincipalFilterCondition.
+	PrincipalFilterCondition *PrincipalFilterCondition
+}
+
+// MarshalJSON writes whichever shape the value holds.
+func (u FilterOperatorOrPrincipalFilterCondition) MarshalJSON() ([]byte, error) {
+	var set []any
+	if u.FilterOperator != nil {
+		set = append(set, u.FilterOperator)
+	}
+	if u.PrincipalFilterCondition != nil {
+		set = append(set, u.PrincipalFilterCondition)
+	}
+	return marshalUnion("FilterOperatorOrPrincipalFilterCondition", set)
+}
+
+// UnmarshalJSON fills the first shape the value fits.
+func (u *FilterOperatorOrPrincipalFilterCondition) UnmarshalJSON(data []byte) error {
+	*u = FilterOperatorOrPrincipalFilterCondition{}
+	var v0 FilterOperator
+	var v1 PrincipalFilterCondition
+	return unmarshalUnion("FilterOperatorOrPrincipalFilterCondition", data, []unionAlt{
+		{Required: []string{"operator", "conditions"}, Into: &v0, Set: func() { u.FilterOperator = &v0 }},
+		{Required: nil, Into: &v1, Set: func() { u.PrincipalFilterCondition = &v1 }},
+	})
+}
+
+// FilterOperatorOrQuotaFilterCondition is a value that is a FilterOperator or
+// a QuotaFilterCondition.
+//
+// Exactly one field is set. Setting none, or more than one, is an error when
+// the value is encoded.
+type FilterOperatorOrQuotaFilterCondition struct {
+	// FilterOperator holds the value where it is a FilterOperator.
+	FilterOperator *FilterOperator
+
+	// QuotaFilterCondition holds the value where it is a QuotaFilterCondition.
+	QuotaFilterCondition *QuotaFilterCondition
+}
+
+// MarshalJSON writes whichever shape the value holds.
+func (u FilterOperatorOrQuotaFilterCondition) MarshalJSON() ([]byte, error) {
+	var set []any
+	if u.FilterOperator != nil {
+		set = append(set, u.FilterOperator)
+	}
+	if u.QuotaFilterCondition != nil {
+		set = append(set, u.QuotaFilterCondition)
+	}
+	return marshalUnion("FilterOperatorOrQuotaFilterCondition", set)
+}
+
+// UnmarshalJSON fills the first shape the value fits.
+func (u *FilterOperatorOrQuotaFilterCondition) UnmarshalJSON(data []byte) error {
+	*u = FilterOperatorOrQuotaFilterCondition{}
+	var v0 FilterOperator
+	var v1 QuotaFilterCondition
+	return unmarshalUnion("FilterOperatorOrQuotaFilterCondition", data, []unionAlt{
+		{Required: []string{"operator", "conditions"}, Into: &v0, Set: func() { u.FilterOperator = &v0 }},
+		{Required: nil, Into: &v1, Set: func() { u.QuotaFilterCondition = &v1 }},
+	})
+}
+
+// FilterOperatorOrShareNotificationFilterCondition is a value that is a
+// FilterOperator or a ShareNotificationFilterCondition.
+//
+// Exactly one field is set. Setting none, or more than one, is an error when
+// the value is encoded.
+type FilterOperatorOrShareNotificationFilterCondition struct {
+	// FilterOperator holds the value where it is a FilterOperator.
+	FilterOperator *FilterOperator
+
+	// ShareNotificationFilterCondition holds the value where it is a
+	// ShareNotificationFilterCondition.
+	ShareNotificationFilterCondition *ShareNotificationFilterCondition
+}
+
+// MarshalJSON writes whichever shape the value holds.
+func (u FilterOperatorOrShareNotificationFilterCondition) MarshalJSON() ([]byte, error) {
+	var set []any
+	if u.FilterOperator != nil {
+		set = append(set, u.FilterOperator)
+	}
+	if u.ShareNotificationFilterCondition != nil {
+		set = append(set, u.ShareNotificationFilterCondition)
+	}
+	return marshalUnion("FilterOperatorOrShareNotificationFilterCondition", set)
+}
+
+// UnmarshalJSON fills the first shape the value fits.
+func (u *FilterOperatorOrShareNotificationFilterCondition) UnmarshalJSON(data []byte) error {
+	*u = FilterOperatorOrShareNotificationFilterCondition{}
+	var v0 FilterOperator
+	var v1 ShareNotificationFilterCondition
+	return unmarshalUnion("FilterOperatorOrShareNotificationFilterCondition", data, []unionAlt{
+		{Required: []string{"operator", "conditions"}, Into: &v0, Set: func() { u.FilterOperator = &v0 }},
+		{Required: nil, Into: &v1, Set: func() { u.ShareNotificationFilterCondition = &v1 }},
+	})
+}
+
+// FilterOperatorOrSieveScriptFilterCondition is a value that is a
+// FilterOperator or a SieveScriptFilterCondition.
+//
+// Exactly one field is set. Setting none, or more than one, is an error when
+// the value is encoded.
+type FilterOperatorOrSieveScriptFilterCondition struct {
+	// FilterOperator holds the value where it is a FilterOperator.
+	FilterOperator *FilterOperator
+
+	// SieveScriptFilterCondition holds the value where it is a
+	// SieveScriptFilterCondition.
+	SieveScriptFilterCondition *SieveScriptFilterCondition
+}
+
+// MarshalJSON writes whichever shape the value holds.
+func (u FilterOperatorOrSieveScriptFilterCondition) MarshalJSON() ([]byte, error) {
+	var set []any
+	if u.FilterOperator != nil {
+		set = append(set, u.FilterOperator)
+	}
+	if u.SieveScriptFilterCondition != nil {
+		set = append(set, u.SieveScriptFilterCondition)
+	}
+	return marshalUnion("FilterOperatorOrSieveScriptFilterCondition", set)
+}
+
+// UnmarshalJSON fills the first shape the value fits.
+func (u *FilterOperatorOrSieveScriptFilterCondition) UnmarshalJSON(data []byte) error {
+	*u = FilterOperatorOrSieveScriptFilterCondition{}
+	var v0 FilterOperator
+	var v1 SieveScriptFilterCondition
+	return unmarshalUnion("FilterOperatorOrSieveScriptFilterCondition", data, []unionAlt{
+		{Required: []string{"operator", "conditions"}, Into: &v0, Set: func() { u.FilterOperator = &v0 }},
+		{Required: nil, Into: &v1, Set: func() { u.SieveScriptFilterCondition = &v1 }},
+	})
+}
+
 // AddedItem is an id to insert into a cached query result, with the index to
 // insert it at.
 type AddedItem struct {
@@ -1121,7 +1561,7 @@ type CalendarEventNotificationQueryArguments struct {
 	AccountID ID `json:"accountId,omitzero"`
 
 	// The condition records must match to be included in the results.
-	Filter any `json:"filter,omitzero"`
+	Filter *FilterOperatorOrCalendarEventNotificationFilterCondition `json:"filter,omitzero"`
 
 	// The comparators to sort the results by, in order of precedence.
 	Sort []Comparator `json:"sort,omitzero"`
@@ -1159,7 +1599,7 @@ type CalendarEventNotificationQueryChangesArguments struct {
 	AccountID ID `json:"accountId,omitzero"`
 
 	// The filter the original query used.
-	Filter any `json:"filter,omitzero"`
+	Filter *FilterOperatorOrCalendarEventNotificationFilterCondition `json:"filter,omitzero"`
 
 	// The sort the original query used.
 	Sort []Comparator `json:"sort,omitzero"`
@@ -1341,7 +1781,7 @@ type CalendarEventQueryArguments struct {
 	AccountID ID `json:"accountId,omitzero"`
 
 	// The condition records must match to be included in the results.
-	Filter any `json:"filter,omitzero"`
+	Filter *FilterOperatorOrCalendarEventFilterCondition `json:"filter,omitzero"`
 
 	// The comparators to sort the results by, in order of precedence.
 	Sort []Comparator `json:"sort,omitzero"`
@@ -1390,7 +1830,7 @@ type CalendarEventQueryChangesArguments struct {
 	AccountID ID `json:"accountId,omitzero"`
 
 	// The filter the original query used.
-	Filter any `json:"filter,omitzero"`
+	Filter *FilterOperatorOrCalendarEventFilterCondition `json:"filter,omitzero"`
 
 	// The sort the original query used.
 	Sort []Comparator `json:"sort,omitzero"`
@@ -1788,7 +2228,7 @@ type ContactAnniversary struct {
 
 	// The date, either partially known or exact. A value with no @type is a
 	// partial date.
-	Date any `json:"date,omitzero"`
+	Date ContactPartialDateOrContactTimestamp `json:"date,omitzero"`
 
 	// Where the anniversary took place.
 	Place ContactAddress `json:"place,omitzero"`
@@ -2168,7 +2608,7 @@ type ContactCardQueryArguments struct {
 	AccountID ID `json:"accountId,omitzero"`
 
 	// The condition records must match to be included in the results.
-	Filter any `json:"filter,omitzero"`
+	Filter *FilterOperatorOrContactCardFilterCondition `json:"filter,omitzero"`
 
 	// The comparators to sort the results by, in order of precedence.
 	Sort []Comparator `json:"sort,omitzero"`
@@ -2206,7 +2646,7 @@ type ContactCardQueryChangesArguments struct {
 	AccountID ID `json:"accountId,omitzero"`
 
 	// The filter the original query used.
-	Filter any `json:"filter,omitzero"`
+	Filter *FilterOperatorOrContactCardFilterCondition `json:"filter,omitzero"`
 
 	// The sort the original query used.
 	Sort []Comparator `json:"sort,omitzero"`
@@ -3468,7 +3908,7 @@ type EmailQueryArguments struct {
 	AccountID ID `json:"accountId,omitzero"`
 
 	// The condition records must match to be included in the results.
-	Filter any `json:"filter,omitzero"`
+	Filter *FilterOperatorOrEmailFilterCondition `json:"filter,omitzero"`
 
 	// The comparators to sort the results by, in order of precedence.
 	Sort []Comparator `json:"sort,omitzero"`
@@ -3512,7 +3952,7 @@ type EmailQueryChangesArguments struct {
 	AccountID ID `json:"accountId,omitzero"`
 
 	// The filter the original query used.
-	Filter any `json:"filter,omitzero"`
+	Filter *FilterOperatorOrEmailFilterCondition `json:"filter,omitzero"`
 
 	// The sort the original query used.
 	Sort []Comparator `json:"sort,omitzero"`
@@ -3826,7 +4266,7 @@ type EmailSubmissionQueryArguments struct {
 	AccountID ID `json:"accountId,omitzero"`
 
 	// The condition records must match to be included in the results.
-	Filter any `json:"filter,omitzero"`
+	Filter *FilterOperatorOrEmailSubmissionFilterCondition `json:"filter,omitzero"`
 
 	// The comparators to sort the results by, in order of precedence.
 	Sort []Comparator `json:"sort,omitzero"`
@@ -3864,7 +4304,7 @@ type EmailSubmissionQueryChangesArguments struct {
 	AccountID ID `json:"accountId,omitzero"`
 
 	// The filter the original query used.
-	Filter any `json:"filter,omitzero"`
+	Filter *FilterOperatorOrEmailSubmissionFilterCondition `json:"filter,omitzero"`
 
 	// The sort the original query used.
 	Sort []Comparator `json:"sort,omitzero"`
@@ -4041,7 +4481,7 @@ type EventAlert struct {
 
 	// When to fire the alert, either relative to the event or at a fixed time. A
 	// trigger of a kind this catalogue does not know is left as it was written.
-	Trigger any `json:"trigger,omitzero"`
+	Trigger EventOffsetTriggerOrEventAbsoluteTrigger `json:"trigger,omitzero"`
 
 	// When the user dismissed the alert.
 	Acknowledged UTCDate `json:"acknowledged,omitzero"`
@@ -4906,7 +5346,7 @@ type MailboxQueryArguments struct {
 	AccountID ID `json:"accountId,omitzero"`
 
 	// The condition records must match to be included in the results.
-	Filter any `json:"filter,omitzero"`
+	Filter *FilterOperatorOrMailboxFilterCondition `json:"filter,omitzero"`
 
 	// The comparators to sort the results by, in order of precedence.
 	Sort []Comparator `json:"sort,omitzero"`
@@ -4954,7 +5394,7 @@ type MailboxQueryChangesArguments struct {
 	AccountID ID `json:"accountId,omitzero"`
 
 	// The filter the original query used.
-	Filter any `json:"filter,omitzero"`
+	Filter *FilterOperatorOrMailboxFilterCondition `json:"filter,omitzero"`
 
 	// The sort the original query used.
 	Sort []Comparator `json:"sort,omitzero"`
@@ -5491,7 +5931,7 @@ type PrincipalQueryArguments struct {
 	AccountID ID `json:"accountId,omitzero"`
 
 	// The condition records must match to be included in the results.
-	Filter any `json:"filter,omitzero"`
+	Filter *FilterOperatorOrPrincipalFilterCondition `json:"filter,omitzero"`
 
 	// The comparators to sort the results by, in order of precedence.
 	Sort []Comparator `json:"sort,omitzero"`
@@ -5529,7 +5969,7 @@ type PrincipalQueryChangesArguments struct {
 	AccountID ID `json:"accountId,omitzero"`
 
 	// The filter the original query used.
-	Filter any `json:"filter,omitzero"`
+	Filter *FilterOperatorOrPrincipalFilterCondition `json:"filter,omitzero"`
 
 	// The sort the original query used.
 	Sort []Comparator `json:"sort,omitzero"`
@@ -5946,7 +6386,7 @@ type QuotaQueryArguments struct {
 	AccountID ID `json:"accountId,omitzero"`
 
 	// The condition records must match to be included in the results.
-	Filter any `json:"filter,omitzero"`
+	Filter *FilterOperatorOrQuotaFilterCondition `json:"filter,omitzero"`
 
 	// The comparators to sort the results by, in order of precedence.
 	Sort []Comparator `json:"sort,omitzero"`
@@ -5984,7 +6424,7 @@ type QuotaQueryChangesArguments struct {
 	AccountID ID `json:"accountId,omitzero"`
 
 	// The filter the original query used.
-	Filter any `json:"filter,omitzero"`
+	Filter *FilterOperatorOrQuotaFilterCondition `json:"filter,omitzero"`
 
 	// The sort the original query used.
 	Sort []Comparator `json:"sort,omitzero"`
@@ -6087,7 +6527,7 @@ type SearchSnippetGetArguments struct {
 	AccountID ID `json:"accountId,omitzero"`
 
 	// The filter the search used, which is what the snippets are cut around.
-	Filter any `json:"filter,omitzero"`
+	Filter *FilterOperatorOrEmailFilterCondition `json:"filter,omitzero"`
 
 	// The ids of the emails to return snippets for.
 	EmailIDs []ID `json:"emailIds,omitzero"`
@@ -6285,7 +6725,7 @@ type ShareNotificationQueryArguments struct {
 	AccountID ID `json:"accountId,omitzero"`
 
 	// The condition records must match to be included in the results.
-	Filter any `json:"filter,omitzero"`
+	Filter *FilterOperatorOrShareNotificationFilterCondition `json:"filter,omitzero"`
 
 	// The comparators to sort the results by, in order of precedence.
 	Sort []Comparator `json:"sort,omitzero"`
@@ -6323,7 +6763,7 @@ type ShareNotificationQueryChangesArguments struct {
 	AccountID ID `json:"accountId,omitzero"`
 
 	// The filter the original query used.
-	Filter any `json:"filter,omitzero"`
+	Filter *FilterOperatorOrShareNotificationFilterCondition `json:"filter,omitzero"`
 
 	// The sort the original query used.
 	Sort []Comparator `json:"sort,omitzero"`
@@ -6541,7 +6981,7 @@ type SieveScriptQueryArguments struct {
 	AccountID ID `json:"accountId,omitzero"`
 
 	// The condition records must match to be included in the results.
-	Filter any `json:"filter,omitzero"`
+	Filter *FilterOperatorOrSieveScriptFilterCondition `json:"filter,omitzero"`
 
 	// The comparators to sort the results by, in order of precedence.
 	Sort []Comparator `json:"sort,omitzero"`

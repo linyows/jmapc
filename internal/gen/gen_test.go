@@ -497,3 +497,22 @@ func TestARecordIDIsNotACreationID(t *testing.T) {
 		t.Errorf("a record id was named as though the query had invented it:\n%s", src)
 	}
 }
+
+// TestAWholeFilterIsTyped checks the parameter that stands for a whole filter.
+// A filter is either a boolean operator or a condition, and Go used to have no
+// way to say that, so the parameter arrived as an any the caller had to get
+// right on their own.
+func TestAWholeFilterIsTyped(t *testing.T) {
+	src := generateOne(t, "Search", `{
+	  "methodCalls": [
+	    ["Email/query", {"filter": "{{filter}}", "limit": 10}, "search"]
+	  ]
+	}`)
+	want := "Filter jmapc.FilterOperatorOrEmailFilterCondition"
+	if !strings.Contains(src, want) {
+		t.Errorf("the parameters do not hold %q:\n%s", want, src)
+	}
+	if strings.Contains(src, "Filter any") {
+		t.Errorf("the filter parameter is still an any:\n%s", src)
+	}
+}

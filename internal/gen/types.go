@@ -37,10 +37,9 @@ func (g *TypeGenerator) Generate() ([]byte, error) {
 		fmt.Fprintf(&buf, "\nimport %q\n", "github.com/linyows/jmapc")
 	}
 
-	for _, o := range g.Spec.Objects() {
-		if g.Skip[o.Name] {
-			continue
-		}
+	objects := g.objects()
+	g.writeUnions(&buf, g.unions(objects))
+	for _, o := range objects {
 		g.writeObject(&buf, o)
 	}
 
@@ -49,6 +48,153 @@ func (g *TypeGenerator) Generate() ([]byte, error) {
 		return nil, fmt.Errorf("gen: formatting generated types: %w\n%s", err, buf.String())
 	}
 	return src, nil
+}
+
+// objects returns the types to write, in catalogue order.
+func (g *TypeGenerator) objects() []*spec.Object {
+	var out []*spec.Object
+	for _, o := range g.Spec.Objects() {
+		if g.Skip[o.Name] {
+			continue
+		}
+		out = append(out, o)
+	}
+	return out
+}
+
+// unions returns the unions the objects use, keyed by the name of the struct
+// standing for each. They are written
+// only into the runtime package: generated code elsewhere refers to them
+// through the qualifier, so there is one declaration however many packages are
+// generated from the same catalogue.
+func (g *TypeGenerator) unions(objects []*spec.Object) map[string]*spec.Type {
+	if g.Qualifier != "" {
+		return nil
+	}
+	found := map[string]*spec.Type{}
+	for _, o := range objects {
+		for _, f := range o.Fields {
+			spec.CollectUnionsBy(f.ParsedType(), spec.GoUnionName, found)
+		}
+	}
+	return found
+}
+
+// writeUnions writes a struct for each union, with the marshalling that keeps
+// exactly one of its fields in play.
+func (g *TypeGenerator) writeUnions(buf *bytes.Buffer, unions map[string]*spec.Type) {
+	for _, name := range spec.SortedUnionNames(unions) {
+		g.writeUnion(buf, name, unions[name])
+	}
+}
+
+// writeUnion writes one union: a struct with a field per shape, and the pair
+// of methods that read and write whichever field is set.
+func (g *TypeGenerator) writeUnion(buf *bytes.Buffer, name string, t *spec.Type) {
+	buf.WriteString("\n")
+	shared.WriteComment(buf, "", name+" is a value that is "+describeUnion(t)+
+		".\n\nExactly one field is set. Setting none, or more than one, is an "+
+		"error when the value is encoded.")
+	fmt.Fprintf(buf, "type %s struct {\n", name)
+	for i, m := range t.Union {
+		if i > 0 {
+			buf.WriteString("\n")
+		}
+		field := spec.GoUnionMemberName(m)
+		shared.WriteComment(buf, "\t", field+" holds the value where it is "+
+			article(m.GoType(g.Qualifier))+".")
+		fmt.Fprintf(buf, "\t%s %s\n", field, g.unionFieldType(m))
+	}
+	buf.WriteString("}\n\n")
+
+	fmt.Fprintf(buf, "// MarshalJSON writes whichever shape the value holds.\n")
+	fmt.Fprintf(buf, "func (u %s) MarshalJSON() ([]byte, error) {\n", name)
+	buf.WriteString("\tvar set []any\n")
+	for _, m := range t.Union {
+		field := spec.GoUnionMemberName(m)
+		fmt.Fprintf(buf, "\tif u.%s != nil {\n\t\tset = append(set, u.%s)\n\t}\n", field, field)
+	}
+	fmt.Fprintf(buf, "\treturn marshalUnion(%q, set)\n}\n\n", name)
+
+	fmt.Fprintf(buf, "// UnmarshalJSON fills the first shape the value fits.\n")
+	fmt.Fprintf(buf, "func (u *%s) UnmarshalJSON(data []byte) error {\n", name)
+	fmt.Fprintf(buf, "\t*u = %s{}\n", name)
+	for i, m := range t.Union {
+		fmt.Fprintf(buf, "\tvar v%d %s\n", i, m.GoType(g.Qualifier))
+	}
+	fmt.Fprintf(buf, "\treturn unmarshalUnion(%q, data, []unionAlt{\n", name)
+	for i, m := range t.Union {
+		field := spec.GoUnionMemberName(m)
+		held := fmt.Sprintf("v%d", i)
+		if strings.HasPrefix(g.unionFieldType(m), "*") {
+			held = "&" + held
+		}
+		fmt.Fprintf(buf, "\t\t{Required: %s, Into: &v%d, Set: func() { u.%s = %s }},\n",
+			goStrings(g.requiredOf(m)), i, field, held)
+	}
+	buf.WriteString("\t})\n}\n")
+}
+
+// unionFieldType returns the Go type of one field of a union struct. A shape
+// that is not set has to be distinguishable from one set to its zero value, so
+// it is a pointer wherever the type has no nil form of its own.
+func (g *TypeGenerator) unionFieldType(m *spec.Type) string {
+	nullable := *m
+	nullable.Nullable = true
+	return nullable.GoType(g.Qualifier)
+}
+
+// requiredOf returns the properties an object shape cannot be without, which is
+// what tells it apart from the other shapes of its union. A shape that is not
+// an object has none, and is told apart by decoding.
+func (g *TypeGenerator) requiredOf(m *spec.Type) []string {
+	if !m.IsObject() {
+		return nil
+	}
+	o, ok := g.Spec.Object(m.Name)
+	if !ok {
+		return nil
+	}
+	var out []string
+	for _, f := range o.Fields {
+		if f.Required {
+			out = append(out, f.Name)
+		}
+	}
+	return out
+}
+
+// goStrings renders a list of strings as the Go literal for it.
+func goStrings(values []string) string {
+	if len(values) == 0 {
+		return "nil"
+	}
+	quoted := make([]string, len(values))
+	for i, v := range values {
+		quoted[i] = fmt.Sprintf("%q", v)
+	}
+	return "[]string{" + strings.Join(quoted, ", ") + "}"
+}
+
+// describeUnion renders a union for prose.
+func describeUnion(t *spec.Type) string {
+	names := make([]string, len(t.Union))
+	for i, m := range t.Union {
+		names[i] = article(m.GoType(""))
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " or " + names[len(names)-1]
+}
+
+// article puts the indefinite article a name takes in front of it, by the
+// letter it starts with, which is as far as generated prose needs to go.
+func article(name string) string {
+	if name == "" {
+		return name
+	}
+	if strings.ContainsRune("AEIOUaeiou", rune(name[0])) {
+		return "an " + name
+	}
+	return "a " + name
 }
 
 // writeObject writes the struct declaration for one object type.

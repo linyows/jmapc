@@ -503,3 +503,29 @@ func TestSetErrorFieldsInSchema(t *testing.T) {
 		t.Errorf("SetErrorFields(Note/set) = %v, want [notCreated]", got)
 	}
 }
+
+// TestUnionGoNames covers the Go type a union of shapes takes. It is a struct
+// named after its members, so that the same union written in two places names
+// one type, and the name matches the Rust enum for it.
+func TestUnionGoNames(t *testing.T) {
+	tests := []struct{ in, goType string }{
+		{"FilterOperator|EmailFilterCondition", "jmapc.FilterOperatorOrEmailFilterCondition"},
+		{"FilterOperator|EmailFilterCondition|null", "*jmapc.FilterOperatorOrEmailFilterCondition"},
+		{"(String|Int)[]", "[]jmapc.StringOrInt"},
+		{"String|Int[]", "jmapc.StringOrIntList"},
+	}
+	for _, tt := range tests {
+		got, err := ParseType(tt.in)
+		if err != nil {
+			t.Errorf("ParseType(%q): %v", tt.in, err)
+			continue
+		}
+		if g := got.GoType("jmapc."); g != tt.goType {
+			t.Errorf("ParseType(%q).GoType = %q, want %q", tt.in, g, tt.goType)
+		}
+		if got.IsUnion() && RustUnionName(got) != strings.TrimPrefix(strings.TrimPrefix(tt.goType, "*"), "jmapc.") {
+			t.Errorf("ParseType(%q): the Rust enum is %q and the Go struct is %q, and they should be one name",
+				tt.in, RustUnionName(got), tt.goType)
+		}
+	}
+}
