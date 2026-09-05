@@ -138,13 +138,12 @@ export async function searchEmails(client: Client, p: SearchEmailsParams): Promi
 }
 
 // searchEmailsPages walks the whole of what searchEmails returns one part of,
-// calling it again for each part until there is none left.
+// calling it again for each part until none is left.
 //
-// It starts from the position the parameters carry and works the next one out
-// from each answer. A window with nothing in it ends the walk rather than
-// being yielded, so everything it yields holds something; where the call
-// asked for the total, the walk ends without asking for a window that is not
-// there.
+// It starts from the position the parameters carry and derives the next one
+// from each answer. An empty window ends the walk instead of being yielded,
+// so everything it yields holds at least one record; where the call asked for
+// the total, the walk ends without requesting a window past it.
 //
 // A failure throws, as it does from the query itself, and leaving the loop
 // early sends no further request.

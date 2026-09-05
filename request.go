@@ -55,8 +55,8 @@ func (in Invocation) RawArgs() (json.RawMessage, bool) {
 }
 
 // ResultReference refers to a value in the response to an earlier method call
-// in the same request, as defined in RFC 8620, Section 3.7. It is what makes a
-// single JMAP request able to stand in for a chain of dependent calls.
+// in the same request, as defined in RFC 8620, Section 3.7. It is what allows a
+// single JMAP request to carry a chain of dependent calls.
 type ResultReference struct {
 	// ResultOf is the call id of the earlier method call.
 	ResultOf string `json:"resultOf"`
@@ -120,9 +120,9 @@ func (r *Response) find(callID string) (*Invocation, bool) {
 }
 
 // callIDs lists the call ids the response does carry, quoted and
-// comma-separated, so that a lookup miss can say what was there instead of
-// only what was asked for. A hand-written server stub that echoes whatever
-// call id it likes is the most common way to hit this.
+// comma-separated, so that a lookup miss can report what was present rather
+// than only what was requested. A hand-written server stub that echoes an
+// arbitrary call id is the most common cause.
 func (r *Response) callIDs() string {
 	if len(r.MethodResponses) == 0 {
 		return "no results"

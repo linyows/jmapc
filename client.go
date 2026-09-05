@@ -32,8 +32,8 @@ type Client struct {
 	retry      RetryPolicy
 	observer   *Observer
 
-	// api and uploads hold the client to the number of each the server said it
-	// takes at once.
+	// api and uploads limit the client to the number of each the server
+	// accepts at once.
 	api     limiter
 	uploads limiter
 
@@ -195,7 +195,7 @@ func (c *Client) Do(ctx context.Context, r *Request) (*Response, error) {
 	httpReq.Header.Set("Content-Type", "application/json; charset=utf-8")
 	httpReq.Header.Set("Accept", "application/json")
 
-	// The server said how many requests it takes at once, and this is one.
+	// The server states how many requests it accepts at once, and this is one.
 	release, err := c.api.hold(ctx, c.limit(func(core *CoreCapability) UnsignedInt {
 		return core.MaxConcurrentRequests
 	}), c.waiting(ctx, KindAPI))
@@ -264,8 +264,8 @@ func preflight(s *Session, r *Request) error {
 			detail := fmt.Sprintf("server does not support %s", uri)
 			if len(s.Capabilities) == 0 {
 				// An empty capabilities map is what a minimal server or a test
-				// stub produces, and it is not the same claim as a server that
-				// listed its capabilities and left this one out.
+				// stub produces, and it does not mean the same as a server
+				// that listed its capabilities and omitted this one.
 				detail = fmt.Sprintf("session lists no capabilities at all, so it cannot say whether it supports %s", uri)
 			}
 			return &RequestError{
@@ -305,7 +305,7 @@ func (c *Client) send(req *http.Request, kind RequestKind, attempt int) (*http.R
 	came(resp, err)
 	if err != nil {
 		// Redacted, because a URL may carry credentials in its userinfo, and
-		// this error is on its way to a log.
+		// this error may be written to a log.
 		return nil, fmt.Errorf("jmapc: %s %s: %w", req.Method, req.URL.Redacted(), err)
 	}
 	return resp, nil

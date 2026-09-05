@@ -49,8 +49,9 @@ func (c *checker) optionalParam(name string, t *spec.Type, where, doc string, al
 func (c *checker) value(t *spec.Type, raw json.RawMessage, where, doc string) Node {
 	raw = json.RawMessage(bytes.TrimSpace(raw))
 
-	// Whether a value may be left out is settled by where it sits, and nothing
-	// under it sits there, so the permission does not travel down.
+	// Whether a value may be left out is determined by its position, and no
+	// value nested under it holds that position, so the permission does not
+	// apply to nested values.
 	mayBeOptional := c.argumentValue
 	c.argumentValue = false
 

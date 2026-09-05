@@ -59,8 +59,8 @@
 // # Push
 //
 // [Client.EventSource] opens the server's push endpoint and reports which types
-// in which accounts have moved on. An event says only that, not what changed, so
-// the client follows up with a /changes call. A stream is a connection, not a
+// in which accounts have changed. An event reports only that, not what changed,
+// so the client follows up with a /changes call. A stream is a connection, not a
 // subscription that outlives the network: treat an error from
 // [EventStream.Next] as a signal to reconnect, passing the stream's
 // [EventStream.LastEventID] so that nothing is missed in between.

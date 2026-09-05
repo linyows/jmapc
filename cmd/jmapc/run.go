@@ -235,7 +235,8 @@ func carriedIDs(pairs []string) (map[jmapc.ID]jmapc.ID, error) {
 
 // printRequest writes the request the query stands for and sends nothing. The
 // account id a query leaves out is looked up in the session at run time, and a
-// dry run has no session, so it says so rather than quietly leaving it out.
+// dry run has no session, so it reports that rather than omitting the id
+// silently.
 func printRequest(catalogue *spec.Spec, q *query.Query, values map[string]request.Value, account string, carried map[jmapc.ID]jmapc.ID) error {
 	var stood []string
 	accounts := func(capability string) (jmapc.ID, error) {

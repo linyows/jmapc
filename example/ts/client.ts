@@ -292,8 +292,8 @@ export class Client {
   private async send(url: string, init: RequestInit): Promise<globalThis.Response> {
     const headers = new Headers(init.headers)
     headers.set("Accept", "application/json")
-    // forEach rather than iteration, which asks the caller's tsconfig for
-    // dom.iterable; the client should compile under a plain dom lib.
+    // forEach rather than iteration, which would require dom.iterable in the
+    // caller's tsconfig; the client should compile under a plain dom lib.
     new Headers(this.options.headers).forEach((value, key) => headers.set(key, value))
     const auth = this.options.auth
     if (typeof auth === "string") {

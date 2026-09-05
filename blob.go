@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// BlobInfo describes a blob the server has taken in, as returned by the upload
+// BlobInfo describes a blob the server has accepted, as returned by the upload
 // endpoint of RFC 8620, Section 6.1.
 type BlobInfo struct {
 	// AccountID is the account the blob was uploaded to.
@@ -31,22 +31,21 @@ type Blob struct {
 	io.ReadCloser
 	// Type is the media type the server served the blob as.
 	Type string
-	// Size is the size in octets, or -1 when the server did not say.
+	// Size is the size in octets, or -1 where the server did not report it.
 	Size int64
 	// Name is the filename from the Content-Disposition header, if the server
-	// sent one. It is whatever the server said, which may be a path rather
+	// sent one. It is whatever the server sent, which may be a path rather
 	// than a name: take the base of it before writing anything under it.
 	Name string
 }
 
-// DownloadOptions are the things a download may ask the server for beyond the
-// blob itself.
+// DownloadOptions are the parameters a download may send beyond the blob id.
 type DownloadOptions struct {
-	// Name is the filename to ask the server to offer the blob under. Servers
-	// use it in the Content-Disposition header.
+	// Name is the filename to request the blob be offered under. Servers use
+	// it in the Content-Disposition header.
 	Name string
-	// Type is the media type to ask the server to serve the blob as. Servers
-	// use it in the Content-Type header, and may refuse a type they consider
+	// Type is the media type to request the blob be served as. Servers use it
+	// in the Content-Type header, and may refuse a type they consider
 	// unsafe.
 	Type string
 }
@@ -62,11 +61,11 @@ func (c *Client) PrimaryAccountID(ctx context.Context, capability string) (ID, e
 }
 
 // Upload sends a blob to the account and returns the id to refer to it by. A
-// blob is untethered until something points at it, such as an Email/set that
-// names it in a body part; servers are free to discard one nothing refers to.
+// blob is unreferenced until something points at it, such as an Email/set that
+// names it in a body part, and a server may discard a blob nothing refers to.
 //
-// The contentType is a hint. The server records what it decides the blob is,
-// which is what BlobInfo reports back.
+// The contentType is a hint. The server records the type it determines for the
+// blob, which is what BlobInfo reports.
 func (c *Client) Upload(ctx context.Context, accountID ID, contentType string, body io.Reader) (*BlobInfo, error) {
 	if accountID == "" {
 		return nil, fmt.Errorf("jmapc: uploading a blob needs an account id")
@@ -96,7 +95,7 @@ func (c *Client) Upload(ctx context.Context, accountID ID, contentType string, b
 		return nil, err
 	}
 
-	// The server said how many uploads it takes at once, and this is one.
+	// The server states how many uploads it accepts at once, and this is one.
 	release, err := c.uploads.hold(ctx, c.limit(func(core *CoreCapability) UnsignedInt {
 		return core.MaxConcurrentUpload
 	}), c.waiting(ctx, KindUpload))
@@ -146,9 +145,9 @@ func (c *Client) checkUploadSize(ctx context.Context, size int64) error {
 
 // Download fetches a blob's content. The caller must close the returned blob.
 //
-// A blob has no type of its own: the server serves it as whatever the download
-// asks for, within what it considers safe. Pass the type from the body part
-// that referred to the blob.
+// A blob has no type of its own: the server serves it as whatever type the
+// download requests, within what it considers safe. Pass the type from the body
+// part that referred to the blob.
 func (c *Client) Download(ctx context.Context, accountID, blobID ID, opts *DownloadOptions) (*Blob, error) {
 	if accountID == "" {
 		return nil, fmt.Errorf("jmapc: downloading a blob needs an account id")
@@ -204,8 +203,8 @@ func (c *Client) Download(ctx context.Context, accountID, blobID ID, opts *Downl
 	}, nil
 }
 
-// filenameFrom pulls the filename out of a Content-Disposition header, and
-// returns an empty string when there is none to be had.
+// filenameFrom extracts the filename from a Content-Disposition header, and
+// returns an empty string where there is none.
 func filenameFrom(disposition string) string {
 	if disposition == "" {
 		return ""

@@ -52,7 +52,7 @@ func (g *QueryGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
 	checks := g.setErrorChecks(p)
 	if p.q.Returns != nil {
 		// The one call this returns is the whole of the answer, so a failure
-		// there leaves nothing to hand back.
+		// there leaves nothing to return.
 		fmt.Fprintf(buf, "  if (failed && !answered(res, %s)) throw failed\n",
 			strconv.Quote(p.q.Returns.ID))
 		fmt.Fprintf(buf, "  const out = decode<%s>(req, res, %s)\n",
@@ -90,7 +90,8 @@ type setErrorCheck struct {
 
 // setErrorChecks finds the calls whose responses report per-record failures.
 // A call the query does not return is decoded for its refusals alone, since
-// otherwise naming one call in "_returns" would quietly stop the others from
+// otherwise naming one call in "_returns" would silently exempt the others
+// from
 // being checked.
 func (g *QueryGenerator) setErrorChecks(p *plan) []setErrorCheck {
 	var checks []setErrorCheck
@@ -326,16 +327,16 @@ func (g *QueryGenerator) writePages(buf *bytes.Buffer, p *plan) {
 
 // writePagesDoc writes the generator's documentation.
 func (g *QueryGenerator) writePagesDoc(buf *bytes.Buffer, p *plan) {
-	doc := fmt.Sprintf("%s walks the whole of what %s returns one part of, calling it again for each part until there is none left.",
+	doc := fmt.Sprintf("%s walks the whole of what %s returns one part of, calling it again for each part until none is left.",
 		p.pagesName, p.funcName)
-	doc += fmt.Sprintf("\n\nIt starts from the %s the parameters carry and works the next one out from each answer. ",
+	doc += fmt.Sprintf("\n\nIt starts from the %s the parameters carry and derives the next one from each answer. ",
 		p.q.PageStart.Name)
 	switch p.q.PageKind {
 	case query.PageQuery:
-		doc += "A window with nothing in it ends the walk rather than being yielded, so everything it yields holds something; " +
-			"where the call asked for the total, the walk ends without asking for a window that is not there."
+		doc += "An empty window ends the walk instead of being yielded, so everything it yields holds at least one record; " +
+			"where the call asked for the total, the walk ends without requesting a window past it."
 	case query.PageChanges:
-		doc += "An answer saying nothing changed is still yielded, since it carries the state to go on from, and the walk ends when the server says there is no more."
+		doc += "An answer reporting no changes is still yielded, since it carries the state to continue from, and the walk ends when the server reports no more."
 	}
 	doc += "\n\nA failure throws, as it does from the query itself, and leaving the loop early sends no further request."
 	shared.WriteComment(buf, "", doc)
