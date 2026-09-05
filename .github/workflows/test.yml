@@ -107,7 +107,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          # Named rather than left to lts/*, so that a run tomorrow is the run
+          # today was: what the LTS is changes under a workflow that does not
+          # say which one it means.
+          node-version: "24"
 
       - name: tsc --strict over the generated client
         working-directory: example/ts
@@ -141,7 +144,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          # The Node the TypeScript job names, for the reason it names one.
+          node-version: "24"
 
       - name: Write the schema
         run: go run ./cmd/jmapc schema -out example/schema/jmapc.schema.json
