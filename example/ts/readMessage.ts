@@ -6,6 +6,8 @@ import type { EmailAddress, EmailBodyValue, Id, UTCDate } from "./types.js"
 
 // ReadMessageParams holds the values ReadMessage leaves open.
 export interface ReadMessageParams {
+  // One of the ids in the list.
+  //
   // The ids of the records to fetch, or null to fetch all of them.
   emailId: Id
 }

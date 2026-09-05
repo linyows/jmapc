@@ -398,6 +398,34 @@ func TestOptionalArrayParameterNeedsNoPointer(t *testing.T) {
 	}
 }
 
+// TestParameterInAListSaysItIsOneOfThem checks the documentation a parameter
+// standing for one element of a list carries. The argument's own
+// documentation is about the whole list and reads as a plural, and an "ids"
+// that may be null says something a single id cannot mean.
+func TestParameterInAListSaysItIsOneOfThem(t *testing.T) {
+	q := parse(t, "ReadOne"+Extension, `{"methodCalls": [
+	  ["Email/get", {"ids": ["{{emailId}}"]}, "c0"]
+	]}`)
+	doc := q.Params[0].Doc
+	if !strings.HasPrefix(doc, "One of the ids in the list.") {
+		t.Errorf("the parameter is documented as %q, want it to say it is one of them", doc)
+	}
+	if !strings.Contains(doc, "The ids of the records to fetch") {
+		t.Errorf("the parameter lost the documentation of the argument it sits in: %q", doc)
+	}
+}
+
+// TestParameterThatIsAWholeArgumentKeepsItsDoc checks that the list wording is
+// not applied where the parameter is the argument itself.
+func TestParameterThatIsAWholeArgumentKeepsItsDoc(t *testing.T) {
+	q := parse(t, "ReadThem"+Extension, `{"methodCalls": [
+	  ["Email/get", {"ids": "{{ids}}"}, "c0"]
+	]}`)
+	if doc := q.Params[0].Doc; !strings.HasPrefix(doc, "The ids of the records to fetch") {
+		t.Errorf("the parameter is documented as %q, want the argument's own documentation", doc)
+	}
+}
+
 // TestPatchPointerParameterAloneIsAString checks that a parameter naming a
 // property, where nothing says what that property is, still generates something
 // usable rather than failing.
