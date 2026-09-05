@@ -12,6 +12,8 @@ use super::types::{Date, EmailAddress, EmailBodyValue, Id, UtcDate};
 /// ReadMessageParams holds the values ReadMessage leaves open.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ReadMessageParams {
+    /// One of the ids in the list.
+    ///
     /// The ids of the records to fetch, or null to fetch all of them.
     pub email_id: Id,
 }

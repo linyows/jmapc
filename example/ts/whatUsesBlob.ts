@@ -6,6 +6,8 @@ import type { BlobLookupResponse, Id } from "./types.js"
 
 // WhatUsesBlobParams holds the values WhatUsesBlob leaves open.
 export interface WhatUsesBlobParams {
+  // One of the ids in the list.
+  //
   // The ids of the blobs to look for.
   blobId: Id
 }

@@ -12,6 +12,8 @@ import (
 
 // WhatUsesBlobParams holds the values WhatUsesBlob leaves open.
 type WhatUsesBlobParams struct {
+	// One of the ids in the list.
+	//
 	// The ids of the blobs to look for.
 	BlobID jmapc.ID
 }

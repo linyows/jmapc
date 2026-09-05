@@ -216,8 +216,9 @@ func (c *checker) array(t *spec.Type, raw json.RawMessage, where, doc string) No
 		return &Literal{JSON: raw}
 	}
 	out := &Array{Items: make([]Node, 0, len(items)), Raw: raw}
+	elem := elemDoc(t.Elem, doc)
 	for i, item := range items {
-		out.Items = append(out.Items, c.value(t.Elem, item, fmt.Sprintf("%s[%d]", where, i), doc))
+		out.Items = append(out.Items, c.value(t.Elem, item, fmt.Sprintf("%s[%d]", where, i), elem))
 	}
 	return out
 }
@@ -447,6 +448,22 @@ func keyDoc(keyType *spec.Type, context string) string {
 	lead := "The key this entry is stored under."
 	if keyType.Name == spec.IdType {
 		lead = "The id of the record this entry applies to."
+	}
+	if context == "" {
+		return lead
+	}
+	return lead + "\n\n" + context
+}
+
+// elemDoc describes a value inside a list the way keyDoc describes the key of
+// a map. The documentation of the argument holding the list is about all of
+// them and reads as a plural, which a parameter standing for one of them is
+// not: an "ids" that may be null describes the argument, not the single id
+// written in it.
+func elemDoc(elemType *spec.Type, context string) string {
+	lead := "One of the values in the list."
+	if elemType != nil && elemType.Name == spec.IdType {
+		lead = "One of the ids in the list."
 	}
 	if context == "" {
 		return lead
