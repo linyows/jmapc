@@ -3,11 +3,11 @@
 //
 // Testing a JMAP client means answering a request that carries several method
 // calls, some of which refer to the results of the others. A stub written by
-// hand for one test either ignores that — and stops resembling a server — or
-// grows into this. So this is it: a server that checks what it is given
+// hand for one test either ignores that, and no longer resembles a server, or
+// grows into this. This package is that server: it checks what it is given
 // against the JMAP data model, resolves the back references the way a server
-// does, answers each call from whatever the test says, and remembers what it
-// was asked.
+// does, answers each call as the test specifies, and records what it was
+// sent.
 //
 //	srv := jmaptest.New(t)
 //	srv.Reply("Email/query", jmapc.EmailQueryResponse{
@@ -23,8 +23,8 @@
 //	res, err := jmapq.ListInboxEmails(ctx, srv.Client(), params)
 //
 // What it does not do is store anything. It is a server to test a client
-// against, not an implementation of JMAP: nothing a /set creates comes back
-// from a later /get unless the test says it does.
+// against, not an implementation of JMAP: nothing a /set creates is returned
+// by a later /get unless the test specifies it.
 package jmaptest
 
 import (
@@ -68,19 +68,19 @@ type Server struct {
 	sent     int
 }
 
-// Option settles something about the server before it answers anything.
+// Option configures the server before it answers anything.
 type Option func(*Server)
 
-// WithoutChecks stops the server from holding the requests it receives to the
-// data model. Use it for a server that has to answer a method jmapc has never
-// heard of, or a request a test means to be wrong.
+// WithoutChecks stops the server from checking the requests it receives
+// against the data model. Use it for a server that has to answer a method
+// jmapc does not know, or a request a test intends to be invalid.
 func WithoutChecks() Option {
 	return func(s *Server) { s.checks = false }
 }
 
 // WithSession adjusts the session the server serves, after the parts that
-// depend on its address have been filled in. It is where to take a capability
-// away, add one of your own, or hold a second account.
+// depend on its address have been filled in. It is where to remove a
+// capability, add one of your own, or add a second account.
 func WithSession(f func(*jmapc.Session)) Option {
 	return func(s *Server) { f(s.session) }
 }
@@ -120,8 +120,8 @@ func New(t testing.TB, opts ...Option) *Server {
 func (s *Server) URL() string { return s.http.URL + "/.well-known/jmap" }
 
 // BaseURL is the address the server answers on, without the session path. It
-// is what a client that is not the generated one is pointed at, since such a
-// client has its own idea of where the session and the API live.
+// is what a client other than the generated one is pointed at, since such a
+// client derives the session and API paths itself.
 func (s *Server) BaseURL() string { return s.http.URL }
 
 // Mux is where the server's paths are registered, so that a test can add its
@@ -130,16 +130,15 @@ func (s *Server) BaseURL() string { return s.http.URL }
 // A migration is the reason this is here. A client half converted to jmapc
 // has a generated half that reaches this server through Client, and a
 // hand-written half still going to paths of its own. Both halves have to
-// answer in one test, and this is where the paths the other half wants are
+// answer in one test, and this is where the paths the other half uses are
 // mounted:
 //
 //	srv := jmaptest.New(t)
 //	srv.Mux().HandleFunc("/jmap", myOldAPIHandler)
 //	old := myOldClient(srv.BaseURL())
 //
-// Where the other half speaks JMAP too and only looks for it elsewhere, the
-// handlers themselves are what to mount, and this server answers on both
-// names:
+// Where the other half also uses JMAP but expects it at different paths, mount
+// the handlers themselves, and this server answers on both paths:
 //
 //	srv.Mux().HandleFunc("/jmap/session", srv.ServeSession)
 //	srv.Mux().HandleFunc("/jmap", srv.ServeAPI)
@@ -154,7 +153,7 @@ func (s *Server) Client(opts ...jmapc.Option) *jmapc.Client {
 	return jmapc.New(s.URL(), append([]jmapc.Option{jmapc.WithBearerToken("token")}, opts...)...)
 }
 
-// Handle says how the server answers a method. It replaces whatever was
+// Handle sets how the server answers a method. It replaces whatever was
 // registered for that method before.
 func (s *Server) Handle(method string, h Handler) {
 	s.mu.Lock()
@@ -162,7 +161,7 @@ func (s *Server) Handle(method string, h Handler) {
 	s.handlers[method] = h
 }
 
-// Reply says what a method answers with, where the answer does not depend on
+// Reply sets what a method answers with, where the answer does not depend on
 // the call. The value is marshalled as JSON, except a json.RawMessage or a
 // []byte, which is taken as the JSON it already is.
 func (s *Server) Reply(method string, response any) {
@@ -176,8 +175,8 @@ func (s *Server) Fail(method, errType string) {
 	s.Handle(method, func(*Call) (any, error) { return nil, Refuse(errType) })
 }
 
-// FailRequest makes the whole request fail, as a server does when it will not
-// look at the calls at all. Pass nil to stop.
+// FailRequest makes the whole request fail, as a server does when it rejects
+// the request as a whole. Pass nil to stop.
 func (s *Server) FailRequest(err *jmapc.RequestError) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -206,7 +205,7 @@ func (s *Server) Call(method string) *Call {
 }
 
 // Requests returns how many requests the server has answered, which is what a
-// test asking whether several calls travelled together is really asking.
+// test checking whether several calls were sent in one request needs.
 func (s *Server) Requests() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -214,7 +213,7 @@ func (s *Server) Requests() int {
 }
 
 // Push sends a state change to every client watching the push endpoint, as a
-// server does when something in an account has moved on. It is what a watch
+// server does when something in an account has changed. It is what a watch
 // waits for.
 func (s *Server) Push(accountID jmapc.ID, states map[string]string) {
 	change := jmapc.StateChange{
@@ -243,9 +242,9 @@ func (s *Server) Push(accountID jmapc.ID, states map[string]string) {
 
 // ServeSession answers the session resource, and is mounted at
 // /.well-known/jmap. Mount it where a client of your own looks for the
-// session as well, and it is served under both names; the session it hands
-// back names the addresses this server already advertises, which a client
-// reaching either name can reach too.
+// session as well, and it is served under both paths; the session it returns
+// names the addresses this server already advertises, which a client reaching
+// either path can also reach.
 func (s *Server) ServeSession(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	session := *s.session
@@ -407,7 +406,7 @@ func (s *Server) checkUsing(using []string) *jmapc.RequestError {
 }
 
 // writeRequestError answers with a problem document, as a server does when it
-// will not look at the calls.
+// rejects the request as a whole.
 func (s *Server) writeRequestError(w http.ResponseWriter, err *jmapc.RequestError) {
 	status := err.Status
 	if status == 0 {
@@ -420,7 +419,7 @@ func (s *Server) writeRequestError(w http.ResponseWriter, err *jmapc.RequestErro
 	}
 }
 
-// methodError renders a method-level error as the invocation it travels in.
+// methodError renders a method-level error as the invocation that carries it.
 func methodError(callID, errType, description string) jmapc.Invocation {
 	args := map[string]any{"type": errType}
 	if description != "" {
@@ -443,7 +442,7 @@ func marshal(value any) (json.RawMessage, error) {
 	return json.Marshal(value)
 }
 
-// refusal is a method-level error a handler asked for.
+// refusal is a method-level error a handler requested.
 type refusal struct {
 	Type        string
 	Description string
@@ -495,9 +494,8 @@ func methodNames(calls []*Call) []string {
 	return out
 }
 
-// capabilities is what the session advertises: everything the catalogue knows
-// about, since a server that supported less would only get in the way of a
-// test about something else.
+// capabilities is what the session advertises: everything in the catalogue,
+// since a server supporting less would obstruct a test about something else.
 func capabilities() map[string]json.RawMessage {
 	out := map[string]json.RawMessage{
 		spec.CapabilityCore: json.RawMessage(`{

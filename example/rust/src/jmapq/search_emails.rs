@@ -171,11 +171,11 @@ pub async fn search_emails<T: Transport>(
 }
 
 /// SearchEmailsPages walks the whole of what search_emails returns one part
-/// of, calling it again for each part until there is none left.
+/// of, calling it again for each part until none is left.
 ///
-/// A window with nothing in it ends the walk rather than being handed back,
-/// so every part it answers with holds something; where the call asked for
-/// the total, the walk ends without asking for a window that is not there.
+/// An empty window ends the walk instead of being returned, so every part it
+/// returns holds at least one record; where the call asked for the total, the
+/// walk ends without requesting a window past it.
 pub struct SearchEmailsPages {
     params: SearchEmailsParams,
     start: i64,

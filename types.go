@@ -56,12 +56,12 @@ func NewUTCDate(t time.Time) UTCDate {
 
 const utcDateLayout = "2006-01-02T15:04:05Z"
 
-// String returns the date as the wire carries it. A client keeping a JMAP date
-// as the text it arrived as — for a response of its own, or a column — would
-// otherwise have to know the layout, and a copy of it is a copy that can drift
-// from this one without saying so. It also settles what fmt prints, which the
-// embedded time.Time would otherwise answer for in a form no JMAP server
-// wrote.
+// String returns the date in the form it takes on the wire. A client that keeps
+// a JMAP date as the text it arrived as — for a response of its own, or for a
+// column — would otherwise have to reproduce the layout, and a second copy of
+// it can diverge from this one unnoticed. It also determines what fmt prints,
+// which the embedded time.Time would otherwise render in a form no JMAP server
+// produces.
 func (d UTCDate) String() string {
 	return d.Time.UTC().Format(utcDateLayout)
 }
@@ -99,8 +99,8 @@ func NewDate(t time.Time) Date {
 	return Date{Time: t.Truncate(time.Second)}
 }
 
-// String returns the date as the wire carries it, offset and all, for the same
-// reason UTCDate has one.
+// String returns the date in the form it takes on the wire, offset included,
+// for the same reason UTCDate has one.
 func (d Date) String() string {
 	return d.Time.Format(time.RFC3339)
 }
@@ -128,7 +128,7 @@ func (d *Date) UnmarshalJSON(b []byte) error {
 //
 // The leading "/" of the pointer is implicit, as RFC 8620, Section 5.3 has it:
 // a keyword is set at "keywords/$seen" rather than at "/keywords/$seen", and
-// writing the slash asks for a property with no name.
+// writing the slash refers to a property with no name.
 type PatchObject map[string]any
 
 // Set records that the value at the given JSON pointer should be replaced. The
@@ -148,12 +148,12 @@ func (p PatchObject) Remove(pointer string) PatchObject {
 // LocalDateTime is the JSCalendar LocalDateTime of RFC 8984, Section 1.4.4: a
 // date and time with no time zone and no offset, such as "2024-05-01T09:00:00".
 // What it means depends on the time zone the enclosing object gives, and for a
-// recurring event that time zone is the point: an alarm set for nine in the
-// morning stays at nine when the clocks change.
+// recurring event that time zone is what matters: an alarm set for 09:00 stays
+// at 09:00 when the clocks change.
 //
 // It is a string rather than a time.Time because it is used as a map key, in
 // the recurrenceOverrides of an event, and because a time.Time can carry a
-// location that this type has no way to mean.
+// location that this type cannot represent.
 type LocalDateTime string
 
 var localDateTimePattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$`)
@@ -242,8 +242,8 @@ func (d Duration) ToTimeDuration() (time.Duration, error) {
 }
 
 // SignedDuration is the JSCalendar SignedDuration of RFC 8984, Section 1.4.7: a
-// Duration that may be negative, which is how an alert says it fires before the
-// event it belongs to.
+// Duration that may be negative, which is how an alert specifies that it fires
+// before the event it belongs to.
 type SignedDuration string
 
 // Valid reports whether the value has the form the specification requires.

@@ -9,10 +9,10 @@ import (
 	"time"
 )
 
-// RetryPolicy says when a client sends a request again, and how long it waits
-// first.
+// RetryPolicy determines when a client sends a request again, and how long it
+// waits first.
 //
-// The default is to try again only where the server has said it did nothing —
+// The default is to retry only where the server reported that it did nothing —
 // a 429 or a 503 — because a request that may have been carried out is not
 // safe to repeat. A JMAP request creates records, and a /set sent twice
 // creates twice.
@@ -20,57 +20,55 @@ type RetryPolicy struct {
 	// Attempts is how many times a request is sent in all, counting the first.
 	// Zero or one sends it once.
 	Attempts int
-	// Worth reports whether an answer is worth another try. A nil Worth means
-	// the two answers that say the server did nothing: 429 and 503.
+	// Worth reports whether a response is worth another attempt. A nil Worth
+	// selects the two responses that report the server did nothing: 429 and
+	// 503.
 	//
-	// It is called with the response, or with the error where the request did
-	// not come back at all. Retrying an error means retrying a request that
-	// may have been carried out, so the default does not.
+	// It is called with the response, or with the error where no response was
+	// received. Retrying an error means retrying a request that may have been
+	// carried out, so the default does not.
 	Worth func(*http.Response, error) bool
 	// Wait returns how long to wait before the nth attempt, counting from two.
-	// The server's Retry-After is passed as it was given, or zero where it
-	// said nothing. A nil Wait honours it, and falls back to a doubling wait
-	// from a fifth of a second to half a minute where the server asked for
-	// nothing in particular.
+	// The server's Retry-After is passed as it was received, or zero where the
+	// server sent none. A nil Wait uses that value, and falls back to a delay
+	// that doubles from 0.2 seconds to 30 seconds where the server sent none.
 	//
-	// However long it asks for, a client that has been told to wait longer
-	// than a minute stops waiting and reports the refusal: a server asking for
-	// an hour is telling the caller to come back later rather than asking a
-	// request to sit in memory until then.
+	// A Retry-After longer than a minute is not waited out. The client stops
+	// and reports the refusal instead, because holding a request in memory for
+	// that long is of no use to the caller, which should retry later.
 	Wait func(attempt int, retryAfter time.Duration) time.Duration
 }
 
-// The waits a policy uses where it says nothing itself.
+// The delays a policy uses where it specifies none of its own.
 const (
 	minRetryWait = 200 * time.Millisecond
 	maxRetryWait = 30 * time.Second
-	// maxRetryAfter caps how long a server can ask the client to wait before
-	// the client stops waiting and reports the refusal instead. A server that
-	// asks for an hour is telling the caller to come back later, not asking a
-	// request to sit in memory until then.
+	// maxRetryAfter caps the Retry-After the client waits out. Beyond it the
+	// client reports the refusal instead, because holding a request in memory
+	// for an hour is of no use to the caller, which should retry later.
 	maxRetryAfter = time.Minute
 )
 
-// WithRetry makes the client send a request again where the server said it
-// could not take it now, up to the given number of attempts counting the
-// first. Two or fewer than two turns it off.
+// WithRetry makes the client send a request again where the server answered
+// 429 or 503, up to the given number of attempts counting the first. Two or
+// fewer than two disables it.
 //
-// What is retried is a 429 or a 503, the two answers that say the request was
-// not carried out, and the wait is the server's Retry-After where it gave one.
-// A request that failed on the way there or on the way back is not retried,
-// since it may have been carried out; WithRetryPolicy is where to say
-// otherwise for a client whose requests are safe to repeat.
+// Those are the two responses that report the request was not carried out, and
+// the delay is the server's Retry-After where it sent one. A request that
+// failed in transit is not retried, since it may have been carried out;
+// WithRetryPolicy overrides that for a client whose requests are safe to
+// repeat.
 func WithRetry(attempts int) Option {
 	return func(c *Client) { c.retry = RetryPolicy{Attempts: attempts} }
 }
 
-// WithRetryPolicy replaces the whole policy: which answers are worth another
-// try, and how long to wait before each.
+// WithRetryPolicy replaces the whole policy: which responses are worth another
+// attempt, and how long to wait before each.
 func WithRetryPolicy(p RetryPolicy) Option {
 	return func(c *Client) { c.retry = p }
 }
 
-// worthRetrying reports whether an answer is worth another try under the
+// worthRetrying reports whether a response is worth another attempt under the
 // policy.
 func (p RetryPolicy) worthRetrying(resp *http.Response, err error) bool {
 	if p.Worth != nil {
@@ -103,8 +101,8 @@ func (p RetryPolicy) wait(attempt int, retryAfter time.Duration) time.Duration {
 	return d
 }
 
-// retryAfter reads what the server asked the client to wait, which RFC 9110
-// writes either as a number of seconds or as a date.
+// retryAfter reads the delay the server requested in Retry-After, which RFC
+// 9110 writes either as a number of seconds or as a date.
 func retryAfter(resp *http.Response, now time.Time) time.Duration {
 	if resp == nil {
 		return 0
@@ -129,11 +127,11 @@ func retryAfter(resp *http.Response, now time.Time) time.Duration {
 	return 0
 }
 
-// sendWithRetry sends a request, and sends it again while the policy says the
-// answer is worth another try.
+// sendWithRetry sends a request, and sends it again while the policy reports
+// the response is worth another attempt.
 //
 // A request can only be sent again if its body can be read again, which the
-// standard library arranges for a body it knows the length of. An upload
+// standard library provides for a body whose length it knows. An upload
 // reading from a file or a network stream has no such body, and is sent once.
 func (c *Client) sendWithRetry(req *http.Request, kind RequestKind) (*http.Response, error) {
 	attempts := c.retry.Attempts
@@ -147,13 +145,13 @@ func (c *Client) sendWithRetry(req *http.Request, kind RequestKind) (*http.Respo
 		}
 		after := retryAfter(resp, time.Now())
 		if after > maxRetryAfter {
-			// The server is not asking the client to wait; it is telling the
-			// caller to come back later.
+			// A delay this long is not one to wait out; the caller is
+			// expected to retry later.
 			return resp, err
 		}
 		delay := c.retry.wait(attempt+1, after)
-		// The answer is being thrown away, so the connection is given back
-		// rather than left for the finaliser.
+		// The response is discarded, so the connection is released rather than
+		// left to the finaliser.
 		if resp != nil {
 			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxErrorBody))
 			resp.Body.Close()
@@ -192,7 +190,7 @@ func again(req *http.Request) (*http.Request, error) {
 	return next, nil
 }
 
-// sleep waits, or gives up as soon as the context ends.
+// sleep waits, or returns as soon as the context ends.
 func sleep(ctx context.Context, d time.Duration) error {
 	timer := time.NewTimer(d)
 	defer timer.Stop()

@@ -33,20 +33,20 @@ const (
 	// CapabilitySieve manages the filtering scripts the server runs on
 	// incoming mail.
 	CapabilitySieve = "urn:ietf:params:jmap:sieve"
-	// CapabilityMDN sends and reads the receipts that say what became of a
+	// CapabilityMDN sends and reads the receipts that report what became of a
 	// message.
 	CapabilityMDN = "urn:ietf:params:jmap:mdn"
-	// CapabilityWebPushVAPID says the server authenticates itself to a push
-	// service with VAPID. It defines no types and no methods: what it has to
-	// say is a key, carried in the session.
+	// CapabilityWebPushVAPID states that the server authenticates itself to a
+	// push service with VAPID. It defines no types and no methods: the value
+	// it carries is a key, held in the session.
 	CapabilityWebPushVAPID = "urn:ietf:params:jmap:webpush-vapid"
 	// CapabilityPrincipalsOwner appears only in an account's capabilities,
 	// where it names the principal that owns the account.
 	CapabilityPrincipalsOwner = "urn:ietf:params:jmap:principals:owner"
 )
 
-// Session is the Session object described in RFC 8620, Section 2. It tells the
-// client where to send requests and what the server supports.
+// Session is the Session object described in RFC 8620, Section 2. It states
+// where to send requests and what the server supports.
 type Session struct {
 	// Capabilities lists the capabilities the server supports, keyed by URI.
 	Capabilities map[string]json.RawMessage `json:"capabilities"`
@@ -82,7 +82,7 @@ type Account struct {
 	AccountCapabilities map[string]json.RawMessage `json:"accountCapabilities"`
 }
 
-// Capability decodes what this account says about a capability into dest.
+// Capability decodes this account's entry for a capability into dest.
 // Several capabilities state their per-account limits here rather than in the
 // session: the largest script, the largest blob, how many of each are allowed.
 func (a *Account) Capability(uri string, dest any) error {
@@ -109,11 +109,11 @@ type CoreCapability struct {
 	CollationAlgorithms   []string    `json:"collationAlgorithms"`
 }
 
-// Capability decodes what the session says about a capability into dest.
+// Capability decodes the session's entry for a capability into dest.
 //
-// Not every capability brings types and methods. Some have only something to
-// tell the client — a limit, a key, an identifier — and this is how that is
-// read, including for a capability jmapc has never heard of.
+// Not every capability defines types and methods. Some carry only a value for
+// the client — a limit, a key, an identifier — and this is how that value is
+// read, including for a capability jmapc does not know.
 func (s *Session) Capability(uri string, dest any) error {
 	raw, ok := s.Capabilities[uri]
 	if !ok {
@@ -145,7 +145,7 @@ type WebPushVAPIDCapability struct {
 }
 
 // WebPushVAPID returns the key the server authenticates itself to a push
-// service with. It changes when the server rotates its keys, which shows up as
+// service with. It changes when the server rotates its keys, which appears as
 // a new sessionState.
 func (s *Session) WebPushVAPID() (*WebPushVAPIDCapability, error) {
 	var c WebPushVAPIDCapability

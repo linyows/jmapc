@@ -52,14 +52,14 @@ func (g *QueryGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
 	buf.WriteString("\tresp, err := c.Do(ctx, req)\n")
 	// A method call the server would not run does not fail the request: the
 	// calls around it may still have answered, and err carries what went
-	// wrong, so the response is read and handed back with it.
+	// wrong, so the response is read and returned with it.
 	buf.WriteString("\tif resp == nil {\n\t\treturn nil, err\n\t}\n\n")
 
 	fmt.Fprintf(buf, "\tvar out %s\n", p.returnType)
 	if p.q.Returns != nil {
 		// The one call this returns is the whole of the answer, so a failure
-		// there leaves nothing to hand back. What went wrong is already in
-		// err, where the server said so.
+		// there leaves nothing to return. What went wrong is already in err,
+		// where the server reported it.
 		fmt.Fprintf(buf, "\tif e := resp.Decode(%q, &out); e != nil {\n", p.q.Returns.ID)
 		buf.WriteString("\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n")
 		buf.WriteString("\t\treturn nil, e\n\t}\n")
@@ -86,8 +86,8 @@ func (g *QueryGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
 // the error, since the rest of it did happen.
 //
 // A call the query does not return is decoded here anyway, for its refusals
-// alone. Otherwise naming one call in "_returns" would quietly stop the others
-// from being checked.
+// alone. Otherwise naming one call in "_returns" would silently exempt the
+// others from the check.
 func (g *QueryGenerator) writeSetErrorChecks(buf *bytes.Buffer, p *plan) {
 	type check struct {
 		call   *query.Call
@@ -386,10 +386,10 @@ func rawExpr(raw json.RawMessage) string {
 func nodeHasParam(n query.Node) bool { return n.HasParam() }
 
 // writeWatch writes the function that follows the changes to the type the
-// query watches. What the server pushes is that a type has moved on, not what
-// changed, so the loop asks the query; the runtime holds the connection open,
-// reopens it when it drops, and keeps asking while the server says there is
-// more.
+// query watches. The server pushes only that a type has changed, not what
+// changed, so the loop calls the query; the runtime holds the connection open,
+// reopens it when it drops, and repeats the call while the server reports more
+// changes.
 func (g *QueryGenerator) writeWatch(buf *bytes.Buffer, p *plan) {
 	if p.watchName == "" {
 		return
@@ -418,18 +418,18 @@ func (g *QueryGenerator) writeWatch(buf *bytes.Buffer, p *plan) {
 	buf.WriteString("}\n")
 }
 
-// writeWatchDoc writes the watching function's documentation, which has to say
-// what the loop does with the query it is built on: where it starts, what it
-// hands back, and when it gives up.
+// writeWatchDoc writes the watching function's documentation, which has to
+// state what the loop does with the query it is built on: where it starts,
+// what it returns, and when it stops.
 func (g *QueryGenerator) writeWatchDoc(buf *bytes.Buffer, p *plan) {
 	dataType := p.q.Watches.Method.DataType
-	doc := fmt.Sprintf("%s follows the changes to %s, calling %s whenever the server says there are any and passing the result to fn.",
+	doc := fmt.Sprintf("%s follows the changes to %s, calling %s whenever the server reports any and passing the result to fn.",
 		p.watchName, dataType, p.q.Name)
-	doc += fmt.Sprintf("\n\nIt starts from the %s the parameters carry, which is the state a previous answer left the caller at, and it goes on from the state each answer reports. "+
-		"A server that answers with only part of what changed is asked again until it says there is no more.",
+	doc += fmt.Sprintf("\n\nIt starts from the %s the parameters carry, which is the state a previous answer reported, and it continues from the state each answer reports. "+
+		"A server that returns only part of what changed is called again until it reports no more.",
 		p.q.WatchState.Name)
-	doc += "\n\nIt runs until the context ends, which is the error it returns; an error from fn stops it and comes back as it was. " +
-		"A dropped connection is not an error: the loop opens another, resuming where it left off, and asks what it missed while there was none."
+	doc += "\n\nIt runs until the context ends, which is the error it returns; an error from fn stops it and is returned unchanged. " +
+		"A dropped connection is not an error: the loop opens another, resuming from the last event delivered, and requests the changes made while no connection was open."
 	shared.WriteComment(buf, "", doc)
 }
 
@@ -511,21 +511,21 @@ func (g *QueryGenerator) writePages(buf *bytes.Buffer, p *plan) {
 	buf.WriteString("}\n")
 }
 
-// writePagesDoc writes the pager's documentation, which has to say where the
-// loop starts, what each step hands back, and what ends it.
+// writePagesDoc writes the pager's documentation, which has to state where the
+// loop starts, what each step returns, and what ends it.
 func (g *QueryGenerator) writePagesDoc(buf *bytes.Buffer, p *plan) {
-	doc := fmt.Sprintf("%s walks the whole of what %s returns one part of, calling it again for each part until there is none left.",
+	doc := fmt.Sprintf("%s walks the whole of what %s returns one part of, calling it again for each part until none is left.",
 		p.pagesName, p.q.Name)
-	doc += fmt.Sprintf("\n\nIt starts from the %s the parameters carry and works the next one out from each answer. ",
+	doc += fmt.Sprintf("\n\nIt starts from the %s the parameters carry and derives the next one from each answer. ",
 		p.q.PageStart.Name)
 	switch p.q.PageKind {
 	case query.PageQuery:
-		doc += "A window with nothing in it ends the walk rather than being handed back, so every result yielded holds something; " +
-			"where the call asked for the total, the walk ends without asking for a window that is not there."
+		doc += "An empty window ends the walk instead of being yielded, so every result yielded holds at least one record; " +
+			"where the call asked for the total, the walk ends without requesting a window past it."
 	case query.PageChanges:
-		doc += "An answer saying nothing changed is still handed back, since it carries the state to go on from, and the walk ends when the server says there is no more."
+		doc += "An answer reporting no changes is still yielded, since it carries the state to continue from, and the walk ends when the server reports no more."
 	}
-	doc += "\n\nAn error ends the walk and is yielded with a nil result, so a range over it checks the error each time round. " +
+	doc += "\n\nAn error ends the walk and is yielded with a nil result, so a range over it checks the error on each iteration. " +
 		"Breaking out of the range stops it, and sends no further request."
 	shared.WriteComment(buf, "", doc)
 }

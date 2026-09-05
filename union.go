@@ -9,7 +9,7 @@ import (
 // A union is a value a specification lets take either of two shapes: the
 // filter of a /query call is a boolean operator or a condition on the type
 // being queried, and a contact's anniversary date is a partial date or a
-// timestamp. Go has no way to spell "one of these shapes", so each union is
+// timestamp. Go cannot express "one of these shapes" directly, so each union is
 // generated as a struct with one field per shape, of which exactly one is set.
 // The functions here are what those structs marshal and unmarshal through.
 
@@ -18,8 +18,8 @@ import (
 const maxUnionValueInError = 96
 
 // marshalUnion writes the one alternative that is set. A union that holds
-// nothing, or more than one thing, is a mistake in the calling code rather
-// than something a server could be asked to make sense of.
+// nothing, or more than one alternative, is an error in the calling code rather
+// than a value a server could interpret.
 func marshalUnion(name string, set []any) ([]byte, error) {
 	switch len(set) {
 	case 1:
@@ -31,11 +31,11 @@ func marshalUnion(name string, set []any) ([]byte, error) {
 	}
 }
 
-// unionAlt is one alternative of a union: where to decode it, what an object
-// of that shape cannot be without, and how to record it once it fits.
+// unionAlt is one alternative of a union: where to decode it, which properties
+// an object of that shape must have, and how to record it once it fits.
 type unionAlt struct {
-	// Required names the properties the shape does not exist without, which is
-	// most of what tells one object shape from another.
+	// Required names the properties the shape must have, which is most of what
+	// distinguishes one object shape from another.
 	Required []string
 	// Into points at a value of the alternative's own type.
 	Into any
@@ -45,12 +45,13 @@ type unionAlt struct {
 
 // unmarshalUnion fills the first alternative the value fits.
 //
-// It looks twice. The first time, an alternative has to account for every
-// property the value carries, which is what separates two object shapes that
-// share no property: a filter operator has an "operator" and a condition does
-// not. The second time, unknown properties are allowed, so that a server which
-// has added a property to a shape jmapc knows does not make the value
-// unreadable — the same forgiveness every other type in this package extends.
+// It decodes twice. On the first pass, an alternative has to account for every
+// property the value carries, which is what distinguishes two object shapes
+// that share no property: a filter operator has an "operator" and a condition
+// does not. On the second pass, unknown properties are allowed, so that a
+// server which has added a property to a shape jmapc knows does not make the
+// value unreadable, which is how every other type in this package treats an
+// unknown property.
 func unmarshalUnion(name string, data []byte, alts []unionAlt) error {
 	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
 		return nil

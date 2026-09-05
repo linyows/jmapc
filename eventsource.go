@@ -13,8 +13,8 @@ import (
 )
 
 // StateChange is the event a JMAP server pushes when something in an account
-// changes, as defined in RFC 8620, Section 7.1. It says only that a type has
-// moved on, not what changed; the client follows up with a /changes call.
+// changes, as defined in RFC 8620, Section 7.1. It reports only that a type
+// has changed, not what changed; the client follows up with a /changes call.
 type StateChange struct {
 	// Type is the object type, always "StateChange".
 	Type string `json:"@type"`
@@ -36,9 +36,9 @@ func (s *StateChange) StateOf(accountID ID, typeName string) (string, bool) {
 
 // PushVerification is what the server posts to a push subscription's URL as
 // soon as it is created, before it will send anything else. The client writes
-// the code back with a PushSubscription/set, which is what proves it controls
-// the URL: without that step a subscription could be pointed at a third party
-// and used to flood them.
+// the code back with a PushSubscription/set, which proves that the client
+// controls the URL. Without that step a subscription could be pointed at a
+// third party and used to flood it.
 //
 // It arrives at the URL the client registered, not through the API, which is
 // why it is here rather than in the generated types.
@@ -51,19 +51,19 @@ type PushVerification struct {
 	VerificationCode string `json:"verificationCode"`
 }
 
-// EventSourceOptions say what to ask the push endpoint for.
+// EventSourceOptions are the parameters of a request to the push endpoint.
 type EventSourceOptions struct {
-	// Types are the object types to be told about, such as "Email". Leave it
-	// empty to hear about every type.
+	// Types are the object types to be notified about, such as "Email". Leave
+	// it empty to receive events for every type.
 	Types []string
-	// Ping asks the server to send a comment every so often, so that a
-	// connection dropped by something in the middle is noticed rather than
-	// hanging. Servers clamp it to a range of their own choosing. Zero asks
-	// for no pings.
+	// Ping requests a comment from the server at that interval, so that a
+	// connection dropped by an intermediary is detected rather than left
+	// hanging. Servers clamp it to a range of their own. Zero requests no
+	// pings.
 	Ping time.Duration
 	// CloseAfterState asks the server to close the connection after the first
-	// event, which suits a client that only wants to know it has fallen
-	// behind.
+	// event, which suits a client that only needs to know that the state it
+	// holds is out of date.
 	CloseAfterState bool
 	// LastEventID resumes from a known point: the server sends the events
 	// since that one, so that a reconnection does not miss anything. Pass the
@@ -85,7 +85,8 @@ type EventStream struct {
 // RFC 8620, Section 7.3.
 //
 // The connection stays open until it is closed or the server drops it, which it
-// will: a stream is not a subscription that outlives the network. Treat an error
+// will do: a stream is a connection, not a subscription that outlives the
+// network. Treat an error
 // from Next as a signal to reconnect, passing LastEventID so that nothing is
 // missed in between.
 func (c *Client) EventSource(ctx context.Context, opts *EventSourceOptions) (*EventStream, error) {
@@ -167,7 +168,7 @@ func (s *EventStream) Next() (*StateChange, error) {
 		line := strings.TrimSuffix(s.scan.Text(), "\r")
 
 		// A blank line ends an event. An event carrying no data is a comment
-		// or a keep-alive, and there is nothing to hand back.
+		// or a keep-alive, and there is nothing to return.
 		if line == "" {
 			if !flushable || data.Len() == 0 {
 				event.Reset()
@@ -192,7 +193,7 @@ func (s *EventStream) Next() (*StateChange, error) {
 		}
 
 		// A line beginning with a colon is a comment, which is how a server
-		// keeps the connection warm without sending an event.
+		// keeps the connection open without sending an event.
 		if strings.HasPrefix(line, ":") {
 			continue
 		}

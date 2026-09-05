@@ -179,7 +179,7 @@ type SetFailure struct {
 	Kind string
 	// Key is the creation id or record id the failure is filed under.
 	Key ID
-	// Err is what the server said.
+	// Err is the error the server reported.
 	Err SetError
 }
 
@@ -192,8 +192,8 @@ func (f SetFailure) Error() string {
 // caller knowing SetFailure exists.
 func (f SetFailure) Unwrap() error { return &f.Err }
 
-// setVerb turns the name of a response property into the verb it denies, so
-// that an error reads as prose rather than as a field name.
+// setVerb turns the name of a response property into the verb it refuses, so
+// that the message reads as a sentence rather than as a field name.
 func setVerb(kind string) string {
 	switch kind {
 	case "notCreated":

@@ -43,8 +43,8 @@ func NewRequestCheck(s *spec.Spec, using []string) *RequestCheck {
 }
 
 // Call checks one method call, given as the three-element array it arrives as,
-// and reports what the data model says is wrong with it. The index is where the
-// call sits in the request, which the diagnostics point at.
+// and reports what the data model says is wrong with it. The index is the
+// position of the call in the request, which the diagnostics refer to.
 //
 // A call that checks out is remembered, so that a back reference in a later
 // call can be resolved against it.

@@ -54,7 +54,7 @@ func (g *QueryGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
 	checks := g.setErrorChecks(p)
 	if p.q.Returns != nil {
 		// The one call this returns is the whole of the answer, so a failure
-		// there leaves nothing to hand back, and what went wrong is already in
+		// there leaves nothing to return, and what went wrong is already in
 		// the error the request came back with.
 		fmt.Fprintf(buf, "    let out = match decode::<%s>(&req, &res, %s) {\n",
 			p.returnType, quote(p.q.Returns.ID))
@@ -126,7 +126,8 @@ type setErrorGroup struct {
 
 // setErrorChecks finds the calls whose responses report per-record failures.
 // A call the query does not return is read for its refusals alone, since
-// otherwise naming one call in "_returns" would quietly stop the others from
+// otherwise naming one call in "_returns" would silently exempt the others
+// from
 // being checked.
 func (g *QueryGenerator) setErrorChecks(p *plan) []setErrorCheck {
 	var checks []setErrorCheck
@@ -497,14 +498,14 @@ func (g *QueryGenerator) writePages(buf *bytes.Buffer, p *plan) {
 
 // writePagesDoc writes the walk's documentation, on whichever item carries it.
 func (g *QueryGenerator) writePagesDoc(buf *bytes.Buffer, p *plan, marker string) {
-	doc := fmt.Sprintf("%s walks the whole of what %s returns one part of, calling it again for each part until there is none left.",
+	doc := fmt.Sprintf("%s walks the whole of what %s returns one part of, calling it again for each part until none is left.",
 		p.pagesType, p.funcName)
 	switch p.q.PageKind {
 	case query.PageQuery:
-		doc += "\n\nA window with nothing in it ends the walk rather than being handed back, so every part it answers with holds something; " +
-			"where the call asked for the total, the walk ends without asking for a window that is not there."
+		doc += "\n\nAn empty window ends the walk instead of being returned, so every part it returns holds at least one record; " +
+			"where the call asked for the total, the walk ends without requesting a window past it."
 	case query.PageChanges:
-		doc += "\n\nAn answer saying nothing changed is still handed back, since it carries the state to go on from, and the walk ends when the server says there is no more."
+		doc += "\n\nAn answer reporting no changes is still returned, since it carries the state to continue from, and the walk ends when the server reports no more."
 	}
 	shared.WriteCommentMarker(buf, "", marker, doc)
 }

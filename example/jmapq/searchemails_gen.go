@@ -146,16 +146,15 @@ func SearchEmails(ctx context.Context, c *jmapc.Client, p SearchEmailsParams) (*
 }
 
 // SearchEmailsPages walks the whole of what SearchEmails returns one part of,
-// calling it again for each part until there is none left.
+// calling it again for each part until none is left.
 //
-// It starts from the position the parameters carry and works the next one out
-// from each answer. A window with nothing in it ends the walk rather than
-// being handed back, so every result yielded holds something; where the call
-// asked for the total, the walk ends without asking for a window that is not
-// there.
+// It starts from the position the parameters carry and derives the next one
+// from each answer. An empty window ends the walk instead of being yielded,
+// so every result yielded holds at least one record; where the call asked for
+// the total, the walk ends without requesting a window past it.
 //
 // An error ends the walk and is yielded with a nil result, so a range over it
-// checks the error each time round. Breaking out of the range stops it, and
+// checks the error on each iteration. Breaking out of the range stops it, and
 // sends no further request.
 func SearchEmailsPages(ctx context.Context, c *jmapc.Client, p SearchEmailsParams) iter.Seq2[*SearchEmailsResult, error] {
 	return func(yield func(*SearchEmailsResult, error) bool) {

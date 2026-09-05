@@ -160,17 +160,17 @@ func SyncEmails(ctx context.Context, c *jmapc.Client, p SyncEmailsParams) (*Sync
 }
 
 // SyncEmailsWatch follows the changes to Email, calling SyncEmails whenever
-// the server says there are any and passing the result to fn.
+// the server reports any and passing the result to fn.
 //
 // It starts from the sinceState the parameters carry, which is the state a
-// previous answer left the caller at, and it goes on from the state each
-// answer reports. A server that answers with only part of what changed is
-// asked again until it says there is no more.
+// previous answer reported, and it continues from the state each answer
+// reports. A server that returns only part of what changed is called again
+// until it reports no more.
 //
 // It runs until the context ends, which is the error it returns; an error
-// from fn stops it and comes back as it was. A dropped connection is not an
-// error: the loop opens another, resuming where it left off, and asks what it
-// missed while there was none.
+// from fn stops it and is returned unchanged. A dropped connection is not an
+// error: the loop opens another, resuming from the last event delivered, and
+// requests the changes made while no connection was open.
 func SyncEmailsWatch(ctx context.Context, c *jmapc.Client, p SyncEmailsParams, fn func(context.Context, *SyncEmailsResult) error, opts ...jmapc.WatchOption) error {
 	session, err := c.Session(ctx)
 	if err != nil {

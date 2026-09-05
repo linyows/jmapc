@@ -41,7 +41,7 @@ type Query struct {
 	Returns *Call
 	// Watches is the call whose state a generated watch follows, or nil where
 	// the query is not watched. A watch calls the query whenever the server
-	// says that call's type has moved on.
+	// reports that call's type has changed.
 	Watches *Call
 	// WatchState is the parameter carrying the state a watched call reports
 	// the changes since. The loop fills it in, from the state the last answer
@@ -135,9 +135,9 @@ const AccountIDArgument = "accountId"
 
 // AccountIDCapability reports the capability whose primary account fills in
 // this call's accountId, and whether one has to be filled in at all. A query
-// that does not care which account it runs against should not have to say so
-// in every call, so the answer is no only where the method takes no account,
-// or the query names one itself.
+// that is not specific to an account should not have to state that in every
+// call, so the answer is no only where the method takes no account, or the
+// query names one itself.
 func (c *Call) AccountIDCapability(s *spec.Spec) (string, bool) {
 	args, err := s.ArgumentsOf(c.Method.Name)
 	if err != nil {

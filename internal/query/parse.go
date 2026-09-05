@@ -234,9 +234,9 @@ func (c *checker) checkOptional(q *Query) {
 // parameter carries it back in.
 //
 // A watched call is one that reports what changed since a state — a /changes
-// call — because that is the only kind a loop can go on from. What the server
-// pushes is that a type has moved on, not what changed, so the loop asks; and
-// what it asks with is the state the last answer left it at.
+// call — because that is the only kind a loop can continue from. The server
+// pushes only that a type has changed, not what changed, so the loop requests
+// the changes, using the state the last answer reported.
 func (c *checker) watch(q *Query, f fileSyntax) {
 	if f.Watches == "" {
 		return
@@ -288,8 +288,8 @@ func (c *checker) watch(q *Query, f fileSyntax) {
 //
 // Two kinds of call return part of an answer and say where the rest is. A
 // /query returns a window of a longer list, and the next window starts after
-// this one. A /changes reports what changed since a state, and answers with as
-// much as it cares to, saying so.
+// this one. A /changes reports what changed since a state, returning as many
+// changes as the server chooses and reporting whether more remain.
 func (c *checker) pages(q *Query, f fileSyntax) {
 	if f.Pages == "" {
 		return

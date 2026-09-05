@@ -160,8 +160,8 @@ func (g *QueryGenerator) plan() ([]*plan, error) {
 }
 
 // planAccountIDs works out which calls need an accountId filling in, and from
-// which capability's primary account. A query that does not care which account
-// it runs against should not have to say so in every call.
+// which capability's primary account. A query that is not specific to an
+// account should not have to state that in every call.
 func (g *QueryGenerator) planAccountIDs(p *plan) {
 	seen := make(map[string]bool)
 	for _, c := range p.q.Calls {
