@@ -674,6 +674,20 @@ res, err := jmapq.ListInboxEmails(ctx, srv.Client(), params)
 これはクライアントをテストするためのサーバであって、JMAP の実装ではありません。
 `/set` が作ったものは、テストがそう言わない限り、後の `/get` からは返りません。
 
+クライアントを一度に全部移すことは稀で、移行の途中では二つの半分を同じテストで応答させることになります。
+生成された側は `srv.Client()` からこのサーバに届きますが、まだ手で書かれている側は自分のパスに投げます。
+そのパスを載せる場所が `srv.Mux()` で、手で書かれた側を向ける先が `srv.BaseURL()` です。
+
+```go
+srv := jmaptest.New(t)
+srv.Mux().HandleFunc("/jmap", myOldAPIHandler)
+srv.Mux().HandleFunc("/jmap/session", myOldSessionHandler)
+
+old := myOldClient(srv.BaseURL())
+```
+
+ですから jmaptest は、最後のメソッドを移し終えてからではなく、最初の一つを移した時点から使えます。
+
 ## Blob
 
 添付ファイルは API エンドポイントを通りません。
