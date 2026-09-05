@@ -8,6 +8,8 @@ import (
 	"io"
 	"strconv"
 	"strings"
+
+	"github.com/linyows/jmapc/internal/query"
 )
 
 // commentWidth is the column the generated comments wrap at, counting the
@@ -91,4 +93,40 @@ func RecordProperties(props []string) []string {
 		}
 	}
 	return append([]string{"id"}, props...)
+}
+
+// SameNarrowing maps each call that narrows what it fetches to the first call
+// of the query that narrows it the same way, and a call that is the first to
+// itself. A call that narrows nothing is not in the map at all.
+//
+// Two calls of one query reading the same type through the same method and
+// asking for the same properties describe one record, so generating a type for
+// each would be two names for one shape, and a caller passing a record from one
+// to a function written for the other would have to convert between them. The
+// property lists have to agree in order as well as in content, since the order
+// is the order the generated fields are written in.
+func SameNarrowing(calls []*query.Call) map[*query.Call]*query.Call {
+	first := make(map[string]*query.Call, len(calls))
+	out := make(map[*query.Call]*query.Call, len(calls))
+	for _, c := range calls {
+		if c.Properties == nil && c.NestedProperties == nil {
+			continue
+		}
+		// The method is part of the key because the response type is the
+		// method's, whatever the records inside it are.
+		key := strings.Join([]string{
+			c.Method.Name,
+			c.Method.DataType,
+			strings.Join(c.Properties, "\x00"),
+			c.Method.NestedType,
+			strings.Join(c.NestedProperties, "\x00"),
+		}, "\x01")
+		if seen, dup := first[key]; dup {
+			out[c] = seen
+			continue
+		}
+		first[key] = c
+		out[c] = c
+	}
+	return out
 }

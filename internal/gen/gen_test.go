@@ -340,3 +340,60 @@ func TestPagesWalksChanges(t *testing.T) {
 		t.Errorf("an empty answer was skipped, and it carries the state:\n%s", src)
 	}
 }
+
+// TestOneShapeIsOneType checks the query whose calls read the same records in
+// the same shape. Two types differing only by name would make a caller convert
+// between them to pass a record from one call to a function written for the
+// other, and the names are numbered by call position, so the second of them
+// would move the moment a call was inserted before it.
+func TestOneShapeIsOneType(t *testing.T) {
+	src := generateOne(t, "TwoReads", `{
+	  "methodCalls": [
+	    ["Email/get", {"ids": ["{{a}}"], "properties": ["id", "subject"]}, "one"],
+	    ["Email/get", {"ids": ["{{b}}"], "properties": ["id", "subject"]}, "two"]
+	  ]
+	}`)
+	if strings.Contains(src, "TwoReadsEmail2") {
+		t.Errorf("the same shape was given a second type:\n%s", src)
+	}
+	if n := strings.Count(src, "type TwoReadsEmail struct {"); n != 1 {
+		t.Errorf("the record type is declared %d times, want 1:\n%s", n, src)
+	}
+	if n := strings.Count(src, "type TwoReadsEmailGetResponse struct {"); n != 1 {
+		t.Errorf("the response type is declared %d times, want 1:\n%s", n, src)
+	}
+	// Both calls still answer separately; it is the type they share.
+	for _, want := range []string{
+		"EmailGet TwoReadsEmailGetResponse",
+		"EmailGet2 TwoReadsEmailGetResponse",
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("the result does not hold %q:\n%s", want, src)
+		}
+	}
+}
+
+// TestDifferentShapesKeepTheirOwnTypes checks the other half of it: calls that
+// ask for different properties describe different records, whether the
+// difference is in the properties themselves or in the parts of a body.
+func TestDifferentShapesKeepTheirOwnTypes(t *testing.T) {
+	src := generateOne(t, "TwoReads", `{
+	  "methodCalls": [
+	    ["Email/get", {"ids": ["{{a}}"], "properties": ["id", "subject"]}, "one"],
+	    ["Email/get", {"ids": ["{{b}}"], "properties": ["id", "threadId"]}, "two"]
+	  ]
+	}`)
+	if !strings.Contains(src, "type TwoReadsEmail2 struct {") {
+		t.Errorf("two shapes were given one type:\n%s", src)
+	}
+
+	bodies := generateOne(t, "TwoBodies", `{
+	  "methodCalls": [
+	    ["Email/get", {"ids": ["{{a}}"], "properties": ["id"], "bodyProperties": ["partId", "type"]}, "one"],
+	    ["Email/get", {"ids": ["{{b}}"], "properties": ["id"], "bodyProperties": ["partId", "size"]}, "two"]
+	  ]
+	}`)
+	if !strings.Contains(bodies, "type TwoBodiesEmailBodyPart2 struct {") {
+		t.Errorf("two body shapes were given one type:\n%s", bodies)
+	}
+}
