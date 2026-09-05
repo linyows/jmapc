@@ -5,6 +5,7 @@ package jmapq
 
 import (
 	"context"
+	"errors"
 
 	"github.com/linyows/jmapc"
 )
@@ -57,13 +58,16 @@ func UpdateContactEmail(ctx context.Context, c *jmapc.Client, p UpdateContactEma
 	}
 
 	resp, err := c.Do(ctx, req)
-	if err != nil {
+	if resp == nil {
 		return nil, err
 	}
 
 	var out jmapc.ContactCardSetResponse
-	if err := resp.Decode("update", &out); err != nil {
-		return nil, err
+	if e := resp.Decode("update", &out); e != nil {
+		if err != nil {
+			return nil, err
+		}
+		return nil, e
 	}
 
 	var failures jmapc.SetErrors
@@ -72,8 +76,8 @@ func UpdateContactEmail(ctx context.Context, c *jmapc.Client, p UpdateContactEma
 		"notUpdated":   out.NotUpdated,
 		"notDestroyed": out.NotDestroyed,
 	})
-	if err := failures.Err(); err != nil {
-		return &out, err
+	if e := failures.Err(); e != nil {
+		return &out, errors.Join(err, e)
 	}
-	return &out, nil
+	return &out, err
 }

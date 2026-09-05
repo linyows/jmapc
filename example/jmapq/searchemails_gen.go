@@ -130,18 +130,18 @@ func SearchEmails(ctx context.Context, c *jmapc.Client, p SearchEmailsParams) (*
 	}
 
 	resp, err := c.Do(ctx, req)
-	if err != nil {
+	if resp == nil {
 		return nil, err
 	}
 
 	var out SearchEmailsResult
-	if err := resp.Decode("search", &out.EmailQuery); err != nil {
-		return nil, err
+	if e := resp.Decode("search", &out.EmailQuery); e != nil && err == nil {
+		return nil, e
 	}
-	if err := resp.Decode("fetch", &out.EmailGet); err != nil {
-		return nil, err
+	if e := resp.Decode("fetch", &out.EmailGet); e != nil && err == nil {
+		return nil, e
 	}
-	return &out, nil
+	return &out, err
 }
 
 // SearchEmailsPages walks the whole of what SearchEmails returns one part of,

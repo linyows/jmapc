@@ -1529,3 +1529,81 @@ func TestSendEmailReportsRefusedRecords(t *testing.T) {
 		t.Error("errors.As does not reach an individual failure")
 	}
 }
+
+// TestPartialResultComesBackWithTheError covers what a chained query does when
+// the call that feeds another succeeds and the one fed by it does not. JMAP
+// runs the calls it can, and the answer to the one that ran is usually what
+// says why the other could not: a generated function hands it back alongside
+// the error rather than dropping it.
+func TestPartialResultComesBackWithTheError(t *testing.T) {
+	s := &stub{t: t, response: `{
+	  "sessionState": "session-1",
+	  "methodResponses": [
+	    ["Mailbox/set", {"accountId": "acct1", "newState": "m2", "created": {"box": {
+	       "id": "mbx9", "role": null, "sortOrder": 0, "totalEmails": 0, "unreadEmails": 0,
+	       "totalThreads": 0, "unreadThreads": 0, "isSubscribed": true,
+	       "myRights": {"mayReadItems": true, "mayAddItems": true, "mayRemoveItems": true,
+	                    "maySetSeen": true, "maySetKeywords": true, "mayCreateChild": true,
+	                    "mayRename": true, "mayDelete": true, "maySubmit": true}}}}, "make"],
+	    ["error", {"type": "invalidResultReference"}, "file"]
+	  ]
+	}`}
+
+	res, err := jmapq.FileIntoNewMailbox(context.Background(), s.client(), jmapq.FileIntoNewMailboxParams{
+		Name: "Archive", EmailID: "e1", FromMailboxID: "mbx1",
+	}, nil)
+
+	var methodErrs jmapc.MethodErrors
+	if !errors.As(err, &methodErrs) {
+		t.Fatalf("err = %v, want a MethodErrors", err)
+	}
+	if len(methodErrs) != 1 || methodErrs[0].CallID != "file" {
+		t.Errorf("the error names %v, want the Email/set call", methodErrs)
+	}
+	if res == nil {
+		t.Fatal("the response was dropped, want what the server did answer")
+	}
+	if res.MailboxSet.NewState != "m2" {
+		t.Errorf("the call that succeeded reads %+v", res.MailboxSet)
+	}
+	if _, made := res.MailboxSet.Created["box"]; !made {
+		t.Error("the mailbox the server created is not in the result")
+	}
+	if res.EmailSet.NewState != "" || res.EmailSet.Created != nil {
+		t.Errorf("the call the server would not run is not at its zero value: %+v", res.EmailSet)
+	}
+}
+
+// TestBothLevelsOfFailureAreReported covers a request where one call was
+// refused a record and another was not run at all. A caller reading only one
+// of the two would miss the other, so both come back.
+func TestBothLevelsOfFailureAreReported(t *testing.T) {
+	s := &stub{t: t, response: `{
+	  "sessionState": "session-1",
+	  "methodResponses": [
+	    ["Mailbox/set", {"accountId": "acct1", "newState": "m2",
+	                     "notCreated": {"box": {"type": "invalidProperties",
+	                                            "properties": ["name"]}}}, "make"],
+	    ["error", {"type": "invalidResultReference"}, "file"]
+	  ]
+	}`}
+
+	res, err := jmapq.FileIntoNewMailbox(context.Background(), s.client(), jmapq.FileIntoNewMailboxParams{
+		Name: "", EmailID: "e1", FromMailboxID: "mbx1",
+	}, nil)
+	if res == nil {
+		t.Fatal("the response was dropped")
+	}
+
+	var methodErrs jmapc.MethodErrors
+	if !errors.As(err, &methodErrs) {
+		t.Errorf("the method call that was not run is missing from %v", err)
+	}
+	var refused *jmapc.SetErrors
+	if !errors.As(err, &refused) {
+		t.Fatalf("the refused record is missing from %v", err)
+	}
+	if len(refused.Failures) != 1 || refused.Failures[0].Key != "box" {
+		t.Errorf("refusals = %v, want the one the Mailbox/set reported", refused.Failures)
+	}
+}

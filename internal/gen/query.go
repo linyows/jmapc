@@ -220,6 +220,9 @@ func (g *QueryGenerator) writeImports(buf *bytes.Buffer, body []byte) {
 	if bytes.Contains(body, []byte("json.")) {
 		imports = append(imports, "encoding/json")
 	}
+	if bytes.Contains(body, []byte("errors.Join")) {
+		imports = append(imports, "errors")
+	}
 	if bytes.Contains(body, []byte("iter.Seq2")) {
 		imports = append(imports, "iter")
 	}

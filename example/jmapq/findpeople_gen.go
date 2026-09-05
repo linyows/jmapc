@@ -107,13 +107,16 @@ func FindPeople(ctx context.Context, c *jmapc.Client, p FindPeopleParams) (*Find
 	}
 
 	resp, err := c.Do(ctx, req)
-	if err != nil {
+	if resp == nil {
 		return nil, err
 	}
 
 	var out FindPeoplePrincipalGetResponse
-	if err := resp.Decode("fetch", &out); err != nil {
-		return nil, err
+	if e := resp.Decode("fetch", &out); e != nil {
+		if err != nil {
+			return nil, err
+		}
+		return nil, e
 	}
-	return &out, nil
+	return &out, err
 }

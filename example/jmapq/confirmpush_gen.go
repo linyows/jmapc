@@ -5,6 +5,7 @@ package jmapq
 
 import (
 	"context"
+	"errors"
 
 	"github.com/linyows/jmapc"
 )
@@ -55,13 +56,16 @@ func ConfirmPush(ctx context.Context, c *jmapc.Client, p ConfirmPushParams) (*jm
 	}
 
 	resp, err := c.Do(ctx, req)
-	if err != nil {
+	if resp == nil {
 		return nil, err
 	}
 
 	var out jmapc.PushSubscriptionSetResponse
-	if err := resp.Decode("confirm", &out); err != nil {
-		return nil, err
+	if e := resp.Decode("confirm", &out); e != nil {
+		if err != nil {
+			return nil, err
+		}
+		return nil, e
 	}
 
 	var failures jmapc.SetErrors
@@ -70,8 +74,8 @@ func ConfirmPush(ctx context.Context, c *jmapc.Client, p ConfirmPushParams) (*jm
 		"notUpdated":   out.NotUpdated,
 		"notDestroyed": out.NotDestroyed,
 	})
-	if err := failures.Err(); err != nil {
-		return &out, err
+	if e := failures.Err(); e != nil {
+		return &out, errors.Join(err, e)
 	}
-	return &out, nil
+	return &out, err
 }

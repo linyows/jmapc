@@ -5,6 +5,7 @@ package jmapq
 
 import (
 	"context"
+	"errors"
 
 	"github.com/linyows/jmapc"
 )
@@ -63,13 +64,16 @@ func CheckSieveScript(ctx context.Context, c *jmapc.Client, p CheckSieveScriptPa
 	}
 
 	resp, err := c.Do(ctx, req)
-	if err != nil {
+	if resp == nil {
 		return nil, err
 	}
 
 	var out jmapc.SieveScriptValidateResponse
-	if err := resp.Decode("check", &out); err != nil {
-		return nil, err
+	if e := resp.Decode("check", &out); e != nil {
+		if err != nil {
+			return nil, err
+		}
+		return nil, e
 	}
 
 	var refused0 jmapc.BlobUploadResponse
@@ -80,8 +84,8 @@ func CheckSieveScript(ctx context.Context, c *jmapc.Client, p CheckSieveScriptPa
 	failures.Collect("Blob/upload", "upload", map[string]map[jmapc.ID]jmapc.SetError{
 		"notCreated": refused0.NotCreated,
 	})
-	if err := failures.Err(); err != nil {
-		return &out, err
+	if e := failures.Err(); e != nil {
+		return &out, errors.Join(err, e)
 	}
-	return &out, nil
+	return &out, err
 }

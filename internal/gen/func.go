@@ -50,21 +50,33 @@ func (g *QueryGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
 	g.writeRequest(buf, p)
 
 	buf.WriteString("\tresp, err := c.Do(ctx, req)\n")
-	buf.WriteString("\tif err != nil {\n\t\treturn nil, err\n\t}\n\n")
+	// A method call the server would not run does not fail the request: the
+	// calls around it may still have answered, and err carries what went
+	// wrong, so the response is read and handed back with it.
+	buf.WriteString("\tif resp == nil {\n\t\treturn nil, err\n\t}\n\n")
 
 	fmt.Fprintf(buf, "\tvar out %s\n", p.returnType)
 	if p.q.Returns != nil {
-		fmt.Fprintf(buf, "\tif err := resp.Decode(%q, &out); err != nil {\n\t\treturn nil, err\n\t}\n", p.q.Returns.ID)
+		// The one call this returns is the whole of the answer, so a failure
+		// there leaves nothing to hand back. What went wrong is already in
+		// err, where the server said so.
+		fmt.Fprintf(buf, "\tif e := resp.Decode(%q, &out); e != nil {\n", p.q.Returns.ID)
+		buf.WriteString("\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n")
+		buf.WriteString("\t\treturn nil, e\n\t}\n")
 	} else {
+		// A call the server would not run leaves its result at the zero value
+		// rather than taking the others with it, since err already says which
+		// calls those were. Anything else wrong with the response is still
+		// worth reporting on its own.
 		for _, c := range p.q.Calls {
-			fmt.Fprintf(buf, "\tif err := resp.Decode(%q, &out.%s); err != nil {\n\t\treturn nil, err\n\t}\n", c.ID, c.Field)
+			fmt.Fprintf(buf, "\tif e := resp.Decode(%q, &out.%s); e != nil && err == nil {\n\t\treturn nil, e\n\t}\n", c.ID, c.Field)
 		}
 	}
 	if p.q.CreatedIDs {
 		buf.WriteString("\tout.CreatedIDs = resp.CreatedIDs\n")
 	}
 	g.writeSetErrorChecks(buf, p)
-	buf.WriteString("\treturn &out, nil\n")
+	buf.WriteString("\treturn &out, err\n")
 	buf.WriteString("}\n")
 }
 
@@ -122,7 +134,10 @@ func (g *QueryGenerator) writeSetErrorChecks(buf *bytes.Buffer, p *plan) {
 		}
 		buf.WriteString("\t})\n")
 	}
-	buf.WriteString("\tif err := failures.Err(); err != nil {\n\t\treturn &out, err\n\t}\n")
+	// Both levels can fail at once: one call refused a record while another
+	// was not run at all, and a caller reading only one of the two would miss
+	// the other.
+	buf.WriteString("\tif e := failures.Err(); e != nil {\n\t\treturn &out, errors.Join(err, e)\n\t}\n")
 }
 
 // writeFuncDoc writes the generated function's documentation, using what the

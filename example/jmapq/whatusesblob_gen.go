@@ -98,16 +98,16 @@ func WhatUsesBlob(ctx context.Context, c *jmapc.Client, p WhatUsesBlobParams) (*
 	}
 
 	resp, err := c.Do(ctx, req)
-	if err != nil {
+	if resp == nil {
 		return nil, err
 	}
 
 	var out WhatUsesBlobResult
-	if err := resp.Decode("uses", &out.BlobLookup); err != nil {
-		return nil, err
+	if e := resp.Decode("uses", &out.BlobLookup); e != nil && err == nil {
+		return nil, e
 	}
-	if err := resp.Decode("peek", &out.BlobGet); err != nil {
-		return nil, err
+	if e := resp.Decode("peek", &out.BlobGet); e != nil && err == nil {
+		return nil, e
 	}
-	return &out, nil
+	return &out, err
 }

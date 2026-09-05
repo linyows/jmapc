@@ -656,6 +656,27 @@ can, so the response comes back alongside the error, and each error names the
 method and call id that failed rather than the bare `"error"` the wire format
 carries.
 
+A generated function hands back the same thing: the calls the server answered
+are decoded, the ones it would not run are left at their zero value, and the
+result comes back with the error. A chained query fails this way as a matter
+of course — the call that feeds another succeeds, the one fed by it cannot
+resolve its reference — and what the first call answered is usually what says
+why:
+
+```go
+res, err := jmapq.DestroyThread(ctx, c, params)
+if err != nil {
+    if len(res.ThreadGet.NotFound) > 0 {
+        return fmt.Errorf("no such thread: %s", res.ThreadGet.NotFound[0])
+    }
+    return err
+}
+```
+
+The exception is a query naming one call in `_returns`: that call is the whole
+of the answer, so if it is the one that failed, there is nothing to hand back
+and the result is nil.
+
 There is a third level, and it is the one that gets missed. A `/set` answers
 **200 with no error in it** and lists the records it would not act on:
 
