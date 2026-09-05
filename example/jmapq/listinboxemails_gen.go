@@ -46,9 +46,9 @@ type ListInboxEmailsEmail struct {
 	HasAttachment bool `json:"hasAttachment"`
 }
 
-// ListInboxEmailsEmailGetResponse holds the response to the Email/get call in
+// ListInboxEmailsFetchResponse holds the response to the Email/get call in
 // ListInboxEmails.
-type ListInboxEmailsEmailGetResponse struct {
+type ListInboxEmailsFetchResponse struct {
 	// The id of the account to operate on.
 	AccountID jmapc.ID `json:"accountId"`
 
@@ -73,7 +73,7 @@ type ListInboxEmailsEmailGetResponse struct {
 // The query does not say which account to use, so the session's primary
 // account for urn:ietf:params:jmap:mail is used, which costs a session lookup
 // on first use.
-func ListInboxEmails(ctx context.Context, c *jmapc.Client, p ListInboxEmailsParams) (*ListInboxEmailsEmailGetResponse, error) {
+func ListInboxEmails(ctx context.Context, c *jmapc.Client, p ListInboxEmailsParams) (*ListInboxEmailsFetchResponse, error) {
 	session, err := c.Session(ctx)
 	if err != nil {
 		return nil, err
@@ -109,7 +109,7 @@ func ListInboxEmails(ctx context.Context, c *jmapc.Client, p ListInboxEmailsPara
 		return nil, err
 	}
 
-	var out ListInboxEmailsEmailGetResponse
+	var out ListInboxEmailsFetchResponse
 	if e := resp.Decode("fetch", &out); e != nil {
 		if err != nil {
 			return nil, err

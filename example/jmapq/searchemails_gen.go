@@ -45,9 +45,9 @@ type SearchEmailsEmail struct {
 	ReceivedAt jmapc.UTCDate `json:"receivedAt"`
 }
 
-// SearchEmailsEmailGetResponse holds the response to the Email/get call in
+// SearchEmailsFetchResponse holds the response to the Email/get call in
 // SearchEmails.
-type SearchEmailsEmailGetResponse struct {
+type SearchEmailsFetchResponse struct {
 	// The id of the account to operate on.
 	AccountID jmapc.ID `json:"accountId"`
 
@@ -66,10 +66,10 @@ type SearchEmailsEmailGetResponse struct {
 // makes.
 type SearchEmailsResult struct {
 	// The response to the Email/query call, made as "search".
-	EmailQuery jmapc.EmailQueryResponse
+	Search jmapc.EmailQueryResponse
 
 	// The response to the Email/get call, made as "fetch".
-	EmailGet SearchEmailsEmailGetResponse
+	Fetch SearchEmailsFetchResponse
 }
 
 // SearchEmails finds emails matching a phrase in one of two mailboxes, and
@@ -136,10 +136,10 @@ func SearchEmails(ctx context.Context, c *jmapc.Client, p SearchEmailsParams) (*
 	}
 
 	var out SearchEmailsResult
-	if e := resp.Decode("search", &out.EmailQuery); e != nil && err == nil {
+	if e := resp.Decode("search", &out.Search); e != nil && err == nil {
 		return nil, e
 	}
-	if e := resp.Decode("fetch", &out.EmailGet); e != nil && err == nil {
+	if e := resp.Decode("fetch", &out.Fetch); e != nil && err == nil {
 		return nil, e
 	}
 	return &out, err
@@ -167,7 +167,7 @@ func SearchEmailsPages(ctx context.Context, c *jmapc.Client, p SearchEmailsParam
 				yield(nil, err)
 				return
 			}
-			window := &res.EmailQuery
+			window := &res.Search
 			if len(window.IDs) == 0 {
 				return
 			}

@@ -41,9 +41,9 @@ type FindPeoplePrincipal struct {
 	TimeZone *string `json:"timeZone"`
 }
 
-// FindPeoplePrincipalGetResponse holds the response to the Principal/get call
-// in FindPeople.
-type FindPeoplePrincipalGetResponse struct {
+// FindPeopleFetchResponse holds the response to the Principal/get call in
+// FindPeople.
+type FindPeopleFetchResponse struct {
 	// The id of the account to operate on.
 	AccountID jmapc.ID `json:"accountId"`
 
@@ -69,7 +69,7 @@ type FindPeoplePrincipalGetResponse struct {
 // The query does not say which account to use, so the session's primary
 // account for urn:ietf:params:jmap:principals is used, which costs a session
 // lookup on first use.
-func FindPeople(ctx context.Context, c *jmapc.Client, p FindPeopleParams) (*FindPeoplePrincipalGetResponse, error) {
+func FindPeople(ctx context.Context, c *jmapc.Client, p FindPeopleParams) (*FindPeopleFetchResponse, error) {
 	session, err := c.Session(ctx)
 	if err != nil {
 		return nil, err
@@ -79,7 +79,7 @@ func FindPeople(ctx context.Context, c *jmapc.Client, p FindPeopleParams) (*Find
 		return nil, err
 	}
 
-	principalQueryArgs := map[string]any{
+	searchArgs := map[string]any{
 		"accountId": principalsAccountID,
 		"filter": map[string]any{
 			"operator": "AND",
@@ -92,13 +92,13 @@ func FindPeople(ctx context.Context, c *jmapc.Client, p FindPeopleParams) (*Find
 		},
 	}
 	if p.Limit != nil {
-		principalQueryArgs["limit"] = *p.Limit
+		searchArgs["limit"] = *p.Limit
 	}
 
 	req := &jmapc.Request{
 		Using: []string{jmapc.CapabilityCore, jmapc.CapabilityPrincipals},
 		MethodCalls: []jmapc.Invocation{
-			{Name: "Principal/query", CallID: "search", Args: principalQueryArgs},
+			{Name: "Principal/query", CallID: "search", Args: searchArgs},
 			{Name: "Principal/get", CallID: "fetch", Args: map[string]any{
 				"accountId":  principalsAccountID,
 				"#ids":       jmapc.ResultReference{ResultOf: "search", Name: "Principal/query", Path: "/ids"},
@@ -112,7 +112,7 @@ func FindPeople(ctx context.Context, c *jmapc.Client, p FindPeopleParams) (*Find
 		return nil, err
 	}
 
-	var out FindPeoplePrincipalGetResponse
+	var out FindPeopleFetchResponse
 	if e := resp.Decode("fetch", &out); e != nil {
 		if err != nil {
 			return nil, err

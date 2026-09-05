@@ -74,11 +74,11 @@ pub struct SearchContactsContactCard {
     pub organizations: BTreeMap<Id, ContactOrganization>,
 }
 
-/// SearchContactsAddressBookGetResponse holds the response to the
-/// AddressBook/get call in SearchContacts.
+/// SearchContactsBooksResponse holds the response to the AddressBook/get call
+/// in SearchContacts.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SearchContactsAddressBookGetResponse {
+pub struct SearchContactsBooksResponse {
     /// The id of the account to operate on.
     pub account_id: Id,
 
@@ -95,11 +95,11 @@ pub struct SearchContactsAddressBookGetResponse {
     pub not_found: Vec<Id>,
 }
 
-/// SearchContactsContactCardGetResponse holds the response to the
-/// ContactCard/get call in SearchContacts.
+/// SearchContactsFetchResponse holds the response to the ContactCard/get call
+/// in SearchContacts.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SearchContactsContactCardGetResponse {
+pub struct SearchContactsFetchResponse {
     /// The id of the account to operate on.
     pub account_id: Id,
 
@@ -121,13 +121,13 @@ pub struct SearchContactsContactCardGetResponse {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct SearchContactsResult {
     /// The response to the AddressBook/get call, made as "books".
-    pub address_book_get: SearchContactsAddressBookGetResponse,
+    pub books: SearchContactsBooksResponse,
 
     /// The response to the ContactCard/query call, made as "search".
-    pub contact_card_query: ContactCardQueryResponse,
+    pub search: ContactCardQueryResponse,
 
     /// The response to the ContactCard/get call, made as "fetch".
-    pub contact_card_get: SearchContactsContactCardGetResponse,
+    pub fetch: SearchContactsFetchResponse,
 }
 
 /// SearchContacts lists the address books and searches one of them in the
@@ -208,18 +208,18 @@ pub async fn search_contacts<T: Transport>(
     };
 
     let mut out = SearchContactsResult::default();
-    match decode::<SearchContactsAddressBookGetResponse>(&req, &res, "books") {
-        Ok(v) => out.address_book_get = v,
+    match decode::<SearchContactsBooksResponse>(&req, &res, "books") {
+        Ok(v) => out.books = v,
         Err(e) if failed.is_none() => return Err(e),
         Err(_) => {}
     }
     match decode::<ContactCardQueryResponse>(&req, &res, "search") {
-        Ok(v) => out.contact_card_query = v,
+        Ok(v) => out.search = v,
         Err(e) if failed.is_none() => return Err(e),
         Err(_) => {}
     }
-    match decode::<SearchContactsContactCardGetResponse>(&req, &res, "fetch") {
-        Ok(v) => out.contact_card_get = v,
+    match decode::<SearchContactsFetchResponse>(&req, &res, "fetch") {
+        Ok(v) => out.fetch = v,
         Err(e) if failed.is_none() => return Err(e),
         Err(_) => {}
     }

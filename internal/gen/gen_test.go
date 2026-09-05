@@ -194,7 +194,7 @@ func TestWatchTakesTheAccountFromTheSession(t *testing.T) {
 		"mailAccountID, err := session.PrimaryAccountID(jmapc.CapabilityMail)",
 		`return c.Watch(ctx, mailAccountID, "Mailbox", p.SinceState,`,
 		"p.SinceState = sinceState",
-		"return res.MailboxChanges.NewState, res.MailboxChanges.HasMoreChanges, nil",
+		"return res.Changes.NewState, res.Changes.HasMoreChanges, nil",
 	} {
 		if !strings.Contains(src, want) {
 			t.Errorf("the generated watch does not contain %q:\n%s", want, src)
@@ -211,11 +211,11 @@ func TestOptionalArgumentIsPutInOnlyWhenGiven(t *testing.T) {
 	}`)
 	for _, want := range []string{
 		"MaxChanges *jmapc.UnsignedInt",
-		"emailChangesArgs := map[string]any{",
+		"changesArgs := map[string]any{",
 		`"sinceState": p.SinceState,`,
 		"if p.MaxChanges != nil {",
-		`emailChangesArgs["maxChanges"] = *p.MaxChanges`,
-		`{Name: "Email/changes", CallID: "changes", Args: emailChangesArgs},`,
+		`changesArgs["maxChanges"] = *p.MaxChanges`,
+		`{Name: "Email/changes", CallID: "changes", Args: changesArgs},`,
 	} {
 		if !strings.Contains(src, want) {
 			t.Errorf("the generated query does not contain %q:\n%s", want, src)
@@ -230,7 +230,7 @@ func TestQueriesWithoutOptionalArgumentsStateTheirArguments(t *testing.T) {
 	src := generateOne(t, "GetChanges", `{
 	  "methodCalls": [["Email/changes", {"sinceState": "{{sinceState}}"}, "changes"]]
 	}`)
-	if strings.Contains(src, "emailChangesArgs") {
+	if strings.Contains(src, "changesArgs") {
 		t.Errorf("the arguments were built where they could have been stated:\n%s", src)
 	}
 	if !strings.Contains(src, `{Name: "Email/changes", CallID: "changes", Args: map[string]any{`) {
@@ -323,7 +323,7 @@ func TestPagesWalksAWindow(t *testing.T) {
 		"func SearchEmailsPages(ctx context.Context, c *jmapc.Client, p SearchEmailsParams) iter.Seq2[*SearchEmailsResult, error] {",
 		"\"iter\"",
 		"start := p.Position",
-		"window := &res.EmailQuery",
+		"window := &res.Search",
 		"if len(window.IDs) == 0 {",
 		"start = jmapc.Int(window.Position) + jmapc.Int(len(window.IDs))",
 		"if window.Total > 0 && jmapc.UnsignedInt(start) >= window.Total {",
@@ -379,13 +379,13 @@ func TestOneShapeIsOneType(t *testing.T) {
 	if n := strings.Count(src, "type TwoReadsEmail struct {"); n != 1 {
 		t.Errorf("the record type is declared %d times, want 1:\n%s", n, src)
 	}
-	if n := strings.Count(src, "type TwoReadsEmailGetResponse struct {"); n != 1 {
+	if n := strings.Count(src, "type TwoReadsOneResponse struct {"); n != 1 {
 		t.Errorf("the response type is declared %d times, want 1:\n%s", n, src)
 	}
 	// Both calls still answer separately; it is the type they share.
 	for _, want := range []string{
-		"EmailGet TwoReadsEmailGetResponse",
-		"EmailGet2 TwoReadsEmailGetResponse",
+		"One TwoReadsOneResponse",
+		"Two TwoReadsOneResponse",
 	} {
 		if !strings.Contains(src, want) {
 			t.Errorf("the result does not hold %q:\n%s", want, src)
@@ -435,8 +435,8 @@ func TestTheResponseIsNotDropped(t *testing.T) {
 		"if resp == nil {\n\t\treturn nil, err\n\t}",
 		// A call the server would not run keeps its zero value, and anything
 		// else wrong with the response is still reported on its own.
-		`if e := resp.Decode("thread", &out.ThreadGet); e != nil && err == nil {`,
-		`if e := resp.Decode("destroy", &out.EmailSet); e != nil && err == nil {`,
+		`if e := resp.Decode("thread", &out.Thread); e != nil && err == nil {`,
+		`if e := resp.Decode("destroy", &out.Destroy); e != nil && err == nil {`,
 		// Both levels of failure travel together.
 		"return &out, errors.Join(err, e)",
 		"return &out, err\n}",

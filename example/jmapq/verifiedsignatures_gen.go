@@ -57,9 +57,9 @@ type VerifiedSignaturesEmail struct {
 	SMIMEVerifiedAt *jmapc.UTCDate `json:"smimeVerifiedAt"`
 }
 
-// VerifiedSignaturesEmailGetResponse holds the response to the Email/get call
-// in VerifiedSignatures.
-type VerifiedSignaturesEmailGetResponse struct {
+// VerifiedSignaturesFetchResponse holds the response to the Email/get call in
+// VerifiedSignatures.
+type VerifiedSignaturesFetchResponse struct {
 	// The id of the account to operate on.
 	AccountID jmapc.ID `json:"accountId"`
 
@@ -86,7 +86,7 @@ type VerifiedSignaturesEmailGetResponse struct {
 // The query does not say which account to use, so the session's primary
 // account for urn:ietf:params:jmap:mail is used, which costs a session lookup
 // on first use.
-func VerifiedSignatures(ctx context.Context, c *jmapc.Client, p VerifiedSignaturesParams) (*VerifiedSignaturesEmailGetResponse, error) {
+func VerifiedSignatures(ctx context.Context, c *jmapc.Client, p VerifiedSignaturesParams) (*VerifiedSignaturesFetchResponse, error) {
 	session, err := c.Session(ctx)
 	if err != nil {
 		return nil, err
@@ -126,7 +126,7 @@ func VerifiedSignatures(ctx context.Context, c *jmapc.Client, p VerifiedSignatur
 		return nil, err
 	}
 
-	var out VerifiedSignaturesEmailGetResponse
+	var out VerifiedSignaturesFetchResponse
 	if e := resp.Decode("fetch", &out); e != nil {
 		if err != nil {
 			return nil, err

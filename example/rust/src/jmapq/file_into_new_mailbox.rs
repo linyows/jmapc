@@ -35,10 +35,10 @@ pub const FILE_INTO_NEW_MAILBOX_BOX: &str = "box";
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct FileIntoNewMailboxResult {
     /// The response to the Mailbox/set call, made as "make".
-    pub mailbox_set: MailboxSetResponse,
+    pub make: MailboxSetResponse,
 
     /// The response to the Email/set call, made as "file".
-    pub email_set: EmailSetResponse,
+    pub file: EmailSetResponse,
 
     /// The creation ids of everything created by this request, together with
     /// those carried in. Pass it to the next request so that a reference to
@@ -117,12 +117,12 @@ pub async fn file_into_new_mailbox<T: Transport>(
 
     let mut out = FileIntoNewMailboxResult::default();
     match decode::<MailboxSetResponse>(&req, &res, "make") {
-        Ok(v) => out.mailbox_set = v,
+        Ok(v) => out.make = v,
         Err(e) if failed.is_none() => return Err(e),
         Err(_) => {}
     }
     match decode::<EmailSetResponse>(&req, &res, "file") {
-        Ok(v) => out.email_set = v,
+        Ok(v) => out.file = v,
         Err(e) if failed.is_none() => return Err(e),
         Err(_) => {}
     }
@@ -136,9 +136,9 @@ pub async fn file_into_new_mailbox<T: Transport>(
         "Mailbox/set",
         "make",
         &[
-            ("notCreated", out.mailbox_set.not_created.as_ref()),
-            ("notUpdated", out.mailbox_set.not_updated.as_ref()),
-            ("notDestroyed", out.mailbox_set.not_destroyed.as_ref()),
+            ("notCreated", out.make.not_created.as_ref()),
+            ("notUpdated", out.make.not_updated.as_ref()),
+            ("notDestroyed", out.make.not_destroyed.as_ref()),
         ],
         &mut failures,
     );
@@ -146,9 +146,9 @@ pub async fn file_into_new_mailbox<T: Transport>(
         "Email/set",
         "file",
         &[
-            ("notCreated", out.email_set.not_created.as_ref()),
-            ("notUpdated", out.email_set.not_updated.as_ref()),
-            ("notDestroyed", out.email_set.not_destroyed.as_ref()),
+            ("notCreated", out.file.not_created.as_ref()),
+            ("notUpdated", out.file.not_updated.as_ref()),
+            ("notDestroyed", out.file.not_destroyed.as_ref()),
         ],
         &mut failures,
     );

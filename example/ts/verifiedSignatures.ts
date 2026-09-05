@@ -51,9 +51,9 @@ export interface VerifiedSignaturesEmail {
   smimeVerifiedAt: UTCDate | null
 }
 
-// VerifiedSignaturesEmailGetResponse holds the response to the Email/get call
-// in VerifiedSignatures.
-export interface VerifiedSignaturesEmailGetResponse {
+// VerifiedSignaturesFetchResponse holds the response to the Email/get call in
+// VerifiedSignatures.
+export interface VerifiedSignaturesFetchResponse {
   // The id of the account to operate on.
   accountId: Id
 
@@ -80,7 +80,7 @@ export interface VerifiedSignaturesEmailGetResponse {
 // The query does not say which account to use, so the session's primary
 // account for urn:ietf:params:jmap:mail is used, which costs a session lookup
 // on first use.
-export async function verifiedSignatures(client: Client, p: VerifiedSignaturesParams): Promise<VerifiedSignaturesEmailGetResponse> {
+export async function verifiedSignatures(client: Client, p: VerifiedSignaturesParams): Promise<VerifiedSignaturesFetchResponse> {
   const mailAccountId = await client.primaryAccountId("urn:ietf:params:jmap:mail")
 
   const req: Request = {
@@ -119,7 +119,7 @@ export async function verifiedSignatures(client: Client, p: VerifiedSignaturesPa
   }
 
   if (failed && !answered(res, "fetch")) throw failed
-  const out = decode<VerifiedSignaturesEmailGetResponse>(req, res, "fetch")
+  const out = decode<VerifiedSignaturesFetchResponse>(req, res, "fetch")
   if (failed) {
     failed.result = out
     throw failed

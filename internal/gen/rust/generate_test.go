@@ -273,3 +273,29 @@ func TestACreationIDGetsAName(t *testing.T) {
 		t.Errorf("the generated query does not contain %q:\n%s", want, src)
 	}
 }
+
+// TestACallIDThatIsARustKeyword checks the call id a query may reasonably use
+// and Rust may not: a field named after it is written as a raw identifier
+// rather than colliding with the language.
+func TestACallIDThatIsARustKeyword(t *testing.T) {
+	q, err := query.NewParser(spec.Standard()).Parse("Keyword"+query.Extension, []byte(`{
+	  "methodCalls": [
+	    ["Email/query", {"limit": 1}, "type"],
+	    ["Email/get", {"#ids": {"resultOf": "type", "name": "Email/query", "path": "/ids"},
+	                   "properties": ["id"]}, "move"]
+	  ]
+	}`))
+	if err != nil {
+		t.Fatalf("checking the query:\n%v", err)
+	}
+	files, err := (&QueryGenerator{Spec: spec.Standard(), Queries: []*query.Query{q}}).Generate()
+	if err != nil {
+		t.Fatalf("generating: %v", err)
+	}
+	src := string(files["keyword.rs"])
+	for _, want := range []string{"pub r#type: EmailQueryResponse,", "pub r#move: KeywordMoveResponse,"} {
+		if !strings.Contains(src, want) {
+			t.Errorf("the generated result does not contain %q:\n%s", want, src)
+		}
+	}
+}

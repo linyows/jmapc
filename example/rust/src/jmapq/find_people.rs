@@ -43,11 +43,11 @@ pub struct FindPeoplePrincipal {
     pub time_zone: Option<String>,
 }
 
-/// FindPeoplePrincipalGetResponse holds the response to the Principal/get
-/// call in FindPeople.
+/// FindPeopleFetchResponse holds the response to the Principal/get call in
+/// FindPeople.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct FindPeoplePrincipalGetResponse {
+pub struct FindPeopleFetchResponse {
     /// The id of the account to operate on.
     pub account_id: Id,
 
@@ -79,7 +79,7 @@ pub struct FindPeoplePrincipalGetResponse {
 pub async fn find_people<T: Transport>(
     client: &Client<T>,
     p: FindPeopleParams,
-) -> Result<FindPeoplePrincipalGetResponse, Error> {
+) -> Result<FindPeopleFetchResponse, Error> {
     let principals_account_id = client
         .primary_account_id("urn:ietf:params:jmap:principals")
         .await?;
@@ -131,7 +131,7 @@ pub async fn find_people<T: Transport>(
         Err(e) => return Err(e),
     };
 
-    let out = match decode::<FindPeoplePrincipalGetResponse>(&req, &res, "fetch") {
+    let out = match decode::<FindPeopleFetchResponse>(&req, &res, "fetch") {
         Ok(out) => out,
         Err(e) => return Err(failed.map(Error::Method).unwrap_or(e)),
     };

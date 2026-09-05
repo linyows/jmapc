@@ -49,9 +49,9 @@ export interface SyncEmailsEmail2 {
   keywords: { [key: string]: boolean }
 }
 
-// SyncEmailsEmailGetResponse holds the response to the Email/get call in
+// SyncEmailsCreatedResponse holds the response to the Email/get call in
 // SyncEmails.
-export interface SyncEmailsEmailGetResponse {
+export interface SyncEmailsCreatedResponse {
   // The id of the account to operate on.
   accountId: Id
 
@@ -66,9 +66,9 @@ export interface SyncEmailsEmailGetResponse {
   notFound: Id[]
 }
 
-// SyncEmailsEmailGet2Response holds the response to the Email/get call in
+// SyncEmailsUpdatedResponse holds the response to the Email/get call in
 // SyncEmails.
-export interface SyncEmailsEmailGet2Response {
+export interface SyncEmailsUpdatedResponse {
   // The id of the account to operate on.
   accountId: Id
 
@@ -86,13 +86,13 @@ export interface SyncEmailsEmailGet2Response {
 // SyncEmailsResult holds the response to each method call SyncEmails makes.
 export interface SyncEmailsResult {
   // The response to the Email/changes call, made as "changes".
-  emailChanges: EmailChangesResponse
+  changes: EmailChangesResponse
 
   // The response to the Email/get call, made as "created".
-  emailGet: SyncEmailsEmailGetResponse
+  created: SyncEmailsCreatedResponse
 
   // The response to the Email/get call, made as "updated".
-  emailGet2: SyncEmailsEmailGet2Response
+  updated: SyncEmailsUpdatedResponse
 }
 
 // SyncEmails fetches the emails that have changed since a known state, so a
@@ -139,9 +139,9 @@ export async function syncEmails(client: Client, p: SyncEmailsParams): Promise<S
   }
 
   const out = {
-    ...(answered(res, "changes") ? { emailChanges: decode<EmailChangesResponse>(req, res, "changes") } : {}),
-    ...(answered(res, "created") ? { emailGet: decode<SyncEmailsEmailGetResponse>(req, res, "created") } : {}),
-    ...(answered(res, "updated") ? { emailGet2: decode<SyncEmailsEmailGet2Response>(req, res, "updated") } : {}),
+    ...(answered(res, "changes") ? { changes: decode<EmailChangesResponse>(req, res, "changes") } : {}),
+    ...(answered(res, "created") ? { created: decode<SyncEmailsCreatedResponse>(req, res, "created") } : {}),
+    ...(answered(res, "updated") ? { updated: decode<SyncEmailsUpdatedResponse>(req, res, "updated") } : {}),
   } as SyncEmailsResult
   if (failed) {
     failed.result = out

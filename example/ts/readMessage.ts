@@ -91,9 +91,9 @@ export interface ReadMessageEmail {
   "header:Delivery-Date:asDate": Date | null
 }
 
-// ReadMessageEmailGetResponse holds the response to the Email/get call in
+// ReadMessageFetchResponse holds the response to the Email/get call in
 // ReadMessage.
-export interface ReadMessageEmailGetResponse {
+export interface ReadMessageFetchResponse {
   // The id of the account to operate on.
   accountId: Id
 
@@ -119,7 +119,7 @@ export interface ReadMessageEmailGetResponse {
 // The query does not say which account to use, so the session's primary
 // account for urn:ietf:params:jmap:mail is used, which costs a session lookup
 // on first use.
-export async function readMessage(client: Client, p: ReadMessageParams): Promise<ReadMessageEmailGetResponse> {
+export async function readMessage(client: Client, p: ReadMessageParams): Promise<ReadMessageFetchResponse> {
   const mailAccountId = await client.primaryAccountId("urn:ietf:params:jmap:mail")
 
   const req: Request = {
@@ -151,7 +151,7 @@ export async function readMessage(client: Client, p: ReadMessageParams): Promise
   }
 
   if (failed && !answered(res, "fetch")) throw failed
-  const out = decode<ReadMessageEmailGetResponse>(req, res, "fetch")
+  const out = decode<ReadMessageFetchResponse>(req, res, "fetch")
   if (failed) {
     failed.result = out
     throw failed

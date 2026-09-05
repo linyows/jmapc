@@ -36,11 +36,11 @@ pub struct WhatUsesBlobBlobData {
     pub digest_sha_256: serde_json::Value,
 }
 
-/// WhatUsesBlobBlobGetResponse holds the response to the Blob/get call in
+/// WhatUsesBlobPeekResponse holds the response to the Blob/get call in
 /// WhatUsesBlob.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WhatUsesBlobBlobGetResponse {
+pub struct WhatUsesBlobPeekResponse {
     /// The id of the account to operate on.
     pub account_id: Id,
 
@@ -58,10 +58,10 @@ pub struct WhatUsesBlobBlobGetResponse {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct WhatUsesBlobResult {
     /// The response to the Blob/lookup call, made as "uses".
-    pub blob_lookup: BlobLookupResponse,
+    pub uses: BlobLookupResponse,
 
     /// The response to the Blob/get call, made as "peek".
-    pub blob_get: WhatUsesBlobBlobGetResponse,
+    pub peek: WhatUsesBlobPeekResponse,
 }
 
 /// WhatUsesBlob reports which records refer to a blob and reads a little of
@@ -123,12 +123,12 @@ pub async fn what_uses_blob<T: Transport>(
 
     let mut out = WhatUsesBlobResult::default();
     match decode::<BlobLookupResponse>(&req, &res, "uses") {
-        Ok(v) => out.blob_lookup = v,
+        Ok(v) => out.uses = v,
         Err(e) if failed.is_none() => return Err(e),
         Err(_) => {}
     }
-    match decode::<WhatUsesBlobBlobGetResponse>(&req, &res, "peek") {
-        Ok(v) => out.blob_get = v,
+    match decode::<WhatUsesBlobPeekResponse>(&req, &res, "peek") {
+        Ok(v) => out.peek = v,
         Err(e) if failed.is_none() => return Err(e),
         Err(_) => {}
     }

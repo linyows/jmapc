@@ -66,11 +66,11 @@ pub struct AgendaCalendarEvent {
     pub participants: BTreeMap<Id, EventParticipant>,
 }
 
-/// AgendaCalendarEventGetResponse holds the response to the CalendarEvent/get
-/// call in Agenda.
+/// AgendaFetchResponse holds the response to the CalendarEvent/get call in
+/// Agenda.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgendaCalendarEventGetResponse {
+pub struct AgendaFetchResponse {
     /// The id of the account to operate on.
     pub account_id: Id,
 
@@ -100,7 +100,7 @@ pub struct AgendaCalendarEventGetResponse {
 pub async fn agenda<T: Transport>(
     client: &Client<T>,
     p: AgendaParams,
-) -> Result<AgendaCalendarEventGetResponse, Error> {
+) -> Result<AgendaFetchResponse, Error> {
     let calendars_account_id = client
         .primary_account_id("urn:ietf:params:jmap:calendars")
         .await?;
@@ -160,7 +160,7 @@ pub async fn agenda<T: Transport>(
         Err(e) => return Err(e),
     };
 
-    let out = match decode::<AgendaCalendarEventGetResponse>(&req, &res, "fetch") {
+    let out = match decode::<AgendaFetchResponse>(&req, &res, "fetch") {
         Ok(out) => out,
         Err(e) => return Err(failed.map(Error::Method).unwrap_or(e)),
     };

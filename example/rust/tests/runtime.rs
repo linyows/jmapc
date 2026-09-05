@@ -299,7 +299,7 @@ fn a_walk_asks_for_each_window_in_turn() {
     });
     let mut subjects = Vec::new();
     while let Some(page) = block_on(pages.next(&client)).expect("the walk should hold") {
-        for email in &page.email_get.list {
+        for email in &page.fetch.list {
             subjects.push(email.subject.clone().unwrap_or_default());
         }
     }
@@ -356,13 +356,13 @@ fn the_calls_that_ran_are_on_the_error() {
     let out = failed
         .result::<FileIntoNewMailboxResult>()
         .expect("what the calls that ran answered with");
-    assert_eq!(out.mailbox_set.new_state, "m2");
+    assert_eq!(out.make.new_state, "m2");
     assert!(
-        out.mailbox_set.created.is_some(),
+        out.make.created.is_some(),
         "the mailbox the server created is not in the result"
     );
     assert_eq!(
-        out.email_set,
+        out.file,
         Default::default(),
         "the call the server would not run should be left at its default"
     );

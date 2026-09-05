@@ -36,10 +36,10 @@ const AttachNoteDraft jmapc.ID = "draft"
 // AttachNoteResult holds the response to each method call AttachNote makes.
 type AttachNoteResult struct {
 	// The response to the Blob/upload call, made as "upload".
-	BlobUpload jmapc.BlobUploadResponse
+	Upload jmapc.BlobUploadResponse
 
 	// The response to the Email/set call, made as "draft".
-	EmailSet jmapc.EmailSetResponse
+	Draft jmapc.EmailSetResponse
 }
 
 // AttachNote writes a note into a blob and attaches it to a draft in the same
@@ -108,21 +108,21 @@ func AttachNote(ctx context.Context, c *jmapc.Client, p AttachNoteParams) (*Atta
 	}
 
 	var out AttachNoteResult
-	if e := resp.Decode("upload", &out.BlobUpload); e != nil && err == nil {
+	if e := resp.Decode("upload", &out.Upload); e != nil && err == nil {
 		return nil, e
 	}
-	if e := resp.Decode("draft", &out.EmailSet); e != nil && err == nil {
+	if e := resp.Decode("draft", &out.Draft); e != nil && err == nil {
 		return nil, e
 	}
 
 	var failures jmapc.SetErrors
 	failures.Collect("Blob/upload", "upload", map[string]map[jmapc.ID]jmapc.SetError{
-		"notCreated": out.BlobUpload.NotCreated,
+		"notCreated": out.Upload.NotCreated,
 	})
 	failures.Collect("Email/set", "draft", map[string]map[jmapc.ID]jmapc.SetError{
-		"notCreated":   out.EmailSet.NotCreated,
-		"notUpdated":   out.EmailSet.NotUpdated,
-		"notDestroyed": out.EmailSet.NotDestroyed,
+		"notCreated":   out.Draft.NotCreated,
+		"notUpdated":   out.Draft.NotUpdated,
+		"notDestroyed": out.Draft.NotDestroyed,
 	})
 	if e := failures.Err(); e != nil {
 		return &out, errors.Join(err, e)

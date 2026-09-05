@@ -28,9 +28,9 @@ export interface WhatUsesBlobBlobData {
   "digest:sha-256": unknown
 }
 
-// WhatUsesBlobBlobGetResponse holds the response to the Blob/get call in
+// WhatUsesBlobPeekResponse holds the response to the Blob/get call in
 // WhatUsesBlob.
-export interface WhatUsesBlobBlobGetResponse {
+export interface WhatUsesBlobPeekResponse {
   // The id of the account to operate on.
   accountId: Id
 
@@ -45,10 +45,10 @@ export interface WhatUsesBlobBlobGetResponse {
 // makes.
 export interface WhatUsesBlobResult {
   // The response to the Blob/lookup call, made as "uses".
-  blobLookup: BlobLookupResponse
+  uses: BlobLookupResponse
 
   // The response to the Blob/get call, made as "peek".
-  blobGet: WhatUsesBlobBlobGetResponse
+  peek: WhatUsesBlobPeekResponse
 }
 
 // WhatUsesBlob reports which records refer to a blob and reads a little of
@@ -96,8 +96,8 @@ export async function whatUsesBlob(client: Client, p: WhatUsesBlobParams): Promi
   }
 
   const out = {
-    ...(answered(res, "uses") ? { blobLookup: decode<BlobLookupResponse>(req, res, "uses") } : {}),
-    ...(answered(res, "peek") ? { blobGet: decode<WhatUsesBlobBlobGetResponse>(req, res, "peek") } : {}),
+    ...(answered(res, "uses") ? { uses: decode<BlobLookupResponse>(req, res, "uses") } : {}),
+    ...(answered(res, "peek") ? { peek: decode<WhatUsesBlobPeekResponse>(req, res, "peek") } : {}),
   } as WhatUsesBlobResult
   if (failed) {
     failed.result = out

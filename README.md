@@ -194,11 +194,30 @@ identifier: letters, digits and underscores, not starting with a digit.
 | The function | `ListInboxEmails` |
 | Its parameters, where the query leaves any open | `ListInboxEmailsParams` |
 | A record whose properties the query narrows | `ListInboxEmailsEmail`, and `ListInboxEmailsEmailBodyPart` for a narrowed body part |
-| The response to a call returning that record | `ListInboxEmailsEmailGetResponse` |
+| The response to a call returning that record | `ListInboxEmailsFetchResponse`, after the call id `fetch` |
 | The result, where `_returns` names no call | `ListInboxEmailsResult` |
 | The function that follows changes, where the query is watched | `SyncEmailsWatch` |
 | The walk over the parts of an answer, where the query is paged | `SearchEmailsPages` |
 | The file | `listinboxemails_gen.go` |
+
+The call ids are the names in the generated code: a result holds one field per
+call, named after the id the query gave it, and the response type of a call
+that narrows is named the same way. Nothing is numbered by position, since a
+call id is unique within a request already and inserting a call ahead of
+another would otherwise move a name onto a different call:
+
+```json
+["Email/query", {...}, "search"],
+["Email/get",   {...}, "fetch"]
+```
+
+```go
+res.Search.IDs      // the Email/query response
+res.Fetch.List      // the Email/get response
+```
+
+A call id that is not an identifier — RFC 8620 allows any string — falls back
+to the method it invokes.
 
 A call the query does not narrow answers with the shared type instead, so
 `SendEmail` returns `*jmapc.EmailSubmissionSetResponse`. Two queries in one

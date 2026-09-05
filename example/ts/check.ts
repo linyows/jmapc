@@ -196,7 +196,7 @@ const session = {
     secondMailboxId: "mbx2",
     position: 0,
   })) {
-    for (const email of page.emailGet.list) subjects.push(email.subject ?? "")
+    for (const email of page.fetch.list) subjects.push(email.subject ?? "")
   }
 
   assert(subjects.length === 3, `the walk found ${subjects.length} messages, want 3`)
@@ -240,9 +240,9 @@ const session = {
     `the error names ${failed.errors.map((e) => e.callId).join(",")}, want the call that failed`)
 
   const partial = failed.result as Partial<FileIntoNewMailboxResult>
-  assert(partial?.mailboxSet?.newState === "m2",
+  assert(partial?.make?.newState === "m2",
     "the call that succeeded is not on the error")
-  assert(partial?.emailSet === undefined,
+  assert(partial?.file === undefined,
     "the call the server would not run was made up rather than left out")
 }
 

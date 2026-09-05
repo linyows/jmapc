@@ -55,9 +55,9 @@ type SyncEmailsEmail2 struct {
 	Keywords map[string]bool `json:"keywords"`
 }
 
-// SyncEmailsEmailGetResponse holds the response to the Email/get call in
+// SyncEmailsCreatedResponse holds the response to the Email/get call in
 // SyncEmails.
-type SyncEmailsEmailGetResponse struct {
+type SyncEmailsCreatedResponse struct {
 	// The id of the account to operate on.
 	AccountID jmapc.ID `json:"accountId"`
 
@@ -72,9 +72,9 @@ type SyncEmailsEmailGetResponse struct {
 	NotFound []jmapc.ID `json:"notFound"`
 }
 
-// SyncEmailsEmailGet2Response holds the response to the Email/get call in
+// SyncEmailsUpdatedResponse holds the response to the Email/get call in
 // SyncEmails.
-type SyncEmailsEmailGet2Response struct {
+type SyncEmailsUpdatedResponse struct {
 	// The id of the account to operate on.
 	AccountID jmapc.ID `json:"accountId"`
 
@@ -92,13 +92,13 @@ type SyncEmailsEmailGet2Response struct {
 // SyncEmailsResult holds the response to each method call SyncEmails makes.
 type SyncEmailsResult struct {
 	// The response to the Email/changes call, made as "changes".
-	EmailChanges jmapc.EmailChangesResponse
+	Changes jmapc.EmailChangesResponse
 
 	// The response to the Email/get call, made as "created".
-	EmailGet SyncEmailsEmailGetResponse
+	Created SyncEmailsCreatedResponse
 
 	// The response to the Email/get call, made as "updated".
-	EmailGet2 SyncEmailsEmailGet2Response
+	Updated SyncEmailsUpdatedResponse
 }
 
 // SyncEmails fetches the emails that have changed since a known state, so a
@@ -147,13 +147,13 @@ func SyncEmails(ctx context.Context, c *jmapc.Client, p SyncEmailsParams) (*Sync
 	}
 
 	var out SyncEmailsResult
-	if e := resp.Decode("changes", &out.EmailChanges); e != nil && err == nil {
+	if e := resp.Decode("changes", &out.Changes); e != nil && err == nil {
 		return nil, e
 	}
-	if e := resp.Decode("created", &out.EmailGet); e != nil && err == nil {
+	if e := resp.Decode("created", &out.Created); e != nil && err == nil {
 		return nil, e
 	}
-	if e := resp.Decode("updated", &out.EmailGet2); e != nil && err == nil {
+	if e := resp.Decode("updated", &out.Updated); e != nil && err == nil {
 		return nil, e
 	}
 	return &out, err
@@ -190,6 +190,6 @@ func SyncEmailsWatch(ctx context.Context, c *jmapc.Client, p SyncEmailsParams, f
 		if err := fn(ctx, res); err != nil {
 			return "", false, err
 		}
-		return res.EmailChanges.NewState, res.EmailChanges.HasMoreChanges, nil
+		return res.Changes.NewState, res.Changes.HasMoreChanges, nil
 	}, opts...)
 }

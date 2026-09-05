@@ -54,9 +54,9 @@ export interface AgendaCalendarEvent {
   participants: { [key: Id]: EventParticipant }
 }
 
-// AgendaCalendarEventGetResponse holds the response to the CalendarEvent/get
-// call in Agenda.
-export interface AgendaCalendarEventGetResponse {
+// AgendaFetchResponse holds the response to the CalendarEvent/get call in
+// Agenda.
+export interface AgendaFetchResponse {
   // The id of the account to operate on.
   accountId: Id
 
@@ -81,7 +81,7 @@ export interface AgendaCalendarEventGetResponse {
 // The query does not say which account to use, so the session's primary
 // account for urn:ietf:params:jmap:calendars is used, which costs a session
 // lookup on first use.
-export async function agenda(client: Client, p: AgendaParams): Promise<AgendaCalendarEventGetResponse> {
+export async function agenda(client: Client, p: AgendaParams): Promise<AgendaFetchResponse> {
   const calendarsAccountId = await client.primaryAccountId("urn:ietf:params:jmap:calendars")
 
   const req: Request = {
@@ -132,7 +132,7 @@ export async function agenda(client: Client, p: AgendaParams): Promise<AgendaCal
   }
 
   if (failed && !answered(res, "fetch")) throw failed
-  const out = decode<AgendaCalendarEventGetResponse>(req, res, "fetch")
+  const out = decode<AgendaFetchResponse>(req, res, "fetch")
   if (failed) {
     failed.result = out
     throw failed
