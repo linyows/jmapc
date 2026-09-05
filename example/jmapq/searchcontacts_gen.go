@@ -115,8 +115,9 @@ type SearchContactsResult struct {
 // It makes AddressBook/get, ContactCard/query, and ContactCard/get calls in a
 // single request, so that 3 dependent calls cost one round trip.
 //
-// The query does not say which account to use, so the primary account of the
-// session is used, which costs a session lookup on first use.
+// The query does not say which account to use, so the session's primary
+// account for urn:ietf:params:jmap:contacts is used, which costs a session
+// lookup on first use.
 func SearchContacts(ctx context.Context, c *jmapc.Client, p SearchContactsParams) (*SearchContactsResult, error) {
 	session, err := c.Session(ctx)
 	if err != nil {

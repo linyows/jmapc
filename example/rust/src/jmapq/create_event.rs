@@ -51,8 +51,9 @@ pub struct CreateEventParams {
 /// server is asked once. It returns the response to the CalendarEvent/set
 /// call.
 ///
-/// The query does not say which account to use, so the primary account of the
-/// session is used, which costs a session lookup on first use.
+/// The query does not say which account to use, so the session's primary
+/// account for urn:ietf:params:jmap:calendars is used, which costs a session
+/// lookup on first use.
 pub async fn create_event<T: Transport>(
     client: &Client<T>,
     p: CreateEventParams,

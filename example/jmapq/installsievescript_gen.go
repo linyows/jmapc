@@ -29,8 +29,10 @@ type InstallSieveScriptParams struct {
 // 2 dependent calls cost one round trip. It returns the response to the
 // SieveScript/set call.
 //
-// The query does not say which account to use, so the primary account of the
-// session is used, which costs a session lookup on first use.
+// The query does not say which account to use, so the session's primary
+// account is used for each of urn:ietf:params:jmap:blob and
+// urn:ietf:params:jmap:sieve, which costs a session lookup on first use. They
+// need not be the same account.
 func InstallSieveScript(ctx context.Context, c *jmapc.Client, p InstallSieveScriptParams) (*jmapc.SieveScriptSetResponse, error) {
 	session, err := c.Session(ctx)
 	if err != nil {

@@ -107,8 +107,9 @@ type SyncEmailsResult struct {
 // It makes Email/changes, Email/get, and Email/get calls in a single request,
 // so that 3 dependent calls cost one round trip.
 //
-// The query does not say which account to use, so the primary account of the
-// session is used, which costs a session lookup on first use.
+// The query does not say which account to use, so the session's primary
+// account for urn:ietf:params:jmap:mail is used, which costs a session lookup
+// on first use.
 func SyncEmails(ctx context.Context, c *jmapc.Client, p SyncEmailsParams) (*SyncEmailsResult, error) {
 	session, err := c.Session(ctx)
 	if err != nil {

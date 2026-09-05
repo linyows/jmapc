@@ -15,8 +15,9 @@ export interface CreateMailboxParams {
 // It makes one Mailbox/set call in a single request, so that the server is
 // asked once. It returns the response to the Mailbox/set call.
 //
-// The query does not say which account to use, so the primary account of the
-// session is used, which costs a session lookup on first use.
+// The query does not say which account to use, so the session's primary
+// account for urn:ietf:params:jmap:mail is used, which costs a session lookup
+// on first use.
 export async function createMailbox(client: Client, p: CreateMailboxParams): Promise<MailboxSetResponse> {
   const mailAccountId = await client.primaryAccountId("urn:ietf:params:jmap:mail")
 

@@ -30,8 +30,9 @@ export interface RescheduleOccurrenceParams {
 // It makes one CalendarEvent/set call in a single request, so that the server
 // is asked once. It returns the response to the CalendarEvent/set call.
 //
-// The query does not say which account to use, so the primary account of the
-// session is used, which costs a session lookup on first use.
+// The query does not say which account to use, so the session's primary
+// account for urn:ietf:params:jmap:calendars is used, which costs a session
+// lookup on first use.
 export async function rescheduleOccurrence(client: Client, p: RescheduleOccurrenceParams): Promise<CalendarEventSetResponse> {
   const calendarsAccountId = await client.primaryAccountId("urn:ietf:params:jmap:calendars")
 
