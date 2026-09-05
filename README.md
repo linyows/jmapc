@@ -812,6 +812,76 @@ The argument is how many attempts to make. The wait is what the server asked
 for in `Retry-After`, or one that doubles from a fifth of a second to half a
 minute where it asked for nothing in particular.
 
+### Observability
+
+`WithObserver` makes the client report what it does. The report affects
+neither the request sent nor the response received, and a hook left nil is
+never called.
+
+```go
+c := jmapc.New(url, jmapc.WithBearerToken(token),
+	jmapc.WithObserver(jmapc.SlogObserver(slog.Default())))
+```
+
+There are three hooks, and they nest. `SlogObserver` writes a debug record for
+each. `Request` covers one JMAP request: the calls it carries and its outcome.
+`Attempt` covers one HTTP request under it, which includes the session fetch a
+first request triggers and every retry. `Wait` covers a delay applied instead
+of sending — for one of the slots `maxConcurrentRequests` allows, or before a
+retry after a 429 or a 503.
+
+```
+Request   Email/query, Email/get
+  Attempt GET  /.well-known/jmap  200
+  Wait    for a slot, where the server accepts two requests at once
+  Attempt POST /jmap/api          429
+  Wait    for the two seconds of the server's Retry-After
+  Attempt POST /jmap/api          200
+```
+
+An HTTP-level instrument already records the round trips, and where that is
+enough, `WithHTTPClient` takes a client with an instrumented transport. What it
+cannot record is the JMAP: which methods were sent together in one request, how
+long the caller waited for a slot, and that a call was refused although the
+request returned 200.
+
+There is no dependency on OpenTelemetry, and none is needed. `Request` and
+`Attempt` return the context used for the operation they cover, so a span
+started in one becomes the parent of the spans started under it:
+
+```go
+tracer := otel.Tracer("jmapc")
+
+obs := &jmapc.Observer{
+	Request: func(ctx context.Context, info jmapc.RequestInfo) (context.Context, func(jmapc.ResponseInfo)) {
+		methods := make([]string, len(info.Calls))
+		for i, call := range info.Calls {
+			methods[i] = call.Name
+		}
+		ctx, span := tracer.Start(ctx, "jmap.request",
+			trace.WithAttributes(attribute.StringSlice("jmap.methods", methods)))
+		return ctx, func(done jmapc.ResponseInfo) {
+			span.SetAttributes(attribute.Int("jmap.method_errors", len(done.Errors)))
+			if done.Err != nil {
+				span.RecordError(done.Err)
+			}
+			span.End()
+		}
+	},
+	Attempt: func(ctx context.Context, info jmapc.AttemptInfo) (context.Context, func(jmapc.AttemptInfo, jmapc.Answer)) {
+		ctx, span := tracer.Start(ctx, "jmap."+string(info.Kind),
+			trace.WithAttributes(attribute.Int("http.attempt", info.Attempt)))
+		return ctx, func(info jmapc.AttemptInfo, answer jmapc.Answer) {
+			span.SetAttributes(attribute.Int("http.status_code", answer.Status))
+			span.End()
+		}
+	},
+}
+```
+
+`Observer` exists only in the Go client. In TypeScript and Rust, the
+equivalent belongs in the transport.
+
 ## Testing
 
 Testing the code you write around a generated client means answering a request

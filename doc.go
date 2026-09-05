@@ -65,6 +65,15 @@
 // [EventStream.Next] as a signal to reconnect, passing the stream's
 // [EventStream.LastEventID] so that nothing is missed in between.
 //
+// # Observability
+//
+// [WithObserver] takes an [Observer], which receives a report of what the
+// client does and affects none of it: the JMAP calls of each request and their
+// outcome, each HTTP request under it, and each delay for a slot or before a
+// retry. [SlogObserver] writes those records to a [log/slog.Logger]. The hooks
+// return the context used for the operation they cover, so a tracer can start
+// a span in one and have the spans under it become its children.
+//
 // # Errors
 //
 // JMAP fails at two levels, and so does this package. A request-level failure,

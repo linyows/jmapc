@@ -135,13 +135,13 @@ func retryAfter(resp *http.Response, now time.Time) time.Duration {
 // A request can only be sent again if its body can be read again, which the
 // standard library arranges for a body it knows the length of. An upload
 // reading from a file or a network stream has no such body, and is sent once.
-func (c *Client) sendWithRetry(req *http.Request) (*http.Response, error) {
+func (c *Client) sendWithRetry(req *http.Request, kind RequestKind) (*http.Response, error) {
 	attempts := c.retry.Attempts
 	if attempts < 2 || (req.Body != nil && req.GetBody == nil) {
-		return c.send(req)
+		return c.send(req, kind, 1)
 	}
 	for attempt := 1; ; attempt++ {
-		resp, err := c.send(req)
+		resp, err := c.send(req, kind, attempt)
 		if attempt >= attempts || !c.retry.worthRetrying(resp, err) {
 			return resp, err
 		}
@@ -159,7 +159,14 @@ func (c *Client) sendWithRetry(req *http.Request) (*http.Response, error) {
 			resp.Body.Close()
 		}
 		if delay > 0 {
-			if err := sleep(req.Context(), delay); err != nil {
+			waited := c.observeWait(req.Context(), WaitInfo{
+				Reason: WaitAfterRefusal,
+				Kind:   kind,
+				Delay:  delay,
+			})
+			err := sleep(req.Context(), delay)
+			waited()
+			if err != nil {
 				return nil, err
 			}
 		}

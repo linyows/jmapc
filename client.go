@@ -30,6 +30,7 @@ type Client struct {
 	userAgent  string
 	strict     bool
 	retry      RetryPolicy
+	observer   *Observer
 
 	// api and uploads hold the client to the number of each the server said it
 	// takes at once.
@@ -139,7 +140,7 @@ func (c *Client) RefreshSession(ctx context.Context) (*Session, error) {
 		return nil, fmt.Errorf("jmapc: building session request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
-	resp, err := c.sendWithRetry(req)
+	resp, err := c.sendWithRetry(req, KindSession)
 	if err != nil {
 		return nil, err
 	}
@@ -170,17 +171,26 @@ func (c *Client) RefreshSession(ctx context.Context) (*Session, error) {
 // MethodErrors describing the calls the server could not execute, because the
 // remaining calls may still have produced usable results.
 func (c *Client) Do(ctx context.Context, r *Request) (*Response, error) {
+	// The report starts before anything is sent, so that the session fetch a
+	// first request triggers is included in the request's duration.
+	ctx, answered := c.observeRequest(ctx, r)
+
 	apiURL, err := c.resolveAPIURL(ctx, r)
 	if err != nil {
+		answered(err, nil)
 		return nil, err
 	}
 	body, err := json.Marshal(r)
 	if err != nil {
-		return nil, fmt.Errorf("jmapc: encoding request: %w", err)
+		err = fmt.Errorf("jmapc: encoding request: %w", err)
+		answered(err, nil)
+		return nil, err
 	}
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("jmapc: building request: %w", err)
+		err = fmt.Errorf("jmapc: building request: %w", err)
+		answered(err, nil)
+		return nil, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json; charset=utf-8")
 	httpReq.Header.Set("Accept", "application/json")
@@ -188,26 +198,34 @@ func (c *Client) Do(ctx context.Context, r *Request) (*Response, error) {
 	// The server said how many requests it takes at once, and this is one.
 	release, err := c.api.hold(ctx, c.limit(func(core *CoreCapability) UnsignedInt {
 		return core.MaxConcurrentRequests
-	}))
+	}), c.waiting(ctx, KindAPI))
 	if err != nil {
+		answered(err, nil)
 		return nil, err
 	}
 	defer release()
 
-	httpResp, err := c.sendWithRetry(httpReq)
+	httpResp, err := c.sendWithRetry(httpReq, KindAPI)
 	if err != nil {
+		answered(err, nil)
 		return nil, err
 	}
 	defer httpResp.Body.Close()
 	if httpResp.StatusCode != http.StatusOK {
-		return nil, c.requestError(httpResp)
+		err := c.requestError(httpResp)
+		answered(err, nil)
+		return nil, err
 	}
 	var resp Response
 	if err := json.NewDecoder(httpResp.Body).Decode(&resp); err != nil {
-		return nil, fmt.Errorf("jmapc: decoding response: %w", err)
+		err = fmt.Errorf("jmapc: decoding response: %w", err)
+		answered(err, nil)
+		return nil, err
 	}
 	resp.req = r
-	if errs := resp.Errors(); len(errs) > 0 {
+	errs := resp.Errors()
+	answered(nil, errs)
+	if len(errs) > 0 {
 		return &resp, errs
 	}
 	return &resp, nil
@@ -273,7 +291,7 @@ func preflight(s *Session, r *Request) error {
 }
 
 // send applies the configured request editors and performs the HTTP request.
-func (c *Client) send(req *http.Request) (*http.Response, error) {
+func (c *Client) send(req *http.Request, kind RequestKind, attempt int) (*http.Response, error) {
 	if c.userAgent != "" {
 		req.Header.Set("User-Agent", c.userAgent)
 	}
@@ -282,7 +300,9 @@ func (c *Client) send(req *http.Request) (*http.Response, error) {
 			return nil, fmt.Errorf("jmapc: preparing request: %w", err)
 		}
 	}
+	req, came := c.observeAttempt(req, kind, attempt)
 	resp, err := c.httpClient.Do(req)
+	came(resp, err)
 	if err != nil {
 		// Redacted, because a URL may carry credentials in its userinfo, and
 		// this error is on its way to a log.
