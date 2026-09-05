@@ -755,6 +755,74 @@ c := jmapc.New(url, jmapc.WithBearerToken(token), jmapc.WithRetry(3))
 待ち時間は、サーバが `Retry-After` で求めた長さです。
 特に何も求められなければ、0.2 秒から 30 秒へ倍々に待ちます。
 
+### 可観測性
+
+`WithObserver` を渡すと、クライアントは送信したリクエストと待機した時間を `Observer` のフックに渡します。
+フックに渡す値は送信内容にも受信内容にも影響せず、nil のままにしたフックは呼ばれません。
+
+```go
+c := jmapc.New(url, jmapc.WithBearerToken(token),
+	jmapc.WithObserver(jmapc.SlogObserver(slog.Default())))
+```
+
+フックは三つあり、入れ子の関係にあります。
+`SlogObserver` はこの三つそれぞれについて debug レベルのレコードを出力します。
+`Request` は JMAP リクエスト一件に対応し、含まれる呼び出しと処理結果を持ちます。
+`Attempt` はその内側の HTTP リクエスト一件に対応します。
+最初のリクエストの前に行われるセッション取得と、再送の各回もここに含まれます。
+`Wait` はリクエストを送信せずに待機した箇所です。
+`maxConcurrentRequests` が許す枠の空きを待つ場合と、拒否されて指定された時間だけ待つ場合があります。
+
+```
+Request   Email/query, Email/get
+  Attempt GET  /.well-known/jmap  200
+  Wait    枠の空き待ち（サーバが同時に受け付けるのは 2 件）
+  Attempt POST /jmap/api          429
+  Wait    サーバの Retry-After が指定した 2 秒
+  Attempt POST /jmap/api          200
+```
+
+このうち HTTP の往復は HTTP 層の計測でも取得できるので、それで足りるなら、トランスポートを差し替えた `http.Client` を `WithHTTPClient` に渡してください。
+HTTP 層の計測で取得できないのは JMAP 側の情報です。
+どのメソッドが同じリクエストに含まれていたか、呼び出し側が枠の空きを待った時間、そしてリクエストが 200 で返っていても呼び出しが拒否されていたこと、の三つです。
+
+OpenTelemetry への依存はなく、追加する必要もありません。
+処理を囲む二つのフックは、その処理に使う context を返します。
+外側のフックで開始したスパンが、内側のフックで開始したスパンの親になります。
+
+```go
+tracer := otel.Tracer("jmapc")
+
+obs := &jmapc.Observer{
+	Request: func(ctx context.Context, info jmapc.RequestInfo) (context.Context, func(jmapc.ResponseInfo)) {
+		methods := make([]string, len(info.Calls))
+		for i, call := range info.Calls {
+			methods[i] = call.Name
+		}
+		ctx, span := tracer.Start(ctx, "jmap.request",
+			trace.WithAttributes(attribute.StringSlice("jmap.methods", methods)))
+		return ctx, func(done jmapc.ResponseInfo) {
+			span.SetAttributes(attribute.Int("jmap.method_errors", len(done.Errors)))
+			if done.Err != nil {
+				span.RecordError(done.Err)
+			}
+			span.End()
+		}
+	},
+	Attempt: func(ctx context.Context, info jmapc.AttemptInfo) (context.Context, func(jmapc.AttemptInfo, jmapc.Answer)) {
+		ctx, span := tracer.Start(ctx, "jmap."+string(info.Kind),
+			trace.WithAttributes(attribute.Int("http.attempt", info.Attempt)))
+		return ctx, func(info jmapc.AttemptInfo, answer jmapc.Answer) {
+			span.SetAttributes(attribute.Int("http.status_code", answer.Status))
+			span.End()
+		}
+	},
+}
+```
+
+`Observer` は Go のクライアントにのみあります。
+TypeScript と Rust では、同じ処理をトランスポートの実装に書きます。
+
 ## テスト
 
 生成されたクライアントの周りに書いたコードをテストするということは、複数のメソッド呼び出しを載せたリクエストに答えるということです。

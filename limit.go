@@ -21,7 +21,11 @@ type limiter struct {
 // again later may say something different, and the client goes on with what it
 // started with rather than letting the slots in flight lose track of how many
 // there are.
-func (l *limiter) hold(ctx context.Context, limit int) (func(), error) {
+//
+// waiting is called only when no slot is free, and the function it returns is
+// called once one is. A request that acquires a slot without blocking is not
+// reported.
+func (l *limiter) hold(ctx context.Context, limit int, waiting func() func()) (func(), error) {
 	if limit <= 0 {
 		return func() {}, nil
 	}
@@ -32,9 +36,18 @@ func (l *limiter) hold(ctx context.Context, limit int) (func(), error) {
 	slots := l.slots
 	l.mu.Unlock()
 
+	release := func() { <-slots }
 	select {
 	case slots <- struct{}{}:
-		return func() { <-slots }, nil
+		return release, nil
+	default:
+	}
+
+	held := waiting()
+	defer held()
+	select {
+	case slots <- struct{}{}:
+		return release, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}

@@ -99,13 +99,13 @@ func (c *Client) Upload(ctx context.Context, accountID ID, contentType string, b
 	// The server said how many uploads it takes at once, and this is one.
 	release, err := c.uploads.hold(ctx, c.limit(func(core *CoreCapability) UnsignedInt {
 		return core.MaxConcurrentUpload
-	}))
+	}), c.waiting(ctx, KindUpload))
 	if err != nil {
 		return nil, err
 	}
 	defer release()
 
-	resp, err := c.sendWithRetry(req)
+	resp, err := c.sendWithRetry(req, KindUpload)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +188,7 @@ func (c *Client) Download(ctx context.Context, accountID, blobID ID, opts *Downl
 	if err != nil {
 		return nil, fmt.Errorf("jmapc: building download request: %w", err)
 	}
-	resp, err := c.sendWithRetry(req)
+	resp, err := c.sendWithRetry(req, KindDownload)
 	if err != nil {
 		return nil, err
 	}
