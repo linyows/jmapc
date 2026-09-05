@@ -42,6 +42,10 @@ type call struct {
 	// accountIDExpr is the Go expression for the accountId argument the query
 	// left out, empty when the query supplies one.
 	accountIDExpr string
+	// writesTypes says this call is the one that writes the types it names.
+	// A call reading the same records in the same shape as an earlier one
+	// shares its types rather than declaring them again.
+	writesTypes bool
 }
 
 // plan is the naming decided for one query before any code is written.
@@ -111,17 +115,25 @@ func (g *QueryGenerator) plan() ([]*plan, error) {
 		if len(q.Params) > 0 {
 			p.paramsType = shared.Unique(taken, q.Name+"Params")
 		}
+		same := shared.SameNarrowing(q.Calls)
 		for _, c := range q.Calls {
 			info := &call{}
 			// Narrowing the nested type means the record type has to be
 			// generated too, since its own fields change to refer to it.
-			if c.Properties != nil || c.NestedProperties != nil {
+			switch {
+			case same[c] != nil && same[c] != c:
+				// Another call of this query reads the same records in the
+				// same shape, and one shape is one type.
+				*info = *p.calls[same[c]]
+				info.writesTypes = false
+			case c.Properties != nil || c.NestedProperties != nil:
 				info.recordType = shared.Unique(taken, q.Name+spec.ExportedName(c.Method.DataType))
 				info.responseType = shared.Unique(taken, q.Name+c.Field+"Response")
-			} else {
+				info.writesTypes = true
+			default:
 				info.responseType = g.Qualifier + spec.ExportedName(c.Method.Response)
 			}
-			if c.NestedProperties != nil {
+			if c.NestedProperties != nil && info.writesTypes {
 				info.nestedType = shared.Unique(taken, q.Name+spec.ExportedName(c.Method.NestedType))
 			}
 			p.calls[c] = info
@@ -241,7 +253,7 @@ func (g *QueryGenerator) writeParams(buf *bytes.Buffer, p *plan) {
 func (g *QueryGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
-		if info.recordType == "" {
+		if info.recordType == "" || !info.writesTypes {
 			continue
 		}
 		dataType, ok := g.Spec.Object(c.Method.DataType)
@@ -333,7 +345,7 @@ func (g *QueryGenerator) nestedGoType(t *spec.Type, nestedTo, nestedFrom string)
 func (g *QueryGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
-		if info.recordType == "" {
+		if info.recordType == "" || !info.writesTypes {
 			continue
 		}
 		respType, err := g.Spec.ResponseOf(c.Method.Name)

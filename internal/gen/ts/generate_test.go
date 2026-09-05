@@ -132,3 +132,29 @@ func TestOptionalArgumentIsSpreadIn(t *testing.T) {
 		}
 	}
 }
+
+// TestOneShapeIsOneType checks that calls reading the same records in the same
+// shape share one type here too, since a caller passing a record from one call
+// to a function written for the other should not have to convert it.
+func TestOneShapeIsOneType(t *testing.T) {
+	q, err := query.NewParser(spec.Standard()).Parse("TwoReads"+query.Extension, []byte(`{
+	  "methodCalls": [
+	    ["Email/get", {"ids": ["{{a}}"], "properties": ["id", "subject"]}, "one"],
+	    ["Email/get", {"ids": ["{{b}}"], "properties": ["id", "subject"]}, "two"]
+	  ]
+	}`))
+	if err != nil {
+		t.Fatalf("checking the query:\n%v", err)
+	}
+	files, err := (&QueryGenerator{Spec: spec.Standard(), Queries: []*query.Query{q}}).Generate()
+	if err != nil {
+		t.Fatalf("generating: %v", err)
+	}
+	src := string(files["twoReads.ts"])
+	if strings.Contains(src, "TwoReadsEmail2") {
+		t.Errorf("the same shape was given a second type:\n%s", src)
+	}
+	if n := strings.Count(src, "export interface TwoReadsEmail {"); n != 1 {
+		t.Errorf("the record type is declared %d times, want 1:\n%s", n, src)
+	}
+}

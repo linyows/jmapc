@@ -205,6 +205,11 @@ A call the query does not narrow answers with the shared type instead, so
 package cannot take the same name, and a generated type whose name is already
 taken gains a number: `ListInboxEmailsEmail2`.
 
+Two calls of one query that read the same type through the same method and ask
+for the same properties describe one record, so they share one type. Two names
+for one shape would make a caller convert between them to hand a record from
+one call to a function written for the other.
+
 A query with no open parameters takes no `Params` argument at all —
 `MailQuota(ctx, c)`, not `MailQuota(ctx, c, MailQuotaParams{})` — so adding
 the first `{{param}}` to a query already in use changes the generated

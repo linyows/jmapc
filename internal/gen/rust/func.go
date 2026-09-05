@@ -321,7 +321,7 @@ func (g *QueryGenerator) writeNestedTypes(buf *bytes.Buffer, p *plan) {
 func (g *QueryGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
-		if info.recordType == "" {
+		if info.recordType == "" || !info.writesTypes {
 			continue
 		}
 		dataType, ok := g.Spec.Object(c.Method.DataType)
@@ -400,7 +400,7 @@ func writeNestedMember(buf *bytes.Buffer, owner, wireName string, t *spec.Type, 
 func (g *QueryGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
-		if info.recordType == "" {
+		if info.recordType == "" || !info.writesTypes {
 			continue
 		}
 		respType, err := g.Spec.ResponseOf(c.Method.Name)

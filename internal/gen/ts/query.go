@@ -25,6 +25,10 @@ type call struct {
 	recordType   string
 	nestedType   string
 	accountIDVar string
+	// writesTypes says this call is the one that writes the types it names. A
+	// call reading the same records in the same shape as an earlier one shares
+	// its types rather than declaring them again.
+	writesTypes bool
 }
 
 // plan is the naming decided for one query before any code is written.
@@ -78,15 +82,23 @@ func (g *QueryGenerator) plan() ([]*plan, error) {
 		if len(q.Params) > 0 {
 			p.paramsType = shared.Unique(taken, q.Name+"Params")
 		}
+		same := shared.SameNarrowing(q.Calls)
 		for _, c := range q.Calls {
 			info := &call{}
-			if c.Properties != nil || c.NestedProperties != nil {
+			switch {
+			case same[c] != nil && same[c] != c:
+				// Another call of this query reads the same records in the
+				// same shape, and one shape is one type.
+				*info = *p.calls[same[c]]
+				info.writesTypes = false
+			case c.Properties != nil || c.NestedProperties != nil:
 				info.recordType = shared.Unique(taken, q.Name+spec.ExportedName(c.Method.DataType))
 				info.responseType = shared.Unique(taken, q.Name+c.Field+"Response")
-			} else {
+				info.writesTypes = true
+			default:
 				info.responseType = spec.ExportedName(c.Method.Response)
 			}
-			if c.NestedProperties != nil {
+			if c.NestedProperties != nil && info.writesTypes {
 				info.nestedType = shared.Unique(taken, q.Name+spec.ExportedName(c.Method.NestedType))
 			}
 			p.calls[c] = info
