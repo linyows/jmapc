@@ -33,13 +33,13 @@ jobs:
           - {os: macos-latest, go: "stable"}
           - {os: windows-latest, go: "stable"}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Nothing here writes back, so the job has no use for a credential
           # in the git config.
           persist-credentials: false
 
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ matrix.go }}
           # The module has no dependencies, so there is no go.sum for the
@@ -56,13 +56,13 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Nothing here writes back, so the job has no use for a credential
           # in the git config.
           persist-credentials: false
 
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: stable
           cache-dependency-path: go.mod
@@ -99,15 +99,18 @@ jobs:
     name: typescript
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Nothing here writes back, so the job has no use for a credential
           # in the git config.
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: lts/*
+          # Named rather than left to lts/*, so that a run tomorrow is the run
+          # today was: what the LTS is changes under a workflow that does not
+          # say which one it means.
+          node-version: "24"
 
       - name: tsc --strict over the generated client
         working-directory: example/ts
@@ -128,20 +131,21 @@ jobs:
     name: schema
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Nothing here writes back, so the job has no use for a credential
           # in the git config.
           persist-credentials: false
 
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: stable
           cache-dependency-path: go.mod
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: lts/*
+          # The Node the TypeScript job names, for the reason it names one.
+          node-version: "24"
 
       - name: Write the schema
         run: go run ./cmd/jmapc schema -out example/schema/jmapc.schema.json
@@ -159,14 +163,20 @@ jobs:
     name: rust
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Nothing here writes back, so the job has no use for a credential
           # in the git config.
           persist-credentials: false
 
-      - uses: dtolnay/rust-toolchain@stable
+      # This action is selected by branch rather than by tag, which is how it
+      # is meant to be used and why pinact leaves it alone. The commit is the
+      # tip of its stable branch, and the toolchain that branch would have
+      # asked for by default is asked for here instead, so that the pin says
+      # what it installs.
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
+          toolchain: stable
           components: rustfmt
 
       - name: cargo fmt over the generated client
