@@ -65,8 +65,8 @@ func main() {
 	}
 }
 
-// usage describes the commands, and is printed when the arguments make no
-// sense.
+// usage describes the commands, and is printed under the banner whenever the
+// arguments make no sense or help is asked for.
 const usage = `jmapc generates a typed client from JMAP queries, in Go, TypeScript or Rust.
 
 Usage:
@@ -97,7 +97,7 @@ ListInboxEmails` + query.Extension + `, and holds a JMAP request.
 
 func run(args []string) error {
 	if len(args) == 0 {
-		fmt.Fprint(stderr, usage)
+		printUsage(stderr)
 		return errors.New("no command given")
 	}
 	command := args[0]
@@ -111,10 +111,10 @@ func run(args []string) error {
 		fmt.Println(versionString())
 		return nil
 	case "-h", "-help", "--help", "help":
-		fmt.Print(usage)
+		printUsage(stdout)
 		return nil
 	default:
-		fmt.Fprint(stderr, usage)
+		printUsage(stderr)
 		return fmt.Errorf("unknown command %q", command)
 	}
 
@@ -141,7 +141,7 @@ func run(args []string) error {
 		user = fs.String("user", os.Getenv("JMAP_USER"), "user:password to authenticate with instead")
 		timeout = fs.Duration("timeout", 30*time.Second, "how long to wait for the server")
 	}
-	fs.Usage = func() { fmt.Fprint(stderr, usage) }
+	fs.Usage = func() { printUsage(stderr) }
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
