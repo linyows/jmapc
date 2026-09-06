@@ -20,9 +20,9 @@ type FindPeopleParams struct {
 	Limit *jmapc.UnsignedInt
 }
 
-// FindPeoplePrincipal holds the properties of Principal that the
+// FindPeopleFetchPrincipal holds the properties of Principal that the
 // Principal/get call in FindPeople asks for.
-type FindPeoplePrincipal struct {
+type FindPeopleFetchPrincipal struct {
 	// The id of the principal.
 	ID jmapc.ID `json:"id"`
 
@@ -52,7 +52,7 @@ type FindPeopleFetchResponse struct {
 	State string `json:"state"`
 
 	// The records that were found, in an undefined order.
-	List []FindPeoplePrincipal `json:"list"`
+	List []FindPeopleFetchPrincipal `json:"list"`
 
 	// The ids that were requested but do not exist.
 	NotFound []jmapc.ID `json:"notFound"`

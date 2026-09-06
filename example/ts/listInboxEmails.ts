@@ -13,9 +13,9 @@ export interface ListInboxEmailsParams {
   limit: number
 }
 
-// ListInboxEmailsEmail holds the properties of Email that the Email/get call
-// in ListInboxEmails asks for.
-export interface ListInboxEmailsEmail {
+// ListInboxEmailsFetchEmail holds the properties of Email that the Email/get
+// call in ListInboxEmails asks for.
+export interface ListInboxEmailsFetchEmail {
   // The id of the email.
   id: Id
 
@@ -51,7 +51,7 @@ export interface ListInboxEmailsFetchResponse {
   state: string
 
   // The records that were found, in an undefined order.
-  list: ListInboxEmailsEmail[]
+  list: ListInboxEmailsFetchEmail[]
 
   // The ids that were requested but do not exist.
   notFound: Id[]

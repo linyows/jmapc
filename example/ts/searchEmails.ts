@@ -21,9 +21,9 @@ export interface SearchEmailsParams {
   position: number
 }
 
-// SearchEmailsEmail holds the properties of Email that the Email/get call in
-// SearchEmails asks for.
-export interface SearchEmailsEmail {
+// SearchEmailsFetchEmail holds the properties of Email that the Email/get
+// call in SearchEmails asks for.
+export interface SearchEmailsFetchEmail {
   // The id of the email.
   id: Id
 
@@ -49,7 +49,7 @@ export interface SearchEmailsFetchResponse {
   state: string
 
   // The records that were found, in an undefined order.
-  list: SearchEmailsEmail[]
+  list: SearchEmailsFetchEmail[]
 
   // The ids that were requested but do not exist.
   notFound: Id[]

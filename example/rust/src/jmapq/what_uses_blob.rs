@@ -16,11 +16,11 @@ pub struct WhatUsesBlobParams {
     pub blob_id: Id,
 }
 
-/// WhatUsesBlobBlobData holds the properties of BlobData that the Blob/get
-/// call in WhatUsesBlob asks for.
+/// WhatUsesBlobPeekBlobData holds the properties of BlobData that the
+/// Blob/get call in WhatUsesBlob asks for.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WhatUsesBlobBlobData {
+pub struct WhatUsesBlobPeekBlobData {
     /// The id of the blob.
     pub id: Id,
 
@@ -46,7 +46,7 @@ pub struct WhatUsesBlobPeekResponse {
 
     /// The blobs that were found.
     #[serde(default)]
-    pub list: Vec<WhatUsesBlobBlobData>,
+    pub list: Vec<WhatUsesBlobPeekBlobData>,
 
     /// The ids that were requested but do not exist.
     #[serde(default)]

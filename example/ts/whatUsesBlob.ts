@@ -12,9 +12,9 @@ export interface WhatUsesBlobParams {
   blobId: Id
 }
 
-// WhatUsesBlobBlobData holds the properties of BlobData that the Blob/get
+// WhatUsesBlobPeekBlobData holds the properties of BlobData that the Blob/get
 // call in WhatUsesBlob asks for.
-export interface WhatUsesBlobBlobData {
+export interface WhatUsesBlobPeekBlobData {
   // The id of the blob.
   id: Id
 
@@ -35,7 +35,7 @@ export interface WhatUsesBlobPeekResponse {
   accountId: Id
 
   // The blobs that were found.
-  list: WhatUsesBlobBlobData[]
+  list: WhatUsesBlobPeekBlobData[]
 
   // The ids that were requested but do not exist.
   notFound: Id[]

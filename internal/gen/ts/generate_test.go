@@ -151,10 +151,10 @@ func TestOneShapeIsOneType(t *testing.T) {
 		t.Fatalf("generating: %v", err)
 	}
 	src := string(files["twoReads.ts"])
-	if strings.Contains(src, "TwoReadsEmail2") {
+	if strings.Contains(src, "TwoReadsTwoEmail") {
 		t.Errorf("the same shape was given a second type:\n%s", src)
 	}
-	if n := strings.Count(src, "export interface TwoReadsEmail {"); n != 1 {
+	if n := strings.Count(src, "export interface TwoReadsOneEmail {"); n != 1 {
 		t.Errorf("the record type is declared %d times, want 1:\n%s", n, src)
 	}
 }

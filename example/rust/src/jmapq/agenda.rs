@@ -26,11 +26,11 @@ pub struct AgendaParams {
     pub time_zone: TimeZoneId,
 }
 
-/// AgendaCalendarEvent holds the properties of CalendarEvent that the
+/// AgendaFetchCalendarEvent holds the properties of CalendarEvent that the
 /// CalendarEvent/get call in Agenda asks for.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgendaCalendarEvent {
+pub struct AgendaFetchCalendarEvent {
     /// The id of the event.
     pub id: Id,
 
@@ -80,7 +80,7 @@ pub struct AgendaFetchResponse {
 
     /// The records that were found, in an undefined order.
     #[serde(default)]
-    pub list: Vec<AgendaCalendarEvent>,
+    pub list: Vec<AgendaFetchCalendarEvent>,
 
     /// The ids that were requested but do not exist.
     #[serde(default)]

@@ -12,9 +12,9 @@ export interface ReadMessageParams {
   emailId: Id
 }
 
-// ReadMessageEmailBodyPart holds the properties of EmailBodyPart that the
-// Email/get call in ReadMessage asks for.
-export interface ReadMessageEmailBodyPart {
+// ReadMessageFetchEmailBodyPart holds the properties of EmailBodyPart that
+// the Email/get call in ReadMessage asks for.
+export interface ReadMessageFetchEmailBodyPart {
   // Identifies the part's content within the bodyValues map, or null if the
   // part has no body of its own.
   partId: string | null
@@ -41,12 +41,12 @@ export interface ReadMessageEmailBodyPart {
   cid: string | null
 
   // The parts of a multipart part, or null if this part is not multipart.
-  subParts: ReadMessageEmailBodyPart[] | null
+  subParts: ReadMessageFetchEmailBodyPart[] | null
 }
 
-// ReadMessageEmail holds the properties of Email that the Email/get call in
-// ReadMessage asks for.
-export interface ReadMessageEmail {
+// ReadMessageFetchEmail holds the properties of Email that the Email/get call
+// in ReadMessage asks for.
+export interface ReadMessageFetchEmail {
   // The id of the email.
   id: Id
 
@@ -64,16 +64,16 @@ export interface ReadMessageEmail {
   receivedAt: UTCDate
 
   // The full MIME structure of the message body.
-  bodyStructure: ReadMessageEmailBodyPart
+  bodyStructure: ReadMessageFetchEmailBodyPart
 
   // The parts to display as the plain-text body of the message.
-  textBody: ReadMessageEmailBodyPart[]
+  textBody: ReadMessageFetchEmailBodyPart[]
 
   // The parts to display as the HTML body of the message.
-  htmlBody: ReadMessageEmailBodyPart[]
+  htmlBody: ReadMessageFetchEmailBodyPart[]
 
   // The parts to present as attachments rather than as body content.
-  attachments: ReadMessageEmailBodyPart[]
+  attachments: ReadMessageFetchEmailBodyPart[]
 
   // The decoded content of the body parts that were fetched, keyed by partId.
   bodyValues: { [key: string]: EmailBodyValue }
@@ -102,7 +102,7 @@ export interface ReadMessageFetchResponse {
   state: string
 
   // The records that were found, in an undefined order.
-  list: ReadMessageEmail[]
+  list: ReadMessageFetchEmail[]
 
   // The ids that were requested but do not exist.
   notFound: Id[]

@@ -28,9 +28,9 @@ type SearchEmailsParams struct {
 	Position jmapc.Int
 }
 
-// SearchEmailsEmail holds the properties of Email that the Email/get call in
-// SearchEmails asks for.
-type SearchEmailsEmail struct {
+// SearchEmailsFetchEmail holds the properties of Email that the Email/get
+// call in SearchEmails asks for.
+type SearchEmailsFetchEmail struct {
 	// The id of the email.
 	ID jmapc.ID `json:"id"`
 
@@ -56,7 +56,7 @@ type SearchEmailsFetchResponse struct {
 	State string `json:"state"`
 
 	// The records that were found, in an undefined order.
-	List []SearchEmailsEmail `json:"list"`
+	List []SearchEmailsFetchEmail `json:"list"`
 
 	// The ids that were requested but do not exist.
 	NotFound []jmapc.ID `json:"notFound"`

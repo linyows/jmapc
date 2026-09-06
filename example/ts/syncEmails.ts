@@ -11,9 +11,9 @@ export interface SyncEmailsParams {
   sinceState: string
 }
 
-// SyncEmailsEmail holds the properties of Email that the Email/get call in
-// SyncEmails asks for.
-export interface SyncEmailsEmail {
+// SyncEmailsCreatedEmail holds the properties of Email that the Email/get
+// call in SyncEmails asks for.
+export interface SyncEmailsCreatedEmail {
   // The id of the email.
   id: Id
 
@@ -35,9 +35,9 @@ export interface SyncEmailsEmail {
   receivedAt: UTCDate
 }
 
-// SyncEmailsEmail2 holds the properties of Email that the Email/get call in
-// SyncEmails asks for.
-export interface SyncEmailsEmail2 {
+// SyncEmailsUpdatedEmail holds the properties of Email that the Email/get
+// call in SyncEmails asks for.
+export interface SyncEmailsUpdatedEmail {
   // The id of the email.
   id: Id
 
@@ -60,7 +60,7 @@ export interface SyncEmailsCreatedResponse {
   state: string
 
   // The records that were found, in an undefined order.
-  list: SyncEmailsEmail[]
+  list: SyncEmailsCreatedEmail[]
 
   // The ids that were requested but do not exist.
   notFound: Id[]
@@ -77,7 +77,7 @@ export interface SyncEmailsUpdatedResponse {
   state: string
 
   // The records that were found, in an undefined order.
-  list: SyncEmailsEmail2[]
+  list: SyncEmailsUpdatedEmail[]
 
   // The ids that were requested but do not exist.
   notFound: Id[]

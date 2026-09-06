@@ -19,9 +19,9 @@ type VerifiedSignaturesParams struct {
 	Limit jmapc.UnsignedInt
 }
 
-// VerifiedSignaturesEmail holds the properties of Email that the Email/get
-// call in VerifiedSignatures asks for.
-type VerifiedSignaturesEmail struct {
+// VerifiedSignaturesFetchEmail holds the properties of Email that the
+// Email/get call in VerifiedSignatures asks for.
+type VerifiedSignaturesFetchEmail struct {
 	// The id of the email.
 	ID jmapc.ID `json:"id"`
 
@@ -68,7 +68,7 @@ type VerifiedSignaturesFetchResponse struct {
 	State string `json:"state"`
 
 	// The records that were found, in an undefined order.
-	List []VerifiedSignaturesEmail `json:"list"`
+	List []VerifiedSignaturesFetchEmail `json:"list"`
 
 	// The ids that were requested but do not exist.
 	NotFound []jmapc.ID `json:"notFound"`

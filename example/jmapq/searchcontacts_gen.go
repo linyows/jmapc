@@ -23,9 +23,9 @@ type SearchContactsParams struct {
 	Limit jmapc.UnsignedInt
 }
 
-// SearchContactsAddressBook holds the properties of AddressBook that the
+// SearchContactsBooksAddressBook holds the properties of AddressBook that the
 // AddressBook/get call in SearchContacts asks for.
-type SearchContactsAddressBook struct {
+type SearchContactsBooksAddressBook struct {
 	// The id of the address book.
 	ID jmapc.ID `json:"id"`
 
@@ -37,9 +37,9 @@ type SearchContactsAddressBook struct {
 	IsDefault bool `json:"isDefault"`
 }
 
-// SearchContactsContactCard holds the properties of ContactCard that the
+// SearchContactsFetchContactCard holds the properties of ContactCard that the
 // ContactCard/get call in SearchContacts asks for.
-type SearchContactsContactCard struct {
+type SearchContactsFetchContactCard struct {
 	// The id of the card.
 	ID jmapc.ID `json:"id"`
 
@@ -73,7 +73,7 @@ type SearchContactsBooksResponse struct {
 	State string `json:"state"`
 
 	// The records that were found, in an undefined order.
-	List []SearchContactsAddressBook `json:"list"`
+	List []SearchContactsBooksAddressBook `json:"list"`
 
 	// The ids that were requested but do not exist.
 	NotFound []jmapc.ID `json:"notFound"`
@@ -90,7 +90,7 @@ type SearchContactsFetchResponse struct {
 	State string `json:"state"`
 
 	// The records that were found, in an undefined order.
-	List []SearchContactsContactCard `json:"list"`
+	List []SearchContactsFetchContactCard `json:"list"`
 
 	// The ids that were requested but do not exist.
 	NotFound []jmapc.ID `json:"notFound"`

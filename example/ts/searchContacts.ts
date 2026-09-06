@@ -17,9 +17,9 @@ export interface SearchContactsParams {
   limit: number
 }
 
-// SearchContactsAddressBook holds the properties of AddressBook that the
+// SearchContactsBooksAddressBook holds the properties of AddressBook that the
 // AddressBook/get call in SearchContacts asks for.
-export interface SearchContactsAddressBook {
+export interface SearchContactsBooksAddressBook {
   // The id of the address book.
   id: Id
 
@@ -31,9 +31,9 @@ export interface SearchContactsAddressBook {
   isDefault: boolean
 }
 
-// SearchContactsContactCard holds the properties of ContactCard that the
+// SearchContactsFetchContactCard holds the properties of ContactCard that the
 // ContactCard/get call in SearchContacts asks for.
-export interface SearchContactsContactCard {
+export interface SearchContactsFetchContactCard {
   // The id of the card.
   id: Id
 
@@ -68,7 +68,7 @@ export interface SearchContactsBooksResponse {
   state: string
 
   // The records that were found, in an undefined order.
-  list: SearchContactsAddressBook[]
+  list: SearchContactsBooksAddressBook[]
 
   // The ids that were requested but do not exist.
   notFound: Id[]
@@ -85,7 +85,7 @@ export interface SearchContactsFetchResponse {
   state: string
 
   // The records that were found, in an undefined order.
-  list: SearchContactsContactCard[]
+  list: SearchContactsFetchContactCard[]
 
   // The ids that were requested but do not exist.
   notFound: Id[]

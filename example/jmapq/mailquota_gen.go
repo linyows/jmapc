@@ -10,9 +10,9 @@ import (
 	"github.com/linyows/jmapc"
 )
 
-// MailQuotaQuota holds the properties of Quota that the Quota/get call in
-// MailQuota asks for.
-type MailQuotaQuota struct {
+// MailQuotaFetchQuota holds the properties of Quota that the Quota/get call
+// in MailQuota asks for.
+type MailQuotaFetchQuota struct {
 	// The id of the quota.
 	ID jmapc.ID `json:"id"`
 
@@ -54,7 +54,7 @@ type MailQuotaFetchResponse struct {
 	State string `json:"state"`
 
 	// The records that were found, in an undefined order.
-	List []MailQuotaQuota `json:"list"`
+	List []MailQuotaFetchQuota `json:"list"`
 
 	// The ids that were requested but do not exist.
 	NotFound []jmapc.ID `json:"notFound"`

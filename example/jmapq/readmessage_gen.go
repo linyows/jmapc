@@ -18,9 +18,9 @@ type ReadMessageParams struct {
 	EmailID jmapc.ID
 }
 
-// ReadMessageEmailBodyPart holds the properties of EmailBodyPart that the
-// Email/get call in ReadMessage asks for.
-type ReadMessageEmailBodyPart struct {
+// ReadMessageFetchEmailBodyPart holds the properties of EmailBodyPart that
+// the Email/get call in ReadMessage asks for.
+type ReadMessageFetchEmailBodyPart struct {
 	// Identifies the part's content within the bodyValues map, or null if the
 	// part has no body of its own.
 	PartID *string `json:"partId"`
@@ -47,12 +47,12 @@ type ReadMessageEmailBodyPart struct {
 	Cid *string `json:"cid"`
 
 	// The parts of a multipart part, or null if this part is not multipart.
-	SubParts []ReadMessageEmailBodyPart `json:"subParts"`
+	SubParts []ReadMessageFetchEmailBodyPart `json:"subParts"`
 }
 
-// ReadMessageEmail holds the properties of Email that the Email/get call in
-// ReadMessage asks for.
-type ReadMessageEmail struct {
+// ReadMessageFetchEmail holds the properties of Email that the Email/get call
+// in ReadMessage asks for.
+type ReadMessageFetchEmail struct {
 	// The id of the email.
 	ID jmapc.ID `json:"id"`
 
@@ -70,16 +70,16 @@ type ReadMessageEmail struct {
 	ReceivedAt jmapc.UTCDate `json:"receivedAt"`
 
 	// The full MIME structure of the message body.
-	BodyStructure ReadMessageEmailBodyPart `json:"bodyStructure"`
+	BodyStructure ReadMessageFetchEmailBodyPart `json:"bodyStructure"`
 
 	// The parts to display as the plain-text body of the message.
-	TextBody []ReadMessageEmailBodyPart `json:"textBody"`
+	TextBody []ReadMessageFetchEmailBodyPart `json:"textBody"`
 
 	// The parts to display as the HTML body of the message.
-	HTMLBody []ReadMessageEmailBodyPart `json:"htmlBody"`
+	HTMLBody []ReadMessageFetchEmailBodyPart `json:"htmlBody"`
 
 	// The parts to present as attachments rather than as body content.
-	Attachments []ReadMessageEmailBodyPart `json:"attachments"`
+	Attachments []ReadMessageFetchEmailBodyPart `json:"attachments"`
 
 	// The decoded content of the body parts that were fetched, keyed by partId.
 	BodyValues map[string]jmapc.EmailBodyValue `json:"bodyValues"`
@@ -108,7 +108,7 @@ type ReadMessageFetchResponse struct {
 	State string `json:"state"`
 
 	// The records that were found, in an undefined order.
-	List []ReadMessageEmail `json:"list"`
+	List []ReadMessageFetchEmail `json:"list"`
 
 	// The ids that were requested but do not exist.
 	NotFound []jmapc.ID `json:"notFound"`

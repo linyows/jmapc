@@ -17,11 +17,11 @@ pub struct VerifiedSignaturesParams {
     pub limit: u64,
 }
 
-/// VerifiedSignaturesEmail holds the properties of Email that the Email/get
-/// call in VerifiedSignatures asks for.
+/// VerifiedSignaturesFetchEmail holds the properties of Email that the
+/// Email/get call in VerifiedSignatures asks for.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct VerifiedSignaturesEmail {
+pub struct VerifiedSignaturesFetchEmail {
     /// The id of the email.
     pub id: Id,
 
@@ -78,7 +78,7 @@ pub struct VerifiedSignaturesFetchResponse {
 
     /// The records that were found, in an undefined order.
     #[serde(default)]
-    pub list: Vec<VerifiedSignaturesEmail>,
+    pub list: Vec<VerifiedSignaturesFetchEmail>,
 
     /// The ids that were requested but do not exist.
     #[serde(default)]

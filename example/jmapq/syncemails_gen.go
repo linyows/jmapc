@@ -17,9 +17,9 @@ type SyncEmailsParams struct {
 	SinceState string
 }
 
-// SyncEmailsEmail holds the properties of Email that the Email/get call in
-// SyncEmails asks for.
-type SyncEmailsEmail struct {
+// SyncEmailsCreatedEmail holds the properties of Email that the Email/get
+// call in SyncEmails asks for.
+type SyncEmailsCreatedEmail struct {
 	// The id of the email.
 	ID jmapc.ID `json:"id"`
 
@@ -41,9 +41,9 @@ type SyncEmailsEmail struct {
 	ReceivedAt jmapc.UTCDate `json:"receivedAt"`
 }
 
-// SyncEmailsEmail2 holds the properties of Email that the Email/get call in
-// SyncEmails asks for.
-type SyncEmailsEmail2 struct {
+// SyncEmailsUpdatedEmail holds the properties of Email that the Email/get
+// call in SyncEmails asks for.
+type SyncEmailsUpdatedEmail struct {
 	// The id of the email.
 	ID jmapc.ID `json:"id"`
 
@@ -66,7 +66,7 @@ type SyncEmailsCreatedResponse struct {
 	State string `json:"state"`
 
 	// The records that were found, in an undefined order.
-	List []SyncEmailsEmail `json:"list"`
+	List []SyncEmailsCreatedEmail `json:"list"`
 
 	// The ids that were requested but do not exist.
 	NotFound []jmapc.ID `json:"notFound"`
@@ -83,7 +83,7 @@ type SyncEmailsUpdatedResponse struct {
 	State string `json:"state"`
 
 	// The records that were found, in an undefined order.
-	List []SyncEmailsEmail2 `json:"list"`
+	List []SyncEmailsUpdatedEmail `json:"list"`
 
 	// The ids that were requested but do not exist.
 	NotFound []jmapc.ID `json:"notFound"`

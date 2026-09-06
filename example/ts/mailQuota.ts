@@ -4,9 +4,9 @@
 import { type Client, type Request, type Response, MethodErrors, answered, decode } from "./client.js"
 import type { Id, QuotaQueryResponse } from "./types.js"
 
-// MailQuotaQuota holds the properties of Quota that the Quota/get call in
-// MailQuota asks for.
-export interface MailQuotaQuota {
+// MailQuotaFetchQuota holds the properties of Quota that the Quota/get call
+// in MailQuota asks for.
+export interface MailQuotaFetchQuota {
   // The id of the quota.
   id: Id
 
@@ -48,7 +48,7 @@ export interface MailQuotaFetchResponse {
   state: string
 
   // The records that were found, in an undefined order.
-  list: MailQuotaQuota[]
+  list: MailQuotaFetchQuota[]
 
   // The ids that were requested but do not exist.
   notFound: Id[]

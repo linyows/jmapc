@@ -17,11 +17,11 @@ pub struct ListInboxEmailsParams {
     pub limit: u64,
 }
 
-/// ListInboxEmailsEmail holds the properties of Email that the Email/get call
-/// in ListInboxEmails asks for.
+/// ListInboxEmailsFetchEmail holds the properties of Email that the Email/get
+/// call in ListInboxEmails asks for.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ListInboxEmailsEmail {
+pub struct ListInboxEmailsFetchEmail {
     /// The id of the email.
     pub id: Id,
 
@@ -62,7 +62,7 @@ pub struct ListInboxEmailsFetchResponse {
 
     /// The records that were found, in an undefined order.
     #[serde(default)]
-    pub list: Vec<ListInboxEmailsEmail>,
+    pub list: Vec<ListInboxEmailsFetchEmail>,
 
     /// The ids that were requested but do not exist.
     #[serde(default)]

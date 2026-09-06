@@ -14,9 +14,9 @@ export interface FindPeopleParams {
   limit?: number
 }
 
-// FindPeoplePrincipal holds the properties of Principal that the
+// FindPeopleFetchPrincipal holds the properties of Principal that the
 // Principal/get call in FindPeople asks for.
-export interface FindPeoplePrincipal {
+export interface FindPeopleFetchPrincipal {
   // The id of the principal.
   id: Id
 
@@ -46,7 +46,7 @@ export interface FindPeopleFetchResponse {
   state: string
 
   // The records that were found, in an undefined order.
-  list: FindPeoplePrincipal[]
+  list: FindPeopleFetchPrincipal[]
 
   // The ids that were requested but do not exist.
   notFound: Id[]

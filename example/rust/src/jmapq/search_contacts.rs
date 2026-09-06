@@ -26,11 +26,11 @@ pub struct SearchContactsParams {
     pub limit: u64,
 }
 
-/// SearchContactsAddressBook holds the properties of AddressBook that the
-/// AddressBook/get call in SearchContacts asks for.
+/// SearchContactsBooksAddressBook holds the properties of AddressBook that
+/// the AddressBook/get call in SearchContacts asks for.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SearchContactsAddressBook {
+pub struct SearchContactsBooksAddressBook {
     /// The id of the address book.
     pub id: Id,
 
@@ -43,11 +43,11 @@ pub struct SearchContactsAddressBook {
     pub is_default: bool,
 }
 
-/// SearchContactsContactCard holds the properties of ContactCard that the
-/// ContactCard/get call in SearchContacts asks for.
+/// SearchContactsFetchContactCard holds the properties of ContactCard that
+/// the ContactCard/get call in SearchContacts asks for.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SearchContactsContactCard {
+pub struct SearchContactsFetchContactCard {
     /// The id of the card.
     pub id: Id,
 
@@ -88,7 +88,7 @@ pub struct SearchContactsBooksResponse {
 
     /// The records that were found, in an undefined order.
     #[serde(default)]
-    pub list: Vec<SearchContactsAddressBook>,
+    pub list: Vec<SearchContactsBooksAddressBook>,
 
     /// The ids that were requested but do not exist.
     #[serde(default)]
@@ -109,7 +109,7 @@ pub struct SearchContactsFetchResponse {
 
     /// The records that were found, in an undefined order.
     #[serde(default)]
-    pub list: Vec<SearchContactsContactCard>,
+    pub list: Vec<SearchContactsFetchContactCard>,
 
     /// The ids that were requested but do not exist.
     #[serde(default)]
