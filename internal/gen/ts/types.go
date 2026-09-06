@@ -1,6 +1,6 @@
-// Package ts writes TypeScript from the JMAP data model and the queries
+// Package ts writes TypeScript from the JMAP data model and the requests
 // checked against it. What it produces has no dependencies: the runtime it
-// needs is small enough to generate alongside the queries, so a project takes
+// needs is small enough to generate alongside the requests, so a project takes
 // on nothing but the files jmapc writes.
 package ts
 

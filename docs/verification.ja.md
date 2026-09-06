@@ -15,19 +15,19 @@
 - 仕様が値を固定しているプロパティに、その値のいずれかが与えられていること。文字列の値と、参加者の `roles` のような集合のキーの両方が対象です
 - id、日付、整数の形式が正しいこと
 - リクエストが宣言するケイパビリティが、呼び出すメソッドを網羅していること
-- `_watches` が指す呼び出しが、ある状態からの変更を報告するものであり、そこから進む状態がクエリに書き込まれずループに委ねられていること
+- `_watches` が指す呼び出しが、ある状態からの変更を報告するものであり、そこから進む状態がリクエストに書き込まれずループに委ねられていること
 - `_pages` が指す呼び出しが、より長い答えの一部を返して残りの位置を報告するものであり、次のリクエストの開始位置がループに委ねられていること
 
 綴り間違いには候補が提示されます。
 
 ```
-queries/BadQuery.jmap.json: methodCalls[0].arguments.filter.hasAttachmnt: EmailFilterCondition has no property "hasAttachmnt"
+requests/BadQuery.jmap.json: methodCalls[0].arguments.filter.hasAttachmnt: EmailFilterCondition has no property "hasAttachmnt"
 	did you mean "hasAttachment"?
-queries/BadQuery.jmap.json: methodCalls[1].arguments.#ids.name: the referenced call is Email/query, but the reference names Email/get
+requests/BadQuery.jmap.json: methodCalls[1].arguments.#ids.name: the referenced call is Email/query, but the reference names Email/get
 	call "c0" invokes Email/query
 ```
 
-パラメータや call id の名前だけが違う二つのクエリは、同じクエリを二度書いたものです。
+パラメータや call id の名前だけが違う二つのリクエストは、同じリクエストを二度書いたものです。
 jmapc はこれを失敗ではなく通知として伝えます。
 
 ```
@@ -43,7 +43,7 @@ jmapc: ListArchiveEmails, ListInboxEmails are the same query under different nam
 
 ここまではすべて、仕様が定めていることです。
 仕様がサーバに委ねていること —— どのケイパビリティを持つか、どのアカウントを持つか、一度のリクエストでどれだけ受け付けるか —— は、ビルド時には分かりません。
-JMAP については正しく、実行対象のサーバについては間違っているクエリは、実行時に失敗します。
+JMAP については正しく、実行対象のサーバについては間違っているリクエストは、実行時に失敗します。
 `-session` は実行中のサーバに対して検査します。
 
 ```
@@ -54,12 +54,12 @@ checked 25 queries against https://jmap.example.com/api/, as someone@example.com
 報告するのは次のものです。
 
 - リクエストが宣言していて、サーバが広告していないケイパビリティ
-- クエリが名指していてセッションが持たないアカウント、そのケイパビリティの primary account がなくセッションが埋められないアカウント、呼び出しに必要なものをサポートしないアカウント
+- リクエストが名指していてセッションが持たないアカウント、そのケイパビリティの primary account がなくセッションが埋められないアカウント、呼び出しに必要なものをサポートしないアカウント
 - `maxCallsInRequest` を超える呼び出し数、`maxObjectsInGet` を超えるレコード数、`maxObjectsInSet` を超える変更数、パラメータを埋める前から `maxSizeRequest` を超えるリクエスト
 - サーバが文字列の比較に使えない `collation`
 
-クエリが呼び出し側に委ねているものには触れません。
-id のリストを表すパラメータは何個にでもなり得るので、そこを推測すれば、問題のないクエリを問題ありと報告することになります。
+リクエストが呼び出し側に委ねているものには触れません。
+id のリストを表すパラメータは何個にでもなり得るので、そこを推測すれば、問題のないリクエストを問題ありと報告することになります。
 
 セッションの URL だけは環境変数から読みません。
 `-token` と `-user` は `$JMAP_TOKEN` と `$JMAP_USER` にフォールバックします。
@@ -68,7 +68,7 @@ id のリストを表すパラメータは何個にでもなり得るので、�
 ## エディタ対応
 
 上の検証は jmapc を走らせたときに実行されます。
-その多くは、クエリを書いている最中に走らせることもできます。
+その多くは、リクエストを書いている最中に走らせることもできます。
 ファイルそのものに対する検証だからです。
 そしてスキーマを名指しした JSON ファイルなら、エディタは検証も補完もすでに知っています。
 
@@ -77,7 +77,7 @@ jmapc schema -out jmapc.schema.json
 ```
 
 これがカタログの JSON Schema を、ベンダ拡張も含めて書き出します。
-クエリファイルからそれを指すか、
+リクエストファイルからそれを指すか、
 
 ```json
 {

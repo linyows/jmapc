@@ -7,8 +7,8 @@ go test ./...        # everything, including the end-to-end tests
 go generate ./...    # regenerate the runtime types and every example client
 ```
 
-The example is generated three times, once per language, into `example/jmapq`,
-`example/rust/src/jmapq` and `example/ts`. Go's tests cannot say whether the
+The example is generated three times, once per language, into `example/client`,
+`example/rust/src/jmap_client` and `example/ts`. Go's tests cannot say whether the
 other two compile, so CI runs `cargo fmt --check` and `cargo test` over the
 Rust and `tsc --strict` over the TypeScript. Each of the two has a
 hand-written check beside the generated code, exercising the runtime against a
@@ -17,7 +17,7 @@ session is cached, and that a `/set` answering 200 with a refusal in it is
 still an error.
 
 The schema is checked the same way, and for the same reason: whether a
-validator accepts the example queries and refuses the mistakes the schema
+validator accepts the example requests and refuses the mistakes the schema
 claims to catch is not something Go's tests can say. `example/schema/check.mjs`
 runs one, over a schema written from the catalogue as it stands.
 

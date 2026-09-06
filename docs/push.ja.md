@@ -6,7 +6,7 @@
 ですから変更を取得するクライアントはループを書きます。
 接続し、手元の状態からの差分を要求し、それを適用し、次のイベントを待つ。
 このループは毎回同じで、そのどの部分にも間違いが入り込みえます。
-そこで、クエリの側から要求できるようにしました。
+そこで、リクエストの側から要求できるようにしました。
 
 `_watches` は、ループが状態を読む呼び出しを指定します。
 指定できるのは、`Email/changes` のように、ある状態からの変更を報告する呼び出しです。
@@ -25,8 +25,8 @@
 `SyncEmails` はこれまでどおり生成され、その隣に `SyncEmailsWatch` が生成されます。
 
 ```go
-err := jmapq.SyncEmailsWatch(ctx, c, jmapq.SyncEmailsParams{SinceState: state},
-	func(ctx context.Context, res *jmapq.SyncEmailsResult) error {
+err := client.SyncEmailsWatch(ctx, c, client.SyncEmailsParams{SinceState: state},
+	func(ctx context.Context, res *client.SyncEmailsResult) error {
 		for _, email := range res.EmailGet.List {
 			fmt.Println("new:", *email.Subject)
 		}
@@ -49,7 +49,7 @@ err := jmapq.SyncEmailsWatch(ctx, c, jmapq.SyncEmailsParams{SinceState: state},
 `jmapc.WithPing` と `jmapc.WithReconnect` が、調整する価値のある二つです。
 
 その下にあるのが `Client.Watch` で、追いつき方を関数で受け取ります。
-追いつきが一つのクエリで済まないときは、これを直接呼びます。
+追いつきが一つのリクエストで済まないときは、これを直接呼びます。
 
 ```go
 err := c.Watch(ctx, accountID, "Email", state,
@@ -60,7 +60,7 @@ err := c.Watch(ctx, accountID, "Email", state,
 
 `_watches` を追うのは Go のクライアントだけです。
 接続を保持するのは生成コードではなくランタイムの仕事で、Rust と TypeScript のランタイムはそれをしません。
-それらの言語で watch するクエリを生成すると、ループのないクエリだけが生成され、その旨が表示されます。
+それらの言語で watch するリクエストを生成すると、ループのないコードだけが生成され、その旨が表示されます。
 
 `Watch` のさらに下にあるのが `Client.EventSource` で、プッシュエンドポイントに接続してイベントをそのまま返します。
 
@@ -84,7 +84,7 @@ for {
 
 これはイベントソース形式のプッシュで、接続を保持できるクライアントに向いています。
 もう一つの形式は、サーバが送る先の URL を登録するもので、スマートフォンのアプリにはこちらが必要です。
-[`example/queries`](../example/queries) の `RegisterPush` と `ConfirmPush` を参照してください。
+[`example/requests`](../example/requests) の `RegisterPush` と `ConfirmPush` を参照してください。
 購読は作成した時点ではまだ有効ではありません。
 サーバが URL にコードを送り、クライアントが `PushSubscription/set` でそれを書き戻すまで、他には何も送られません。
 届いたものは `jmapc.PushVerification` でデコードします。

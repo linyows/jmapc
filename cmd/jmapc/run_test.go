@@ -67,13 +67,13 @@ func server(t *testing.T, api func(w http.ResponseWriter, body []byte)) *httptes
 	return srv
 }
 
-// TestRunDryRun checks the request a query stands for, which is what a dry run
+// TestRunDryRun checks the request a request stands for, which is what a dry run
 // is for: seeing what would go out without anything going out.
 func TestRunDryRun(t *testing.T) {
-	dir := workspace(t, map[string]string{"queries/SearchMailboxes.jmap.json": searchMailboxes})
+	dir := workspace(t, map[string]string{"requests/SearchMailboxes.jmap.json": searchMailboxes})
 
 	out, note, err := capture(t, []string{"run", "SearchMailboxes",
-		"-queries", filepath.Join(dir, "queries"), "-dry-run", "-p", "name=Work", "-p", "limit=3"})
+		"-requests", filepath.Join(dir, "requests"), "-dry-run", "-p", "name=Work", "-p", "limit=3"})
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestRunDryRun(t *testing.T) {
 // TestRunSends checks the whole path: the parameters reach the server in the
 // request, and the response reaches the terminal.
 func TestRunSends(t *testing.T) {
-	dir := workspace(t, map[string]string{"queries/MarkRead.jmap.json": markRead})
+	dir := workspace(t, map[string]string{"requests/MarkRead.jmap.json": markRead})
 	var got []byte
 	srv := server(t, func(w http.ResponseWriter, body []byte) {
 		got = body
@@ -113,7 +113,7 @@ func TestRunSends(t *testing.T) {
 	})
 
 	out, _, err := capture(t, []string{"run", "MarkRead",
-		"-queries", filepath.Join(dir, "queries"), "-session", srv.URL + "/.well-known/jmap",
+		"-requests", filepath.Join(dir, "requests"), "-session", srv.URL + "/.well-known/jmap",
 		"-token", "secret", "-p", "emailId=m1"})
 	if err != nil {
 		t.Fatalf("run: %v", err)
@@ -134,7 +134,7 @@ func TestRunSends(t *testing.T) {
 // records it would not act on, and a run that read only the transport error
 // would call that a success.
 func TestRunReportsRefusals(t *testing.T) {
-	dir := workspace(t, map[string]string{"queries/MarkRead.jmap.json": markRead})
+	dir := workspace(t, map[string]string{"requests/MarkRead.jmap.json": markRead})
 	srv := server(t, func(w http.ResponseWriter, body []byte) {
 		fmt.Fprint(w, `{"sessionState":"sess1","methodResponses":[
 			["Email/set", {"accountId": "a1", "newState": "s1", "notUpdated":
@@ -142,7 +142,7 @@ func TestRunReportsRefusals(t *testing.T) {
 	})
 
 	out, _, err := capture(t, []string{"run", "MarkRead",
-		"-queries", filepath.Join(dir, "queries"), "-session", srv.URL + "/.well-known/jmap",
+		"-requests", filepath.Join(dir, "requests"), "-session", srv.URL + "/.well-known/jmap",
 		"-p", "emailId=m1"})
 	var refused *jmapc.SetErrors
 	if !errors.As(err, &refused) {
@@ -161,32 +161,32 @@ func TestRunReportsRefusals(t *testing.T) {
 // TestRunChecksParameters checks that a value is held to the type of the
 // argument it stands in for, before anything is sent.
 func TestRunChecksParameters(t *testing.T) {
-	dir := workspace(t, map[string]string{"queries/SearchMailboxes.jmap.json": searchMailboxes})
-	queries := filepath.Join(dir, "queries")
+	dir := workspace(t, map[string]string{"requests/SearchMailboxes.jmap.json": searchMailboxes})
+	requests := filepath.Join(dir, "requests")
 
-	_, _, err := capture(t, []string{"run", "SearchMailboxes", "-queries", queries,
+	_, _, err := capture(t, []string{"run", "SearchMailboxes", "-requests", requests,
 		"-dry-run", "-p", "name=Work", "-p", "limit=soon"})
 	if err == nil || !strings.Contains(err.Error(), "not a whole number") {
 		t.Errorf("err = %v, want the limit to be rejected", err)
 	}
 
-	_, _, err = capture(t, []string{"run", "SearchMailboxes", "-queries", queries, "-dry-run"})
+	_, _, err = capture(t, []string{"run", "SearchMailboxes", "-requests", requests, "-dry-run"})
 	if err == nil || !strings.Contains(err.Error(), "name (String), limit (UnsignedInt)") {
 		t.Errorf("err = %v, want the parameters it takes", err)
 	}
 
-	_, _, err = capture(t, []string{"run", "SearchMailboxes", "-queries", queries,
+	_, _, err = capture(t, []string{"run", "SearchMailboxes", "-requests", requests,
 		"-dry-run", "-p", "name=Work", "-p", "limit=3", "-p", "lmit=3"})
 	if err == nil || !strings.Contains(err.Error(), `has no parameter "lmit"`) {
 		t.Errorf("err = %v, want the misspelled parameter reported", err)
 	}
 }
 
-// TestRunNamesTheQueriesItHas checks what a run says when the query is not
+// TestRunNamesTheRequestsItHas checks what a run says when the request is not
 // there, since the case a shell completes to is easy to get wrong.
-func TestRunNamesTheQueriesItHas(t *testing.T) {
-	dir := workspace(t, map[string]string{"queries/SearchMailboxes.jmap.json": searchMailboxes})
-	_, _, err := capture(t, []string{"run", "searchmailboxes", "-queries", filepath.Join(dir, "queries")})
+func TestRunNamesTheRequestsItHas(t *testing.T) {
+	dir := workspace(t, map[string]string{"requests/SearchMailboxes.jmap.json": searchMailboxes})
+	_, _, err := capture(t, []string{"run", "searchmailboxes", "-requests", filepath.Join(dir, "requests")})
 	if err == nil || !strings.Contains(err.Error(), "did you mean SearchMailboxes?") {
 		t.Errorf("err = %v, want a suggestion", err)
 	}
@@ -195,9 +195,9 @@ func TestRunNamesTheQueriesItHas(t *testing.T) {
 // TestRunWithoutAServer checks that a run with nowhere to send says so, rather
 // than failing somewhere further in.
 func TestRunWithoutAServer(t *testing.T) {
-	dir := workspace(t, map[string]string{"queries/SearchMailboxes.jmap.json": searchMailboxes})
+	dir := workspace(t, map[string]string{"requests/SearchMailboxes.jmap.json": searchMailboxes})
 	t.Setenv("JMAP_SESSION_URL", "")
-	_, _, err := capture(t, []string{"run", "SearchMailboxes", "-queries", filepath.Join(dir, "queries"),
+	_, _, err := capture(t, []string{"run", "SearchMailboxes", "-requests", filepath.Join(dir, "requests"),
 		"-p", "name=Work", "-p", "limit=3"})
 	if err == nil || !strings.Contains(err.Error(), "no server to send to") {
 		t.Errorf("err = %v, want the missing server reported", err)

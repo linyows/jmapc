@@ -1,219 +1,369 @@
-// Package request turns a checked query into the JMAP request it stands for,
-// with the parameters filled in. The generator writes that request as source;
-// here the same request is built at run time, which is what lets a query be
-// sent without generating a client for it first.
+// Package request parses the JMAP requests a user writes and checks them against
+// the JMAP data model, so that a mistake in a request is reported where it was
+// written rather than by the server at run time.
 package request
 
 import (
 	"encoding/json"
-	"fmt"
-	"sort"
-	"strings"
 
 	"github.com/linyows/jmapc"
-	"github.com/linyows/jmapc/internal/query"
 	"github.com/linyows/jmapc/internal/spec"
 )
 
-// Value is a parameter value as the caller gave it: the text they wrote, and
-// the JSON it denotes for the type the parameter has. The text is kept because
-// a parameter standing in for part of a member name goes into the name as
-// text, not as JSON.
-type Value struct {
-	// Text is the value as written.
-	Text string
-	// JSON is the value as it goes on the wire.
+// Request is one parsed and checked request file: a single JMAP request, with the
+// parameters its author left open.
+type Request struct {
+	// Name is the request's name, taken from the file name, and becomes the name
+	// of the generated function.
+	Name string
+	// Path is the file the request was read from.
+	Path string
+	// Shape is the request with its names taken off, so that two requests that
+	// differ only in what they call things can be told apart from two that
+	// ask for different things. See shapeOf.
+	Shape string
+	// Doc is the request's documentation, carried into the generated function.
+	Doc string
+	// Using lists the capability URIs the request declares.
+	Using []string
+	// Calls are the method calls, in the order the server will run them.
+	Calls []*Call
+	// Params are the parameters the request takes, in the order they first
+	// appear.
+	Params []*Param
+	// Creations are the creation ids the request invents, in the order they were
+	// written. A record created under one of these is reported back under the
+	// same name, so a generator gives the name to the caller rather than
+	// leaving it to be spelled again.
+	Creations []string
+	// Returns is the call whose result the generated function returns, or nil
+	// when it returns all of them.
+	Returns *Call
+	// Watches is the call whose state a generated watch follows, or nil where
+	// the request is not watched. A watch calls the request whenever the server
+	// reports that call's type has changed.
+	Watches *Call
+	// WatchState is the parameter carrying the state a watched call reports
+	// the changes since. The loop fills it in, from the state the last answer
+	// left it at.
+	WatchState *Param
+	// Pages is the call a generated pager advances, or nil where the request
+	// asked for no pager. One request answers with one window of a longer
+	// list, and the pager asks for the next until there is none.
+	Pages *Call
+	// PageStart is the parameter saying where the next request starts, which
+	// the pager fills in from the answer before it.
+	PageStart *Param
+	// PageKind says how that is worked out.
+	PageKind PageKind
+	// CreatedIDs reports whether the generated function carries the creation
+	// ids of a request in and out, which is what lets a proxy split one
+	// request across several and have the references still resolve.
+	CreatedIDs bool
+}
+
+// Call is one method call within a request.
+type Call struct {
+	// ID is the call id the request gave it, which back references point at.
+	ID string
+	// Method is the catalogue entry for the method being called.
+	Method *spec.Method
+	// Args is the argument object as written, with parameters and back
+	// references resolved.
+	Args *Object
+	// Properties are the property names a /get call selects, when the request
+	// states them literally. It is nil when the call fetches every property.
+	Properties []string
+	// NestedProperties are the property names selected for a type nested
+	// inside the records, as bodyProperties selects them for the body parts of
+	// an Email. It is nil when the call narrows nothing.
+	NestedProperties []string
+	// Comment is what the request said this call is for, carried into the
+	// generated code. It comes from the _comment member of the arguments,
+	// which never reaches the server.
+	Comment string
+	// Field is the name this call's result takes among the results, before any
+	// language has spelled it. A generator turns it into whatever an
+	// identifier looks like in the language it writes.
+	Field string
+}
+
+// The members of a /changes call the generated watch reads. A call that has
+// them is one a loop can go on from, whichever specification declared it.
+const (
+	// SinceStateArgument is the state a /changes call reports the changes
+	// since, which the loop supplies from the last answer it had.
+	SinceStateArgument = "sinceState"
+	// NewStateProperty is the state the changes leave the client at.
+	NewStateProperty = "newState"
+	// HasMoreChangesProperty says the server answered with only part of what
+	// changed, and the call should be repeated from newState.
+	HasMoreChangesProperty = "hasMoreChanges"
+)
+
+// The members of a /query call a generated pager reads. A call that has them
+// returns one window of a longer list, and says where the window sits.
+const (
+	// PositionArgument is where the window the call returns starts, which the
+	// pager moves on by what the last answer held.
+	PositionArgument = "position"
+	// IDsProperty holds the ids in the window.
+	IDsProperty = "ids"
+	// TotalProperty is how many records match in all, which a server reports
+	// only where the call asked it to.
+	TotalProperty = "total"
+)
+
+// PageKind says how a pager works the next request out from the last answer.
+type PageKind int
+
+const (
+	// NotPaged is a request that asked for no pager.
+	NotPaged PageKind = iota
+	// PageQuery advances a /query: the window moves on by the ids that came
+	// back, and the end is a window with nothing in it.
+	PageQuery
+	// PageChanges advances a /changes: the state moves on to the one the
+	// answer reports, and the end is the server saying there is no more.
+	PageChanges
+)
+
+// AccountIDArgument is the argument every standard JMAP method takes to say
+// which account it applies to. A request that omits it has it filled in from the
+// session's primary account.
+const AccountIDArgument = "accountId"
+
+// AccountIDCapability reports the capability whose primary account fills in
+// this call's accountId, and whether one has to be filled in at all. A request
+// that is not specific to an account should not have to state that in every
+// call, so the answer is no only where the method takes no account, or the
+// request names one itself.
+func (c *Call) AccountIDCapability(s *spec.Spec) (string, bool) {
+	args, err := s.ArgumentsOf(c.Method.Name)
+	if err != nil {
+		return "", false
+	}
+	if _, takesAccount := args.Field(AccountIDArgument); !takesAccount {
+		return "", false
+	}
+	if _, given := c.Args.Find(AccountIDArgument); given {
+		return "", false
+	}
+	if _, referenced := c.Args.Find("#" + AccountIDArgument); referenced {
+		return "", false
+	}
+	if c.Method.Capability == "" {
+		return spec.CapabilityCore, true
+	}
+	return c.Method.Capability, true
+}
+
+// Param is a value the request leaves open, written as "$name" where the value
+// belongs.
+type Param struct {
+	// Name is the parameter name as written in the request, without the "$".
+	Name string
+	// Field is the name this parameter takes among the parameters, before any
+	// language has spelled it.
+	Field string
+	// Type is the type the parameter must have, taken from the argument it
+	// stands in for.
+	Type *spec.Type
+	// Where records the first place in the request the parameter appeared, for
+	// use in diagnostics and in the generated documentation.
+	Where string
+	// Doc is the documentation of the argument the parameter stands in for.
+	Doc string
+	// Weak marks a parameter whose type came from a use that did not really
+	// know it, such as a name embedded in a JSON pointer. The first use that
+	// does know settles the type.
+	Weak bool
+	// Optional marks a parameter the caller may leave out, written
+	// "{{name?}}". The argument it stands for is then left out of the request
+	// altogether, which is a different request from one that sends null.
+	//
+	// Only an argument of a method call may be left out, and only where the
+	// parameter standing for it is used nowhere else, so that "left out" has
+	// one meaning: this member is not there.
+	Optional bool
+	// Places records every place in the request the parameter is used, by the
+	// path each was written at. An optional parameter has exactly one.
+	Places []string
+}
+
+// OptionalParam returns the parameter this argument stands for where the
+// caller may leave it out, and nil everywhere else. An argument left out is
+// not in the request at all, so a generator has to build the argument object
+// rather than state it outright.
+func (f ObjectField) OptionalParam() *Param {
+	ref, isParam := f.Value.(*ParamRef)
+	if !isParam || !ref.Param.Optional {
+		return nil
+	}
+	return ref.Param
+}
+
+// HasOptionalArgs reports whether any argument of the call may be left out.
+func (c *Call) HasOptionalArgs() bool {
+	for _, f := range c.Args.Fields {
+		if f.OptionalParam() != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// ValueType returns the parameter's type with the null taken off. A parameter
+// always carries a value, so a nullable argument yields the underlying type: a
+// request that means null can simply write null.
+func (p *Param) ValueType() *spec.Type {
+	t := *p.Type
+	t.Nullable = false
+	return &t
+}
+
+// absentType returns the parameter's type marked nullable where the parameter
+// may be left out, so that a language spells "no value" the way it already
+// spells null: a pointer in Go, an Option in Rust, and nothing at all where
+// the type has a form of its own for it, as a Go slice does.
+func (p *Param) absentType() *spec.Type {
+	t := p.ValueType()
+	t.Nullable = p.Optional
+	return t
+}
+
+// GoType returns the Go type of the parameter.
+func (p *Param) GoType(qualifier string) string {
+	return p.absentType().GoType(qualifier)
+}
+
+// RustType returns the Rust type of the parameter.
+func (p *Param) RustType() string {
+	return p.absentType().RustType()
+}
+
+// addPlace records a use of the parameter. The same path arriving twice is one
+// use: a union tries its alternatives in turn, and the one that fits walks the
+// value the others already walked.
+func (p *Param) addPlace(where string) {
+	for _, seen := range p.Places {
+		if seen == where {
+			return
+		}
+	}
+	p.Places = append(p.Places, where)
+}
+
+// Node is one value inside an argument object: a literal, a parameter, a back
+// reference, or a composite of those.
+type Node interface {
+	isNode()
+	// HasParam reports whether the node or anything under it depends on a
+	// parameter, which decides whether it can be emitted as a constant.
+	HasParam() bool
+}
+
+// Literal is a JSON value the request states outright.
+type Literal struct {
+	// JSON is the value exactly as it was written.
 	JSON json.RawMessage
 }
 
-// Accounts resolves the primary account id of a capability, for the calls
-// whose accountId the query leaves out.
-type Accounts func(capability string) (jmapc.ID, error)
-
-// Build returns the request a query stands for, with values filling in the
-// parameters it left open and accounts filling in the account ids it did not
-// state.
-func Build(s *spec.Spec, q *query.Query, values map[string]Value, accounts Accounts, createdIDs map[jmapc.ID]jmapc.ID) (*jmapc.Request, error) {
-	if err := CheckValues(q, values); err != nil {
-		return nil, err
-	}
-	b := &builder{spec: s, values: values, accounts: accounts, resolved: map[string]jmapc.ID{}}
-	req := &jmapc.Request{Using: q.Using, CreatedIDs: createdIDs}
-	for _, c := range q.Calls {
-		args := make(map[string]any, len(c.Args.Fields)+1)
-		if capability, ok := c.AccountIDCapability(s); ok {
-			id, err := b.accountID(capability)
-			if err != nil {
-				return nil, err
-			}
-			args[query.AccountIDArgument] = id
-		}
-		for _, f := range c.Args.Fields {
-			// An argument the caller may leave out is not in the request when
-			// they did, which is a different request from one sending null.
-			if param := f.OptionalParam(); param != nil {
-				if _, given := values[param.Name]; !given {
-					continue
-				}
-			}
-			key, err := b.key(f)
-			if err != nil {
-				return nil, err
-			}
-			value, err := b.node(f.Value)
-			if err != nil {
-				return nil, err
-			}
-			args[key] = value
-		}
-		req.MethodCalls = append(req.MethodCalls, jmapc.Invocation{
-			Name:   c.Method.Name,
-			CallID: c.ID,
-			Args:   args,
-		})
-	}
-	return req, nil
+// ParamRef stands in for a value the caller supplies.
+type ParamRef struct {
+	// Param is the parameter this value comes from.
+	Param *Param
 }
 
-// CheckValues reports the parameters the caller left out and the ones they
-// supplied that the query does not have, both at once: a caller who mistyped
-// one name should not have to run again to learn about the next. Build calls
-// it, and a caller with something to do before building may call it first.
-func CheckValues(q *query.Query, values map[string]Value) error {
-	wanted := make(map[string]bool, len(q.Params))
-	var missing []string
-	for _, p := range q.Params {
-		wanted[p.Name] = true
-		if _, ok := values[p.Name]; !ok && !p.Optional {
-			missing = append(missing, fmt.Sprintf("%s (%s)", p.Name, p.ValueType()))
-		}
-	}
-	var unknown []string
-	for name := range values {
-		if !wanted[name] {
-			unknown = append(unknown, name)
-		}
-	}
-	sort.Strings(unknown)
-	var problems []string
-	if len(missing) > 0 {
-		problems = append(problems, fmt.Sprintf("%s takes %s: %s",
-			q.Name, noun(len(missing), "a parameter that was not given", "parameters that were not given"),
-			strings.Join(missing, ", ")))
-	}
-	for _, name := range unknown {
-		problems = append(problems, fmt.Sprintf("%s has no parameter %q%s", q.Name, name, hint(name, q.Params)))
-	}
-	if len(problems) > 0 {
-		return fmt.Errorf("%s", strings.Join(problems, "\n"))
-	}
-	return nil
+// Object is a JSON object whose members may themselves depend on parameters.
+type Object struct {
+	// Fields are the members, in the order they were written.
+	Fields []ObjectField
+	// Raw is the object exactly as it was written, which lets a subtree that
+	// depends on nothing be emitted as the constant it is.
+	Raw json.RawMessage
 }
 
-// hint suggests the parameter the caller probably meant.
-func hint(name string, params []*query.Param) string {
-	for _, p := range params {
-		if strings.EqualFold(p.Name, name) {
-			return fmt.Sprintf("; did you mean %q?", p.Name)
-		}
-	}
-	return ""
+// ObjectField is one member of an Object.
+type ObjectField struct {
+	// Key is the member name as written, including the leading "#" of a back
+	// reference.
+	Key string
+	// KeySegments is set when the member name is built from parameters, which
+	// is how a /set names the record to update, or how a patch points into a
+	// property keyed by id. It is nil when the name is a constant.
+	KeySegments []KeySegment
+	// Value is the member's value.
+	Value Node
 }
 
-// noun renders a count's noun in the right number.
-func noun(n int, one, many string) string {
-	if n == 1 {
-		return one
-	}
-	return many
+// KeySegment is one piece of a member name: either literal text or a parameter
+// standing in for it.
+type KeySegment struct {
+	// Text is the literal text of the segment, empty for a parameter.
+	Text string
+	// Param is the parameter the segment stands for, nil for literal text.
+	Param *Param
 }
 
-// builder holds what filling in one request needs.
-type builder struct {
-	spec     *spec.Spec
-	values   map[string]Value
-	accounts Accounts
-	resolved map[string]jmapc.ID
+// Array is a JSON array whose elements may depend on parameters.
+type Array struct {
+	// Items are the elements, in order.
+	Items []Node
+	// Raw is the array exactly as it was written.
+	Raw json.RawMessage
 }
 
-// accountID resolves a capability's primary account, once per capability.
-func (b *builder) accountID(capability string) (jmapc.ID, error) {
-	if id, ok := b.resolved[capability]; ok {
-		return id, nil
-	}
-	if b.accounts == nil {
-		return "", fmt.Errorf("the query leaves accountId to the session's primary account for %s, and there is no session to ask", capability)
-	}
-	id, err := b.accounts(capability)
-	if err != nil {
-		return "", err
-	}
-	b.resolved[capability] = id
-	return id, nil
+// ResultRef is a back reference: it takes the place of an argument and is
+// filled in by the server from the result of an earlier call in the same
+// request.
+type ResultRef struct {
+	// Argument is the argument being filled in, without the leading "#".
+	Argument string
+	// Ref is the reference as it goes on the wire.
+	Ref jmapc.ResultReference
+	// From is the call the reference reads from.
+	From *Call
 }
 
-// node renders one argument value. A subtree depending on no parameter is the
-// JSON it already is, which keeps the request the shape the query wrote.
-func (b *builder) node(n query.Node) (any, error) {
-	switch v := n.(type) {
-	case *query.ResultRef:
-		return v.Ref, nil
+func (*Literal) isNode()   {}
+func (*ParamRef) isNode()  {}
+func (*Object) isNode()    {}
+func (*Array) isNode()     {}
+func (*ResultRef) isNode() {}
 
-	case *query.ParamRef:
-		return b.values[v.Param.Name].JSON, nil
-
-	case *query.Literal:
-		return v.JSON, nil
-
-	case *query.Object:
-		if !v.HasParam() {
-			return v.Raw, nil
-		}
-		out := make(map[string]any, len(v.Fields))
-		for _, f := range v.Fields {
-			key, err := b.key(f)
-			if err != nil {
-				return nil, err
-			}
-			value, err := b.node(f.Value)
-			if err != nil {
-				return nil, err
-			}
-			out[key] = value
-		}
-		return out, nil
-
-	case *query.Array:
-		if !v.HasParam() {
-			return v.Raw, nil
-		}
-		out := make([]any, 0, len(v.Items))
-		for _, item := range v.Items {
-			value, err := b.node(item)
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, value)
-		}
-		return out, nil
-	}
-	return nil, fmt.Errorf("cannot render a %T", n)
+func (*Literal) HasParam() bool  { return false }
+func (*ParamRef) HasParam() bool { return true }
+func (*ResultRef) HasParam() bool {
+	// A back reference is a constant in the request body; the server is what
+	// fills it in.
+	return false
 }
 
-// key renders an object member name. Most names are constants, but a query may
-// build one from parameters, as a patch does when it points at a property keyed
-// by an id the caller chooses.
-func (b *builder) key(f query.ObjectField) (string, error) {
-	if len(f.KeySegments) == 0 {
-		return f.Key, nil
-	}
-	var name strings.Builder
-	for _, seg := range f.KeySegments {
-		if seg.Param == nil {
-			name.WriteString(seg.Text)
-			continue
+func (o *Object) HasParam() bool {
+	for _, f := range o.Fields {
+		if len(f.KeySegments) > 0 || f.Value.HasParam() {
+			return true
 		}
-		name.WriteString(b.values[seg.Param.Name].Text)
 	}
-	return name.String(), nil
+	return false
+}
+
+func (a *Array) HasParam() bool {
+	for _, item := range a.Items {
+		if item.HasParam() {
+			return true
+		}
+	}
+	return false
+}
+
+// Find returns the field with the given key.
+func (o *Object) Find(key string) (Node, bool) {
+	for _, f := range o.Fields {
+		if f.Key == key {
+			return f.Value, true
+		}
+	}
+	return nil, false
 }

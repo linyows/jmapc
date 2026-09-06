@@ -74,7 +74,7 @@ func TestWriteCommentKeepsRoomAtDeepIndents(t *testing.T) {
 }
 
 // TestUnique checks that a name taken twice comes back numbered, which is what
-// keeps two queries in one package from declaring the same type.
+// keeps two requests in one package from declaring the same type.
 func TestUnique(t *testing.T) {
 	taken := make(map[string]bool)
 	want := []string{
@@ -93,7 +93,7 @@ func TestUnique(t *testing.T) {
 }
 
 // TestUniqueSkipsNamesTakenElsewhere checks that a name claimed by something
-// other than Unique is honoured, since the plan reserves the query names first.
+// other than Unique is honoured, since the plan reserves the request names first.
 func TestUniqueSkipsNamesTakenElsewhere(t *testing.T) {
 	taken := map[string]bool{"Agenda": true, "Agenda2": true}
 	if got := Unique(taken, "Agenda"); got != "Agenda3" {
@@ -102,7 +102,7 @@ func TestUniqueSkipsNamesTakenElsewhere(t *testing.T) {
 }
 
 // TestRecordProperties checks that a record type carries the id whether or not
-// the query asked for it, because a /get response always returns it.
+// the request asked for it, because a /get response always returns it.
 func TestRecordProperties(t *testing.T) {
 	tests := []struct {
 		name string
@@ -124,7 +124,7 @@ func TestRecordProperties(t *testing.T) {
 	}
 }
 
-// TestRecordPropertiesLeavesItsInputAlone checks that the properties the query
+// TestRecordPropertiesLeavesItsInputAlone checks that the properties the request
 // holds are not rewritten, since the generator reads them again for the
 // TypeScript pass.
 func TestRecordPropertiesLeavesItsInputAlone(t *testing.T) {
@@ -137,7 +137,7 @@ func TestRecordPropertiesLeavesItsInputAlone(t *testing.T) {
 
 // TestPrimaryAccountPhrase checks what a generated function says about the
 // account it is sent to. A session has a primary account for each capability
-// rather than one for everything, so the capability is named: two queries in
+// rather than one for everything, so the capability is named: two requests in
 // one package may be talking to two different accounts, and this is the only
 // place that shows.
 func TestPrimaryAccountPhrase(t *testing.T) {
@@ -152,12 +152,12 @@ func TestPrimaryAccountPhrase(t *testing.T) {
 	}, {
 		name:         "one",
 		capabilities: []string{"urn:ietf:params:jmap:mail"},
-		want: "The query does not say which account to use, so the session's primary account for " +
+		want: "The request does not say which account to use, so the session's primary account for " +
 			"urn:ietf:params:jmap:mail is used, which costs a session lookup on first use.",
 	}, {
 		name:         "two",
 		capabilities: []string{"urn:ietf:params:jmap:blob", "urn:ietf:params:jmap:mail"},
-		want: "The query does not say which account to use, so the session's primary account is used for each of " +
+		want: "The request does not say which account to use, so the session's primary account is used for each of " +
 			"urn:ietf:params:jmap:blob and urn:ietf:params:jmap:mail, which costs a session lookup on first use. " +
 			"They need not be the same account.",
 	}, {
@@ -165,7 +165,7 @@ func TestPrimaryAccountPhrase(t *testing.T) {
 		capabilities: []string{
 			"urn:ietf:params:jmap:blob", "urn:ietf:params:jmap:mail", "urn:ietf:params:jmap:submission",
 		},
-		want: "The query does not say which account to use, so the session's primary account is used for each of " +
+		want: "The request does not say which account to use, so the session's primary account is used for each of " +
 			"urn:ietf:params:jmap:blob, urn:ietf:params:jmap:mail, and urn:ietf:params:jmap:submission, " +
 			"which costs a session lookup on first use. They need not be the same account.",
 	}}

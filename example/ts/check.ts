@@ -134,7 +134,7 @@ const session = {
   assert(thrown instanceof SetErrors, `threw ${thrown}, not SetErrors`)
   const errs = thrown as SetErrors
 
-  // The call the query does not return is checked too, so naming one call in
+  // The call the request does not return is checked too, so naming one call in
   // "_returns" does not stop the others from being looked at.
   assert(errs.failures.length === 2, `got ${errs.failures.length} failures, want 2`)
   assert(errs.failures[0].method === "Email/set", "the unreturned call was not checked")

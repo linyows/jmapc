@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/linyows/jmapc"
-	"github.com/linyows/jmapc/example/jmapq"
+	"github.com/linyows/jmapc/example/client"
 )
 
 // accountID is the account the stub server reports as primary for mail.
@@ -133,7 +133,7 @@ func TestListInboxEmails(t *testing.T) {
 	  ]
 	}`}
 
-	got, err := jmapq.ListInboxEmails(context.Background(), s.client(), jmapq.ListInboxEmailsParams{
+	got, err := client.ListInboxEmails(context.Background(), s.client(), client.ListInboxEmailsParams{
 		MailboxID: "mbx1",
 		Limit:     25,
 	})
@@ -201,7 +201,7 @@ func TestMarkEmailRead(t *testing.T) {
 	  ]
 	}`}
 
-	got, err := jmapq.MarkEmailRead(context.Background(), s.client(), jmapq.MarkEmailReadParams{EmailID: "e1"})
+	got, err := client.MarkEmailRead(context.Background(), s.client(), client.MarkEmailReadParams{EmailID: "e1"})
 	if err != nil {
 		t.Fatalf("MarkEmailRead: %v", err)
 	}
@@ -239,7 +239,7 @@ func TestSyncEmails(t *testing.T) {
 	  ]
 	}`}
 
-	got, err := jmapq.SyncEmails(context.Background(), s.client(), jmapq.SyncEmailsParams{SinceState: "s1"})
+	got, err := client.SyncEmails(context.Background(), s.client(), client.SyncEmailsParams{SinceState: "s1"})
 	if err != nil {
 		t.Fatalf("SyncEmails: %v", err)
 	}
@@ -275,7 +275,7 @@ func TestCreateMailbox(t *testing.T) {
 	  ]
 	}`}
 
-	got, err := jmapq.CreateMailbox(context.Background(), s.client(), jmapq.CreateMailboxParams{Name: "Receipts"})
+	got, err := client.CreateMailbox(context.Background(), s.client(), client.CreateMailboxParams{Name: "Receipts"})
 	if err != nil {
 		t.Fatalf("CreateMailbox: %v", err)
 	}
@@ -292,8 +292,8 @@ func TestCreateMailbox(t *testing.T) {
 	if mailbox["isSubscribed"] != true {
 		t.Errorf("isSubscribed = %v, want true", mailbox["isSubscribed"])
 	}
-	if got.Created[jmapq.CreateMailboxNew].ID != "mbx9" {
-		t.Errorf("created mailbox = %+v, want id mbx9", got.Created[jmapq.CreateMailboxNew])
+	if got.Created[client.CreateMailboxNew].ID != "mbx9" {
+		t.Errorf("created mailbox = %+v, want id mbx9", got.Created[client.CreateMailboxNew])
 	}
 }
 
@@ -309,7 +309,7 @@ func TestMethodError(t *testing.T) {
 	  ]
 	}`}
 
-	_, err := jmapq.ListInboxEmails(context.Background(), s.client(), jmapq.ListInboxEmailsParams{MailboxID: "mbx1"})
+	_, err := client.ListInboxEmails(context.Background(), s.client(), client.ListInboxEmailsParams{MailboxID: "mbx1"})
 	if err == nil {
 		t.Fatal("expected an error")
 	}
@@ -374,7 +374,7 @@ func TestSendEmail(t *testing.T) {
 	  ]
 	}`}
 
-	got, err := jmapq.SendEmail(context.Background(), s.client(), jmapq.SendEmailParams{
+	got, err := client.SendEmail(context.Background(), s.client(), client.SendEmailParams{
 		DraftsMailboxID: "drafts",
 		SentMailboxID:   "sent",
 		IdentityID:      "id1",
@@ -424,8 +424,8 @@ func TestSendEmail(t *testing.T) {
 		t.Errorf("patch removes $draft as %v (present %v), want an explicit null", v, present)
 	}
 
-	if got.Created[jmapq.SendEmailSend].UndoStatus != "final" {
-		t.Errorf("submission = %+v, want undoStatus final", got.Created[jmapq.SendEmailSend])
+	if got.Created[client.SendEmailSend].UndoStatus != "final" {
+		t.Errorf("submission = %+v, want undoStatus final", got.Created[client.SendEmailSend])
 	}
 }
 
@@ -455,7 +455,7 @@ func TestSearchContacts(t *testing.T) {
 	  ]
 	}`}
 
-	got, err := jmapq.SearchContacts(context.Background(), s.client(), jmapq.SearchContactsParams{
+	got, err := client.SearchContacts(context.Background(), s.client(), client.SearchContactsParams{
 		AddressBookID: "book2",
 		Phrase:        "lovelace",
 		Limit:         20,
@@ -515,7 +515,7 @@ func TestCreateContact(t *testing.T) {
 	  ]
 	}`}
 
-	got, err := jmapq.CreateContact(context.Background(), s.client(), jmapq.CreateContactParams{
+	got, err := client.CreateContact(context.Background(), s.client(), client.CreateContactParams{
 		AddressBookID: "book1",
 		UID:           "urn:uuid:5678",
 		GivenName:     "Grace",
@@ -551,8 +551,8 @@ func TestCreateContact(t *testing.T) {
 	if features := phone["features"].(map[string]any); features["mobile"] != true {
 		t.Errorf("phone features = %v", features)
 	}
-	if got.Created[jmapq.CreateContactCard].ID != "card9" {
-		t.Errorf("created card = %+v, want id card9", got.Created[jmapq.CreateContactCard])
+	if got.Created[client.CreateContactCard].ID != "card9" {
+		t.Errorf("created card = %+v, want id card9", got.Created[client.CreateContactCard])
 	}
 }
 
@@ -567,7 +567,7 @@ func TestUpdateContactEmail(t *testing.T) {
 	  ]
 	}`}
 
-	got, err := jmapq.UpdateContactEmail(context.Background(), s.client(), jmapq.UpdateContactEmailParams{
+	got, err := client.UpdateContactEmail(context.Background(), s.client(), client.UpdateContactEmailParams{
 		CardID:   "card1",
 		EmailKey: "work",
 		Address:  "ada@example.org",
@@ -614,7 +614,7 @@ func TestAgenda(t *testing.T) {
 	  ]
 	}`}
 
-	got, err := jmapq.Agenda(context.Background(), s.client(), jmapq.AgendaParams{
+	got, err := client.Agenda(context.Background(), s.client(), client.AgendaParams{
 		CalendarID: "cal1",
 		From:       "2024-05-06T00:00:00",
 		Until:      "2024-05-07T00:00:00",
@@ -680,7 +680,7 @@ func TestCreateEvent(t *testing.T) {
 	  ]
 	}`}
 
-	got, err := jmapq.CreateEvent(context.Background(), s.client(), jmapq.CreateEventParams{
+	got, err := client.CreateEvent(context.Background(), s.client(), client.CreateEventParams{
 		CalendarID:       "cal1",
 		UID:              "urn:uuid:9999",
 		Title:            "Weekly sync",
@@ -718,8 +718,8 @@ func TestCreateEvent(t *testing.T) {
 	if roles := participant["roles"].(map[string]any); roles["owner"] != true {
 		t.Errorf("participant roles = %v", roles)
 	}
-	if !got.Created[jmapq.CreateEventMeeting].IsOrigin {
-		t.Errorf("created event = %+v, want isOrigin", got.Created[jmapq.CreateEventMeeting])
+	if !got.Created[client.CreateEventMeeting].IsOrigin {
+		t.Errorf("created event = %+v, want isOrigin", got.Created[client.CreateEventMeeting])
 	}
 }
 
@@ -734,7 +734,7 @@ func TestRescheduleOccurrence(t *testing.T) {
 	  ]
 	}`}
 
-	_, err := jmapq.RescheduleOccurrence(context.Background(), s.client(), jmapq.RescheduleOccurrenceParams{
+	_, err := client.RescheduleOccurrence(context.Background(), s.client(), client.RescheduleOccurrenceParams{
 		EventID:    "series1",
 		Occurrence: "2024-05-06T09:00:00",
 		NewStart:   "2024-05-06T11:00:00",
@@ -777,7 +777,7 @@ func TestFindPeople(t *testing.T) {
 	}`}
 
 	limit := jmapc.UnsignedInt(10)
-	got, err := jmapq.FindPeople(context.Background(), s.client(), jmapq.FindPeopleParams{
+	got, err := client.FindPeople(context.Background(), s.client(), client.FindPeopleParams{
 		Phrase: "ada",
 		Limit:  &limit,
 	})
@@ -822,7 +822,7 @@ func TestFindPeopleWithoutLimit(t *testing.T) {
 	  ]
 	}`}
 
-	if _, err := jmapq.FindPeople(context.Background(), s.client(), jmapq.FindPeopleParams{
+	if _, err := client.FindPeople(context.Background(), s.client(), client.FindPeopleParams{
 		Phrase: "ada",
 	}); err != nil {
 		t.Fatalf("FindPeople: %v", err)
@@ -854,7 +854,7 @@ func TestRecentlyShared(t *testing.T) {
 	  ]
 	}`}
 
-	got, err := jmapq.RecentlyShared(context.Background(), s.client(), jmapq.RecentlySharedParams{
+	got, err := client.RecentlyShared(context.Background(), s.client(), client.RecentlySharedParams{
 		Since: jmapc.NewUTCDate(mustTime(t, "2024-04-01T00:00:00Z")),
 		Limit: 20,
 	})
@@ -908,7 +908,7 @@ func TestVerifiedSignatures(t *testing.T) {
 	  ]
 	}`}
 
-	got, err := jmapq.VerifiedSignatures(context.Background(), s.client(), jmapq.VerifiedSignaturesParams{
+	got, err := client.VerifiedSignatures(context.Background(), s.client(), client.VerifiedSignaturesParams{
 		MailboxID: "mbx1",
 		Limit:     25,
 	})
@@ -976,7 +976,7 @@ func TestAttachNote(t *testing.T) {
 	  ]
 	}`}
 
-	got, err := jmapq.AttachNote(context.Background(), s.client(), jmapq.AttachNoteParams{
+	got, err := client.AttachNote(context.Background(), s.client(), client.AttachNoteParams{
 		DraftsMailboxID: "drafts",
 		Subject:         "Minutes",
 		Note:            "Nothing was decided.",
@@ -1003,11 +1003,11 @@ func TestAttachNote(t *testing.T) {
 		t.Errorf("attachment blobId = %v, want the creation id #note", blobID)
 	}
 
-	if got.Upload.Created[jmapq.AttachNoteNote].ID != "blob9" {
-		t.Errorf("uploaded blob = %+v", got.Upload.Created[jmapq.AttachNoteNote])
+	if got.Upload.Created[client.AttachNoteNote].ID != "blob9" {
+		t.Errorf("uploaded blob = %+v", got.Upload.Created[client.AttachNoteNote])
 	}
-	if got.Draft.Created[jmapq.AttachNoteDraft].ID != "e9" {
-		t.Errorf("created draft = %+v", got.Draft.Created[jmapq.AttachNoteDraft])
+	if got.Draft.Created[client.AttachNoteDraft].ID != "e9" {
+		t.Errorf("created draft = %+v", got.Draft.Created[client.AttachNoteDraft])
 	}
 }
 
@@ -1027,7 +1027,7 @@ func TestWhatUsesBlob(t *testing.T) {
 	  ]
 	}`}
 
-	got, err := jmapq.WhatUsesBlob(context.Background(), s.client(), jmapq.WhatUsesBlobParams{
+	got, err := client.WhatUsesBlob(context.Background(), s.client(), client.WhatUsesBlobParams{
 		BlobID: "blob9",
 	})
 	if err != nil {
@@ -1074,7 +1074,7 @@ func TestMailQuota(t *testing.T) {
 	  ]
 	}`}
 
-	got, err := jmapq.MailQuota(context.Background(), s.client())
+	got, err := client.MailQuota(context.Background(), s.client())
 	if err != nil {
 		t.Fatalf("MailQuota: %v", err)
 	}
@@ -1121,7 +1121,7 @@ func TestInstallSieveScript(t *testing.T) {
 	  ]
 	}`}
 
-	got, err := jmapq.InstallSieveScript(context.Background(), s.client(), jmapq.InstallSieveScriptParams{
+	got, err := client.InstallSieveScript(context.Background(), s.client(), client.InstallSieveScriptParams{
 		Name:   "vacation",
 		Script: `require "vacation"; vacation :days 7 "Away until Monday.";`,
 	})
@@ -1151,8 +1151,8 @@ func TestInstallSieveScript(t *testing.T) {
 		t.Errorf("onSuccessDeactivateScript = %v", install["onSuccessDeactivateScript"])
 	}
 
-	if !got.Created[jmapq.InstallSieveScriptFilter].IsActive {
-		t.Errorf("installed script = %+v, want it active", got.Created[jmapq.InstallSieveScriptFilter])
+	if !got.Created[client.InstallSieveScriptFilter].IsActive {
+		t.Errorf("installed script = %+v, want it active", got.Created[client.InstallSieveScriptFilter])
 	}
 }
 
@@ -1171,7 +1171,7 @@ func TestCheckSieveScript(t *testing.T) {
 	  ]
 	}`}
 
-	got, err := jmapq.CheckSieveScript(context.Background(), s.client(), jmapq.CheckSieveScriptParams{
+	got, err := client.CheckSieveScript(context.Background(), s.client(), client.CheckSieveScriptParams{
 		Script: "keeep;",
 	})
 	if err != nil {
@@ -1217,7 +1217,7 @@ func TestSendReadReceipt(t *testing.T) {
 	  ]
 	}`}
 
-	got, err := jmapq.SendReadReceipt(context.Background(), s.client(), jmapq.SendReadReceiptParams{
+	got, err := client.SendReadReceipt(context.Background(), s.client(), client.SendReadReceiptParams{
 		IdentityID: "id1",
 		EmailID:    "e1",
 		Subject:    "Read: Lunch",
@@ -1271,7 +1271,7 @@ func TestRegisterPush(t *testing.T) {
 	  ]
 	}`}
 
-	got, err := jmapq.RegisterPush(context.Background(), s.client(), jmapq.RegisterPushParams{
+	got, err := client.RegisterPush(context.Background(), s.client(), client.RegisterPushParams{
 		DeviceClientID: "a1b2c3",
 		URL:            "https://push.example.com/hook/xyz",
 		PublicKey:      "BN1v...",
@@ -1294,7 +1294,7 @@ func TestRegisterPush(t *testing.T) {
 		t.Errorf("keys = %v", keys)
 	}
 
-	created := got.Created[jmapq.RegisterPushDevice]
+	created := got.Created[client.RegisterPushDevice]
 	if created.ID != "sub1" {
 		t.Errorf("created = %+v", created)
 	}
@@ -1327,7 +1327,7 @@ func TestConfirmPush(t *testing.T) {
 		t.Fatalf("decoding the verification: %v", err)
 	}
 
-	got, err := jmapq.ConfirmPush(context.Background(), s.client(), jmapq.ConfirmPushParams{
+	got, err := client.ConfirmPush(context.Background(), s.client(), client.ConfirmPushParams{
 		SubscriptionID:   v.PushSubscriptionID,
 		VerificationCode: v.VerificationCode,
 		Expires:          jmapc.NewUTCDate(mustTime(t, "2024-05-08T00:00:00Z")),
@@ -1373,7 +1373,7 @@ func TestReadMessage(t *testing.T) {
 	  ]
 	}`}
 
-	got, err := jmapq.ReadMessage(context.Background(), s.client(), jmapq.ReadMessageParams{EmailID: "e1"})
+	got, err := client.ReadMessage(context.Background(), s.client(), client.ReadMessageParams{EmailID: "e1"})
 	if err != nil {
 		t.Fatalf("ReadMessage: %v", err)
 	}
@@ -1426,7 +1426,7 @@ func TestFileIntoNewMailbox(t *testing.T) {
 	// Ids from a request that ran before this one.
 	carried := map[jmapc.ID]jmapc.ID{"earlier": "mbx1"}
 
-	got, err := jmapq.FileIntoNewMailbox(context.Background(), s.client(), jmapq.FileIntoNewMailboxParams{
+	got, err := client.FileIntoNewMailbox(context.Background(), s.client(), client.FileIntoNewMailboxParams{
 		Name:          "Receipts",
 		EmailID:       "e1",
 		FromMailboxID: "inbox",
@@ -1477,7 +1477,7 @@ func TestSendEmailReportsRefusedRecords(t *testing.T) {
 	  ]
 	}`}
 
-	got, err := jmapq.SendEmail(context.Background(), s.client(), jmapq.SendEmailParams{
+	got, err := client.SendEmail(context.Background(), s.client(), client.SendEmailParams{
 		DraftsMailboxID: "drafts",
 		SentMailboxID:   "sent",
 		IdentityID:      "id1",
@@ -1549,7 +1549,7 @@ func TestPartialResultComesBackWithTheError(t *testing.T) {
 	  ]
 	}`}
 
-	res, err := jmapq.FileIntoNewMailbox(context.Background(), s.client(), jmapq.FileIntoNewMailboxParams{
+	res, err := client.FileIntoNewMailbox(context.Background(), s.client(), client.FileIntoNewMailboxParams{
 		Name: "Archive", EmailID: "e1", FromMailboxID: "mbx1",
 	}, nil)
 
@@ -1566,7 +1566,7 @@ func TestPartialResultComesBackWithTheError(t *testing.T) {
 	if res.Make.NewState != "m2" {
 		t.Errorf("the call that succeeded reads %+v", res.Make)
 	}
-	if _, made := res.Make.Created[jmapq.FileIntoNewMailboxBox]; !made {
+	if _, made := res.Make.Created[client.FileIntoNewMailboxBox]; !made {
 		t.Error("the mailbox the server created is not in the result")
 	}
 	if res.File.NewState != "" || res.File.Created != nil {
@@ -1588,7 +1588,7 @@ func TestBothLevelsOfFailureAreReported(t *testing.T) {
 	  ]
 	}`}
 
-	res, err := jmapq.FileIntoNewMailbox(context.Background(), s.client(), jmapq.FileIntoNewMailboxParams{
+	res, err := client.FileIntoNewMailbox(context.Background(), s.client(), client.FileIntoNewMailboxParams{
 		Name: "", EmailID: "e1", FromMailboxID: "mbx1",
 	}, nil)
 	if res == nil {

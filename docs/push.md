@@ -6,7 +6,7 @@ An event reports which types in which accounts have changed, not what changed.
 A client that needs the changes therefore writes a loop: connect, request the
 changes since the state it holds, apply them, wait for the next event. That
 loop is the same every time and every part of it is a place for a mistake, so a
-query can request it.
+request file can ask for it.
 
 `_watches` names the call the loop reads the state from, which has to be one
 that reports what changed since a state, as `Email/changes` does:
@@ -26,8 +26,8 @@ that reports what changed since a state, as `Email/changes` does:
 it:
 
 ```go
-err := jmapq.SyncEmailsWatch(ctx, c, jmapq.SyncEmailsParams{SinceState: state},
-	func(ctx context.Context, res *jmapq.SyncEmailsResult) error {
+err := client.SyncEmailsWatch(ctx, c, client.SyncEmailsParams{SinceState: state},
+	func(ctx context.Context, res *client.SyncEmailsResult) error {
 		for _, email := range res.EmailGet.List {
 			fmt.Println("new:", *email.Subject)
 		}
@@ -57,7 +57,7 @@ retrying, because retrying will not change a 403. `jmapc.WithPing` and
 `jmapc.WithReconnect` configure the two values worth tuning.
 
 Underneath is `Client.Watch`, which takes the catch-up as a function and is what
-to call where the catching up is not one query:
+to call where the catching up is not one request:
 
 ```go
 err := c.Watch(ctx, accountID, "Email", state,
@@ -68,8 +68,8 @@ err := c.Watch(ctx, accountID, "Email", state,
 
 Only the Go client follows a watch. Holding a connection open is the runtime's
 responsibility rather than the generated code's, and the Rust and TypeScript
-runtimes do not implement it; generating either from a watching query writes
-the query without the loop and reports that.
+runtimes do not implement it; generating either from a watching request writes
+the request without the loop and reports that.
 
 Below `Watch` is `Client.EventSource`, which opens the push endpoint and returns
 the events:
@@ -95,7 +95,7 @@ for {
 This is the event source form of push, which suits a client that can hold a
 connection open. The other form registers a URL for the server to post to, which
 is what an app on a phone needs: see `RegisterPush` and `ConfirmPush` in
-[`example/queries`](../example/queries). A subscription is not active when it is
+[`example/requests`](../example/requests). A subscription is not active when it is
 created — the server pushes a code to the URL, and the client sends it back with
 a `PushSubscription/set` before anything else is sent. `jmapc.PushVerification`
 decodes what arrives.

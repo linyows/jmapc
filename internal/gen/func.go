@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/linyows/jmapc/internal/gen/shared"
-	"github.com/linyows/jmapc/internal/query"
+	"github.com/linyows/jmapc/internal/request"
 	"github.com/linyows/jmapc/internal/spec"
 )
 
@@ -32,8 +32,8 @@ var capabilityConstants = map[string]string{
 	spec.CapabilityMDN:             "CapabilityMDN",
 }
 
-// writeFunc writes the function that sends the query and decodes its response.
-func (g *QueryGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
+// writeFunc writes the function that sends the request and decodes its response.
+func (g *RequestGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
 	g.writeFuncDoc(buf, p)
 
 	sig := fmt.Sprintf("func %s(ctx context.Context, c *%sClient", p.q.Name, g.Qualifier)
@@ -85,12 +85,12 @@ func (g *QueryGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
 // destroy, so nothing above this notices; the response is returned along with
 // the error, since the rest of it did happen.
 //
-// A call the query does not return is decoded here anyway, for its refusals
+// A call the request does not return is decoded here anyway, for its refusals
 // alone. Otherwise naming one call in "_returns" would silently exempt the
 // others from the check.
-func (g *QueryGenerator) writeSetErrorChecks(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writeSetErrorChecks(buf *bytes.Buffer, p *plan) {
 	type check struct {
-		call   *query.Call
+		call   *request.Call
 		prefix string
 		decode string // the type to decode into first, empty where out holds it
 		fields []string
@@ -141,8 +141,8 @@ func (g *QueryGenerator) writeSetErrorChecks(buf *bytes.Buffer, p *plan) {
 }
 
 // writeFuncDoc writes the generated function's documentation, using what the
-// query says about itself and filling in what it does not.
-func (g *QueryGenerator) writeFuncDoc(buf *bytes.Buffer, p *plan) {
+// request says about itself and filling in what it does not.
+func (g *RequestGenerator) writeFuncDoc(buf *bytes.Buffer, p *plan) {
 	doc := strings.TrimSpace(p.q.Doc)
 	if doc == "" {
 		doc = fmt.Sprintf("%s sends the JMAP request in %s.", p.q.Name, p.q.Path)
@@ -166,9 +166,9 @@ func (g *QueryGenerator) writeFuncDoc(buf *bytes.Buffer, p *plan) {
 	shared.WriteComment(buf, "", doc)
 }
 
-// writeSessionLookups writes the code that resolves the account ids the query
+// writeSessionLookups writes the code that resolves the account ids the request
 // left unstated.
-func (g *QueryGenerator) writeSessionLookups(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writeSessionLookups(buf *bytes.Buffer, p *plan) {
 	if len(p.sessionCapabilities) == 0 {
 		return
 	}
@@ -184,7 +184,7 @@ func (g *QueryGenerator) writeSessionLookups(buf *bytes.Buffer, p *plan) {
 
 // capabilityExpr renders a capability URI as the runtime constant that names
 // it, or as a string literal when there is none.
-func (g *QueryGenerator) capabilityExpr(uri string) string {
+func (g *RequestGenerator) capabilityExpr(uri string) string {
 	if name, ok := capabilityConstants[uri]; ok {
 		return g.Qualifier + name
 	}
@@ -193,7 +193,7 @@ func (g *QueryGenerator) capabilityExpr(uri string) string {
 
 // writeArgVars writes the argument objects that cannot be stated as one
 // literal, because a member of each is only there when the caller supplied it.
-func (g *QueryGenerator) writeArgVars(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writeArgVars(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		if !c.HasOptionalArgs() {
 			continue
@@ -201,7 +201,7 @@ func (g *QueryGenerator) writeArgVars(buf *bytes.Buffer, p *plan) {
 		name := argsVar(c)
 		fmt.Fprintf(buf, "\t%s := map[string]any{\n", name)
 		if expr := p.calls[c].accountIDExpr; expr != "" {
-			fmt.Fprintf(buf, "\t\t%q: %s,\n", query.AccountIDArgument, expr)
+			fmt.Fprintf(buf, "\t\t%q: %s,\n", request.AccountIDArgument, expr)
 		}
 		for _, field := range c.Args.Fields {
 			if field.OptionalParam() != nil {
@@ -228,13 +228,13 @@ func (g *QueryGenerator) writeArgVars(buf *bytes.Buffer, p *plan) {
 
 // argsVar names the variable holding a call's arguments, for a call whose
 // arguments are built rather than stated.
-func argsVar(c *query.Call) string {
+func argsVar(c *request.Call) string {
 	field := c.Field
 	return strings.ToLower(field[:1]) + field[1:] + "Args"
 }
 
 // writeRequest writes the literal JMAP request the function sends.
-func (g *QueryGenerator) writeRequest(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writeRequest(buf *bytes.Buffer, p *plan) {
 	fmt.Fprintf(buf, "\treq := &%sRequest{\n", g.Qualifier)
 	buf.WriteString("\t\tUsing: []string{")
 	for i, uri := range p.q.Using {
@@ -256,7 +256,7 @@ func (g *QueryGenerator) writeRequest(buf *bytes.Buffer, p *plan) {
 }
 
 // writeInvocation writes one method call of the request.
-func (g *QueryGenerator) writeInvocation(buf *bytes.Buffer, p *plan, c *query.Call) {
+func (g *RequestGenerator) writeInvocation(buf *bytes.Buffer, p *plan, c *request.Call) {
 	if c.Comment != "" {
 		shared.WriteComment(buf, "\t\t\t", c.Comment)
 	}
@@ -266,7 +266,7 @@ func (g *QueryGenerator) writeInvocation(buf *bytes.Buffer, p *plan, c *query.Ca
 	}
 	fmt.Fprintf(buf, "\t\t\t{Name: %q, CallID: %q, Args: map[string]any{\n", c.Method.Name, c.ID)
 	if expr := p.calls[c].accountIDExpr; expr != "" {
-		fmt.Fprintf(buf, "\t\t\t\t%q: %s,\n", query.AccountIDArgument, expr)
+		fmt.Fprintf(buf, "\t\t\t\t%q: %s,\n", request.AccountIDArgument, expr)
 	}
 	for _, field := range c.Args.Fields {
 		fmt.Fprintf(buf, "\t\t\t\t%s: %s,\n", g.keyExpr(field), g.expr(field.Value, "\t\t\t\t"))
@@ -276,20 +276,20 @@ func (g *QueryGenerator) writeInvocation(buf *bytes.Buffer, p *plan, c *query.Ca
 
 // expr renders one argument value as a Go expression. A subtree that depends on
 // no parameter is emitted as the JSON it already is, which keeps the generated
-// code close to the query that produced it.
-func (g *QueryGenerator) expr(n query.Node, indent string) string {
+// code close to the request that produced it.
+func (g *RequestGenerator) expr(n request.Node, indent string) string {
 	switch v := n.(type) {
-	case *query.ResultRef:
+	case *request.ResultRef:
 		return fmt.Sprintf("%sResultReference{ResultOf: %q, Name: %q, Path: %q}",
 			g.Qualifier, v.Ref.ResultOf, v.Ref.Name, v.Ref.Path)
 
-	case *query.ParamRef:
+	case *request.ParamRef:
 		return "p." + v.Param.Field
 
-	case *query.Literal:
+	case *request.Literal:
 		return literalExpr(v.JSON)
 
-	case *query.Object:
+	case *request.Object:
 		if !v.HasParam() {
 			return rawExpr(v.Raw)
 		}
@@ -301,7 +301,7 @@ func (g *QueryGenerator) expr(n query.Node, indent string) string {
 		b.WriteString(indent + "}")
 		return b.String()
 
-	case *query.Array:
+	case *request.Array:
 		if !v.HasParam() {
 			return rawExpr(v.Raw)
 		}
@@ -316,10 +316,10 @@ func (g *QueryGenerator) expr(n query.Node, indent string) string {
 	return "nil"
 }
 
-// keyExpr renders an object member name. Most names are constants, but a query
+// keyExpr renders an object member name. Most names are constants, but a request
 // may build one from parameters, as a patch does when it points at a property
 // keyed by an id the caller chooses.
-func (g *QueryGenerator) keyExpr(f query.ObjectField) string {
+func (g *RequestGenerator) keyExpr(f request.ObjectField) string {
 	if len(f.KeySegments) == 0 {
 		return strconv.Quote(f.Key)
 	}
@@ -338,10 +338,10 @@ func (g *QueryGenerator) keyExpr(f query.ObjectField) string {
 	return strings.Join(parts, " + ")
 }
 
-// literalExpr renders a JSON value the query stated outright. A scalar becomes
+// literalExpr renders a JSON value the request stated outright. A scalar becomes
 // the Go value it denotes, which reads better than a fragment of encoded JSON;
 // anything composite is kept as raw JSON so that the generated request matches
-// the query line for line.
+// the request line for line.
 func literalExpr(raw json.RawMessage) string {
 	trimmed := bytes.TrimSpace(raw)
 	if len(trimmed) == 0 {
@@ -368,7 +368,7 @@ func literalExpr(raw json.RawMessage) string {
 }
 
 // rawExpr renders a JSON value as a json.RawMessage, which marshals back into
-// the request exactly as the query wrote it.
+// the request exactly as the request wrote it.
 func rawExpr(raw json.RawMessage) string {
 	var compact bytes.Buffer
 	if err := json.Compact(&compact, raw); err != nil {
@@ -383,14 +383,14 @@ func rawExpr(raw json.RawMessage) string {
 }
 
 // nodeHasParam reports whether a node depends on a parameter.
-func nodeHasParam(n query.Node) bool { return n.HasParam() }
+func nodeHasParam(n request.Node) bool { return n.HasParam() }
 
 // writeWatch writes the function that follows the changes to the type the
-// query watches. The server pushes only that a type has changed, not what
-// changed, so the loop calls the query; the runtime holds the connection open,
+// request watches. The server pushes only that a type has changed, not what
+// changed, so the loop calls the request; the runtime holds the connection open,
 // reopens it when it drops, and repeats the call while the server reports more
 // changes.
-func (g *QueryGenerator) writeWatch(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writeWatch(buf *bytes.Buffer, p *plan) {
 	if p.watchName == "" {
 		return
 	}
@@ -413,15 +413,15 @@ func (g *QueryGenerator) writeWatch(buf *bytes.Buffer, p *plan) {
 		changes += watched.Field + "."
 	}
 	fmt.Fprintf(buf, "\t\treturn %[1]s%[2]s, %[1]s%[3]s, nil\n",
-		changes, spec.ExportedName(query.NewStateProperty), spec.ExportedName(query.HasMoreChangesProperty))
+		changes, spec.ExportedName(request.NewStateProperty), spec.ExportedName(request.HasMoreChangesProperty))
 	buf.WriteString("\t}, opts...)\n")
 	buf.WriteString("}\n")
 }
 
 // writeWatchDoc writes the watching function's documentation, which has to
-// state what the loop does with the query it is built on: where it starts,
+// state what the loop does with the request it is built on: where it starts,
 // what it returns, and when it stops.
-func (g *QueryGenerator) writeWatchDoc(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writeWatchDoc(buf *bytes.Buffer, p *plan) {
 	dataType := p.q.Watches.Method.DataType
 	doc := fmt.Sprintf("%s follows the changes to %s, calling %s whenever the server reports any and passing the result to fn.",
 		p.watchName, dataType, p.q.Name)
@@ -436,7 +436,7 @@ func (g *QueryGenerator) writeWatchDoc(buf *bytes.Buffer, p *plan) {
 // watchAccount writes whatever is needed to name the account a watch listens
 // for, and returns the expression naming it. The events are keyed by account,
 // so a watch has to know which one before it makes any request at all.
-func (g *QueryGenerator) watchAccount(buf *bytes.Buffer, p *plan) string {
+func (g *RequestGenerator) watchAccount(buf *bytes.Buffer, p *plan) string {
 	watched := p.q.Watches
 	if expr := p.calls[watched].accountIDExpr; expr != "" {
 		capability := watched.Method.Capability
@@ -449,8 +449,8 @@ func (g *QueryGenerator) watchAccount(buf *bytes.Buffer, p *plan) string {
 		buf.WriteString("\tif err != nil {\n\t\treturn err\n\t}\n\n")
 		return expr
 	}
-	account, _ := watched.Args.Find(query.AccountIDArgument)
-	if param, ok := account.(*query.ParamRef); ok {
+	account, _ := watched.Args.Find(request.AccountIDArgument)
+	if param, ok := account.(*request.ParamRef); ok {
 		return "p." + param.Param.Field
 	}
 	return fmt.Sprintf("%sID(%s)", g.Qualifier, g.expr(account, "\t"))
@@ -461,7 +461,7 @@ func (g *QueryGenerator) watchAccount(buf *bytes.Buffer, p *plan) string {
 // and says where it sits; a /changes answers with as much as the server cares
 // to and says whether there is more. Either way the next request is worked out
 // from the last answer, which is what the loop does.
-func (g *QueryGenerator) writePages(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writePages(buf *bytes.Buffer, p *plan) {
 	if p.pagesName == "" {
 		return
 	}
@@ -484,26 +484,26 @@ func (g *QueryGenerator) writePages(buf *bytes.Buffer, p *plan) {
 	fmt.Fprintf(buf, "\t\t\twindow := %s\n", window)
 
 	switch p.q.PageKind {
-	case query.PageQuery:
-		ids := spec.ExportedName(query.IDsProperty)
+	case request.PageQuery:
+		ids := spec.ExportedName(request.IDsProperty)
 		// A window with nothing in it is the end of the list rather than a
 		// page of it, and handing it back would make every caller check.
 		fmt.Fprintf(buf, "\t\t\tif len(window.%s) == 0 {\n\t\t\t\treturn\n\t\t\t}\n", ids)
 		buf.WriteString("\t\t\tif !yield(res, nil) {\n\t\t\t\treturn\n\t\t\t}\n")
 		fmt.Fprintf(buf, "\t\t\tstart = %[1]sInt(window.%[2]s) + %[1]sInt(len(window.%[3]s))\n",
-			g.Qualifier, spec.ExportedName(query.PositionArgument), ids)
+			g.Qualifier, spec.ExportedName(request.PositionArgument), ids)
 		// Where the call asked for the total, the end is known without asking
 		// for a window that is not there.
 		fmt.Fprintf(buf, "\t\t\tif window.%[1]s > 0 && %[2]sUnsignedInt(start) >= window.%[1]s {\n\t\t\t\treturn\n\t\t\t}\n",
-			spec.ExportedName(query.TotalProperty), g.Qualifier)
+			spec.ExportedName(request.TotalProperty), g.Qualifier)
 
-	case query.PageChanges:
+	case request.PageChanges:
 		// An answer saying nothing changed still carries the state to go on
 		// from, so it is worth handing back.
 		buf.WriteString("\t\t\tif !yield(res, nil) {\n\t\t\t\treturn\n\t\t\t}\n")
 		fmt.Fprintf(buf, "\t\t\tif !window.%s {\n\t\t\t\treturn\n\t\t\t}\n",
-			spec.ExportedName(query.HasMoreChangesProperty))
-		fmt.Fprintf(buf, "\t\t\tstart = window.%s\n", spec.ExportedName(query.NewStateProperty))
+			spec.ExportedName(request.HasMoreChangesProperty))
+		fmt.Fprintf(buf, "\t\t\tstart = window.%s\n", spec.ExportedName(request.NewStateProperty))
 	}
 
 	buf.WriteString("\t\t}\n")
@@ -513,16 +513,16 @@ func (g *QueryGenerator) writePages(buf *bytes.Buffer, p *plan) {
 
 // writePagesDoc writes the pager's documentation, which has to state where the
 // loop starts, what each step returns, and what ends it.
-func (g *QueryGenerator) writePagesDoc(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writePagesDoc(buf *bytes.Buffer, p *plan) {
 	doc := fmt.Sprintf("%s walks the whole of what %s returns one part of, calling it again for each part until none is left.",
 		p.pagesName, p.q.Name)
 	doc += fmt.Sprintf("\n\nIt starts from the %s the parameters carry and derives the next one from each answer. ",
 		p.q.PageStart.Name)
 	switch p.q.PageKind {
-	case query.PageQuery:
+	case request.PageQuery:
 		doc += "An empty window ends the walk instead of being yielded, so every result yielded holds at least one record; " +
 			"where the call asked for the total, the walk ends without requesting a window past it."
-	case query.PageChanges:
+	case request.PageChanges:
 		doc += "An answer reporting no changes is still yielded, since it carries the state to continue from, and the walk ends when the server reports no more."
 	}
 	doc += "\n\nAn error ends the walk and is yielded with a nil result, so a range over it checks the error on each iteration. " +

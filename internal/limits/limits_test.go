@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/linyows/jmapc"
-	"github.com/linyows/jmapc/internal/query"
+	"github.com/linyows/jmapc/internal/request"
 	"github.com/linyows/jmapc/internal/spec"
 )
 
@@ -43,13 +43,13 @@ const generous = `{
   "state": "s1"
 }`
 
-// check parses a query and reports what the server would refuse about it.
+// check parses a request and reports what the server would refuse about it.
 func check(t *testing.T, sessionSrc, src string) string {
 	t.Helper()
 	catalogue := spec.Standard()
-	q, err := query.NewParser(catalogue).Parse("Q"+query.Extension, []byte(src))
+	q, err := request.NewParser(catalogue).Parse("Q"+request.Extension, []byte(src))
 	if err != nil {
-		t.Fatalf("checking the query:\n%v", err)
+		t.Fatalf("checking the request:\n%v", err)
 	}
 	err = Check(catalogue, session(t, sessionSrc), q)
 	if err == nil {
@@ -58,7 +58,7 @@ func check(t *testing.T, sessionSrc, src string) string {
 	return err.Error()
 }
 
-// TestAccepted checks that a query a server would take is reported as nothing
+// TestAccepted checks that a request a server would take is reported as nothing
 // at all, which is what makes the rest of these worth reading.
 func TestAccepted(t *testing.T) {
 	got := check(t, generous, `{
@@ -69,13 +69,13 @@ func TestAccepted(t *testing.T) {
 	  ]
 	}`)
 	if got != "" {
-		t.Errorf("the server was said to refuse a query it would take:\n%s", got)
+		t.Errorf("the server was said to refuse a request it would take:\n%s", got)
 	}
 }
 
 // TestRefused covers each thing a session says that the specifications do not.
 func TestRefused(t *testing.T) {
-	cases := []struct{ name, session, query, want string }{
+	cases := []struct{ name, session, request, want string }{
 		{
 			"a capability the server does not have",
 			`{"capabilities": {"urn:ietf:params:jmap:core": {}}, "accounts": {}, "primaryAccounts": {}, "apiUrl": "u", "state": "s"}`,
@@ -87,7 +87,7 @@ func TestRefused(t *testing.T) {
 			`{"capabilities": {"urn:ietf:params:jmap:core": {}, "urn:ietf:params:jmap:mail": {}},
 			  "accounts": {"a1": {"name": "someone"}}, "primaryAccounts": {}, "apiUrl": "u", "state": "s"}`,
 			`{"methodCalls": [["Email/get", {"ids": null}, "c0"]]}`,
-			"the query leaves the account to the session",
+			"the request leaves the account to the session",
 		},
 		{
 			"an account the session does not hold",
@@ -109,7 +109,7 @@ func TestRefused(t *testing.T) {
 			  "accounts": {"a1": {"name": "someone"}}, "primaryAccounts": {"urn:ietf:params:jmap:mail": "a1"},
 			  "apiUrl": "u", "state": "s"}`,
 			`{"methodCalls": [["Email/get", {"ids": ["m1"]}, "c0"], ["Mailbox/get", {"ids": null}, "c1"]]}`,
-			"the query makes 2 calls, and the server takes 1 in one request",
+			"the request makes 2 calls, and the server takes 1 in one request",
 		},
 		{
 			"more records than the server returns",
@@ -145,7 +145,7 @@ func TestRefused(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := check(t, c.session, c.query)
+			got := check(t, c.session, c.request)
 			if !strings.Contains(got, c.want) {
 				t.Errorf("got  %s\nwant it to mention %q", got, c.want)
 			}
@@ -153,9 +153,9 @@ func TestRefused(t *testing.T) {
 	}
 }
 
-// TestUnknowableIsNotRefused checks what a query leaves to its caller. How many
+// TestUnknowableIsNotRefused checks what a request leaves to its caller. How many
 // records they pass, and which account they name, is not known here, and
-// guessing at it would report a query that is fine.
+// guessing at it would report a request that is fine.
 func TestUnknowableIsNotRefused(t *testing.T) {
 	small := `{"capabilities": {"urn:ietf:params:jmap:core": {"maxObjectsInGet": 1, "maxObjectsInSet": 1},
 	            "urn:ietf:params:jmap:mail": {}},
@@ -165,7 +165,7 @@ func TestUnknowableIsNotRefused(t *testing.T) {
 	  "methodCalls": [["Email/get", {"accountId": "{{accountId}}", "ids": "{{ids}}"}, "c0"]]
 	}`)
 	if got != "" {
-		t.Errorf("a query the server may well accept was refused:\n%s", got)
+		t.Errorf("a request the server may well accept was refused:\n%s", got)
 	}
 }
 

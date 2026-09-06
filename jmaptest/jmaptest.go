@@ -15,12 +15,12 @@
 //		IDs:       []jmapc.ID{"m1"},
 //	})
 //	srv.Handle("Email/get", func(c *jmaptest.Call) (any, error) {
-//		// The ids are the ones the query call answered with: the back
+//		// The ids are the ones the request call answered with: the back
 //		// reference has already been resolved.
 //		return myEmails(c.IDs()), nil
 //	})
 //
-//	res, err := jmapq.ListInboxEmails(ctx, srv.Client(), params)
+//	res, err := client.ListInboxEmails(ctx, srv.Client(), params)
 //
 // What it does not do is store anything. It is a server to test a client
 // against, not an implementation of JMAP: nothing a /set creates is returned
@@ -38,7 +38,7 @@ import (
 	"testing"
 
 	"github.com/linyows/jmapc"
-	"github.com/linyows/jmapc/internal/query"
+	"github.com/linyows/jmapc/internal/request"
 	"github.com/linyows/jmapc/internal/spec"
 )
 
@@ -290,9 +290,9 @@ func (s *Server) ServeEvents(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// request is the JMAP Request object as it arrives, kept undecoded so that
+// incoming is the JMAP Request object as it arrives, kept undecoded so that
 // each call is checked as it was written.
-type request struct {
+type incoming struct {
 	Using       []string              `json:"using"`
 	MethodCalls []json.RawMessage     `json:"methodCalls"`
 	CreatedIDs  map[jmapc.ID]jmapc.ID `json:"createdIds"`
@@ -310,7 +310,7 @@ func (s *Server) ServeAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req request
+	var req incoming
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		s.t.Errorf("jmaptest: the request is not JSON: %v", err)
 		s.writeRequestError(w, &jmapc.RequestError{Status: http.StatusBadRequest, Type: jmapc.ErrTypeNotJSON})
@@ -321,7 +321,7 @@ func (s *Server) ServeAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	check := query.NewRequestCheck(spec.Standard(), req.Using)
+	check := request.NewRequestCheck(spec.Standard(), req.Using)
 	responses := make([]jmapc.Invocation, 0, len(req.MethodCalls))
 	answered := map[string]json.RawMessage{}
 	names := map[string]string{}

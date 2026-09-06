@@ -12,7 +12,7 @@ import (
 
 // TypeGenerator writes Go declarations for the object types in a catalogue.
 // jmapc uses it on itself: the runtime package's JMAP data types are generated
-// from the same catalogue the query generator resolves names against, so the
+// from the same catalogue the request generator resolves names against, so the
 // two can never drift apart.
 type TypeGenerator struct {
 	// Spec is the catalogue to generate from.
@@ -252,7 +252,7 @@ func (g *TypeGenerator) fieldType(o *spec.Object, f *spec.Field) string {
 
 // jsonTag returns the struct tag for a field. Everything the client may send is
 // omitted when it holds its zero value, so that a request carries only what the
-// query actually set. Response fields are never re-encoded, so they keep their
+// request actually set. Response fields are never re-encoded, so they keep their
 // name alone.
 func (g *TypeGenerator) jsonTag(o *spec.Object, f *spec.Field) string {
 	if o.Kind == spec.KindResponse {

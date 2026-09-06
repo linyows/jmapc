@@ -102,7 +102,7 @@ func (c *Call) Arg(name string, dest any) error {
 }
 
 // AccountID is the account the call names, which generated code fills in from
-// the session where the query leaves it out.
+// the session where the request leaves it out.
 func (c *Call) AccountID() jmapc.ID {
 	var id jmapc.ID
 	_ = c.Arg("accountId", &id)

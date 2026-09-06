@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/linyows/jmapc"
-	"github.com/linyows/jmapc/example/jmapq"
+	"github.com/linyows/jmapc/example/client"
 )
 
 // pagingStub answers each request with the next window it was given, and
@@ -112,8 +112,8 @@ func TestSearchEmailsPages(t *testing.T) {
 	}}
 
 	var subjects []string
-	for page, err := range jmapq.SearchEmailsPages(context.Background(), s.client(),
-		jmapq.SearchEmailsParams{Phrase: "invoice", FirstMailboxID: "mbx1", SecondMailboxID: "mbx2"}) {
+	for page, err := range client.SearchEmailsPages(context.Background(), s.client(),
+		client.SearchEmailsParams{Phrase: "invoice", FirstMailboxID: "mbx1", SecondMailboxID: "mbx2"}) {
 		if err != nil {
 			t.Fatalf("the walk failed: %v", err)
 		}
@@ -148,7 +148,7 @@ func TestSearchEmailsPagesStopsAtAnEmptyWindow(t *testing.T) {
 	}}
 
 	pages := 0
-	for page, err := range jmapq.SearchEmailsPages(context.Background(), s.client(), jmapq.SearchEmailsParams{}) {
+	for page, err := range client.SearchEmailsPages(context.Background(), s.client(), client.SearchEmailsParams{}) {
 		if err != nil {
 			t.Fatalf("the walk failed: %v", err)
 		}
@@ -172,7 +172,7 @@ func TestSearchEmailsPagesReportsAFailure(t *testing.T) {
 
 	var failed error
 	pages := 0
-	for page, err := range jmapq.SearchEmailsPages(context.Background(), s.client(), jmapq.SearchEmailsParams{}) {
+	for page, err := range client.SearchEmailsPages(context.Background(), s.client(), client.SearchEmailsParams{}) {
 		if err != nil {
 			failed = err
 			continue

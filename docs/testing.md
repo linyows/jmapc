@@ -14,21 +14,21 @@ srv.Reply("Email/query", jmapc.EmailQueryResponse{
 	IDs:       []jmapc.ID{"m1", "m2"},
 })
 srv.Handle("Email/get", func(c *jmaptest.Call) (any, error) {
-	// The ids are the ones the query call answered with: the back reference
+	// The ids are the ones the request call answered with: the back reference
 	// has already been resolved, the way a server resolves it.
 	return emailsFor(c.IDs()), nil
 })
 
-res, err := jmapq.ListInboxEmails(ctx, srv.Client(), params)
+res, err := client.ListInboxEmails(ctx, srv.Client(), params)
 ```
 
 What it removes from the test:
 
 - **The back references.** They are resolved as RFC 8620 defines, including the
-  `*` that maps a path over a list, so a chained query reaches the handlers
+  `*` that maps a path over a list, so a chained request reaches the handlers
   with resolved values.
 - **The checking.** The request is checked against the data model the same way
-  the build checks a query, so a call with an argument no method has fails the
+  the build checks a request, so a call with an argument no method has fails the
   test rather than passing quietly. `jmaptest.WithoutChecks()` disables it, for
   a method jmapc does not know.
 - **The failures.** `srv.Fail` for a method-level error, `srv.FailRequest` for a
@@ -39,7 +39,7 @@ What it removes from the test:
   which is how to check that calls were sent in one request rather than one at
   a time.
 - **The push.** `srv.Push` sends a state change to a watching client, which is
-  what a watching query's loop waits for.
+  what a watching request's loop waits for.
 
 What it does not do is store anything. It is a server to test a client against
 rather than an implementation of JMAP: nothing a `/set` creates comes back from

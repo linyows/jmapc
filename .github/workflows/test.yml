@@ -125,7 +125,7 @@ jobs:
           node dist/check.js
 
   # The JSON Schema jmapc writes describes the query files, and whether it
-  # accepts the queries in this repository and refuses the mistakes it claims
+  # accepts the requests in this repository and refuses the mistakes it claims
   # to catch is something Go's tests cannot say without a validator.
   schema:
     name: schema
@@ -150,7 +150,7 @@ jobs:
       - name: Write the schema
         run: go run ./cmd/jmapc schema -out example/schema/jmapc.schema.json
 
-      - name: Check it against the example queries, and against mistakes
+      - name: Check it against the example requests, and against mistakes
         working-directory: example/schema
         run: |
           npm install --no-audit --no-fund

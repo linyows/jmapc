@@ -1,10 +1,10 @@
-// Package limits checks a query against what a server says it will accept.
+// Package limits checks a request against what a server says it will accept.
 //
 // The checks a build can make are checks against the specifications: that a
 // method exists, that an argument belongs to it, that a value has the right
 // type. What the specifications leave to the server is what it supports and
 // how much of it — the capabilities it advertises, the accounts it holds, how
-// many calls it takes in one request, how many objects in one /get. A query
+// many calls it takes in one request, how many objects in one /get. A request
 // that is right about JMAP and wrong about the server in front of it fails at
 // run time, and this is how to find that out sooner.
 package limits
@@ -17,14 +17,14 @@ import (
 	"strings"
 
 	"github.com/linyows/jmapc"
-	"github.com/linyows/jmapc/internal/query"
 	"github.com/linyows/jmapc/internal/request"
 	"github.com/linyows/jmapc/internal/spec"
+	"github.com/linyows/jmapc/internal/wire"
 )
 
-// Check reports what a server would refuse about a query, as the checks
+// Check reports what a server would refuse about a request, as the checks
 // against the specifications report what JMAP would.
-func Check(catalogue *spec.Spec, session *jmapc.Session, q *query.Query) error {
+func Check(catalogue *spec.Spec, session *jmapc.Session, q *request.Request) error {
 	c := &checker{catalogue: catalogue, session: session, q: q}
 	core, err := session.Core()
 	if err != nil {
@@ -42,16 +42,16 @@ func Check(catalogue *spec.Spec, session *jmapc.Session, q *query.Query) error {
 	return c.errs.Err()
 }
 
-// checker collects what one query and one session disagree about.
+// checker collects what one request and one session disagree about.
 type checker struct {
 	catalogue *spec.Spec
 	session   *jmapc.Session
-	q         *query.Query
-	errs      query.ErrorList
+	q         *request.Request
+	errs      request.ErrorList
 }
 
 func (c *checker) errorf(where, hint, format string, args ...any) {
-	c.errs = append(c.errs, &query.Error{
+	c.errs = append(c.errs, &request.Error{
 		File:  c.q.Path,
 		Where: where,
 		Msg:   fmt.Sprintf(format, args...),
@@ -61,7 +61,7 @@ func (c *checker) errorf(where, hint, format string, args ...any) {
 
 // capabilities checks that the server offers what the request declares. A
 // capability jmapc knows and the server does not is the difference between a
-// query that is right about JMAP and one that will work here.
+// request that is right about JMAP and one that will work here.
 func (c *checker) capabilities() {
 	for _, uri := range c.q.Using {
 		if c.session.HasCapability(uri) {
@@ -73,7 +73,7 @@ func (c *checker) capabilities() {
 }
 
 // accounts checks the account each call runs against: that the session has one
-// to fill in where the query leaves it out, that an account the query names is
+// to fill in where the request leaves it out, that an account the request names is
 // one the session holds, and that the account supports what the call needs.
 func (c *checker) accounts() {
 	for i, call := range c.q.Calls {
@@ -83,17 +83,17 @@ func (c *checker) accounts() {
 			id, err := c.session.PrimaryAccountID(capability)
 			if err != nil {
 				c.errorf(where, `write "accountId" to name the account to use`,
-					"the query leaves the account to the session, and %v", err)
+					"the request leaves the account to the session, and %v", err)
 				continue
 			}
 			c.accountSupports(where, id, capability)
 			continue
 		}
-		stated, ok := call.Args.Find(query.AccountIDArgument)
+		stated, ok := call.Args.Find(request.AccountIDArgument)
 		if !ok {
 			continue
 		}
-		literal, ok := stated.(*query.Literal)
+		literal, ok := stated.(*request.Literal)
 		if !ok {
 			// A parameter, so the account is not known until the caller
 			// supplies one.
@@ -104,7 +104,7 @@ func (c *checker) accounts() {
 			continue
 		}
 		if _, held := c.session.Accounts[id]; !held {
-			c.errorf(where+".arguments."+query.AccountIDArgument,
+			c.errorf(where+".arguments."+request.AccountIDArgument,
 				"the session holds "+list(accountIDs(c.session)),
 				"the session has no account %q", id)
 			continue
@@ -135,8 +135,8 @@ func (c *checker) calls(core *jmapc.CoreCapability) {
 	if core.MaxCallsInRequest == 0 || len(c.q.Calls) <= int(core.MaxCallsInRequest) {
 		return
 	}
-	c.errorf("methodCalls", "split the query in two, carrying what the first created with "+query.CreatedIDsMember,
-		"the query makes %d calls, and the server takes %d in one request",
+	c.errorf("methodCalls", "split the request in two, carrying what the first created with "+request.CreatedIDsMember,
+		"the request makes %d calls, and the server takes %d in one request",
 		len(c.q.Calls), core.MaxCallsInRequest)
 }
 
@@ -189,12 +189,12 @@ func (c *checker) collations(core *jmapc.CoreCapability) {
 		if !ok {
 			continue
 		}
-		comparators, ok := sortArg.(*query.Array)
+		comparators, ok := sortArg.(*request.Array)
 		if !ok {
 			continue
 		}
 		for j, item := range comparators.Items {
-			object, ok := item.(*query.Object)
+			object, ok := item.(*request.Object)
 			if !ok {
 				continue
 			}
@@ -202,7 +202,7 @@ func (c *checker) collations(core *jmapc.CoreCapability) {
 			if !ok {
 				continue
 			}
-			literal, ok := value.(*query.Literal)
+			literal, ok := value.(*request.Literal)
 			if !ok {
 				continue
 			}
@@ -228,12 +228,12 @@ func (c *checker) size(core *jmapc.CoreCapability) {
 	if core.MaxSizeRequest == 0 {
 		return
 	}
-	values := make(map[string]request.Value, len(c.q.Params))
+	values := make(map[string]wire.Value, len(c.q.Params))
 	for _, p := range c.q.Params {
 		text := "{{" + p.Name + "}}"
-		values[p.Name] = request.Value{Text: text, JSON: json.RawMessage(strconv.Quote(text))}
+		values[p.Name] = wire.Value{Text: text, JSON: json.RawMessage(strconv.Quote(text))}
 	}
-	req, err := request.Build(c.catalogue, c.q, values,
+	req, err := wire.Build(c.catalogue, c.q, values,
 		func(string) (jmapc.ID, error) { return "accountId", nil }, nil)
 	if err != nil {
 		return
@@ -253,11 +253,11 @@ func (c *checker) size(core *jmapc.CoreCapability) {
 // length returns how many entries an argument holds, for the arguments that
 // hold a list or a map of records. It counts nothing for a value that depends
 // on the caller, since how many they pass is not known here.
-func length(n query.Node) (int, bool) {
+func length(n request.Node) (int, bool) {
 	switch v := n.(type) {
-	case *query.Array:
+	case *request.Array:
 		return len(v.Items), true
-	case *query.Object:
+	case *request.Object:
 		return len(v.Fields), true
 	}
 	return 0, false

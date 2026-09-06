@@ -8,12 +8,12 @@ import (
 	"strings"
 
 	"github.com/linyows/jmapc/internal/gen/shared"
-	"github.com/linyows/jmapc/internal/query"
+	"github.com/linyows/jmapc/internal/request"
 	"github.com/linyows/jmapc/internal/spec"
 )
 
-// writeFunc writes the function that sends the query and decodes its response.
-func (g *QueryGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
+// writeFunc writes the function that sends the request and decodes its response.
+func (g *RequestGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
 	g.writeFuncDoc(buf, p)
 
 	params := []string{"client: Client"}
@@ -82,18 +82,18 @@ func (g *QueryGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
 // setErrorCheck is one method call whose response reports records the server
 // refused.
 type setErrorCheck struct {
-	call   *query.Call
+	call   *request.Call
 	object string // the expression holding the response
 	decode string // the type to decode it from, empty where out holds it
 	fields []string
 }
 
 // setErrorChecks finds the calls whose responses report per-record failures.
-// A call the query does not return is decoded for its refusals alone, since
+// A call the request does not return is decoded for its refusals alone, since
 // otherwise naming one call in "_returns" would silently exempt the others
 // from
 // being checked.
-func (g *QueryGenerator) setErrorChecks(p *plan) []setErrorCheck {
+func (g *RequestGenerator) setErrorChecks(p *plan) []setErrorCheck {
 	var checks []setErrorCheck
 	for i, c := range p.q.Calls {
 		fields := g.Spec.SetErrorFields(c.Method.Name)
@@ -115,7 +115,7 @@ func (g *QueryGenerator) setErrorChecks(p *plan) []setErrorCheck {
 
 // writeSetErrorChecks writes the code that throws where the server refused a
 // record. The response is carried on the error, since the rest of it happened.
-func (g *QueryGenerator) writeSetErrorChecks(buf *bytes.Buffer, checks []setErrorCheck) {
+func (g *RequestGenerator) writeSetErrorChecks(buf *bytes.Buffer, checks []setErrorCheck) {
 	if len(checks) == 0 {
 		return
 	}
@@ -141,7 +141,7 @@ func (g *QueryGenerator) writeSetErrorChecks(buf *bytes.Buffer, checks []setErro
 }
 
 // writeFuncDoc writes the function's documentation.
-func (g *QueryGenerator) writeFuncDoc(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writeFuncDoc(buf *bytes.Buffer, p *plan) {
 	doc := strings.TrimSpace(p.q.Doc)
 	if doc == "" {
 		doc = fmt.Sprintf("%s sends the JMAP request in %s.", p.funcName, p.q.Path)
@@ -165,7 +165,7 @@ func (g *QueryGenerator) writeFuncDoc(buf *bytes.Buffer, p *plan) {
 }
 
 // writeRequest writes the literal request the function sends.
-func (g *QueryGenerator) writeRequest(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writeRequest(buf *bytes.Buffer, p *plan) {
 	buf.WriteString("  const req: Request = {\n")
 	uris := make([]string, len(p.q.Using))
 	for i, uri := range p.q.Using {
@@ -184,13 +184,13 @@ func (g *QueryGenerator) writeRequest(buf *bytes.Buffer, p *plan) {
 }
 
 // writeInvocation writes one method call of the request.
-func (g *QueryGenerator) writeInvocation(buf *bytes.Buffer, p *plan, c *query.Call) {
+func (g *RequestGenerator) writeInvocation(buf *bytes.Buffer, p *plan, c *request.Call) {
 	if c.Comment != "" {
 		shared.WriteComment(buf, "      ", c.Comment)
 	}
 	fmt.Fprintf(buf, "      [%s, {\n", strconv.Quote(c.Method.Name))
 	if v := p.calls[c].accountIDVar; v != "" {
-		fmt.Fprintf(buf, "        %s: %s,\n", strconv.Quote(query.AccountIDArgument), v)
+		fmt.Fprintf(buf, "        %s: %s,\n", strconv.Quote(request.AccountIDArgument), v)
 	}
 	for _, field := range c.Args.Fields {
 		// An argument the caller may leave out is spread in, so that leaving
@@ -206,8 +206,8 @@ func (g *QueryGenerator) writeInvocation(buf *bytes.Buffer, p *plan, c *query.Ca
 	fmt.Fprintf(buf, "      }, %s],\n", strconv.Quote(c.ID))
 }
 
-// keyExpr renders an argument name, which a query may build from parameters.
-func (g *QueryGenerator) keyExpr(f query.ObjectField) string {
+// keyExpr renders an argument name, which a request may build from parameters.
+func (g *RequestGenerator) keyExpr(f request.ObjectField) string {
 	if len(f.KeySegments) == 0 {
 		return strconv.Quote(f.Key)
 	}
@@ -225,19 +225,19 @@ func (g *QueryGenerator) keyExpr(f query.ObjectField) string {
 }
 
 // expr renders one argument value.
-func (g *QueryGenerator) expr(n query.Node, indent string) string {
+func (g *RequestGenerator) expr(n request.Node, indent string) string {
 	switch v := n.(type) {
-	case *query.ResultRef:
+	case *request.ResultRef:
 		return fmt.Sprintf("{ resultOf: %s, name: %s, path: %s }",
 			strconv.Quote(v.Ref.ResultOf), strconv.Quote(v.Ref.Name), strconv.Quote(v.Ref.Path))
 
-	case *query.ParamRef:
+	case *request.ParamRef:
 		return "p." + tsMemberName(v.Param.Field)
 
-	case *query.Literal:
+	case *request.Literal:
 		return literalExpr(v.JSON)
 
-	case *query.Object:
+	case *request.Object:
 		if !v.HasParam() {
 			return literalExpr(v.Raw)
 		}
@@ -249,7 +249,7 @@ func (g *QueryGenerator) expr(n query.Node, indent string) string {
 		b.WriteString(indent + "}")
 		return b.String()
 
-	case *query.Array:
+	case *request.Array:
 		if !v.HasParam() {
 			return literalExpr(v.Raw)
 		}
@@ -264,7 +264,7 @@ func (g *QueryGenerator) expr(n query.Node, indent string) string {
 	return "undefined"
 }
 
-// literalExpr renders a JSON value the query stated outright. JSON is a subset
+// literalExpr renders a JSON value the request stated outright. JSON is a subset
 // of TypeScript's own literal syntax, so it goes in as it is.
 func literalExpr(raw json.RawMessage) string {
 	var compact bytes.Buffer
@@ -277,7 +277,7 @@ func literalExpr(raw json.RawMessage) string {
 // writePages writes the generator that walks the whole of what one request
 // returns a window of. TypeScript spells that as an async generator, so a
 // caller writes for await over it and the loop is somebody else's.
-func (g *QueryGenerator) writePages(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writePages(buf *bytes.Buffer, p *plan) {
 	if p.pagesName == "" {
 		return
 	}
@@ -299,26 +299,26 @@ func (g *QueryGenerator) writePages(buf *bytes.Buffer, p *plan) {
 	fmt.Fprintf(buf, "    const window = %s\n", window)
 
 	switch p.q.PageKind {
-	case query.PageQuery:
-		ids := tsMemberName(spec.ExportedName(query.IDsProperty))
+	case request.PageQuery:
+		ids := tsMemberName(spec.ExportedName(request.IDsProperty))
 		// A window with nothing in it is the end of the list rather than a
 		// page of it, and handing it back would make every caller check.
 		fmt.Fprintf(buf, "    if (window.%s.length === 0) {\n      return\n    }\n", ids)
 		buf.WriteString("    yield res\n")
 		fmt.Fprintf(buf, "    start = window.%s + window.%s.length\n",
-			tsMemberName(spec.ExportedName(query.PositionArgument)), ids)
+			tsMemberName(spec.ExportedName(request.PositionArgument)), ids)
 		// Where the call asked for the total, the end is known without asking
 		// for a window that is not there.
 		fmt.Fprintf(buf, "    if (window.%[1]s > 0 && start >= window.%[1]s) {\n      return\n    }\n",
-			tsMemberName(spec.ExportedName(query.TotalProperty)))
+			tsMemberName(spec.ExportedName(request.TotalProperty)))
 
-	case query.PageChanges:
+	case request.PageChanges:
 		// An answer saying nothing changed still carries the state to go on
 		// from, so it is worth handing back.
 		buf.WriteString("    yield res\n")
 		fmt.Fprintf(buf, "    if (!window.%s) {\n      return\n    }\n",
-			tsMemberName(spec.ExportedName(query.HasMoreChangesProperty)))
-		fmt.Fprintf(buf, "    start = window.%s\n", tsMemberName(spec.ExportedName(query.NewStateProperty)))
+			tsMemberName(spec.ExportedName(request.HasMoreChangesProperty)))
+		fmt.Fprintf(buf, "    start = window.%s\n", tsMemberName(spec.ExportedName(request.NewStateProperty)))
 	}
 
 	buf.WriteString("  }\n")
@@ -326,18 +326,18 @@ func (g *QueryGenerator) writePages(buf *bytes.Buffer, p *plan) {
 }
 
 // writePagesDoc writes the generator's documentation.
-func (g *QueryGenerator) writePagesDoc(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writePagesDoc(buf *bytes.Buffer, p *plan) {
 	doc := fmt.Sprintf("%s walks the whole of what %s returns one part of, calling it again for each part until none is left.",
 		p.pagesName, p.funcName)
 	doc += fmt.Sprintf("\n\nIt starts from the %s the parameters carry and derives the next one from each answer. ",
 		p.q.PageStart.Name)
 	switch p.q.PageKind {
-	case query.PageQuery:
+	case request.PageQuery:
 		doc += "An empty window ends the walk instead of being yielded, so everything it yields holds at least one record; " +
 			"where the call asked for the total, the walk ends without requesting a window past it."
-	case query.PageChanges:
+	case request.PageChanges:
 		doc += "An answer reporting no changes is still yielded, since it carries the state to continue from, and the walk ends when the server reports no more."
 	}
-	doc += "\n\nA failure throws, as it does from the query itself, and leaving the loop early sends no further request."
+	doc += "\n\nA failure throws, as it does from the request itself, and leaving the loop early sends no further request."
 	shared.WriteComment(buf, "", doc)
 }

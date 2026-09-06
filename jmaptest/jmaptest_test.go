@@ -44,7 +44,7 @@ func send(t *testing.T, c *jmapc.Client, calls ...jmapc.Invocation) (*jmapc.Resp
 
 // TestBackReferencesAreResolved covers what a stub written by hand usually
 // does not: the argument one call leaves to the server is filled in from the
-// answer to the call before it, so a chained query reaches the handler with the
+// answer to the call before it, so a chained request reaches the handler with the
 // ids in it.
 func TestBackReferencesAreResolved(t *testing.T) {
 	srv := New(t)
@@ -69,7 +69,7 @@ func TestBackReferencesAreResolved(t *testing.T) {
 		t.Fatalf("the request failed: %v", err)
 	}
 	if len(got) != 2 || got[0] != "m1" || got[1] != "m2" {
-		t.Errorf("the get was given %v, want the ids the query answered with", got)
+		t.Errorf("the get was given %v, want the ids the request answered with", got)
 	}
 	// What the client asked for is there to be asserted on as well as what it
 	// was given.

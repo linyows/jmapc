@@ -10,6 +10,15 @@ history.
 
 ### Breaking changes
 
+- **What you write is called a request, not a query.** In JMAP, `Foo/query` is
+  the method that searches, and a file holding `methodCalls` is a Request object
+  as RFC 8620 defines it, so calling that file a query collided with the
+  specification's own word. `-queries` is now `-requests`, the `jmapc.json` key
+  `"queries"` is `"requests"`, and the defaults are `requests` for the input and
+  `client` for the output, in place of `queries` and `jmapq`. A project keeping
+  its old layout passes the paths it already uses; one on the defaults renames
+  the two directories and regenerates. The generated code itself is unchanged
+  apart from its package name.
 - **A record type is named after the call that read it.** `ListInboxEmailsEmail`
   is `ListInboxEmailsFetchEmail`, after the call id `fetch`. The types were
   numbered by the position of the call, so inserting a call moved a name onto a
