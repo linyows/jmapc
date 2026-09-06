@@ -64,3 +64,12 @@ history.
 - **The three languages are listed in one order everywhere**, Go, Rust,
   TypeScript, including the order the README's sections come in.
   ([#66](https://github.com/linyows/jmapc/pull/66))
+- **The README says what jmapc does before why it exists**, opening with a
+  query and the call generated from it, then a list of what jmapc does, and the
+  reference sections moved to
+  `docs/`: writing a query, verification, the command, the runtime, push,
+  paging, testing, the Rust and TypeScript clients, vendor extensions,
+  coverage, and working on jmapc. It also says how jmapc differs from the JMAP
+  client libraries — the request written in JMAP rather than in an API of the
+  library's own, the checking done before the program runs, and the response
+  typed to what the query asked for. Both languages are split the same way.

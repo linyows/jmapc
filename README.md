@@ -28,12 +28,53 @@
   </a>
 </p>
 
-jmapc generates **type-safe code** from JMAP, in Go, Rust or TypeScript. Here's
-how it works:
+jmapc is a compiler for JMAP. You write a query — a JMAP request, the JSON the
+specification already defines — and jmapc generates a **type-safe client** for
+it, in Go, Rust or TypeScript, having checked the query against the
+specification first.
 
 1. You write queries in JMAP.
 1. You run jmapc to generate code with type-safe interfaces to those queries.
 1. You write application code that calls the generated code.
+
+A query, `queries/ListInboxEmails.jmap.json`:
+
+```json
+{
+  "methodCalls": [
+    ["Email/query", {"filter": {"inMailbox": "{{mailboxId}}"}, "limit": "{{limit}}"}, "search"],
+    ["Email/get", {"#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"},
+                   "properties": ["id", "subject", "from", "receivedAt"]}, "fetch"]
+  ],
+  "_returns": "fetch"
+}
+```
+
+and what `jmapc generate` makes of it:
+
+```go
+res, err := jmapq.ListInboxEmails(ctx, c, jmapq.ListInboxEmailsParams{
+	MailboxID: inbox,
+	Limit:     25,
+})
+```
+
+`res.List` holds exactly the four properties the query asked for.
+
+## Features
+
+The features that distinguish jmapc come down to these five.
+
+- Queries are written in JMAP itself, so there is no API of jmapc's own to learn
+- A query is checked before it generates a line of code, in the editor as it is
+  typed, and against a running server
+- The generated code decodes a type-safe response, handles the errors JMAP
+  reports at every level, and carries the loops for push and for paging
+- One query generates a Go, a Rust and a TypeScript client, with external
+  dependencies kept to a minimum
+- It comes with a command that sends a query to a real server, a JMAP server to
+  test your own code against, and a schema file that adds a capability jmapc
+  does not know
 
 ## Motivation
 
@@ -43,31 +84,10 @@ operations costs a single round trip:
 
 ```json
 {
-  "using": [
-    "urn:ietf:params:jmap:core",
-    "urn:ietf:params:jmap:mail"
-  ],
+  "using": ["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail"],
   "methodCalls": [
-    [
-      "Email/query",
-      {
-        "filter": {
-          "inMailbox": "mbx1"
-        }
-      },
-      "search"
-    ],
-    [
-      "Email/get",
-      {
-        "#ids": {
-          "resultOf": "search",
-          "name": "Email/query",
-          "path": "/ids"
-        }
-      },
-      "fetch"
-    ]
+    ["Email/query", {"filter": {"inMailbox": "mbx1"}}, "search"],
+    ["Email/get", {"#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"}}, "fetch"]
   ]
 }
 ```
@@ -80,20 +100,45 @@ learning the builder. But the query is the part you care about; the client is
 not. So write the query, and let jmapc write the client — an approach it
 takes from [sqlc](https://sqlc.dev).
 
-Writing the query is all you do; jmapc takes on the parts that are tedious by
-hand and easy to get wrong.
+## Compared with other JMAP clients
 
-- Linting the query
-- A type-safe response
-- Exhaustive error handling
+The JMAP clients in use today are libraries — [go-jmap](https://github.com/rockorager/go-jmap)
+for Go, [jmap-client](https://github.com/stalwartlabs/jmap-client) for Rust,
+[Jam](https://github.com/htunnicliff/jmap-jam) for TypeScript, and the others
+[jmap.io lists](https://jmap.io/software/) — and they hand you the protocol as
+an API to call at run time. jmapc runs before that, which shows in three
+places.
 
-Result references are checked against the methods they point at, arguments
-against the data model, and property names against the type, so a misspelling
-fails the build before it ever reaches the server. The response decodes into a
-struct holding exactly the properties the query asked for, with no
-`map[string]any` to walk, so it is type-safe. JMAP fails at three levels —
-request, method, and record. The record level arrives as HTTP 200, which is
-easy to miss, but generated code checks it.
+**The request is written in JMAP, not in an API of the library's own.** A
+builder spells the request its own way: `req.Invoke(&email.Get{...})` with a
+`jmap.ResultReference{ResultOf, Name, Path}` in Go, `client.build()` and
+`.updated_reference()` in Rust. You learn JMAP, and then you learn how that
+library says it. A jmapc query is the request object RFC 8620 defines and
+nothing besides, so it can be lifted out of the specification, sent as it
+stands with `jmapc run`, read by `jq`, and completed in an editor.
+
+**The mistakes are found before the program runs.** A library checks what its
+types describe — that a field exists, that its type fits — but what makes a
+JMAP request correct is mostly values: `"name": "Email/query"` naming the call
+a reference points at, `"path": "/ids"` selecting from it, the names in
+`properties`, the conditions in a filter, the pointers in a patch. To a library
+those are strings, and a wrong one comes back from the server. jmapc checks
+them against the data model as it generates, so a back reference naming the
+wrong method fails the build.
+
+**The response holds what the query asked for.** go-jmap returns
+`Invocation.Args` as an `any` to type-switch on; jmap-client unwraps a chain of
+`unwrap_method_responses()` and `unwrap_get_mailbox()`. A generated function
+returns a named type carrying exactly the properties the query listed. Jam
+reaches this in TypeScript, whose literal types can narrow a response by the
+`properties` given; jmapc gets the same narrowing in Go and Rust, where the
+type system cannot do it on its own.
+
+What you give up is that a query is fixed when jmapc runs. A request whose
+shape is decided at run time — a filter assembled from what a user typed — is
+handed over as one parameter rather than built call by call, and a program that
+assembles arbitrary requests is what a builder is for. Generated code is also
+code: a step in the build, and files committed to the repository.
 
 ## Install
 
@@ -183,1236 +228,87 @@ their sub-parts, and a property naming a header field is typed by the form it
 names: `header:List-Id:asText` is a `*string`, `header:To:asAddresses` a
 `[]jmapc.EmailAddress`.
 
-### Generated names
+The file name determines every name in the generated code, and the call ids
+determine the names within it: see
+[Writing a query](docs/queries.md#generated-names).
+[`example/queries`](example/queries) holds twenty-five queries, over mail,
+contacts, calendars, sharing and filtering.
 
-The file name determines every name in the generated file, so it has to be a Go
-identifier: letters, digits and underscores, not starting with a digit.
-`ListInboxEmails.jmap.json` gives:
+## Other languages
 
-| Generated | Name |
-| --- | --- |
-| The function | `ListInboxEmails` |
-| Its parameters, where the query leaves any open | `ListInboxEmailsParams` |
-| A record whose properties the query narrows | `ListInboxEmailsFetchEmail`, after the call id `fetch`, and `ListInboxEmailsFetchEmailBodyPart` for a narrowed body part |
-| The response to a call returning that record | `ListInboxEmailsFetchResponse`, after the call id `fetch` |
-| The result, where `_returns` names no call | `ListInboxEmailsResult` |
-| The function that follows changes, where the query is watched | `SyncEmailsWatch` |
-| The walk over the parts of an answer, where the query is paged | `SearchEmailsPages` |
-| The file | `listinboxemails_gen.go` |
-
-The call ids are the names in the generated code: a result holds one field per
-call, named after the id the query gave it, and the record and response types
-of a call that narrows are named the same way. Nothing is numbered by position,
-since a call id is unique within a request already and inserting a call ahead
-of another would otherwise move a name onto a different shape:
-
-```json
-["Email/query", {...}, "search"],
-["Email/get",   {...}, "fetch"]
-```
-
-```go
-res.Search.IDs      // the Email/query response
-res.Fetch.List      // the Email/get response
-```
-
-A call id that is not an identifier — RFC 8620 allows any string — falls back
-to the method it invokes.
-
-A call the query does not narrow answers with the shared type instead, so
-`SendEmail` returns `*jmapc.EmailSubmissionSetResponse`. Two queries in one
-package cannot take the same name, and a generated type whose name is already
-taken gains a number: `ListInboxEmailsFetchEmail2`.
-
-Two calls of one query that read the same type through the same method and ask
-for the same properties describe one record, so they share one type, named
-after the first of them. Two names for one shape would make a caller convert
-between them to hand a record from one call to a function written for the
-other. Inserting a call that reads that same shape ahead of both moves the name
-to the new call, which the build reports; the shape a name stands for does not
-change.
-
-A `/set` that creates gets a constant for each name it gives a record, since
-the response reports the record back under that name:
-
-```json
-["Mailbox/set", {"create": {"newMailbox": {"name": "{{name}}"}}}, "make"]
-```
-
-```go
-res, err := jmapq.CreateMailbox(ctx, c, jmapq.CreateMailboxParams{Name: name})
-...
-created := res.Created[jmapq.CreateMailboxNewMailbox]
-```
-
-Without it the name appears in two files with no link between them, and
-renaming it in the query still builds: the lookup misses at run time instead.
-Rust writes `CREATE_MAILBOX_NEW_MAILBOX` and TypeScript
-`createMailboxNewMailbox`. A creation id the query leaves to the caller —
-`{"{{creationId}}": ...}` — has no constant, since the caller already has the
-name.
-
-A query with no open parameters takes no `Params` argument at all —
-`MailQuota(ctx, c)`, not `MailQuota(ctx, c, MailQuotaParams{})` — so adding
-the first `{{param}}` to a query already in use changes the generated
-function's arity and breaks every call site. That is a deliberate trade for
-the common case of a query with no parameters reading like a plain function
-call, not an oversight.
-
-Rust writes the function and its module in snake_case — `list_inbox_emails` in
-`list_inbox_emails.rs` — and keeps the type names above, except that an
-initialism becomes a word, since that is how Rust spells one: a `UTCDate` is a
-`UtcDate`. Properties are snake_case, with a serde rename wherever that is not
-the name on the wire.
-
-TypeScript lowercases the first letter of the function and of the file —
-`listInboxEmails` in `listInboxEmails.ts` — and keeps the type names too.
-
-### Examples
-
-[`example/queries`](example/queries) holds twenty-five of these, over mail,
-contacts, calendars, sharing and filtering: searching, syncing from a known state, sending,
-creating a contact card, moving one occurrence of a recurring meeting without
-touching the rest of the series.
-
-## Rust
-
-The same queries generate a Rust client:
+The same queries generate a Rust or a TypeScript client:
 
 ```
 jmapc generate -lang rust -out src/jmapq
-```
-
-```rust
-use jmapq::list_inbox_emails::{list_inbox_emails, ListInboxEmailsParams};
-use jmapq::Client;
-
-let client = Client::with_bearer_token("https://example.com/.well-known/jmap", http, token);
-
-let res = list_inbox_emails(&client, ListInboxEmailsParams {
-    mailbox_id: inbox,
-    limit: 25,
-})
-.await?;
-for email in &res.list {
-    println!("{} {:?}", email.received_at, email.subject);
-}
-```
-
-The runtime comes with it — `client.rs`, `types.rs`, and the `mod.rs` that
-declares them beside the queries — so `mod jmapq;` is the whole of what a crate
-has to add. The generated code requires **serde and serde_json** and nothing
-else. Transmission is a `Transport` you implement over whichever HTTP client
-the program already has, so no HTTP stack, no TLS backend and no async runtime
-is added with it:
-
-```rust
-struct Http(reqwest::Client);
-
-impl Transport for Http {
-    async fn send(&self, req: HttpRequest) -> Result<HttpResponse, TransportError> {
-        let mut out = self.0.request(req.method.parse()?, &req.url);
-        for (name, value) in req.headers {
-            out = out.header(name, value);
-        }
-        if let Some(body) = req.body {
-            out = out.body(body);
-        }
-        let res = out.send().await?;
-        Ok(HttpResponse {
-            status: res.status().as_u16(),
-            content_type: res
-                .headers()
-                .get("content-type")
-                .and_then(|v| v.to_str().ok())
-                .unwrap_or("")
-                .to_string(),
-            body: res.bytes().await?.to_vec(),
-        })
-    }
-}
-```
-
-That is also where authentication that a bearer token does not cover belongs —
-a signature over the request, a token refreshed on expiry — since the transport
-is the last stage before a request is sent.
-
-A nullable property is an `Option`, so `subject` is `Option<String>`. A union of
-shapes is an enum: a filter is `Option<FilterOperatorOrEmailFilterCondition>`,
-untagged, where Go has a struct of the same name with a field per shape. The
-primitives that
-carry a format rather than a shape are named aliases of `String`, so an `Id` and
-a `TimeZoneId` are distinguishable in a signature. And a record derives
-`Default`, so a type with fifty optional properties is built by naming the two
-that differ from the default and omitting the rest.
-
-The generated code is already formatted the way rustfmt formats it, so
-`cargo fmt` over the crate changes nothing.
-
-## TypeScript
-
-The same queries generate a TypeScript client:
-
-```
 jmapc generate -lang typescript -out src/jmapq
 ```
 
-```typescript
-import { Client } from "./jmapq/client.js"
-import { listInboxEmails } from "./jmapq/listInboxEmails.js"
-
-const client = new Client("https://example.com/.well-known/jmap", { auth: token })
-
-const res = await listInboxEmails(client, { mailboxId: inbox, limit: 25 })
-for (const email of res.list) {
-  console.log(email.receivedAt, email.from?.[0].email, email.subject)
-}
-```
-
-The runtime comes with it — `client.ts` and `types.ts` are generated alongside
-the queries — so the output has **no dependencies**. The only platform
-requirement is `fetch`.
-
-TypeScript expresses some things more precisely than Go. A nullable property is
-a union rather than a pointer, so `subject` is `string | null`. A union of
-shapes is written as one: a filter is `FilterOperator | EmailFilterCondition |
-null`, where Go has a struct with a field per shape. And the primitives that carry a format
-rather than a shape are named aliases of `string`, so an `Id` and a
-`TimeZoneId` cannot be swapped by accident.
-
-## Writing a query
-
-A query file is a JMAP Request object, exactly as
-[RFC 8620](https://www.rfc-editor.org/rfc/rfc8620) defines it, plus four
-members jmapc reads and the JMAP server never sees.
-
-A member beginning with an underscore is one the generator reads; everything
-else is the request as RFC 8620 defines it.
-
-| Member | |
-|---|---|
-| `methodCalls` | The calls, as `[name, arguments, callId]`. Required. |
-| `using` | The capabilities the request declares. Optional: derived from the methods called. |
-| `_doc` | The generated function's documentation. Optional. |
-| `_returns` | The call whose response the function returns. Optional: without it, every response is returned. |
-| `_createdIds` | Carry the creation ids of an earlier request in, and this request's out. Optional; see below. |
-| `_watches` | The call a generated client follows the changes of, so that it catches up whenever the server reports a change. Optional; see [Push](#push). |
-| `_pages` | The call a generated walk advances, so that a result returned one part at a time can be read in full. Optional; see [Walking an answer that does not fit in one request](#walking-an-answer-that-does-not-fit-in-one-request). |
-| `_comment` | Why a call is there. Goes in that call's arguments; see below. |
-
-A query file is plain JSON, so `jq` can read it and an editor can check it. To
-record why a call is there, give its arguments a `_comment`.
-
-### Parameters
-
-Write `{{name}}` where a value is left to the caller. Its Go type comes from the
-argument it stands in for, so `{{limit}}` in `limit` is a `jmapc.UnsignedInt`
-and `{{mailboxId}}` in `inMailbox` is a `jmapc.ID`. Use the same name twice and
-it becomes one field, checked for agreeing on its type.
-
-An argument that may take either of two shapes becomes a struct with a field
-per shape, of which exactly one is set. A filter is where that matters, since
-it is either a boolean operator or a condition on the type being queried:
-`{{filter}}` in `filter` is a `jmapc.FilterOperatorOrEmailFilterCondition`.
-
-```go
-jmapq.Search(ctx, c, jmapq.SearchParams{
-	Filter: jmapc.FilterOperatorOrEmailFilterCondition{
-		EmailFilterCondition: &jmapc.EmailFilterCondition{Text: "invoice"},
-	},
-})
-```
-
-Setting no field, or more than one, is an error where the request is encoded
-rather than something the server has to refuse. The conditions a
-`FilterOperator` combines stay `[]any`: which condition type they hold depends
-on the type being queried, and the operator itself is written once for all of
-them.
-
-A map key may be a parameter too, which is how a `/set` names the record to
-change:
-
-```json
-["Email/set", {"update": {"{{emailId}}": {"keywords/$seen": true}}}, "mark"]
-```
-
-The braces are used rather than a `$` prefix because JMAP keywords are
-themselves written with one, as in `$seen`.
-
-#### An argument the caller may leave out
-
-Write `{{name?}}` where the caller may leave the argument out altogether:
-
-```json
-["Email/changes", {"sinceState": "{{sinceState}}", "maxChanges": "{{maxChanges?}}"}, "changes"]
-```
-
-Nothing supplied means the argument is not in the request, which is not the
-same as sending null. RFC 8620 makes the difference twice over: `maxChanges`
-absent is no cap, while `maxChanges: 0` asks for nothing at all; and in a
-PatchObject a pointer set to null removes the property while a pointer that is
-not there leaves it alone. Without this, each argument that is only sometimes
-sent would need a query of its own, and *n* of them would need 2ⁿ.
-
-The caller says "left out" the way the language already does. Go takes a
-pointer, or nothing where the type has a nil of its own:
-
-```go
-limit := jmapc.UnsignedInt(25)
-jmapq.FindPeople(ctx, c, jmapq.FindPeopleParams{Phrase: "ada", Limit: &limit})
-jmapq.FindPeople(ctx, c, jmapq.FindPeopleParams{Phrase: "ada"}) // no limit argument
-```
-
-Rust wraps it in an `Option`, TypeScript makes the member optional
-(`limit?: number`), and `jmapc run` leaves the argument out when no `-p` names
-it.
-
-Only a whole argument of a method call may be left out, and only where the
-parameter standing for it is used nowhere else, so that leaving it out has one
-meaning: this member is not there. A parameter inside a filter or an array is
-part of a larger value, and dropping it would leave a question the query does
-not answer, since an empty `AND` and no filter at all are different requests.
-For a filter whose shape varies, hand the whole filter over as one parameter
-instead.
-
-### Creation ids across requests
-
-Referring to `#draft` within one request needs nothing: the server resolves it.
-Carrying a reference from one request into the next needs the ids to be carried
-between them, which `_createdIds` does.
-
-```json
-{
-  "_createdIds": true,
-  "methodCalls": [
-    ["Mailbox/set", {"create": {"box": {"name": "{{name}}"}}}, "make"],
-    ["Email/set", {"update": {"{{emailId}}": {"mailboxIds/#box": true}}}, "file"]
-  ]
-}
-```
-
-The generated function takes them and reports them:
-
-```go
-res, err := jmapq.FileIntoNewMailbox(ctx, c, params, carried)
-// res.CreatedIDs goes to the next request.
-```
-
-RFC 8620 has this for proxies, which split one request across servers and need
-the references to still resolve. A query using it returns every response rather
-than one, since the ids belong to the request rather than to any call in it.
-
-### Account ids
-
-Leave `accountId` out and the generated function fills it in from the primary
-account of the session, looking the session up once. Write `"{{accountId}}"` to
-make it a parameter instead.
+Each runtime is generated alongside the queries, so the Rust output requires
+serde and nothing else, and the TypeScript output has no dependencies at all,
+its one platform requirement being `fetch`. Each spells the generated names the
+way its own language spells them, and both express a nullable property and a
+union of shapes more precisely than Go does:
+[Other languages](docs/languages.md).
 
 ## Verification
 
-Everything below is a compile-time failure rather than a server round trip:
-
-- the method exists, and is spelled the way the specification spells it
-- every argument belongs to the method, with the type the method requires
-- a back reference points at an *earlier* call, names that call's method
-  correctly, and selects a value the target argument can accept
-- filter conditions are checked against the type being queried, including the
-  ones nested inside `AND`, `OR`, and `NOT` operators
-- `properties` names properties the type has, and `bodyProperties` names
-  properties an `EmailBodyPart` has
-- a property naming a header field asks for a parsed form the specification
-  defines, so `header:List-Id:asText` is a string and `header:To:asAddresses` a
-  list of addresses
-- a `PatchObject` points at properties the record being patched actually has,
-  and sets them to values of the right type, its keys written the way RFC 8620
-  writes them: the leading `/` of the pointer is implicit, so a keyword is set
-  at `keywords/$seen` rather than at `/keywords/$seen`
-- `sort` names properties the type can actually be sorted by, and supplies the
-  extra member a comparator like `hasKeyword` needs
-- a property whose specification fixes the values it may take is given one of
-  them, whether it is a string or the keys of a set like a participant's `roles`
-- ids, dates, and integers are well formed
-- the capabilities the request declares cover the methods it calls
-- a watched call is one that reports what changed since a state, and the state
-  it continues from is supplied by the loop rather than written into the query
-- a paged call is one that returns part of a longer result and reports where the
-  rest is, and where the next request starts is supplied by the walk
-
-A misspelling produces a suggestion:
+A query is checked when jmapc runs, so a query that is wrong about JMAP is a
+build failure rather than a server round trip: that the method exists, that
+every argument belongs to it, that a back reference points at an earlier call
+and selects a value the target argument accepts, that filters, `properties`,
+`sort` orders and patch pointers name what the type actually has. A misspelling
+produces a suggestion:
 
 ```
 queries/BadQuery.jmap.json: methodCalls[0].arguments.filter.hasAttachmnt: EmailFilterCondition has no property "hasAttachmnt"
 	did you mean "hasAttachment"?
-queries/BadQuery.jmap.json: methodCalls[1].arguments.#ids.name: the referenced call is Email/query, but the reference names Email/get
-	call "c0" invokes Email/query
 ```
 
-Two queries that differ only in what they call their parameters and their
-calls are one query written twice, and jmapc says so rather than failing:
-
-```
-jmapc: ListArchiveEmails, ListInboxEmails are the same query under different names; one of them would do for all of them
-```
-
-Both are generated all the same, since a project may want two names for one
-request. It is worth knowing about because each name produces a set of
-generated types of its own.
-
-`jmapc check` runs the checks without writing anything.
-
-### What only the server can report
-
-Everything above is what the specifications say. What they leave to the server —
-which capabilities it has, which accounts it holds, how much it accepts in one
-request — a build cannot know, and a query that is right about JMAP and wrong
-about the server it runs against fails at run time. `-session` checks against a
-running server:
-
-```
-jmapc check -session jmap.example.com -token $JMAP_TOKEN
-checked 25 queries against https://jmap.example.com/api/, as someone@example.com
-```
-
-What it reports:
-
-- a capability the request declares and the server does not advertise
-- an account the query names that the session does not hold, an account the
-  session cannot fill in because it has no primary account for the capability,
-  and an account that does not support what the call needs
-- more calls than `maxCallsInRequest`, more records than `maxObjectsInGet`, more
-  changes than `maxObjectsInSet`, a request already larger than `maxSizeRequest`
-  before its parameters are filled in
-- a `collation` the server does not compare strings with
-
-What the query leaves to its caller is not checked: a parameter standing for a
-list of ids may be any length, and an assumption about it would report a
-problem in a query that is correct.
-
-The session URL is the one value not read from the environment — `-token` and
-`-user` fall back to `$JMAP_TOKEN` and `$JMAP_USER` — because a check that
-reaches the network should be requested on the command line rather than
-triggered by whatever the environment happens to hold.
-
-## Editor support
-
-The checks above run when jmapc does. Most of them can run while the query is
-being typed instead, because they are checks on the file itself, and a JSON file
-that names a schema is one an editor can already check and complete.
-
-```
-jmapc schema -out jmapc.schema.json
-```
-
-That writes a JSON Schema for the catalogue, vendor extensions and all. Point a
-query file at it:
-
-```json
-{
-  "$schema": "../jmapc.schema.json",
-  "methodCalls": [["Email/query", {"filter": {"inMailbox": "{{mailboxId}}"}}, "search"]]
-}
-```
-
-or point the editor at every query at once, which in VS Code is:
-
-```json
-{
-  "json.schemas": [
-    {"fileMatch": ["*.jmap.json"], "url": "./jmapc.schema.json"}
-  ]
-}
-```
-
-Either way the editor completes a method name, offers the arguments that method
-takes and the properties the type has, and underlines a misspelling where it was
-written. A filter nested inside an `AND` is checked like one outside it, a
-comparator offers the properties the type can actually be sorted by, and a
-`{{parameter}}` is accepted anywhere a value goes.
-
-What a schema cannot say is the part that depends on another call: that a back
-reference names an earlier call and selects a value the argument accepts. That
-stays jmapc's to check, which is why the editor is a first pass rather than a
-replacement for the build.
-
-## Sending a query
-
-A query is worth trying before there is any code that calls it, so `jmapc run`
-sends one and prints what came back.
-
-```
-jmapc run ListInboxEmails -p mailboxId=mbx1 -p limit=25
-```
-
-A value is written the way its type requires. A `String` or an `Id` is the text
-itself, so nothing has to be quoted past the shell, and anything with a shape is
-JSON. A value the type does not accept is refused before anything is sent:
-
-```
-jmapc: parameter limit: "soon" is not a whole number
-```
-
-The server comes from `-session`, which takes the session URL or the host to
-find it under, and the credentials from `-token` or `-user`. Each falls back to an
-environment variable — `$JMAP_SESSION_URL`, `$JMAP_TOKEN`, `$JMAP_USER` — which
-is what keeps a token out of shell history. The account id a query leaves out is looked up in the session, exactly
-as the generated function looks it up, and `-account` overrides it.
-
-`-dry-run` prints the request rather than sending it — the same request the
-generated function builds, which is the thing to look at when a server answers
-something unexpected:
-
-```
-jmapc run MarkEmailRead -dry-run -p emailId=m1
-{
-  "using": [
-    "urn:ietf:params:jmap:core",
-    "urn:ietf:params:jmap:mail"
-  ],
-  "methodCalls": [
-    [
-      "Email/set",
-      {
-        "accountId": "ACCOUNT_ID",
-        "update": {
-          "m1": {
-            "keywords/$seen": true
-          }
-        }
-      },
-      "mark"
-    ]
-  ]
-}
-```
-
-The account id is the one value a dry run cannot know, since it comes from a
-session it never fetches, so `ACCOUNT_ID` stands in for it and the run says so
-on standard error.
-
-A run reads the response the way generated code does: a `/set` that answers 200
-with a refusal in it is an error here too, printed after the response that
-carries it.
-
-## Configuration
-
-Flags, or a `jmapc.json` beside your module:
-
-```json
-{
-  "queries": "queries",
-  "out": "internal/jmapq",
-  "package": "jmapq",
-  "schemas": ["schema/notes.json"]
-}
-```
-
-## Errors at run time
-
-JMAP fails at two levels, and so does the runtime.
-
-A **request-level** failure, where the server rejected the request as a whole,
-is a `*jmapc.RequestError` carrying the problem type from RFC 8620 §3.6.1. The client
-catches some of these before sending: a capability the session does not
-advertise, or more calls than the server accepts.
-
-A **method-level** failure is a `jmapc.MethodErrors`. JMAP runs the calls it
-can, so the response comes back alongside the error, and each error names the
-method and call id that failed rather than the bare `"error"` the wire format
-carries.
-
-A generated function returns the same thing: the calls the server answered are
-decoded, the ones it did not run are left at their zero value, and the result
-is returned with the error. A chained query fails this way routinely — the call
-another depends on succeeds, and the dependent call cannot resolve its
-reference — and the first call's response usually explains why:
-
-```go
-res, err := jmapq.DestroyThread(ctx, c, params)
-if err != nil {
-    if len(res.ThreadGet.NotFound) > 0 {
-        return fmt.Errorf("no such thread: %s", res.ThreadGet.NotFound[0])
-    }
-    return err
-}
-```
-
-The exception is a query naming one call in `_returns`: that call is the whole
-of the answer, so if it is the one that failed, there is nothing to return and
-the result is nil.
-
-TypeScript throws rather than returning, so the decoded response is attached to
-the error. `MethodErrors` carries the response it came from, and `result` holds as much of
-what the query returns as the server answered. Read it as a `Partial`, since a
-call the server would not run is not in it at all:
-
-```ts
-try {
-  await destroyThread(client, params)
-} catch (e) {
-  if (e instanceof MethodErrors) {
-    const partial = e.result as Partial<DestroyThreadResult>
-    if (partial.threadGet?.notFound?.length) {
-      throw new Error(`no such thread: ${partial.threadGet.notFound[0]}`)
-    }
-  }
-  throw e
-}
-```
-
-Rust returns an `Err`, and attaches it there: `MethodErrors::result` returns the
-result the query would have returned, with a call the server did not run left at
-its default rather than missing, since Rust has `Default` for it:
-
-```rust
-if let Error::Method(failed) = &err {
-    if let Some(out) = failed.result::<DestroyThreadResult>() {
-        if !out.thread_get.not_found.is_empty() { /* which thread was missing */ }
-    }
-}
-```
-
-There is a third level, and it is the one most often missed. A `/set` answers
-**200 with no error in it** and lists the records it would not act on:
-
-```json
-["Email/set", {"notCreated": {"draft": {"type": "invalidProperties",
-                                        "properties": ["subject"]}}}, "write"]
-```
-
-Read only the transport error and this is a success where nothing happened.
-Generated code checks it, so a refused record is a `*jmapc.SetErrors`:
-
-```go
-res, err := jmapq.SendEmail(ctx, c, params)
-if err != nil {
-    var refused *jmapc.SetErrors
-    if errors.As(err, &refused) {
-        for _, f := range refused.Failures {
-            log.Printf("%s: %v", f.Key, f.Err) // draft: invalidProperties [subject]
-        }
-    }
-    return err
-}
-```
-
-`res` is returned alongside the error, since the part of the request the server
-did carry out still happened. Calls the query does not name in `_returns` are
-checked too — naming one call should not exempt the others from the check.
-
-In TypeScript the same failure is a thrown `SetErrors`, with the response on
-`err.result`. In Rust it is an `Error::Set`, and the response is retrieved with
-the type the function would have returned, through `err.result::<T>()`.
-
-### Splitting a large /get
-
-A `/get` naming more ids than the server's `maxObjectsInGet` is refused.
-`WithSplitGets` sends it in several requests instead, and joins the answers
-into the one response the caller asked for:
-
-```go
-c := jmapc.New(url, jmapc.WithBearerToken(token), jmapc.WithSplitGets())
-```
-
-It is off by default, for two reasons. One call to `Do` then costs several
-round trips. And the records no longer arrive as one snapshot: each request is
-answered separately, and the account may change between them. Where the `state`
-a `/get` reports differs between requests, the joined response is returned
-together with a `*jmapc.StateChanged`, which `errors.As` reaches — the same
-shape as a method error, so a caller that needs one snapshot can fetch again
-and one that does not can ignore it.
-
-Only the ids written into the query are counted, and two calls are sent as they
-are. One whose ids come from a back reference, since how many they resolve to
-is known to the server alone. And one that another call refers to, since a
-reference resolves within one request, and splitting the call it names would
-leave nothing to resolve against.
-
-The ids that did not fit travel in further requests of their own, no more calls
-in one request than `maxCallsInRequest` allows. The rest of the query is sent
-once, in the first request, so the back references between its other calls
-resolve as they did before.
-
-### Tokens that expire
-
-`WithBearerToken` holds one string for the life of the client. An OAuth 2.0
-access token does not last that long, and replacing it means building another
-client, which discards the cached session and the count of the requests in
-flight along with it. `WithTokenSource` takes a function instead:
-
-```go
-c := jmapc.New(url, jmapc.WithTokenSource(func(ctx context.Context) (jmapc.Token, error) {
-	tok, err := oauthConfig.TokenSource(ctx, refreshToken).Token()
-	if err != nil {
-		return jmapc.Token{}, err
-	}
-	return jmapc.Token{Value: tok.AccessToken, Expiry: tok.Expiry}, nil
-}))
-```
-
-The token is held until it expires. A source that reports an `Expiry` is called
-again shortly before it; one that reports none is called again only when a
-server answers 401. Requests arriving together share one call, so a source that
-exchanges a refresh token is not asked to do so several times at once — some
-servers accept a refresh token only once.
-
-A 401 also sends that one request again, once, with a newly fetched token. A
-second 401 is reported to the caller, since a source returning a token the
-server does not accept is not resolved by sending the request again. This is
-separate from `WithRetry`, which retries what a server reported it did not
-carry out.
-
-### Retries
-
-`WithRetry` retries when the server answers with HTTP 429 or 503.
-
-```go
-c := jmapc.New(url, jmapc.WithBearerToken(token), jmapc.WithRetry(3))
-```
-
-The argument is how many attempts to make. The delay is the value of the
-server's `Retry-After`, or, where the server sends none, a delay that doubles
-from 0.2 seconds to 30 seconds.
-
-### Observability
-
-`WithObserver` makes the client report what it does. The report affects
-neither the request sent nor the response received, and a hook left nil is
-never called.
-
-```go
-c := jmapc.New(url, jmapc.WithBearerToken(token),
-	jmapc.WithObserver(jmapc.SlogObserver(slog.Default())))
-```
-
-There are three hooks, and they nest. `SlogObserver` writes a debug record for
-each. `Request` covers one JMAP request: the calls it carries and its outcome.
-`Attempt` covers one HTTP request under it, which includes the session fetch a
-first request triggers and every retry. `Wait` covers a delay applied instead
-of sending — for one of the slots `maxConcurrentRequests` allows, or before a
-retry after a 429 or a 503.
-
-```
-Request   Email/query, Email/get
-  Attempt GET  /.well-known/jmap  200
-  Wait    for a slot, where the server accepts two requests at once
-  Attempt POST /jmap/api          429
-  Wait    for the two seconds of the server's Retry-After
-  Attempt POST /jmap/api          200
-```
-
-An HTTP-level instrument already records the round trips, and where that is
-enough, `WithHTTPClient` takes a client with an instrumented transport. What it
-cannot record is the JMAP: which methods were sent together in one request, how
-long the caller waited for a slot, and that a call was refused although the
-request returned 200.
-
-There is no dependency on OpenTelemetry, and none is needed. `Request` and
-`Attempt` return the context used for the operation they cover, so a span
-started in one becomes the parent of the spans started under it:
-
-```go
-tracer := otel.Tracer("jmapc")
-
-obs := &jmapc.Observer{
-	Request: func(ctx context.Context, info jmapc.RequestInfo) (context.Context, func(jmapc.ResponseInfo)) {
-		methods := make([]string, len(info.Calls))
-		for i, call := range info.Calls {
-			methods[i] = call.Name
-		}
-		ctx, span := tracer.Start(ctx, "jmap.request",
-			trace.WithAttributes(attribute.StringSlice("jmap.methods", methods)))
-		return ctx, func(done jmapc.ResponseInfo) {
-			span.SetAttributes(attribute.Int("jmap.method_errors", len(done.Errors)))
-			if done.Err != nil {
-				span.RecordError(done.Err)
-			}
-			span.End()
-		}
-	},
-	Attempt: func(ctx context.Context, info jmapc.AttemptInfo) (context.Context, func(jmapc.AttemptInfo, jmapc.Answer)) {
-		ctx, span := tracer.Start(ctx, "jmap."+string(info.Kind),
-			trace.WithAttributes(attribute.Int("http.attempt", info.Attempt)))
-		return ctx, func(info jmapc.AttemptInfo, answer jmapc.Answer) {
-			span.SetAttributes(attribute.Int("http.status_code", answer.Status))
-			span.End()
-		}
-	},
-}
-```
-
-`Observer` exists only in the Go client. In Rust and TypeScript, the
-equivalent belongs in the transport.
-
-## Testing
-
-Testing the code you write around a generated client means answering a request
-that carries several method calls, some of which refer to the results of the
-others. A stub written by hand for one test either ignores that, and no longer
-resembles a server, or grows into this:
-
-```go
-srv := jmaptest.New(t)
-srv.Reply("Email/query", jmapc.EmailQueryResponse{
-	AccountID: jmaptest.AccountID,
-	IDs:       []jmapc.ID{"m1", "m2"},
-})
-srv.Handle("Email/get", func(c *jmaptest.Call) (any, error) {
-	// The ids are the ones the query call answered with: the back reference
-	// has already been resolved, the way a server resolves it.
-	return emailsFor(c.IDs()), nil
-})
-
-res, err := jmapq.ListInboxEmails(ctx, srv.Client(), params)
-```
-
-What it removes from the test:
-
-- **The back references.** They are resolved as RFC 8620 defines, including the
-  `*` that maps a path over a list, so a chained query reaches the handlers
-  with resolved values.
-- **The checking.** The request is checked against the data model the same way
-  the build checks a query, so a call with an argument no method has fails the
-  test rather than passing quietly. `jmaptest.WithoutChecks()` disables it, for
-  a method jmapc does not know.
-- **The failures.** `srv.Fail` for a method-level error, `srv.FailRequest` for a
-  request rejected as a whole, and a `/set` response listing what it refused for
-  the failure that answers 200.
-- **What was requested.** `srv.Call("Email/query")` is the last call to a method,
-  `srv.Calls()` all of them, and `srv.Requests()` how many requests they took —
-  which is how to check that calls were sent in one request rather than one at
-  a time.
-- **The push.** `srv.Push` sends a state change to a watching client, which is
-  what a watching query's loop waits for.
-
-What it does not do is store anything. It is a server to test a client against
-rather than an implementation of JMAP: nothing a `/set` creates comes back from
-a later `/get` unless the test says it does.
-
-A client is rarely converted all at once, and a half-converted one has two
-halves to answer in the same test: the generated half, which reaches the
-server through `srv.Client()`, and the half still written by hand, which posts
-to paths of its own. `srv.Mux()` is where those paths go, and `srv.BaseURL()`
-is what the other half is pointed at:
-
-```go
-srv := jmaptest.New(t)
-srv.Mux().HandleFunc("/jmap", myOldAPIHandler)
-srv.Mux().HandleFunc("/jmap/session", myOldSessionHandler)
-
-old := myOldClient(srv.BaseURL())
-```
-
-Where the other half already uses JMAP and only expects it at different paths —
-deriving the session and the API from a base URL of its own — mount jmaptest's
-own handlers there instead, and it answers under both paths:
-
-```go
-srv.Mux().HandleFunc("/jmap/session", srv.ServeSession)
-srv.Mux().HandleFunc("/jmap", srv.ServeAPI)
-```
-
-So jmaptest is worth adopting on the first method converted rather than the
-last.
-
-## Blobs
-
-Attachments are not transferred through the API endpoint. They are uploaded and
-downloaded over plain HTTP, at the URLs the session advertises, and the runtime
-handles both:
-
-```go
-info, err := c.Upload(ctx, accountID, "application/pdf", file)
-// info.BlobID now goes into an Email/set that attaches it.
-
-blob, err := c.Download(ctx, accountID, part.BlobID, &jmapc.DownloadOptions{
-	Name: *part.Name,
-	Type: part.Type,
-})
-defer blob.Close()
-```
-
-Both stream. `Upload` reads from an `io.Reader` and `Download` returns an
-`io.ReadCloser`, so an attachment larger than memory is copied from a file to
-the server, and from the server to a file, without being held in either
-direction. An upload larger than the server's `maxSizeUpload` fails before it
-is sent.
-
-`From` and `Length` fetch part of a blob, which is how a download interrupted
-part way is resumed:
-
-```go
-blob, err := c.Download(ctx, accountID, blobID, &jmapc.DownloadOptions{From: written})
-...
-blob.Range // the part that came back: 4096-8191 of 8192
-```
-
-They are sent as an HTTP `Range` header. JMAP defines none for the download
-endpoint, so a server is free to ignore it and answer with the whole blob;
-where that happens the download fails rather than returning content the caller
-would write at the wrong offset.
-
-A server offering `urn:ietf:params:jmap:blob` can also create and read blobs
-through the API, which the endpoints cannot: `Blob/upload` puts a blob in the
-same request as the call that uses it, so the id never comes back to the client
-in between.
-
-## Walking an answer that does not fit in one request
-
-A JMAP answer is often only part of an answer. A `/query` returns just the
-window of results the caller asked for, and says where that window sits in the
-full result. A `/changes` returns only as many changes as the server chooses to,
-and reports whether there are more.
-
-Either way, getting the rest means sending another request, and what goes in it
-comes from the last answer: `position` for a `/query`, `sinceState` for a
-`/changes`. Naming a call in `_pages` generates that loop, called a walk, so it
-does not have to be written by hand.
-
-The call named in `_pages` is the one the walk resends on each step. Where the
-next request should start — `position` for a `/query`, `sinceState` for a
-`/changes` — is managed by the walk rather than by the caller, so it is written
-as a parameter in the query:
-
-```json
-{
-  "_pages": "search",
-
-  "methodCalls": [
-    ["Email/query", {"filter": {"text": "{{phrase}}"}, "position": "{{position}}",
-                     "limit": 50, "calculateTotal": true}, "search"],
-    ["Email/get", {"#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"}}, "fetch"]
-  ]
-}
-```
-
-Go gets an iterator. Advancing it sends the next request:
-
-```go
-for page, err := range jmapq.SearchEmailsPages(ctx, c, params) {
-	if err != nil {
-		return err
-	}
-	for _, email := range page.EmailGet.List {
-		fmt.Println(*email.Subject)
-	}
-}
-```
-
-TypeScript gets an async generator that does the same, one step at a time. A
-failure throws as it does from the query itself:
-
-```ts
-for await (const page of searchEmailsPages(client, params)) {
-  for (const email of page.emailGet.list) console.log(email.subject)
-}
-```
-
-Rust gets a value that holds the current position, and advances the same way. A
-stream would require a crate to define one, and the generated code requires
-serde and nothing else:
-
-```rust
-let mut pages = search_emails_pages(params);
-while let Some(page) = pages.next(&client).await? {
-    for email in &page.email_get.list {
-        println!("{:?}", email.subject);
-    }
-}
-```
-
-When a walk stops depends on what it is walking.
-
-A `/query` walk starts from the `position` the parameters carry, so it can
-resume where a previous walk stopped. An empty window ends the walk instead of
-being yielded, so every page the walk yields holds at least one record. Where
-the call asked for the total, the walk also stops once the next request would
-be past that total.
-
-A `/changes` walk yields even an answer reporting no changes, because that
-answer still carries the `sinceState` to continue from. It ends only when the
-server reports no further changes.
-
-A watching query already repeats the request while the server reports more
-changes, so `_watches` and `_pages` are never written on the same query.
-
-## Push
-
-An event reports which types in which accounts have changed, not what changed.
-A client that needs the changes therefore writes a loop: connect, request the
-changes since the state it holds, apply them, wait for the next event. That
-loop is the same every time and every part of it is a place for a mistake, so a
-query can request it.
-
-`_watches` names the call the loop reads the state from, which has to be one
-that reports what changed since a state, as `Email/changes` does:
-
-```json
-{
-  "_watches": "changes",
-
-  "methodCalls": [
-    ["Email/changes", {"sinceState": "{{sinceState}}", "maxChanges": 128}, "changes"],
-    ["Email/get", {"#ids": {"resultOf": "changes", "name": "Email/changes", "path": "/created"}}, "created"]
-  ]
-}
-```
-
-`SyncEmails` is generated as it would be anyway, and `SyncEmailsWatch` alongside
-it:
-
-```go
-err := jmapq.SyncEmailsWatch(ctx, c, jmapq.SyncEmailsParams{SinceState: state},
-	func(ctx context.Context, res *jmapq.SyncEmailsResult) error {
-		for _, email := range res.EmailGet.List {
-			fmt.Println("new:", *email.Subject)
-		}
-		state = res.EmailChanges.NewState // keep it, and start there next time
-		return nil
-	})
-```
-
-It starts from the state the parameters carry, and continues from the state
-each answer reports. What it removes from the caller:
-
-- **A stream is a connection, not a subscription.** When it drops, another is
-  opened, resuming from the last event delivered, with a delay that doubles
-  from a second to 30 seconds while the server is unreachable.
-- **Changes made while no connection was open are not pushed**, so every
-  connection is followed by a catch-up.
-- **A server returns as many changes as it chooses** and sets
-  `hasMoreChanges`, so the loop repeats the request until that is false.
-- **An event about another account, another type, or a state the loop has
-  already reached** does not need a request. The last of those is the common
-  case: a catch-up causes the server to push the state it has just received.
-
-The loop runs until the context ends, which is the error it returns. An error
-from the callback stops the loop and is returned unchanged. A server that
-refuses the connection outright returns that error immediately rather than
-retrying, because retrying will not change a 403. `jmapc.WithPing` and
-`jmapc.WithReconnect` configure the two values worth tuning.
-
-Underneath is `Client.Watch`, which takes the catch-up as a function and is what
-to call where the catching up is not one query:
-
-```go
-err := c.Watch(ctx, accountID, "Email", state,
-	func(ctx context.Context, since string) (newState string, more bool, err error) {
-		// ... /changes from since, then whatever the ids call for
-	})
-```
-
-Only the Go client follows a watch. Holding a connection open is the runtime's
-responsibility rather than the generated code's, and the Rust and TypeScript
-runtimes do not implement it; generating either from a watching query writes
-the query without the loop and reports that.
-
-Below `Watch` is `Client.EventSource`, which opens the push endpoint and returns
-the events:
-
-```go
-stream, err := c.EventSource(ctx, &jmapc.EventSourceOptions{
-	Types: []string{"Email"},
-	Ping:  30 * time.Second,
-})
-defer stream.Close()
-
-for {
-	change, err := stream.Next()
-	if err != nil {
-		break // reconnect, passing stream.LastEventID()
-	}
-	if state, ok := change.StateOf(accountID, "Email"); ok {
-		_ = state
-	}
-}
-```
-
-This is the event source form of push, which suits a client that can hold a
-connection open. The other form registers a URL for the server to post to, which
-is what an app on a phone needs: see `RegisterPush` and `ConfirmPush` in
-[`example/queries`](example/queries). A subscription is not active when it is
-created — the server pushes a code to the URL, and the client sends it back with
-a `PushSubscription/set` before anything else is sent. `jmapc.PushVerification`
-decodes what arrives.
-
-## Vendor extensions
-
-JMAP is meant to be extended: a server advertises a capability URI of its own,
-bringing types and methods jmapc does not know. Describe them in a
-schema file and queries against them are checked exactly as ones against `Email`
-are — back references, property names, sort orders and all.
-
-```json
-{
-  "capability": "urn:example:params:jmap:notes",
-  "types": [
-    {
-      "name": "Note",
-      "doc": "Note is a scrap of text the user keeps.",
-      "properties": [
-        {"name": "id", "type": "Id", "serverSet": true, "immutable": true, "doc": "The id of the note."},
-        {"name": "title", "type": "String", "doc": "The note's title."}
-      ],
-      "methods": ["get", "changes", "set", "query"],
-      "sort": [{"name": "createdAt", "doc": "Sorts by when the note was created."}]
-    },
-    {
-      "name": "NoteFilterCondition",
-      "doc": "NoteFilterCondition is a condition a note must satisfy to match a Note/query.",
-      "properties": [{"name": "text", "type": "String", "doc": "Matches notes containing this text."}]
-    }
-  ]
-}
-```
-
-Naming the six standard methods is enough to get them: their arguments and
-responses follow the shapes RFC 8620 fixes. A method that does not follow one is
-declared outright, with its arguments and response spelled out.
-
-```
-jmapc generate -schema schema/notes.json
-```
-
-Or list them in `jmapc.json` under `"schemas"`.
-
-## Working on jmapc
-
-```
-go test ./...        # everything, including the end-to-end tests
-go generate ./...    # regenerate the runtime types and every example client
-```
-
-The example is generated three times, once per language, into `example/jmapq`,
-`example/rust/src/jmapq` and `example/ts`. Go's tests cannot say whether the
-other two compile, so CI runs `cargo fmt --check` and `cargo test` over the
-Rust and `tsc --strict` over the TypeScript. Each of the two has a
-hand-written check beside the generated code, exercising the runtime against a
-stub: that the headers are sent, that authentication overrides them, that the
-session is cached, and that a `/set` answering 200 with a refusal in it is
-still an error.
-
-The schema is checked the same way, and for the same reason: whether a
-validator accepts the example queries and refuses the mistakes the schema
-claims to catch is not something Go's tests can say. `example/schema/check.mjs`
-runs one, over a schema written from the catalogue as it stands.
-
-The generator is run from source here, not through `go tool`, because this is
-the repository that defines it.
-
-The runtime types and the example client are committed, and a test compares
-them against what the catalogue produces now, so a change to the data model
-that was not regenerated fails the build rather than going unnoticed. CI runs
-the same checks, plus gofmt, go vet, and govulncheck.
-
-A release is a tag pushed once the work is on main, and its notes are the
-section of [CHANGELOG.md](CHANGELOG.md) for that tag: what changed, grouped by
-what it means for the code that uses this, with the breaking changes first.
-Write that section before the tag. A tag with no section fails the release
-rather than publishing an empty one.
+`jmapc check` runs the checks without writing anything, and `-session` adds what
+only a running server can answer — the capabilities it advertises, the accounts
+it holds, how much it accepts in one request. Most of the checks run in the
+editor too, from a JSON Schema jmapc writes. The whole list is in
+[Verification](docs/verification.md).
+
+## Documentation
+
+Everything above is the whole of jmapc in outline. The rest is under `docs/`,
+one file to a subject, in the order they are worth reading in.
+
+The first three are what you have in front of you while writing a query: what a
+query file may hold, what jmapc checks before it generates anything, and how to
+send a query and look at the answer before there is any code that calls it. The
+next four describe what the generated code calls into once it runs — errors,
+blobs, changes the server pushes, an answer that arrives one part at a time, and
+a server to test your own code against. The last four are reference: the Rust
+and TypeScript clients, capabilities jmapc does not know, the ones it does, and
+jmapc itself.
+
+| | |
+|---|---|
+| [Writing a query](docs/queries.md) | The query file, its parameters, and the names generated from it |
+| [Verification](docs/verification.md) | What is checked at build time, against a server, and in the editor |
+| [The jmapc command](docs/cli.md) | Sending a query with `jmapc run`, and configuration |
+| [The runtime](docs/runtime.md) | Errors, large `/get`s, tokens, retries, observability, and blobs |
+| [Push](docs/push.md) | Following changes as the server reports them |
+| [Walking an answer that does not fit in one request](docs/paging.md) | Reading a result the server returns one part at a time |
+| [Testing](docs/testing.md) | jmaptest, a JMAP server to test your code against |
+| [Other languages](docs/languages.md) | The Rust and the TypeScript client |
+| [Vendor extensions](docs/extensions.md) | Types and methods jmapc does not know, described in a schema file |
+| [Coverage](docs/coverage.md) | The capabilities and the methods supported |
+| [Working on jmapc](docs/contributing.md) | Building, testing and releasing jmapc itself |
 
 ## Coverage
 
-JMAP is a family of specifications: a server advertises capability URIs, and
-each brings its own types and methods. These are the ones
-[IANA lists](https://www.iana.org/assignments/jmap/jmap.xhtml), and where jmapc
-stands on each.
+jmapc supports every JMAP capability [IANA
+lists](https://www.iana.org/assignments/jmap/jmap.xhtml) — core, mail,
+submission, contacts, calendars, principals, sieve, quota, blob and the rest —
+and the 81 methods they bring, all checked and generated the same way. A
+capability that is not among them is described in a
+[schema file](docs/extensions.md) and checked like any other. What each
+capability brings, and the one thing jmapc deliberately does not check, is in
+[Coverage](docs/coverage.md).
 
-| Capability | Specification | Supported |
-|---|---|---|
-| `urn:ietf:params:jmap:core` | [RFC 8620](https://www.rfc-editor.org/rfc/rfc8620) | ✅ |
-| `urn:ietf:params:jmap:mail` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | ✅ |
-| `urn:ietf:params:jmap:submission` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | ✅ |
-| `urn:ietf:params:jmap:vacationresponse` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | ✅ |
-| `urn:ietf:params:jmap:contacts` | [RFC 9610](https://www.rfc-editor.org/rfc/rfc9610) | ✅ |
-| `urn:ietf:params:jmap:calendars` | [draft-ietf-jmap-calendars](https://datatracker.ietf.org/doc/draft-ietf-jmap-calendars/) | ✅ |
-| `urn:ietf:params:jmap:principals:availability` | [draft-ietf-jmap-calendars](https://datatracker.ietf.org/doc/draft-ietf-jmap-calendars/) | ✅ |
-| `urn:ietf:params:jmap:principals` | [RFC 9670](https://www.rfc-editor.org/rfc/rfc9670) | ✅ |
-| `urn:ietf:params:jmap:principals:owner` | [RFC 9670](https://www.rfc-editor.org/rfc/rfc9670) | ✅ |
-| `urn:ietf:params:jmap:smimeverify` | [RFC 9219](https://www.rfc-editor.org/rfc/rfc9219) | ✅ |
-| `urn:ietf:params:jmap:blob` | [RFC 9404](https://www.rfc-editor.org/rfc/rfc9404) | ✅ |
-| `urn:ietf:params:jmap:quota` | [RFC 9425](https://www.rfc-editor.org/rfc/rfc9425) | ✅ |
-| `urn:ietf:params:jmap:sieve` | [RFC 9661](https://www.rfc-editor.org/rfc/rfc9661) | ✅ |
-| `urn:ietf:params:jmap:mdn` | [RFC 9007](https://www.rfc-editor.org/rfc/rfc9007) | ✅ |
-| `urn:ietf:params:jmap:webpush-vapid` | [RFC 9749](https://www.rfc-editor.org/rfc/rfc9749) | ✅ |
+## Author
 
-Two of these store objects from specifications of their own: a contact card is
-a [JSContact](https://www.rfc-editor.org/rfc/rfc9553) Card, and a calendar event
-is a [JSCalendar](https://www.rfc-editor.org/rfc/rfc8984) JSEvent. Both name
-types that JMAP also names, and each other's too — there are three different
-`Link` types between them. So those carry a prefix: `ContactEmailAddress` is an
-address on a card, `EmailAddress` is one in a header field, and `EventLink` is a
-resource attached to a meeting. Each type's documentation gives the name its
-specification uses.
-
-JSCalendar also brings time types JMAP does not have. An event's `start` is a
-`LocalDateTime` with no zone, and its `duration` is an ISO 8601 `Duration`,
-because "P1D" across a daylight saving change is not always 24 hours. Both are
-checked in a query, so a `start` written with a `Z` on the end, or a duration
-written as `90m`, fails to build.
-
-Not every capability brings types of its own. S/MIME verification adds four
-properties to `Email` and nothing else, so a query needs it without any method
-name saying so. jmapc works out which capabilities the properties a query
-touches belong to, and declares them: ask for `smimeStatus` and
-`urn:ietf:params:jmap:smimeverify` appears in `using` on its own.
-
-Some define neither types nor methods, only a value for the client. VAPID is
-one, and that value is a key. Those are read from the session, and
-`Session.Capability` reads any of them, including one jmapc does not know.
-
-```go
-vapid, err := session.WebPushVAPID()
-// vapid.ApplicationServerKey goes to the push service when subscribing there.
-
-var limits struct{ MaxSizeScript int `json:"maxSizeScript"` }
-err = session.Accounts[accountID].Capability(jmapc.CapabilitySieve, &limits)
-```
-
-A capability that is not built in can still be used: describe its types in a
-[schema file](#vendor-extensions) and queries against them are checked like any
-other. That is the same mechanism a vendor extension uses, and the work is
-declarative — no Go to write.
-
-### Methods
-
-81 methods, all of them checked and generated the same way.
-
-| Type | Methods |
-|---|---|
-| `Mailbox` | `get` `changes` `set` `query` `queryChanges` |
-| `Thread` | `get` `changes` |
-| `Email` | `get` `changes` `set` `copy` `query` `queryChanges` `import` `parse` |
-| `SearchSnippet` | `get` |
-| `Identity` | `get` `changes` `set` |
-| `EmailSubmission` | `get` `changes` `set` `query` `queryChanges` |
-| `VacationResponse` | `get` `set` |
-| `AddressBook` | `get` `changes` `set` |
-| `ContactCard` | `get` `changes` `set` `copy` `query` `queryChanges` |
-| `Calendar` | `get` `changes` `set` |
-| `CalendarEvent` | `get` `changes` `set` `copy` `query` `queryChanges` `parse` |
-| `CalendarEventNotification` | `get` `changes` `set` `query` `queryChanges` |
-| `ParticipantIdentity` | `get` `changes` `set` |
-| `Principal` | `get` `changes` `set` `query` `queryChanges` `getAvailability` |
-| `ShareNotification` | `get` `changes` `set` `query` `queryChanges` |
-| `Quota` | `get` `changes` `query` `queryChanges` |
-| `SieveScript` | `get` `set` `query` `validate` |
-| `MDN` | `send` `parse` |
-| `Blob` | `copy` `upload` `get` `lookup` |
-| `PushSubscription` | `get` `set` |
-| `Core` | `echo` |
-
-### What is not checked
-
-One thing, and it is on purpose.
-
-**Open sets are not checked, deliberately.** Where a specification fixes the
-values a property takes, jmapc checks them. Where it leaves the set open — a
-mailbox `role`, an email keyword, a `Content-Disposition` — it does not, because
-rejecting a value the server would have accepted is worse than letting a typo
-through.
-
-### Generation
-
-`internal/spec` is a plain Go declaration of the data model, and the runtime
-types in `types_gen.go` are generated from the same catalogue the queries are
-checked against, so the two cannot drift apart.
+[linyows](https://github.com/linyows)

@@ -28,11 +28,46 @@
   </a>
 </p>
 
-jmapc は JMAP から**型安全なコード**を、Go、Rust、TypeScript で生成します。
+jmapc は JMAP のコンパイラです。
+仕様がすでに定めている JMAP のリクエスト、つまり JSON でクエリを書くと、jmapc はそれを仕様に照らして検証したうえで、Go、Rust、TypeScript の**型安全なクライアント**を生成します。
 
 1. JMAP でクエリを書きます。
 1. jmapc を実行して、そのクエリに型安全なインターフェースを持つコードを生成します。
 1. 生成されたコードを呼ぶアプリケーションコードを書きます。
+
+クエリ `queries/ListInboxEmails.jmap.json` は次のように書きます。
+
+```json
+{
+  "methodCalls": [
+    ["Email/query", {"filter": {"inMailbox": "{{mailboxId}}"}, "limit": "{{limit}}"}, "search"],
+    ["Email/get", {"#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"},
+                   "properties": ["id", "subject", "from", "receivedAt"]}, "fetch"]
+  ],
+  "_returns": "fetch"
+}
+```
+
+`jmapc generate` はこれを次のように呼べるコードにします。
+
+```go
+res, err := jmapq.ListInboxEmails(ctx, c, jmapq.ListInboxEmailsParams{
+	MailboxID: inbox,
+	Limit:     25,
+})
+```
+
+`res.List` は、クエリが要求した四つのプロパティだけを持ちます。
+
+## 機能
+
+jmapc を特徴づける機能は、次の五つにまとめられます。
+
+- クエリは jmapc 独自の API ではなく、JMAP そのもので書きます
+- クエリの検証は、コードを生成する前、エディタで書いている最中、そして稼働中のサーバに対しても行えます
+- 生成されるコードは、型安全なレスポンス、網羅的なエラー処理、プッシュとページングのループを備えます
+- 一つのクエリから Go、Rust、TypeScript のクライアントを生成でき、外部への依存は最低限です
+- 実際にクエリを送信するコマンドやテスト用の JMAP サーバ、そして jmapc が知らないケイパビリティを足すスキーマファイルが付属します
 
 ## 動機
 
@@ -41,31 +76,10 @@ JMAP は一つのリクエスト中に複数のメソッド呼び出しを記述
 
 ```json
 {
-  "using": [
-    "urn:ietf:params:jmap:core",
-    "urn:ietf:params:jmap:mail"
-  ],
+  "using": ["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail"],
   "methodCalls": [
-    [
-      "Email/query",
-      {
-        "filter": {
-          "inMailbox": "mbx1"
-        }
-      },
-      "search"
-    ],
-    [
-      "Email/get",
-      {
-        "#ids": {
-          "resultOf": "search",
-          "name": "Email/query",
-          "path": "/ids"
-        }
-      },
-      "fetch"
-    ]
+    ["Email/query", {"filter": {"inMailbox": "mbx1"}}, "search"],
+    ["Email/get", {"#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"}}, "fetch"]
   ]
 }
 ```
@@ -79,17 +93,39 @@ JMAP は一つのリクエスト中に複数のメソッド呼び出しを記述
 であれば、クエリだけを書いて、クライアントは jmapc に書かせればよいはずです。
 このアイデアは、SQL における [sqlc](https://sqlc.dev) から着想を得たものです。
 
-利用者が書くのはクエリだけで、手で書くと面倒で間違えやすい部分は jmapc に任せることができます。
+## 既存の JMAP クライアントとの違い
 
-- クエリのリンティング
-- レスポンスの型安全
-- 網羅的なエラー処理
+いま使われている JMAP クライアントはライブラリです。
+Go の [go-jmap](https://github.com/rockorager/go-jmap)、Rust の [jmap-client](https://github.com/stalwartlabs/jmap-client)、TypeScript の [Jam](https://github.com/htunnicliff/jmap-jam)、そして [jmap.io が挙げている](https://jmap.io/software/)ものがあります。
+いずれもプロトコルを、実行時に呼ぶ API として提供します。
+jmapc が動くのは、それより前、コードを生成する時点です。
+違いは次の三つです。
 
-結果参照は参照先のメソッドに照らして、引数はデータモデルに、プロパティ名は型に照らして検証されます。
-プロパティ名の綴り間違いは、ビルドが失敗するのでサーバに届く前に分かります。
-クエリが要求したプロパティだけを持つ構造体にデコードされるので、`map[string]any` を辿る必要はなく、レスポンスは型安全です。
-JMAP はリクエスト、メソッド、レコードの三つのレベルで失敗します。
-レコードレベルは HTTP 200 で返るので見落とされがちですが、生成コードがこれを検査します。
+**リクエストを、ライブラリ独自の API ではなく JMAP で書きます。**
+ビルダーは、リクエストを独自の書き方で表現します。
+Go なら `jmap.ResultReference{ResultOf, Name, Path}` を持たせた `req.Invoke(&email.Get{...})`、Rust なら `client.build()` と `.updated_reference()` です。
+利用者は JMAP を覚え、そのうえでそのライブラリでの書き方を覚えることになります。
+jmapc のクエリは RFC 8620 が定めるリクエストオブジェクトそのもので、それ以上のものはありません。
+仕様からそのまま持ってこられますし、そのまま `jmapc run` で送れて、`jq` で読めて、エディタで補完できます。
+
+**間違いはプログラムを動かす前に見つかります。**
+ライブラリが検査できるのは、その型が表しているもの、つまりフィールドが存在すること、型が合っていることです。
+しかし JMAP のリクエストが正しいかどうかは、その多くが値によって決まります。
+参照先の呼び出しを名指す `"name": "Email/query"`、そこから値を選ぶ `"path": "/ids"`、`properties` に並ぶ名前、フィルタの条件、パッチのポインタです。
+ライブラリにとってこれらは文字列でしかないので、間違いはサーバからのエラーとして返ってきます。
+jmapc は生成時にこれらをデータモデルに照らして検証するので、参照先のメソッド名を間違えた結果参照はビルドを失敗させます。
+
+**レスポンスはクエリが要求したものを持ちます。**
+go-jmap は `Invocation.Args` を `any` で返すので、型スイッチで取り出します。
+jmap-client は `unwrap_method_responses()` から `unwrap_get_mailbox()` へと unwrap を連ねます。
+生成された関数は、クエリが並べたプロパティだけを持つ名前の付いた型を返します。
+TypeScript の Jam は同じことを実現しています。リテラル型が `properties` の指定でレスポンスの型を絞れるからです。
+jmapc は、型システムだけではそれができない Go と Rust でも同じ絞り込みを得ます。
+
+引き換えになるのは、クエリが jmapc の実行時に固定されることです。
+実行時に形が決まるリクエスト、たとえば利用者の入力から組み立てるフィルタは、呼び出しを一つずつ組み立てるのではなく、一つのパラメータとして渡すことになります。
+任意のリクエストを組み立てるプログラムは、ビルダーの領分です。
+生成されたコードも、リポジトリで管理するコードです。ビルドに一手間が加わり、生成物をコミットすることになります。
 
 ## インストール
 
@@ -174,1126 +210,74 @@ for _, email := range res.List {
 ヘッダフィールドを指すプロパティは、要求した形式によって型が決まります。
 `header:List-Id:asText` は `*string`、`header:To:asAddresses` は `[]jmapc.EmailAddress` です。
 
-### 生成される名前
-
-生成される名前はすべてファイル名から決まります。
-そのためファイル名は Go の識別子でなければなりません。
-英数字とアンダースコアからなり、数字で始まらない名前です。
-
-`ListInboxEmails.jmap.json` からは次の名前が生成されます。
-
-| 生成物 | 名前 |
-|---|---|
-| 関数 | `ListInboxEmails` |
-| パラメータ。クエリが値を開けている場合に生成されます | `ListInboxEmailsParams` |
-| プロパティを絞り込んだレコード | call id `fetch` から `ListInboxEmailsFetchEmail`。ボディパートを絞り込めば `ListInboxEmailsFetchEmailBodyPart` も生成されます |
-| そのレコードを返す呼び出しのレスポンス | `ListInboxEmailsFetchResponse`（call id の `fetch` から） |
-| 結果。`_returns` が呼び出しを指定しない場合に生成されます | `ListInboxEmailsResult` |
-| 変更を追う関数。クエリが `_watches` を持つ場合に生成されます | `SyncEmailsWatch` |
-| 答えを最後まで読み通すもの。クエリが `_pages` を持つ場合に生成されます | `SearchEmailsPages` |
-| ファイル | `listinboxemails_gen.go` |
-
-生成されるコードの名前は call id から決まります。
-結果は呼び出しごとに一つのフィールドを持ち、その名前はクエリが付けた id です。絞り込みのある呼び出しのレコード型とレスポンス型も同じ名前から作られます。
-位置による連番は使いません。call id はリクエスト内で一意だと決まっており、連番にすると呼び出しを前に挿したときに名前が別の形を指してしまうからです。
-
-```json
-["Email/query", {...}, "search"],
-["Email/get",   {...}, "fetch"]
-```
-
-```go
-res.Search.IDs      // Email/query のレスポンス
-res.Fetch.List      // Email/get のレスポンス
-```
-
-RFC 8620 は call id に任意の文字列を許しているので、識別子にならない call id の場合は、呼び出すメソッド名にフォールバックします。
-
-絞り込みのない呼び出しは、クエリごとの型ではなく共有の型で返ります。
-`SendEmail` の戻り値が `*jmapc.EmailSubmissionSetResponse` なのはそのためです。
-同じパッケージに同名のクエリを二つ置くことはできません。
-生成される型の名前がすでに使われている場合は、`ListInboxEmailsFetchEmail2` のように連番が付きます。
-
-一つのクエリの中で、同じメソッドで同じ型を読み、同じプロパティを要求している呼び出しどうしは、同じレコードを表しています。
-そのため型は一つになり、名前は最初の呼び出しの call id から作られます。
-同じ形に二つの名前が付くと、片方の呼び出しが返したレコードを、もう片方のために書いた関数に渡すのに変換が要ることになります。
-同じ形を読む呼び出しを前に挿すと名前は新しい呼び出しに移りますが、これはビルドが報告します。名前が指す形が変わることはありません。
-
-レコードを作る `/set` には、そのレコードに付けた名前ごとに定数が生成されます。
-レスポンスはその名前でレコードを返してくるからです。
-
-```json
-["Mailbox/set", {"create": {"newMailbox": {"name": "{{name}}"}}}, "make"]
-```
-
-```go
-res, err := jmapq.CreateMailbox(ctx, c, jmapq.CreateMailboxParams{Name: name})
-...
-created := res.Created[jmapq.CreateMailboxNewMailbox]
-```
-
-これがないと、同じ名前が二つのファイルに何の繋がりもなく存在することになります。
-クエリ側で改名してもビルドは通り、実行時にルックアップが外れるだけです。
-Rust では `CREATE_MAILBOX_NEW_MAILBOX`、TypeScript では `createMailboxNewMailbox` になります。
-`{"{{creationId}}": ...}` のように呼び出し側に名前を委ねた場合は、呼び出し側がすでに名前を持っているので定数は作られません。
-
-パラメータを持たないクエリは、Params 引数自体を取りません。
-`MailQuota(ctx, c, MailQuotaParams{})` ではなく `MailQuota(ctx, c)` になります。
-そのため、すでに使われているクエリに最初の `{{param}}` を追加すると、生成される関数の引数の数が変わり、呼び出し箇所がすべて壊れます。
-これは意図的なトレードオフです。パラメータを持たないクエリが、ただの関数呼び出しのように読めることを優先しています。
-
-TypeScript では関数名とファイル名の先頭が小文字になり、`listInboxEmails.ts` の `listInboxEmails` になります。
-型名は上の表のままです。
-
-Rust では関数名とモジュール名が snake_case になり、`list_inbox_emails.rs` の `list_inbox_emails` になります。
-型名も上の表のままですが、頭字語は一語として綴られます。
-これは Rust の綴り方に倣ったもので、`UTCDate` は `UtcDate` になります。
-プロパティは snake_case になり、それがワイヤ上の名前と違う場合には serde の rename が付きます。
-
-### 用例
-
+生成されるコードの名前はファイル名から、その中の名前は呼び出し id から決まります。
+[クエリの書き方](docs/queries.ja.md#生成される名前)を参照してください。
 [`example/queries`](example/queries) には、メール、連絡先、カレンダー、共有、フィルタにまたがる 25 個のクエリがあります。
-検索、既知の状態からの同期、送信、連絡先カードの作成、繰り返し予定のうち一回だけを他に触れずに動かす操作などです。
 
-## Rust
+## 他の言語
 
-同じクエリから Rust 用のクライアントを生成できます。
+同じクエリから Rust や TypeScript のクライアントも生成できます。
 
 ```
 jmapc generate -lang rust -out src/jmapq
-```
-
-```rust
-use jmapq::list_inbox_emails::{list_inbox_emails, ListInboxEmailsParams};
-use jmapq::Client;
-
-let client = Client::with_bearer_token("https://example.com/.well-known/jmap", http, token);
-
-let res = list_inbox_emails(&client, ListInboxEmailsParams {
-    mailbox_id: inbox,
-    limit: 25,
-})
-.await?;
-for email in &res.list {
-    println!("{} {:?}", email.received_at, email.subject);
-}
-```
-
-ランタイムも一緒に生成されます。
-`client.rs`、`types.rs`、そしてそれらをクエリと並べて宣言する `mod.rs` が出力されるので、クレート側が足すのは `mod jmapq;` の一行だけです。
-生成されたコードが求めるのは **serde と serde_json** だけです。
-送受信は `Transport` として利用者が実装します。
-プログラムがすでに持っている HTTP クライアントの上に実装すればよく、HTTP スタックも TLS バックエンドも非同期ランタイムも生成物には付いてきません。
-
-```rust
-struct Http(reqwest::Client);
-
-impl Transport for Http {
-    async fn send(&self, req: HttpRequest) -> Result<HttpResponse, TransportError> {
-        let mut out = self.0.request(req.method.parse()?, &req.url);
-        for (name, value) in req.headers {
-            out = out.header(name, value);
-        }
-        if let Some(body) = req.body {
-            out = out.body(body);
-        }
-        let res = out.send().await?;
-        Ok(HttpResponse {
-            status: res.status().as_u16(),
-            content_type: res
-                .headers()
-                .get("content-type")
-                .and_then(|v| v.to_str().ok())
-                .unwrap_or("")
-                .to_string(),
-            body: res.bytes().await?.to_vec(),
-        })
-    }
-}
-```
-
-ベアラトークンでは足りない認証も、ここが置き場所です。
-リクエストへの署名や、期限切れで更新するトークンがそれにあたります。
-トランスポートは、リクエストが出ていく前の最後の通過点だからです。
-
-null を取りうるプロパティは `Option` なので、`subject` は `Option<String>` です。
-複数の形を取る値は enum になります。
-フィルタは `Option<FilterOperatorOrEmailFilterCondition>` という untagged な enum で、Go では同じ名前の、形ごとにフィールドを持つ構造体になります。
-形ではなく書式を持つプリミティブは `String` の名前付き別名になるので、シグネチャの上で `Id` と `TimeZoneId` が読み分けられます。
-そしてレコードは `Default` を導出します。
-省略可能なプロパティを五十個持つ型を組み立てられるのはこれのおかげで、必要な二つだけを名指しして残りは任せられます。
-
-生成されるコードは rustfmt が整形した形そのものなので、クレートに `cargo fmt` をかけても何も動きません。
-
-## TypeScript
-
-同じクエリから TypeScript 用のクライアントを生成できます。
-
-```
 jmapc generate -lang typescript -out src/jmapq
 ```
 
-```typescript
-import { Client } from "./jmapq/client.js"
-import { listInboxEmails } from "./jmapq/listInboxEmails.js"
-
-const client = new Client("https://example.com/.well-known/jmap", { auth: token })
-
-const res = await listInboxEmails(client, { mailboxId: inbox, limit: 25 })
-for (const email of res.list) {
-  console.log(email.receivedAt, email.from?.[0].email, email.subject)
-}
-```
-
-ランタイムも一緒に生成されます。
-`client.ts` と `types.ts` がクエリと並んで出力されるので、生成物には**依存がありません**。
-プラットフォームに求めるのは `fetch` だけです。
-
-TypeScript のほうが正確に言えることもあります。
-null を取りうるプロパティはポインタではなく union なので、`subject` は `string | null` です。
-複数の形を取る値も union で書けます。
-フィルタは `FilterOperator | EmailFilterCondition | null` で、Go では形ごとにフィールドを持つ構造体になるところです。
-形ではなく書式を持つプリミティブは `string` の名前付き別名になるので、`Id` と `TimeZoneId` を取り違えることがありません。
-
-## クエリの書き方
-
-クエリファイルは [RFC 8620](https://www.rfc-editor.org/rfc/rfc8620) が定義する JMAP の Request オブジェクトそのものです。
-これに、jmapcが読みjmapサーバが見ることのない四つのメンバが加わります。
-
-アンダースコアで始まるメンバはジェネレータが読むもので、それ以外は RFC 8620 が定義するリクエストそのものです。
-
-| メンバ | |
-|---|---|
-| `methodCalls` | 呼び出しを `[name, arguments, callId]` の形で並べます。必須です。 |
-| `using` | リクエストが宣言するケイパビリティです。省略でき、その場合は呼び出すメソッドから導出されます。 |
-| `_doc` | 生成される関数のドキュメントです。省略できます。 |
-| `_returns` | どの呼び出しのレスポンスを関数の戻り値にするかを指定します。省略すると全てのレスポンスが返ります。 |
-| `_createdIds` | 先行するリクエストの creation id を受け取り、このリクエストのものを返します。省略可。次項を参照してください。 |
-| `_watches` | 生成されたクライアントが変更を追う呼び出しを指定します。サーバが変更を報告するたびに追いつきます。省略可。[プッシュ](#プッシュ)を参照してください。 |
-| `_pages` | 生成されたループが進める呼び出しを指定します。一度のリクエストが一部だけ返す答えを、最後まで読み通せます。省略可。[一度のリクエストに収まらない答えを読み通す](#一度のリクエストに収まらない答えを読み通す)を参照してください。 |
-| `_comment` | その呼び出しが何のためにあるかを書きます。呼び出しの引数の中に置きます。次項を参照してください。 |
-
-クエリファイルは素の JSON です。
-`jq` で読めますし、エディタも理解します。
-呼び出しの意図を書くには、その引数に `_comment` を置きます。
-
-### パラメータ
-
-呼び出し側に委ねる値の位置に `{{name}}` と書きます。
-Go の型は、その値が埋まる引数から決まります。
-`limit` に置いた `{{limit}}` は `jmapc.UnsignedInt` になり、`inMailbox` に置いた `{{mailboxId}}` は `jmapc.ID` になります。
-同じ名前を二箇所で使えば一つのフィールドにまとまり、型が一致しているかが検証されます。
-
-二つの形のどちらかを取りうる引数は、形ごとにフィールドを持つ構造体になります。
-設定するフィールドはそのうちの一つだけです。
-これが効くのはフィルタで、フィルタは論理演算子か、問い合わせ対象の型に対する条件か、そのどちらかだからです。
-`filter` に置いた `{{filter}}` は `jmapc.FilterOperatorOrEmailFilterCondition` になります。
-
-```go
-jmapq.Search(ctx, c, jmapq.SearchParams{
-	Filter: jmapc.FilterOperatorOrEmailFilterCondition{
-		EmailFilterCondition: &jmapc.EmailFilterCondition{Text: "invoice"},
-	},
-})
-```
-
-どのフィールドも設定しなかった場合と、二つ以上設定した場合は、リクエストを符号化する時点でエラーになります。
-サーバに拒否させるまでもありません。
-`FilterOperator` がまとめる条件は `[]any` のままです。
-どの条件型が入るかは問い合わせ対象の型によって変わるのに対し、演算子自体はすべての型に共通で一度だけ定義されているからです。
-
-マップのキーもパラメータにできます。
-`/set` が変更対象のレコードを指定する方法がこれです。
-
-```json
-["Email/set", {"update": {"{{emailId}}": {"keywords/$seen": true}}}, "mark"]
-```
-
-#### 呼び出し側が省略できる引数
-
-呼び出し側が引数ごと省略してよい位置には `{{name?}}` と書きます。
-
-```json
-["Email/changes", {"sinceState": "{{sinceState}}", "maxChanges": "{{maxChanges?}}"}, "changes"]
-```
-
-値を渡さなければ、その引数はリクエストに入りません。
-これは null を送るのとは別のことです。
-RFC 8620 でも違いは二度出てきます。
-`maxChanges` が無いことは上限なしを意味しますが、`maxChanges: 0` は何も要求しないことになります。
-PatchObject では、ポインタに null を入れるとそのプロパティが消え、ポインタ自体が無いときだけ触らずに残ります。
-この記法がなければ、ときどきしか送らない引数ごとに別のクエリが必要になり、n 個あれば 2^n 個要ることになります。
-
-省略の伝え方は、その言語がすでに持っている形に従います。
-Go はポインタを取り、型自身に nil があるならそのままです。
-
-```go
-limit := jmapc.UnsignedInt(25)
-jmapq.FindPeople(ctx, c, jmapq.FindPeopleParams{Phrase: "ada", Limit: &limit})
-jmapq.FindPeople(ctx, c, jmapq.FindPeopleParams{Phrase: "ada"}) // limit 引数は送られません
-```
-
-Rust では `Option` に包まれ、TypeScript ではメンバー自体が省略可能になります (`limit?: number`)。
-`jmapc run` では、`-p` で指定しなかった引数がそのまま省略されます。
-
-省略できるのはメソッド呼び出しの引数そのものだけで、しかもそのパラメータが他の場所で使われていない場合に限ります。
-こうすることで「省略された」の意味が一つに定まります。つまり、そのメンバーが無い、ということです。
-フィルタや配列の中にあるパラメータは、より大きな値の一部です。
-そこだけ落とすと、空の `AND` と、フィルタが無いことのどちらなのかという、クエリが答えていない問いが残ります。
-形の変わるフィルタは、フィルタ全体を一つのパラメータとして渡してください。
-
-### リクエストを跨ぐ creation id
-
-一つのリクエストの中で `#draft` を参照するのに準備は要りません。
-サーバが解決します。
-あるリクエストから次のリクエストへ参照を持ち越すには id 自体が移動する必要があり、それを求めるのが `_createdIds` です。
-
-```json
-{
-  "_createdIds": true,
-  "methodCalls": [
-    ["Mailbox/set", {"create": {"box": {"name": "{{name}}"}}}, "make"],
-    ["Email/set", {"update": {"{{emailId}}": {"mailboxIds/#box": true}}}, "file"]
-  ]
-}
-```
-
-生成される関数は、それを受け取って返します。
-
-```go
-res, err := jmapq.FileIntoNewMailbox(ctx, c, params, carried)
-// res.CreatedIDs を次のリクエストへ渡す。
-```
-
-RFC 8620 がこれを用意しているのはプロキシのためです。
-一つのリクエストを複数のサーバに分割しても、参照が解決できるようにするものです。
-これを使うクエリは、単一のレスポンスではなく全てのレスポンスを返します。
-creation id はリクエスト全体のものであって、その中のどの呼び出しのものでもないからです。
-
-### アカウント id
-
-`accountId` を省略すると、生成された関数がセッションのプライマリアカウントから補います。
-セッションの取得は一度だけです。
-パラメータにしたい場合は `"{{accountId}}"` と書きます。
+ランタイムはクエリと一緒に生成されます。
+Rust の出力が要求するのは serde だけで、TypeScript の出力に依存はなく、必要なのは `fetch` だけです。
+生成される名前はそれぞれの言語の綴り方に従い、null を取りうるプロパティと複数の形を取る値は、どちらも Go より正確に表現されます。
+詳しくは[他の言語](docs/languages.ja.md)を参照してください。
 
 ## 検証
 
-以下はすべて、サーバへの往復ではなくビルド時の失敗になります。
-
-- メソッドが存在し、仕様どおりに綴られていること
-- 引数がそのメソッドのものであり、メソッドが要求する型であること
-- 結果参照が**先行する**呼び出しを指し、その呼び出しのメソッド名を正しく名指し、参照先の引数が受け取れる値を選んでいること
-- フィルタ条件が、クエリ対象の型に照らして検証されること。`AND`、`OR`、`NOT` の中に入れ子になったものも含みます
-- `properties` がその型の持つプロパティを、`bodyProperties` が `EmailBodyPart` の持つプロパティを指していること
-- ヘッダフィールドを指すプロパティが、仕様の定めるパース形式を要求していること。`header:List-Id:asText` は文字列に、`header:To:asAddresses` はアドレスのリストになります
-- `PatchObject` が、パッチ対象のレコードが実際に持つプロパティを指し、正しい型の値を設定していること。キーの書き方は RFC 8620 に従います。ポインタ先頭の `/` は暗黙なので、キーワードを立てる位置は `/keywords/$seen` ではなく `keywords/$seen` です
-- `sort` がその型で実際にソートできるプロパティを指し、`hasKeyword` のような比較子が要求する追加メンバを与えていること
-- 仕様が値を固定しているプロパティに、その値のいずれかが与えられていること。文字列の値と、参加者の `roles` のような集合のキーの両方が対象です
-- id、日付、整数の形式が正しいこと
-- リクエストが宣言するケイパビリティが、呼び出すメソッドを網羅していること
-- `_watches` が指す呼び出しが、ある状態からの変更を報告するものであり、そこから進む状態がクエリに書き込まれずループに委ねられていること
-- `_pages` が指す呼び出しが、より長い答えの一部を返して残りの位置を報告するものであり、次のリクエストの開始位置がループに委ねられていること
-
-綴り間違いには候補が提示されます。
+クエリは jmapc の実行時に検証されるので、JMAP として誤っているクエリは、サーバへの往復ではなくビルドの失敗になります。
+メソッドが存在すること、引数がそのメソッドのものであること、結果参照が先行する呼び出しを指し、参照先の引数が受け取れる値を選んでいること、フィルタ、`properties`、`sort`、パッチのポインタがその型の持つものを指していること、といった検証です。
+綴り間違いには候補が示されます。
 
 ```
 queries/BadQuery.jmap.json: methodCalls[0].arguments.filter.hasAttachmnt: EmailFilterCondition has no property "hasAttachmnt"
 	did you mean "hasAttachment"?
-queries/BadQuery.jmap.json: methodCalls[1].arguments.#ids.name: the referenced call is Email/query, but the reference names Email/get
-	call "c0" invokes Email/query
 ```
 
-パラメータや call id の名前だけが違う二つのクエリは、同じクエリを二度書いたものです。
-jmapc はこれを失敗ではなく通知として伝えます。
-
-```
-jmapc: ListArchiveEmails, ListInboxEmails are the same query under different names; one of them would do for all of them
-```
-
-両方とも生成はされます。一つのリクエストに二つの名前を付けたいこともあるからです。
-知らせるのは、名前の数だけ生成される型が増えるためです。
-
-`jmapc check` は、何も書き出さずに検証だけを実行します。
-
-### サーバ側にしかない情報
-
-ここまではすべて、仕様が定めていることです。
-仕様がサーバに委ねていること —— どのケイパビリティを持つか、どのアカウントを持つか、一度のリクエストでどれだけ受け付けるか —— は、ビルド時には分かりません。
-JMAP については正しく、実行対象のサーバについては間違っているクエリは、実行時に失敗します。
-`-session` は実行中のサーバに対して検査します。
-
-```
-jmapc check -session jmap.example.com -token $JMAP_TOKEN
-checked 25 queries against https://jmap.example.com/api/, as someone@example.com
-```
-
-報告するのは次のものです。
-
-- リクエストが宣言していて、サーバが広告していないケイパビリティ
-- クエリが名指していてセッションが持たないアカウント、そのケイパビリティの primary account がなくセッションが埋められないアカウント、呼び出しに必要なものをサポートしないアカウント
-- `maxCallsInRequest` を超える呼び出し数、`maxObjectsInGet` を超えるレコード数、`maxObjectsInSet` を超える変更数、パラメータを埋める前から `maxSizeRequest` を超えるリクエスト
-- サーバが文字列の比較に使えない `collation`
-
-クエリが呼び出し側に委ねているものには触れません。
-id のリストを表すパラメータは何個にでもなり得るので、そこを推測すれば、問題のないクエリを問題ありと報告することになります。
-
-セッションの URL だけは環境変数から読みません。
-`-token` と `-user` は `$JMAP_TOKEN` と `$JMAP_USER` にフォールバックします。
-ネットワークに出る検証は、周囲にたまたま設定されているものによってではなく、コマンドラインでそう言われて出るべきだからです。
-
-## エディタ対応
-
-上の検証は jmapc を走らせたときに実行されます。
-その多くは、クエリを書いている最中に走らせることもできます。
-ファイルそのものに対する検証だからです。
-そしてスキーマを名指しした JSON ファイルなら、エディタは検証も補完もすでに知っています。
-
-```
-jmapc schema -out jmapc.schema.json
-```
-
-これがカタログの JSON Schema を、ベンダ拡張も含めて書き出します。
-クエリファイルからそれを指すか、
-
-```json
-{
-  "$schema": "../jmapc.schema.json",
-  "methodCalls": [["Email/query", {"filter": {"inMailbox": "{{mailboxId}}"}}, "search"]]
-}
-```
-
-エディタ側からまとめて指します。
-VS Code なら次のとおりです。
-
-```json
-{
-  "json.schemas": [
-    {"fileMatch": ["*.jmap.json"], "url": "./jmapc.schema.json"}
-  ]
-}
-```
-
-どちらでも、エディタはメソッド名を補完し、そのメソッドが取る引数とその型が持つプロパティを提示し、綴り間違いをその場に下線で示します。
-`AND` の中に入れ子になったフィルタも外側と同じように検証され、比較子はその型が実際にソートできるプロパティを提示し、`{{パラメータ}}` は値が置ける場所ならどこでも受け付けられます。
-
-スキーマに言えないのは、他の呼び出しに依存する部分です。
-結果参照が先行する呼び出しを名指し、引数が受け取れる値を選んでいるか、そこは jmapc の仕事のままです。
-エディタはビルドの代わりではなく、その手前の一段だと考えてください。
-
-## クエリを送る
-
-クエリは、それを呼ぶコードができる前に試せるほうがよいので、`jmapc run` が一つ送って、返ってきたものを表示します。
-
-```
-jmapc run ListInboxEmails -p mailboxId=mbx1 -p limit=25
-```
-
-値は型の言うとおりに書きます。
-`String` や `Id` はテキストそのものなので、シェルの先で引用符を付ける必要はなく、形を持つものは JSON で書きます。
-型が受け付けない値は、何かが送られる前に拒まれます。
-
-```
-jmapc: parameter limit: "soon" is not a whole number
-```
-
-サーバは `-session` で指定します。
-セッションの URL でも、それが置かれているホスト名でも構いません。
-資格情報は `-token` か `-user` です。
-いずれも環境変数 `$JMAP_SESSION_URL`、`$JMAP_TOKEN`、`$JMAP_USER` にフォールバックするので、トークンをシェルの履歴に残さずに済みます。
-クエリが省いた account id は、生成された関数がそうするのと同じように、セッションから引かれます。
-`-account` を渡せばそちらが使われます。
-
-`-dry-run` は、送る代わりにリクエストを表示します。
-生成された関数が組み立てるのと同じリクエストで、サーバが予期しない答えを返したときに見るべきものです。
-
-```
-jmapc run MarkEmailRead -dry-run -p emailId=m1
-{
-  "using": [
-    "urn:ietf:params:jmap:core",
-    "urn:ietf:params:jmap:mail"
-  ],
-  "methodCalls": [
-    [
-      "Email/set",
-      {
-        "accountId": "ACCOUNT_ID",
-        "update": {
-          "m1": {
-            "keywords/$seen": true
-          }
-        }
-      },
-      "mark"
-    ]
-  ]
-}
-```
-
-account id だけは、dry run には知りようがありません。
-取りにいかないセッションから来る値だからです。
-そこで `ACCOUNT_ID` がその場に立ち、そのことを標準エラーに書きます。
-
-実行は、生成されたコードと同じようにレスポンスを読みます。
-200 で拒否を返す `/set` はここでもエラーで、それを運んできたレスポンスを表示した後に報告されます。
-
-## 設定
-
-フラグで指定するか、モジュールの隣に `jmapc.json` を置きます。
-
-```json
-{
-  "queries": "queries",
-  "out": "internal/jmapq",
-  "package": "jmapq",
-  "schemas": ["schema/notes.json"]
-}
-```
-
-## 実行時のエラー
-
-JMAP は二つのレベルで失敗します。
-ランタイムもそれに対応します。
-
-**リクエストレベル**の失敗は、サーバがリクエスト全体を拒否した場合で、`*jmapc.RequestError` になります。
-RFC 8620 §3.6.1 の problem type を持ちます。
-このうちいくつかは送信前にクライアントが捕まえます。
-セッションが広告していないケイパビリティや、サーバが受け付ける数を超える呼び出しなどです。
-
-**メソッドレベル**の失敗は `jmapc.MethodErrors` になります。
-JMAP は実行できる呼び出しを実行するので、レスポンスはエラーと一緒に返ります。
-各エラーは、ワイヤフォーマット上の `"error"` ではなく、失敗したメソッド名と呼び出し id を報告します。
-
-生成された関数も同じものを返します。
-サーバが答えた呼び出しはデコードされ、実行されなかった呼び出しはゼロ値のまま残り、結果がエラーと一緒に返ります。
-連鎖したクエリはこの形で失敗するのが普通です。後続に値を渡す呼び出しが成功し、それを受ける呼び出しが参照を解決できずに失敗します。
-そして理由を語っているのは、たいてい先に成功したほうの応答です。
-
-```go
-res, err := jmapq.DestroyThread(ctx, c, params)
-if err != nil {
-    if len(res.ThreadGet.NotFound) > 0 {
-        return fmt.Errorf("no such thread: %s", res.ThreadGet.NotFound[0])
-    }
-    return err
-}
-```
-
-例外は `_returns` で一つの呼び出しを指定したクエリです。
-その呼び出しが答えのすべてなので、失敗したのがそれであれば返すものがなく、結果は nil になります。
-
-TypeScript は値を返すのではなく throw するので、読み取った内容はエラーに載ります。
-`MethodErrors` は元になったレスポンスを持ち、`result` にはクエリの戻り値のうちサーバが答えた分が入ります。
-サーバが実行しなかった呼び出しはそこに存在しないので、`Partial` として読んでください。
-
-```ts
-try {
-  await destroyThread(client, params)
-} catch (e) {
-  if (e instanceof MethodErrors) {
-    const partial = e.result as Partial<DestroyThreadResult>
-    if (partial.threadGet?.notFound?.length) {
-      throw new Error(`no such thread: ${partial.threadGet.notFound[0]}`)
-    }
-  }
-  throw e
-}
-```
-
-Rust も `Err` を返すので、同じくエラーに載ります。
-`MethodErrors::result` が、そのクエリの戻り値をそのまま返します。
-サーバが実行しなかった呼び出しは、欠けるのではなく既定値のまま残ります。Rust には置いておける既定値があるからです。
-
-```rust
-if let Error::Method(failed) = &err {
-    if let Some(out) = failed.result::<DestroyThreadResult>() {
-        if !out.thread_get.not_found.is_empty() { /* どのスレッドが無かったか */ }
-    }
-}
-```
-
-第三のレベルがあり、見落とされるのはこれです。
-`/set` は**エラーを含まない 200** を返しながら、処理を拒んだレコードを列挙します。
-
-```json
-["Email/set", {"notCreated": {"draft": {"type": "invalidProperties",
-                                        "properties": ["subject"]}}}, "write"]
-```
-
-転送レベルのエラーだけを見ると、何も起きていないのに成功に見えます。
-生成コードがこれを検査するので、拒否されたレコードは `*jmapc.SetErrors` になります。
-
-```go
-res, err := jmapq.SendEmail(ctx, c, params)
-if err != nil {
-    var refused *jmapc.SetErrors
-    if errors.As(err, &refused) {
-        for _, f := range refused.Failures {
-            log.Printf("%s: %v", f.Key, f.Err) // draft: invalidProperties [subject]
-        }
-    }
-    return err
-}
-```
-
-`res` はエラーと一緒に返ります。
-サーバが実際に実行した部分は起きているからです。
-クエリが `_returns` で名指ししていない呼び出しも検査されます。
-一つの呼び出しを名指ししたことで、他が見られなくなるべきではないからです。
-
-TypeScript では同じ失敗が `SetErrors` の throw になり、レスポンスは `err.result` に載ります。
-Rust では `Error::Set` になり、レスポンスは関数が返すはずだった型を指定して `err.result::<T>()` で取り出します。
-
-### 大きな /get の分割
-
-サーバの `maxObjectsInGet` を超える数の id を並べた `/get` は拒否されます。
-`WithSplitGets` を渡すと、これを複数のリクエストに分けて送り、答えを一つのレスポンスに連結します。
-
-```go
-c := jmapc.New(url, jmapc.WithBearerToken(token), jmapc.WithSplitGets())
-```
-
-既定では無効です。理由は二つあります。
-一度の `Do` が複数の往復になること。
-そしてレコードが一つのスナップショットではなくなることです。
-各リクエストは別々に処理されるので、その間にアカウントの状態が変わりえます。
-`/get` が報告する `state` がリクエスト間で異なった場合は、連結したレスポンスと一緒に `*jmapc.StateChanged` を返します。
-`errors.As` で取り出せる、メソッドエラーと同じ扱い方です。
-一貫したスナップショットが必要な呼び出し側は取得し直せますし、不要なら無視できます。
-
-数えるのはクエリに書かれた id だけで、次の二つはそのまま送ります。
-id をバックリファレンスから得ている呼び出し。解決後の件数はサーバにしか分からないからです。
-そして他の呼び出しから参照されている呼び出し。参照は一つのリクエスト内でしか解決せず、参照先を分割すると解決先がなくなるからです。
-
-入りきらなかった id は、それ専用の後続リクエストで送ります。
-一つのリクエストに入れる呼び出しの数は `maxCallsInRequest` を超えません。
-クエリの残りの部分は最初のリクエストで一度だけ送るので、他の呼び出し同士のバックリファレンスはこれまでどおり解決します。
-
-### 期限切れのあるトークン
-
-`WithBearerToken` は、クライアントの生存期間中ずっと一つの文字列を保持します。
-OAuth 2.0 のアクセストークンはそこまで長く有効ではなく、差し替えるにはクライアントを作り直すことになります。
-作り直すと、キャッシュしたセッションと、実行中のリクエスト数の管理も一緒に失われます。
-`WithTokenSource` は、文字列の代わりに関数を受け取ります。
-
-```go
-c := jmapc.New(url, jmapc.WithTokenSource(func(ctx context.Context) (jmapc.Token, error) {
-	tok, err := oauthConfig.TokenSource(ctx, refreshToken).Token()
-	if err != nil {
-		return jmapc.Token{}, err
-	}
-	return jmapc.Token{Value: tok.AccessToken, Expiry: tok.Expiry}, nil
-}))
-```
-
-取得したトークンは、期限が切れるまで保持されます。
-`Expiry` を返すソースは期限の少し前に再度呼ばれ、`Expiry` を返さないソースはサーバが 401 を返したときにだけ再度呼ばれます。
-同時に発生したリクエストは一回の呼び出しを共有します。
-リフレッシュトークンを交換するソースを同時に何度も実行しないためで、リフレッシュトークンを一度しか受け付けないサーバがあるからです。
-
-401 を受けたときは、そのリクエストを新しいトークンで一度だけ送り直します。
-二度目の 401 は呼び出し側に返します。
-サーバが受け付けないトークンをソースが返している状態は、送り直しても解決しないからです。
-これは `WithRetry` とは別の仕組みです。
-`WithRetry` が送り直すのは、サーバが処理しなかったと報告したリクエストです。
-
-### 再送
-
-サーバがHTTP 429 と 503 を返す場合、`WithRetry` は再送を行います。
-
-```go
-c := jmapc.New(url, jmapc.WithBearerToken(token), jmapc.WithRetry(3))
-```
-
-引数は試行回数です。
-待ち時間は、サーバが `Retry-After` で求めた長さです。
-特に何も求められなければ、0.2 秒から 30 秒へ倍々に待ちます。
-
-### 可観測性
-
-`WithObserver` を渡すと、クライアントは送信したリクエストと待機した時間を `Observer` のフックに渡します。
-フックに渡す値は送信内容にも受信内容にも影響せず、nil のままにしたフックは呼ばれません。
-
-```go
-c := jmapc.New(url, jmapc.WithBearerToken(token),
-	jmapc.WithObserver(jmapc.SlogObserver(slog.Default())))
-```
-
-フックは三つあり、入れ子の関係にあります。
-`SlogObserver` はこの三つそれぞれについて debug レベルのレコードを出力します。
-`Request` は JMAP リクエスト一件に対応し、含まれる呼び出しと処理結果を持ちます。
-`Attempt` はその内側の HTTP リクエスト一件に対応します。
-最初のリクエストの前に行われるセッション取得と、再送の各回もここに含まれます。
-`Wait` はリクエストを送信せずに待機した箇所です。
-`maxConcurrentRequests` が許す枠の空きを待つ場合と、拒否されて指定された時間だけ待つ場合があります。
-
-```
-Request   Email/query, Email/get
-  Attempt GET  /.well-known/jmap  200
-  Wait    枠の空き待ち（サーバが同時に受け付けるのは 2 件）
-  Attempt POST /jmap/api          429
-  Wait    サーバの Retry-After が指定した 2 秒
-  Attempt POST /jmap/api          200
-```
-
-このうち HTTP の往復は HTTP 層の計測でも取得できるので、それで足りるなら、トランスポートを差し替えた `http.Client` を `WithHTTPClient` に渡してください。
-HTTP 層の計測で取得できないのは JMAP 側の情報です。
-どのメソッドが同じリクエストに含まれていたか、呼び出し側が枠の空きを待った時間、そしてリクエストが 200 で返っていても呼び出しが拒否されていたこと、の三つです。
-
-OpenTelemetry への依存はなく、追加する必要もありません。
-処理を囲む二つのフックは、その処理に使う context を返します。
-外側のフックで開始したスパンが、内側のフックで開始したスパンの親になります。
-
-```go
-tracer := otel.Tracer("jmapc")
-
-obs := &jmapc.Observer{
-	Request: func(ctx context.Context, info jmapc.RequestInfo) (context.Context, func(jmapc.ResponseInfo)) {
-		methods := make([]string, len(info.Calls))
-		for i, call := range info.Calls {
-			methods[i] = call.Name
-		}
-		ctx, span := tracer.Start(ctx, "jmap.request",
-			trace.WithAttributes(attribute.StringSlice("jmap.methods", methods)))
-		return ctx, func(done jmapc.ResponseInfo) {
-			span.SetAttributes(attribute.Int("jmap.method_errors", len(done.Errors)))
-			if done.Err != nil {
-				span.RecordError(done.Err)
-			}
-			span.End()
-		}
-	},
-	Attempt: func(ctx context.Context, info jmapc.AttemptInfo) (context.Context, func(jmapc.AttemptInfo, jmapc.Answer)) {
-		ctx, span := tracer.Start(ctx, "jmap."+string(info.Kind),
-			trace.WithAttributes(attribute.Int("http.attempt", info.Attempt)))
-		return ctx, func(info jmapc.AttemptInfo, answer jmapc.Answer) {
-			span.SetAttributes(attribute.Int("http.status_code", answer.Status))
-			span.End()
-		}
-	},
-}
-```
-
-`Observer` は Go のクライアントにのみあります。
-Rust と TypeScript では、同じ処理をトランスポートの実装に書きます。
-
-## テスト
-
-生成されたクライアントの周りに書いたコードをテストするということは、複数のメソッド呼び出しを載せたリクエストに答えるということです。
-しかもその一部は、他の呼び出しの結果を参照しています。
-一つのテストのために手で書いたスタブは、そこを無視してサーバらしさを失うか、さもなければこれへと育っていきます。
-
-```go
-srv := jmaptest.New(t)
-srv.Reply("Email/query", jmapc.EmailQueryResponse{
-	AccountID: jmaptest.AccountID,
-	IDs:       []jmapc.ID{"m1", "m2"},
-})
-srv.Handle("Email/get", func(c *jmaptest.Call) (any, error) {
-	// id は query の呼び出しが答えたものです。結果参照は、
-	// サーバが解決するのと同じように、すでに解決されています。
-	return emailsFor(c.IDs()), nil
-})
-
-res, err := jmapq.ListInboxEmails(ctx, srv.Client(), params)
-```
-
-テストから引き受けるのは次のことです。
-
-- **結果参照。** RFC 8620 の言うとおりに解決します。パスをリストに写像する `*` も含みます。ですから連鎖したクエリは、実際の値が入った状態でハンドラに届きます。
-- **検証。** リクエストは、ビルドがクエリを照らすのと同じデータモデルに照らされます。どのメソッドも持たない引数を送る呼び出しは、黙って通るのではなくテストを失敗させます。jmapc が知らないメソッドを扱うときは `jmaptest.WithoutChecks()` で検証を無効にします。
-- **失敗。** メソッドレベルのエラーには `srv.Fail`、リクエスト全体を拒否する場合には `srv.FailRequest`、そして 200 を返す失敗には、拒否したものを並べた `/set` のレスポンスを返します。
-- **何が要求されたか。** `srv.Call("Email/query")` はそのメソッドへの最後の呼び出し、`srv.Calls()` はその全部、`srv.Requests()` はそれが何回のリクエストで済んだかです。複数の呼び出しが一つのリクエストにまとまったかどうかは、これで確かめます。
-- **プッシュ。** `srv.Push` は、watch しているクライアントに状態変化を送ります。watch するクエリのループが待っているものです。
-
-しないのは、何かを保存することです。
-これはクライアントをテストするためのサーバであって、JMAP の実装ではありません。
-`/set` が作ったものは、テストがそう指定しない限り、後の `/get` からは返りません。
-
-クライアントを一度に全部移すことは稀で、移行の途中では二つの半分を同じテストで応答させることになります。
-生成された側は `srv.Client()` からこのサーバに届きますが、まだ手で書かれている側は自分のパスに投げます。
-そのパスを載せる場所が `srv.Mux()` で、手で書かれた側を向ける先が `srv.BaseURL()` です。
-
-```go
-srv := jmaptest.New(t)
-srv.Mux().HandleFunc("/jmap", myOldAPIHandler)
-srv.Mux().HandleFunc("/jmap/session", myOldSessionHandler)
-
-old := myOldClient(srv.BaseURL())
-```
-
-まだ移していない側も JMAP を話していて、ただ探す場所が違うだけ（セッションと API を自前のベース URL から導いている）という場合は、jmaptest 自身のハンドラをそこに載せます。
-両方の名前で応答するようになります。
-
-```go
-srv.Mux().HandleFunc("/jmap/session", srv.ServeSession)
-srv.Mux().HandleFunc("/jmap", srv.ServeAPI)
-```
-
-ですから jmaptest は、最後のメソッドを移し終えてからではなく、最初の一つを移した時点から使えます。
-
-## Blob
-
-添付ファイルは API エンドポイントを通りません。
-セッションが広告する URL に対して、素の HTTP でアップロードとダウンロードを行います。
-ランタイムが両方を扱います。
-
-```go
-info, err := c.Upload(ctx, accountID, "application/pdf", file)
-// info.BlobID を Email/set に渡して添付する。
-
-blob, err := c.Download(ctx, accountID, part.BlobID, &jmapc.DownloadOptions{
-	Name: *part.Name,
-	Type: part.Type,
-})
-defer blob.Close()
-```
-
-どちらもストリーミングです。
-`Upload` は `io.Reader` から読み、`Download` は `io.ReadCloser` を返します。
-メモリより大きい添付ファイルも、ファイルからサーバへ、サーバからファイルへ、どちらの向きも保持せずに転送できます。
-サーバが受け付けると表明したサイズを超えるアップロードは、送信前に失敗します。
-
-`From` と `Length` で blob の一部だけを取得できます。
-途中で中断したダウンロードを再開する方法です。
-
-```go
-blob, err := c.Download(ctx, accountID, blobID, &jmapc.DownloadOptions{From: written})
-...
-blob.Range // 返ってきた範囲。8192 バイト中の 4096-8191
-```
-
-これらは HTTP の `Range` ヘッダとして送ります。
-JMAP はダウンロードエンドポイントに Range を定義していないので、サーバがこれを無視して blob 全体を返すことがあります。
-その場合はダウンロードを失敗させます。
-呼び出し側が誤ったオフセットに書き込む内容を返すよりよいからです。
-
-`urn:ietf:params:jmap:blob` を提供するサーバでは、API 経由で blob を作成し読み取ることもできます。
-エンドポイントにはできないことです。
-`Blob/upload` は blob を、それを使う呼び出しと同じリクエストに置けるので、id がクライアントに戻ってきません。
-
-## 一度のリクエストに収まらない答えを読み通す
-
-JMAP の答えは、しばしば答え全体の一部にすぎません。
-`/query` は呼び出し側が求めた件数の窓だけを返し、その窓が結果全体のどこに位置するかを報告します。
-`/changes` はサーバが返すと決めた数だけの変更を返し、続きがあるかどうかを報告します。
-
-どちらの場合も、答えの残りを得るには次のリクエストを送り直す必要があります。
-次のリクエストの中身は直前の答えから決まり、それは `/query` なら次に求める `position`、`/changes` なら次に渡す `sinceState` です。
-この「答えを見て、次のリクエストを組み立てて、また送る」というループは、クエリの `_pages` に呼び出し名を書くだけで生成できます。
-
-`_pages` に指定した呼び出しが、ループがそのたびに送り直す呼び出しです。
-次のリクエストがどこから始まるかを言う値（`/query` の `position`、`/changes` の `sinceState`）は、呼び出し側ではなくループが管理するので、クエリの中ではパラメータとして書いておくだけで構いません。
-
-```json
-{
-  "_pages": "search",
-
-  "methodCalls": [
-    ["Email/query", {"filter": {"text": "{{phrase}}"}, "position": "{{position}}",
-                     "limit": 50, "calculateTotal": true}, "search"],
-    ["Email/get", {"#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"}}, "fetch"]
-  ]
-}
-```
-
-Go にはイテレータが生成されます。
-読み進めるたびに、裏で次のリクエストが送られます。
-
-```go
-for page, err := range jmapq.SearchEmailsPages(ctx, c, params) {
-	if err != nil {
-		return err
-	}
-	for _, email := range page.EmailGet.List {
-		fmt.Println(*email.Subject)
-	}
-}
-```
-
-TypeScript には非同期ジェネレータが生成され、同じように読み進めるたびにリクエストを送ります。
-失敗は、クエリ自体と同じように throw されます。
-
-```ts
-for await (const page of searchEmailsPages(client, params)) {
-  for (const email of page.emailGet.list) console.log(email.subject)
-}
-```
-
-Rust には、現在の位置を保持する値が生成されます。
-ストリームを返すにはそれを定義するクレートが要り、生成されるコードが求めるのは serde だけだからです。
-
-```rust
-let mut pages = search_emails_pages(params);
-while let Some(page) = pages.next(&client).await? {
-    for email in &page.email_get.list {
-        println!("{:?}", email.subject);
-    }
-}
-```
-
-読み通しが終わるタイミングは、`/query` と `/changes` とで違います。
-
-`/query` の場合、パラメータが持つ `position` から読み始めるので、前回の続きから読み進められます。
-中身のない窓は呼び出し側には渡さず、そこで読み通しを終えます。
-ですから呼び出し側が受け取る窓には必ず中身があります。
-呼び出しが `calculateTotal` で総数を求めていれば、その総数を超えて窓を求めることもありません。
-
-`/changes` の場合は、何も変わっていないという答えも呼び出し側に渡します。
-その答えが、次に進むための `sinceState` を運んでいるからです。
-終わるのは、サーバが変更の続きはないと報告したときです。
-
-watch するクエリ（`_watches` を持つクエリ）は、サーバが変更の続きを報告する間はもともとリクエストを送り直しています。
-つまり同じ仕組みをすでに内蔵しているので、`_watches` と `_pages` を同じクエリに書くことはありません。
-
-## プッシュ
-
-イベントが伝えるのは、どのアカウントのどの型が変わったかであって、何が変わったかではありません。
-ですから変更を取得するクライアントはループを書きます。
-接続し、手元の状態からの差分を要求し、それを適用し、次のイベントを待つ。
-このループは毎回同じで、そのどの部分にも間違いが入り込みえます。
-そこで、クエリの側から要求できるようにしました。
-
-`_watches` は、ループが状態を読む呼び出しを指定します。
-指定できるのは、`Email/changes` のように、ある状態からの変更を報告する呼び出しです。
-
-```json
-{
-  "_watches": "changes",
-
-  "methodCalls": [
-    ["Email/changes", {"sinceState": "{{sinceState}}", "maxChanges": 128}, "changes"],
-    ["Email/get", {"#ids": {"resultOf": "changes", "name": "Email/changes", "path": "/created"}}, "created"]
-  ]
-}
-```
-
-`SyncEmails` はこれまでどおり生成され、その隣に `SyncEmailsWatch` が生成されます。
-
-```go
-err := jmapq.SyncEmailsWatch(ctx, c, jmapq.SyncEmailsParams{SinceState: state},
-	func(ctx context.Context, res *jmapq.SyncEmailsResult) error {
-		for _, email := range res.EmailGet.List {
-			fmt.Println("new:", *email.Subject)
-		}
-		state = res.EmailChanges.NewState // 保存して、次はここから始める
-		return nil
-	})
-```
-
-ループはパラメータが持つ状態から始まり、各回の答えが報告する状態へ進みます。
-呼び出し側が持たずに済むのは次のことです。
-
-- **ストリームは接続であって購読ではありません。** 切れたら別の接続を開き、最後に届いたイベントから再開します。サーバに届かない間は、1 秒から 30 秒へと倍々に待ちます。
-- **接続がない間の変更はプッシュされません。** ですから接続のたびに、まず追いつきます。
-- **サーバは `/changes` に返すと決めた数だけ答え**、`hasMoreChanges` にその旨を設定します。ループは、これが false になるまでリクエストを繰り返します。
-- **他のアカウント、他の型、あるいは既に到達済みの状態のイベント**にはリクエストが不要です。最後のものはよく起きます。自分の追いつきによって、サーバが受け取ったばかりの状態をプッシュするからです。
-
-ループはコンテキストが終わるまで走り、そのエラーを返します。
-コールバックが返したエラーはループを止め、そのまま返ります。
-接続を明確に拒んだサーバのエラーは、待たずに返します。403 は待っても変わらないからです。
-`jmapc.WithPing` と `jmapc.WithReconnect` が、調整する価値のある二つです。
-
-その下にあるのが `Client.Watch` で、追いつき方を関数で受け取ります。
-追いつきが一つのクエリで済まないときは、これを直接呼びます。
-
-```go
-err := c.Watch(ctx, accountID, "Email", state,
-	func(ctx context.Context, since string) (newState string, more bool, err error) {
-		// since からの /changes を呼び、返った id に応じて取得する
-	})
-```
-
-`_watches` を追うのは Go のクライアントだけです。
-接続を保持するのは生成コードではなくランタイムの仕事で、Rust と TypeScript のランタイムはそれをしません。
-それらの言語で watch するクエリを生成すると、ループのないクエリだけが生成され、その旨が表示されます。
-
-`Watch` のさらに下にあるのが `Client.EventSource` で、プッシュエンドポイントに接続してイベントをそのまま返します。
-
-```go
-stream, err := c.EventSource(ctx, &jmapc.EventSourceOptions{
-	Types: []string{"Email"},
-	Ping:  30 * time.Second,
-})
-defer stream.Close()
-
-for {
-	change, err := stream.Next()
-	if err != nil {
-		break // stream.LastEventID() を渡して再接続する
-	}
-	if state, ok := change.StateOf(accountID, "Email"); ok {
-		_ = state
-	}
-}
-```
-
-これはイベントソース形式のプッシュで、接続を保持できるクライアントに向いています。
-もう一つの形式は、サーバが送る先の URL を登録するもので、スマートフォンのアプリにはこちらが必要です。
-[`example/queries`](example/queries) の `RegisterPush` と `ConfirmPush` を参照してください。
-購読は作成した時点ではまだ有効ではありません。
-サーバが URL にコードを送り、クライアントが `PushSubscription/set` でそれを書き戻すまで、他には何も送られません。
-届いたものは `jmapc.PushVerification` でデコードします。
-
-## ベンダ拡張
-
-JMAP は拡張される前提の設計です。
-サーバは独自のケイパビリティ URI を広告し、それとともに jmapc の知らない型とメソッドが現れます。
-スキーマファイルに記述すれば、それに対するクエリも `Email` に対するものとまったく同じように検証されます。
-結果参照、プロパティ名、ソート順、すべてが対象です。
-
-```json
-{
-  "capability": "urn:example:params:jmap:notes",
-  "types": [
-    {
-      "name": "Note",
-      "doc": "Note is a scrap of text the user keeps.",
-      "properties": [
-        {"name": "id", "type": "Id", "serverSet": true, "immutable": true, "doc": "The id of the note."},
-        {"name": "title", "type": "String", "doc": "The note's title."}
-      ],
-      "methods": ["get", "changes", "set", "query"],
-      "sort": [{"name": "createdAt", "doc": "Sorts by when the note was created."}]
-    },
-    {
-      "name": "NoteFilterCondition",
-      "doc": "NoteFilterCondition is a condition a note must satisfy to match a Note/query.",
-      "properties": [{"name": "text", "type": "String", "doc": "Matches notes containing this text."}]
-    }
-  ]
-}
-```
-
-標準の六つのメソッドは、名前を挙げるだけで手に入ります。
-引数とレスポンスの形は RFC 8620 が固定しているからです。
-その形に従わないメソッドは、引数とレスポンスを書き下して宣言します。
-
-```
-jmapc generate -schema schema/notes.json
-```
-
-`jmapc.json` の `"schemas"` に列挙することもできます。
-
-## jmapc の開発
-
-```
-go test ./...        # エンドツーエンドのテストを含むすべて
-go generate ./...    # ランタイムの型と、全言語のサンプルクライアントを再生成する
-```
-
-サンプルは言語ごとに三度生成され、`example/jmapq`、`example/rust/src/jmapq`、`example/ts` に出力されます。
-残る二つがコンパイルできるかどうかは Go のテストでは分からないので、CI は Rust に `cargo fmt --check` と `cargo test` を、TypeScript に `tsc --strict` を実行します。
-どちらにも生成コードと並ぶ手書きの検査があり、スタブを相手にランタイムを動かします。
-ヘッダが送られること、認証がそれに優先すること、セッションがキャッシュされること、そして 200 を返しながら拒否を含む `/set` がやはりエラーになることを確かめます。
-
-スキーマも同じやり方で、同じ理由から検証します。
-バリデータが example のクエリを受け入れ、スキーマが捕まえると主張する間違いを拒むかどうかは、Go のテストには言えません。
-`example/schema/check.mjs` が、その時点のカタログから書き出したスキーマに対してバリデータを実行します。
-
-ここでジェネレータをソースから実行しているのは、このリポジトリがジェネレータの居場所だからです。
-
-ランタイムの型とサンプルのクライアントはコミットされていて、それらをカタログが今生成する結果と比較するテストがあります。
-データモデルを変えたのに再生成し忘れると、見逃されるのではなくビルドが失敗します。
-CI では同じ検証に加えて、gofmt、go vet、govulncheck を実行します。
-
-リリースは、変更が main に入ったあとにタグを push して作ります。
-リリースノートは [CHANGELOG.md](CHANGELOG.md) のそのタグの節で、何が変わったかを、利用側にとっての意味でグループ分けし、破壊的変更を先頭に置いて書きます。
-節はタグより先に書いてください。
-対応する節がないタグはリリースを失敗させます。空の本文で公開するよりよいからです。
+`jmapc check` は何も書き出さずに検証だけを行います。
+`-session` を付けると、稼働中のサーバにしか分からないこと、つまりサーバが広告するケイパビリティ、保持するアカウント、一度のリクエストに受け付ける量も検証されます。
+検証の多くは、jmapc が書き出す JSON Schema を使ってエディタでも動きます。
+検証の一覧は[検証](docs/verification.ja.md)にあります。
+
+## ドキュメント
+
+ここまでが jmapc の全体像です。
+残りは `docs/` の下に、主題ごとに一つのファイルとして置いてあります。
+並びは読む順序でもあります。
+
+はじめの三つは、クエリを書いているあいだ手元に置くものです。
+クエリファイルに何を書けるか、生成の前に jmapc が何を検証するか、そして呼び出すコードを書く前にクエリを送って答えを見る方法です。
+続く四つは、生成されたコードが実行時に何を呼ぶかを説明します。
+エラー、blob、サーバが送ってくる変更、一部ずつ返ってくる答え、そして自分のコードをテストするためのサーバです。
+最後の四つはリファレンスです。
+Rust と TypeScript のクライアント、jmapc が知らないケイパビリティ、知っているケイパビリティ、そして jmapc 自体です。
+
+| | |
+|---|---|
+| [クエリの書き方](docs/queries.ja.md) | クエリファイル、パラメータ、そこから生成される名前 |
+| [検証](docs/verification.ja.md) | ビルド時、サーバに対して、エディタで、それぞれ何が検証されるか |
+| [jmapc コマンド](docs/cli.ja.md) | `jmapc run` でクエリを送る方法と設定 |
+| [ランタイム](docs/runtime.ja.md) | エラー、大きな `/get`、トークン、再送、可観測性、blob |
+| [プッシュ](docs/push.ja.md) | サーバが報告する変更を追い続ける |
+| [一度のリクエストに収まらない答えを読み通す](docs/paging.ja.md) | 一部ずつ返ってくる結果を最後まで読む |
+| [テスト](docs/testing.ja.md) | 自分のコードをテストするための JMAP サーバ、jmaptest |
+| [他の言語](docs/languages.ja.md) | Rust と TypeScript のクライアント |
+| [ベンダ拡張](docs/extensions.ja.md) | jmapc が知らない型とメソッドをスキーマファイルに記述する |
+| [対応範囲](docs/coverage.ja.md) | 対応しているケイパビリティとメソッド |
+| [jmapc の開発](docs/contributing.ja.md) | jmapc 自体のビルド、テスト、リリース |
 
 ## 対応範囲
 
-JMAP は仕様の集まりです。
-サーバはケイパビリティ URI を広告し、それぞれが固有の型とメソッドを持ち込みます。
-以下は [IANA が登録しているもの](https://www.iana.org/assignments/jmap/jmap.xhtml)と、それぞれに対する jmapc の状況です。
+jmapc は [IANA が挙げている](https://www.iana.org/assignments/jmap/jmap.xhtml) JMAP のケイパビリティをすべてサポートします。
+core、mail、submission、contacts、calendars、principals、sieve、quota、blob などで、そこに含まれる 81 個のメソッドはすべて同じように検証され、生成されます。
+そこに含まれないケイパビリティも、[スキーマファイル](docs/extensions.ja.md)に記述すれば他と同じように検証されます。
+ケイパビリティごとの内容と、jmapc があえて検証しない一つのことは[対応範囲](docs/coverage.ja.md)にあります。
 
-| ケイパビリティ | 仕様 | サポート |
-|---|---|---|
-| `urn:ietf:params:jmap:core` | [RFC 8620](https://www.rfc-editor.org/rfc/rfc8620) | ✅ |
-| `urn:ietf:params:jmap:mail` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | ✅ |
-| `urn:ietf:params:jmap:submission` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | ✅ |
-| `urn:ietf:params:jmap:vacationresponse` | [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621) | ✅ |
-| `urn:ietf:params:jmap:contacts` | [RFC 9610](https://www.rfc-editor.org/rfc/rfc9610) | ✅ |
-| `urn:ietf:params:jmap:calendars` | [draft-ietf-jmap-calendars](https://datatracker.ietf.org/doc/draft-ietf-jmap-calendars/) | ✅ |
-| `urn:ietf:params:jmap:principals:availability` | [draft-ietf-jmap-calendars](https://datatracker.ietf.org/doc/draft-ietf-jmap-calendars/) | ✅ |
-| `urn:ietf:params:jmap:principals` | [RFC 9670](https://www.rfc-editor.org/rfc/rfc9670) | ✅ |
-| `urn:ietf:params:jmap:principals:owner` | [RFC 9670](https://www.rfc-editor.org/rfc/rfc9670) | ✅ |
-| `urn:ietf:params:jmap:smimeverify` | [RFC 9219](https://www.rfc-editor.org/rfc/rfc9219) | ✅ |
-| `urn:ietf:params:jmap:blob` | [RFC 9404](https://www.rfc-editor.org/rfc/rfc9404) | ✅ |
-| `urn:ietf:params:jmap:quota` | [RFC 9425](https://www.rfc-editor.org/rfc/rfc9425) | ✅ |
-| `urn:ietf:params:jmap:sieve` | [RFC 9661](https://www.rfc-editor.org/rfc/rfc9661) | ✅ |
-| `urn:ietf:params:jmap:mdn` | [RFC 9007](https://www.rfc-editor.org/rfc/rfc9007) | ✅ |
-| `urn:ietf:params:jmap:webpush-vapid` | [RFC 9749](https://www.rfc-editor.org/rfc/rfc9749) | ✅ |
+## Author
 
-このうち二つは、それ自体が別仕様のオブジェクトを格納します。
-連絡先カードは [JSContact](https://www.rfc-editor.org/rfc/rfc9553) の Card であり、カレンダーの予定は [JSCalendar](https://www.rfc-editor.org/rfc/rfc8984) の JSEvent です。
-どちらも JMAP が使っている型名を使い、しかも互いの型名とも衝突します。
-三つの異なる `Link` 型が存在することになります。
-そこでこれらには接頭辞を付けています。
-`ContactEmailAddress` はカード上のアドレス、`EmailAddress` はヘッダフィールドのアドレス、`EventLink` は会議に添付されたリソースです。
-各型のドキュメントには、その仕様が使っている名前を記載しています。
-
-JSCalendar は JMAP にない時刻の型も持ち込みます。
-予定の `start` はタイムゾーンを持たない `LocalDateTime` で、`duration` は ISO 8601 の `Duration` です。
-`Duration` が独自の型なのは、サマータイムの切り替えを跨ぐ `P1D` が常に 24 時間とは限らないからです。
-どちらもクエリで検証されるので、末尾に `Z` の付いた `start` や、`90m` と書いた duration はビルドに失敗します。
-
-ケイパビリティのすべてが固有の型を持ち込むわけではありません。
-S/MIME の検証は `Email` に四つのプロパティを足すだけで、型もメソッドも増やしません。
-つまりメソッド名からは、そのケイパビリティが必要だと分かりません。
-jmapc はクエリが触れたプロパティがどのケイパビリティに属するかを判断し、`using` に加えます。
-`smimeStatus` を要求すれば、`urn:ietf:params:jmap:smimeverify` が自動で現れます。
-
-型もメソッドも持たず、クライアントに伝えることだけを持つケイパビリティもあります。
-VAPID がそれで、伝えるのは鍵です。
-こうしたものはセッションから読みます。
-`Session.Capability` は、jmapc が知らないケイパビリティも含めて、どれでも読めます。
-
-```go
-vapid, err := session.WebPushVAPID()
-// vapid.ApplicationServerKey を push service への購読時に渡す。
-
-var limits struct{ MaxSizeScript int `json:"maxSizeScript"` }
-err = session.Accounts[accountID].Capability(jmapc.CapabilitySieve, &limits)
-```
-
-サポートしていないケイパビリティも、手が届かないわけではありません。
-[スキーマファイル](#ベンダ拡張)に型を記述すれば、それに対するクエリも他と同じように検証されます。
-ベンダ拡張と同じ仕組みであり、記述するのは宣言だけで、Go を書く必要はありません。
-
-### メソッド
-
-81 のメソッドがあり、すべて同じ方法で検証され生成されます。
-
-| 型 | メソッド |
-|---|---|
-| `Mailbox` | `get` `changes` `set` `query` `queryChanges` |
-| `Thread` | `get` `changes` |
-| `Email` | `get` `changes` `set` `copy` `query` `queryChanges` `import` `parse` |
-| `SearchSnippet` | `get` |
-| `Identity` | `get` `changes` `set` |
-| `EmailSubmission` | `get` `changes` `set` `query` `queryChanges` |
-| `VacationResponse` | `get` `set` |
-| `AddressBook` | `get` `changes` `set` |
-| `ContactCard` | `get` `changes` `set` `copy` `query` `queryChanges` |
-| `Calendar` | `get` `changes` `set` |
-| `CalendarEvent` | `get` `changes` `set` `copy` `query` `queryChanges` `parse` |
-| `CalendarEventNotification` | `get` `changes` `set` `query` `queryChanges` |
-| `ParticipantIdentity` | `get` `changes` `set` |
-| `Principal` | `get` `changes` `set` `query` `queryChanges` `getAvailability` |
-| `ShareNotification` | `get` `changes` `set` `query` `queryChanges` |
-| `Quota` | `get` `changes` `query` `queryChanges` |
-| `SieveScript` | `get` `set` `query` `validate` |
-| `MDN` | `send` `parse` |
-| `Blob` | `copy` `upload` `get` `lookup` |
-| `PushSubscription` | `get` `set` |
-| `Core` | `echo` |
-
-### 検証しないもの
-
-一つだけあり、それは意図的なものです。
-
-**開いた集合は意図的に検証しない**：仕様が値を固定しているプロパティは検証します。
-一方、集合が開いているもの、たとえばメールボックスの `role`、メールのキーワード、`Content-Disposition` は検証しません。
-サーバが受け付けたはずの値を拒否するほうが、綴り間違いを通すより害が大きいからです。
+[linyows](https://github.com/linyows)
