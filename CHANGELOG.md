@@ -6,7 +6,7 @@ The release on GitHub carries the same text.
 This starts at v0.12.0. What went into the releases before it is in the commit
 history.
 
-## v0.12.0 (2026-09-06)
+## v0.13.0 (2026-09-06)
 
 ### Breaking changes
 
@@ -19,6 +19,25 @@ history.
   its old layout passes the paths it already uses; one on the defaults renames
   the two directories and regenerates. The generated code itself is unchanged
   apart from its package name.
+  ([#70](https://github.com/linyows/jmapc/pull/70))
+
+### Documentation
+
+- **The README says what jmapc does before why it exists**, opening with a
+  request and the call generated from it, then a list of five features. The
+  reference moved to `docs/`, a file to a subject: writing a request,
+  verification, the command, the runtime, push, paging, testing, the Rust and
+  TypeScript clients, vendor extensions, coverage, and working on jmapc. A new
+  section says how jmapc differs from the JMAP client libraries — the request
+  written in JMAP rather than in an API of the library's own, the checking done
+  before the program runs, and the response typed to what the request asked
+  for. Both languages are split the same way.
+  ([#68](https://github.com/linyows/jmapc/pull/68))
+
+## v0.12.0 (2026-09-06)
+
+### Breaking changes
+
 - **A record type is named after the call that read it.** `ListInboxEmailsEmail`
   is `ListInboxEmailsFetchEmail`, after the call id `fetch`. The types were
   numbered by the position of the call, so inserting a call moved a name onto a
@@ -73,12 +92,3 @@ history.
 - **The three languages are listed in one order everywhere**, Go, Rust,
   TypeScript, including the order the README's sections come in.
   ([#66](https://github.com/linyows/jmapc/pull/66))
-- **The README says what jmapc does before why it exists**, opening with a
-  query and the call generated from it, then a list of what jmapc does, and the
-  reference sections moved to
-  `docs/`: writing a query, verification, the command, the runtime, push,
-  paging, testing, the Rust and TypeScript clients, vendor extensions,
-  coverage, and working on jmapc. It also says how jmapc differs from the JMAP
-  client libraries — the request written in JMAP rather than in an API of the
-  library's own, the checking done before the program runs, and the response
-  typed to what the query asked for. Both languages are split the same way.
