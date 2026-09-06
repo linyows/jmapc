@@ -56,6 +56,14 @@
 // shortly before the one it holds expires, and when a server answers 401, and
 // requests arriving together share one call.
 //
+// # Splitting a large /get
+//
+// [WithSplitGets] sends a /get naming more ids than the server's
+// maxObjectsInGet in several requests and joins the answers, at the cost of
+// several round trips and of the records no longer arriving as one snapshot.
+// Where the state differs between those requests, the joined response is
+// returned together with a [StateChanged].
+//
 // # Blobs
 //
 // Attachments do not go through the API endpoint. [Client.Upload] and

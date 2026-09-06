@@ -799,6 +799,35 @@ In TypeScript the same failure is a thrown `SetErrors`, with the response on
 `err.result`. In Rust it is an `Error::Set`, and the response is retrieved with
 the type the function would have returned, through `err.result::<T>()`.
 
+### Splitting a large /get
+
+A `/get` naming more ids than the server's `maxObjectsInGet` is refused.
+`WithSplitGets` sends it in several requests instead, and joins the answers
+into the one response the caller asked for:
+
+```go
+c := jmapc.New(url, jmapc.WithBearerToken(token), jmapc.WithSplitGets())
+```
+
+It is off by default, for two reasons. One call to `Do` then costs several
+round trips. And the records no longer arrive as one snapshot: each request is
+answered separately, and the account may change between them. Where the `state`
+a `/get` reports differs between requests, the joined response is returned
+together with a `*jmapc.StateChanged`, which `errors.As` reaches — the same
+shape as a method error, so a caller that needs one snapshot can fetch again
+and one that does not can ignore it.
+
+Only the ids written into the query are counted, and two calls are sent as they
+are. One whose ids come from a back reference, since how many they resolve to
+is known to the server alone. And one that another call refers to, since a
+reference resolves within one request, and splitting the call it names would
+leave nothing to resolve against.
+
+The ids that did not fit travel in further requests of their own, no more calls
+in one request than `maxCallsInRequest` allows. The rest of the query is sent
+once, in the first request, so the back references between its other calls
+resolve as they did before.
+
 ### Tokens that expire
 
 `WithBearerToken` holds one string for the life of the client. An OAuth 2.0

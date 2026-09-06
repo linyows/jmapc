@@ -147,7 +147,7 @@ func (r *Response) Decode(callID string, dest any) error {
 	if !ok {
 		return fmt.Errorf("jmapc: result for call %q was not decoded from JSON", callID)
 	}
-	if in.Name == "error" {
+	if in.Name == errorMethod {
 		return methodErrorFrom(callID, r.requestedMethod(callID, in.Name), raw)
 	}
 	if dest == nil {
@@ -166,7 +166,7 @@ func (r *Response) Errors() MethodErrors {
 	var errs MethodErrors
 	for i := range r.MethodResponses {
 		in := &r.MethodResponses[i]
-		if in.Name != "error" {
+		if in.Name != errorMethod {
 			continue
 		}
 		raw, ok := in.RawArgs()
