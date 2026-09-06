@@ -53,6 +53,17 @@ jobs:
       - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           version: "~> v2"
-          args: release --clean --release-notes=${{ runner.temp }}/release-notes.md
+          args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # goreleaser builds and uploads the binaries; the body is written here,
+      # from the file above. Its own --release-notes silently published an
+      # empty body, and a release whose notes are written by hand is better
+      # served by the one step that does nothing else.
+      - name: Write the release body
+        run: gh release edit "$TAG" --notes-file "$NOTES"
+        env:
+          TAG: ${{ github.ref_name }}
+          NOTES: ${{ runner.temp }}/release-notes.md
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

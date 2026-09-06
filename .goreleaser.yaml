@@ -60,6 +60,7 @@ release:
   # The tag is pushed once the work is on main, so the release is not a draft.
   draft: false
   prerelease: auto
-  # The notes, the install section included, are the file the workflow builds
-  # and passes with --release-notes. A header or a footer here would be part
-  # of a changelog this no longer generates.
+  # The body is written by the workflow after this runs, with `gh release
+  # edit`, from the section of CHANGELOG.md for the tag. A header or a footer
+  # here would be part of a changelog this no longer generates, and would be
+  # overwritten in any case.
