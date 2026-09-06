@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -32,6 +33,7 @@ type Client struct {
 	retry      RetryPolicy
 	observer   *Observer
 	tokens     *tokenHolder
+	splitGets  bool
 
 	// api and uploads limit the client to the number of each the server
 	// accepts at once.
@@ -181,17 +183,52 @@ func (c *Client) Do(ctx context.Context, r *Request) (*Response, error) {
 		answered(err, nil)
 		return nil, err
 	}
-	body, err := json.Marshal(r)
+
+	// A /get holding more ids than the server takes is sent in several
+	// requests, where the client was told to send it that way at all.
+	first, parts := c.planSplit(r)
+	resp, err := c.post(ctx, apiURL, first)
 	if err != nil {
-		err = fmt.Errorf("jmapc: encoding request: %w", err)
 		answered(err, nil)
 		return nil, err
 	}
+	resp.req = r
+
+	var split []error
+	for _, part := range parts {
+		answer, err := c.post(ctx, apiURL, part.request)
+		if err != nil {
+			answered(err, nil)
+			return nil, err
+		}
+		if err := joinSplit(resp, answer, part.chunks); err != nil {
+			split = append(split, err)
+		}
+	}
+
+	errs := resp.Errors()
+	if len(errs) > 0 {
+		answered(nil, errs)
+		return resp, errors.Join(append(split, errs)...)
+	}
+	answered(nil, nil)
+	if len(split) > 0 {
+		return resp, errors.Join(split...)
+	}
+	return resp, nil
+}
+
+// post sends one request and decodes what comes back. It is one round trip:
+// the request a caller made is one, and each further request a split needs is
+// another.
+func (c *Client) post(ctx context.Context, apiURL string, r *Request) (*Response, error) {
+	body, err := json.Marshal(r)
+	if err != nil {
+		return nil, fmt.Errorf("jmapc: encoding request: %w", err)
+	}
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(body))
 	if err != nil {
-		err = fmt.Errorf("jmapc: building request: %w", err)
-		answered(err, nil)
-		return nil, err
+		return nil, fmt.Errorf("jmapc: building request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json; charset=utf-8")
 	httpReq.Header.Set("Accept", "application/json")
@@ -201,33 +238,21 @@ func (c *Client) Do(ctx context.Context, r *Request) (*Response, error) {
 		return core.MaxConcurrentRequests
 	}), c.waiting(ctx, KindAPI))
 	if err != nil {
-		answered(err, nil)
 		return nil, err
 	}
 	defer release()
 
 	httpResp, err := c.sendWithRetry(httpReq, KindAPI)
 	if err != nil {
-		answered(err, nil)
 		return nil, err
 	}
 	defer httpResp.Body.Close()
 	if httpResp.StatusCode != http.StatusOK {
-		err := c.requestError(httpResp)
-		answered(err, nil)
-		return nil, err
+		return nil, c.requestError(httpResp)
 	}
 	var resp Response
 	if err := json.NewDecoder(httpResp.Body).Decode(&resp); err != nil {
-		err = fmt.Errorf("jmapc: decoding response: %w", err)
-		answered(err, nil)
-		return nil, err
-	}
-	resp.req = r
-	errs := resp.Errors()
-	answered(nil, errs)
-	if len(errs) > 0 {
-		return &resp, errs
+		return nil, fmt.Errorf("jmapc: decoding response: %w", err)
 	}
 	return &resp, nil
 }

@@ -22,6 +22,9 @@ type testServer struct {
 	apiHits atomic.Int64
 	// apiHandler answers API requests when set.
 	apiHandler http.HandlerFunc
+	// sessionHandler is the session document to serve, where a test needs one
+	// stating limits of its own.
+	sessionHandler string
 }
 
 func newTestServer(t *testing.T) *testServer {
@@ -33,6 +36,10 @@ func newTestServer(t *testing.T) *testServer {
 
 	mux.HandleFunc("/.well-known/jmap", func(w http.ResponseWriter, r *http.Request) {
 		ts.sessionHits.Add(1)
+		if ts.sessionHandler != "" {
+			fmt.Fprint(w, ts.sessionHandler)
+			return
+		}
 		fmt.Fprintf(w, `{
 		  "capabilities": {
 		    "urn:ietf:params:jmap:core": {"maxCallsInRequest": 2},
