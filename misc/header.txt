@@ -1,0 +1,2 @@
+jmapc: Generates type-safe code from JMAP, in Go, Rust or TS.
+https://github.com/linyows/jmapc

@@ -69,7 +69,10 @@
 // Attachments do not go through the API endpoint. [Client.Upload] and
 // [Client.Download] exchange them over plain HTTP at the URLs the session
 // advertises, and an upload larger than the server accepts fails before it is
-// sent.
+// sent. Both stream, so an attachment larger than memory is never held in it.
+//
+// [DownloadOptions] From and Length fetch part of a blob, as an HTTP Range
+// header, which is how a download interrupted part way is resumed.
 //
 // # Push
 //

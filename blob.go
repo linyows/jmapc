@@ -7,6 +7,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -26,13 +27,21 @@ type BlobInfo struct {
 }
 
 // Blob is a blob being downloaded. The caller must close it.
+//
+// The content is read from the server as it is read from here, so a blob
+// larger than memory is written straight to a file without being held.
 type Blob struct {
 	// ReadCloser carries the blob's content.
 	io.ReadCloser
 	// Type is the media type the server served the blob as.
 	Type string
-	// Size is the size in octets, or -1 where the server did not report it.
+	// Size is the size in octets of what is being read, which is the size of
+	// the part where a range was requested, or -1 where the server did not
+	// report it.
 	Size int64
+	// Range is the part of the blob the server returned, and is nil where the
+	// whole of it was requested.
+	Range *BlobRange
 	// Name is the filename from the Content-Disposition header, if the server
 	// sent one. It is whatever the server sent, which may be a path rather
 	// than a name: take the base of it before writing anything under it.
@@ -48,6 +57,40 @@ type DownloadOptions struct {
 	// in the Content-Type header, and may refuse a type they consider
 	// unsafe.
 	Type string
+	// From is the first octet to fetch, counted from the start of the blob.
+	// Zero starts at the beginning.
+	//
+	// From and Length are sent as an HTTP Range header. JMAP does not define
+	// one for the download endpoint, so a server is free to ignore it and
+	// return the whole blob; where that happens the download fails rather than
+	// returning content the caller would write at the wrong offset.
+	From int64
+	// Length is how many octets to fetch, and zero fetches to the end of the
+	// blob.
+	Length int64
+}
+
+// BlobRange is the part of a blob a server returned, as its Content-Range
+// header reported it.
+type BlobRange struct {
+	// From and To are the first and last octet returned, counted from the
+	// start of the blob and both included.
+	From, To int64
+	// Total is the size of the whole blob, or -1 where the server did not
+	// report it.
+	Total int64
+}
+
+// header renders the range as the value of an HTTP Range header.
+func (o *DownloadOptions) header() string {
+	switch {
+	case o.From == 0 && o.Length == 0:
+		return ""
+	case o.Length == 0:
+		return fmt.Sprintf("bytes=%d-", o.From)
+	default:
+		return fmt.Sprintf("bytes=%d-%d", o.From, o.From+o.Length-1)
+	}
 }
 
 // PrimaryAccountID returns the id of the account to use by default for a
@@ -183,24 +226,83 @@ func (c *Client) Download(ctx context.Context, accountID, blobID ID, opts *Downl
 		return nil, fmt.Errorf("jmapc: expanding downloadUrl: %w", err)
 	}
 
+	if opts.From < 0 || opts.Length < 0 {
+		return nil, fmt.Errorf("jmapc: a download range counts octets from the start of the blob, and neither part of it is negative")
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("jmapc: building download request: %w", err)
+	}
+	wanted := opts.header()
+	if wanted != "" {
+		req.Header.Set("Range", wanted)
 	}
 	resp, err := c.sendWithRetry(req, KindDownload)
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 		defer resp.Body.Close()
 		return nil, c.requestError(resp)
 	}
-	return &Blob{
+	if wanted != "" && resp.StatusCode == http.StatusOK {
+		// The whole blob, where part of it was asked for. Returning it would
+		// leave the caller to write the start of the blob at the offset it
+		// asked to continue from.
+		resp.Body.Close()
+		return nil, fmt.Errorf("jmapc: the server ignored the range %q and answered with the whole blob", wanted)
+	}
+	blob := &Blob{
 		ReadCloser: resp.Body,
 		Type:       resp.Header.Get("Content-Type"),
 		Size:       resp.ContentLength,
 		Name:       filenameFrom(resp.Header.Get("Content-Disposition")),
-	}, nil
+	}
+	if wanted != "" {
+		part, err := parseContentRange(resp.Header.Get("Content-Range"))
+		if err != nil {
+			resp.Body.Close()
+			return nil, err
+		}
+		blob.Range = part
+	}
+	return blob, nil
+}
+
+// parseContentRange reads the part of a blob a server reported returning,
+// which RFC 9110, Section 14.4 writes as "bytes 0-99/1234", with the size of
+// the whole written as "*" where the server does not report it.
+func parseContentRange(header string) (*BlobRange, error) {
+	value, ok := strings.CutPrefix(strings.TrimSpace(header), "bytes ")
+	if !ok {
+		return nil, fmt.Errorf("jmapc: the server answered with part of the blob and a Content-Range of %q", header)
+	}
+	span, total, ok := strings.Cut(value, "/")
+	if !ok {
+		return nil, fmt.Errorf("jmapc: the server answered with part of the blob and a Content-Range of %q", header)
+	}
+	first, last, ok := strings.Cut(span, "-")
+	if !ok {
+		return nil, fmt.Errorf("jmapc: the server answered with part of the blob and a Content-Range of %q", header)
+	}
+	from, err := strconv.ParseInt(first, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("jmapc: the server answered with part of the blob and a Content-Range of %q", header)
+	}
+	to, err := strconv.ParseInt(last, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("jmapc: the server answered with part of the blob and a Content-Range of %q", header)
+	}
+	part := &BlobRange{From: from, To: to, Total: -1}
+	if total != "*" {
+		size, err := strconv.ParseInt(total, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("jmapc: the server answered with part of the blob and a Content-Range of %q", header)
+		}
+		part.Total = size
+	}
+	return part, nil
 }
 
 // filenameFrom extracts the filename from a Content-Disposition header, and

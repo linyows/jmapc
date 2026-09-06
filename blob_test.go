@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -70,9 +71,18 @@ type blobServer struct {
 	uploadedBody string
 	// downloadPath records the path the last download asked for.
 	downloadPath string
+	// downloadRange records the Range header the last download sent.
+	downloadRange string
+	// ignoreRange makes the download endpoint answer with the whole blob even
+	// where part of it was asked for, as a server that does not implement
+	// ranges does.
+	ignoreRange bool
 	// maxSizeUpload is advertised by the session.
 	maxSizeUpload int
 }
+
+// blobBody is what the download endpoint serves.
+const blobBody = "%PDF-1.4 pretend"
 
 func newBlobServer(t *testing.T) *blobServer {
 	t.Helper()
@@ -109,9 +119,17 @@ func newBlobServer(t *testing.T) *blobServer {
 	})
 	mux.HandleFunc("/dl/", func(w http.ResponseWriter, r *http.Request) {
 		bs.downloadPath = r.URL.RequestURI()
+		bs.downloadRange = r.Header.Get("Range")
 		w.Header().Set("Content-Type", "application/pdf")
 		w.Header().Set("Content-Disposition", `attachment; filename="report.pdf"`)
-		fmt.Fprint(w, "%PDF-1.4 pretend")
+		if bs.downloadRange == "" || bs.ignoreRange {
+			fmt.Fprint(w, blobBody)
+			return
+		}
+		from, to := parseTestRange(t, bs.downloadRange, len(blobBody))
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", from, to, len(blobBody)))
+		w.WriteHeader(http.StatusPartialContent)
+		fmt.Fprint(w, blobBody[from:to+1])
 	})
 	return bs
 }
@@ -307,6 +325,143 @@ func TestFilenameFrom(t *testing.T) {
 	for _, tt := range tests {
 		if got := filenameFrom(tt.in); got != tt.want {
 			t.Errorf("filenameFrom(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+// parseTestRange reads the "bytes=a-b" a test sent, with an open end meaning
+// the rest of the blob.
+func parseTestRange(t *testing.T, header string, size int) (int, int) {
+	t.Helper()
+	span, ok := strings.CutPrefix(header, "bytes=")
+	if !ok {
+		t.Fatalf("the client sent a Range of %q", header)
+	}
+	first, last, ok := strings.Cut(span, "-")
+	if !ok {
+		t.Fatalf("the client sent a Range of %q", header)
+	}
+	from, err := strconv.Atoi(first)
+	if err != nil {
+		t.Fatalf("the client sent a Range of %q", header)
+	}
+	if last == "" {
+		return from, size - 1
+	}
+	to, err := strconv.Atoi(last)
+	if err != nil {
+		t.Fatalf("the client sent a Range of %q", header)
+	}
+	return from, to
+}
+
+func TestDownloadARange(t *testing.T) {
+	bs := newBlobServer(t)
+	blob, err := bs.client().Download(context.Background(), "a1", "blob9", &DownloadOptions{From: 5, Length: 4})
+	if err != nil {
+		t.Fatalf("Download: %v", err)
+	}
+	defer blob.Close()
+
+	if bs.downloadRange != "bytes=5-8" {
+		t.Errorf("the client sent a Range of %q, want bytes=5-8", bs.downloadRange)
+	}
+	body, err := io.ReadAll(blob)
+	if err != nil {
+		t.Fatalf("reading the blob: %v", err)
+	}
+	if string(body) != blobBody[5:9] {
+		t.Errorf("body = %q, want %q", body, blobBody[5:9])
+	}
+	if blob.Range == nil {
+		t.Fatal("the blob reports no range")
+	}
+	if blob.Range.From != 5 || blob.Range.To != 8 || blob.Range.Total != int64(len(blobBody)) {
+		t.Errorf("range = %+v, want 5-8 of %d", *blob.Range, len(blobBody))
+	}
+}
+
+// A download resumed after an interruption asks for the rest of the blob
+// without knowing how much of it is left.
+func TestDownloadFromAnOffsetToTheEnd(t *testing.T) {
+	bs := newBlobServer(t)
+	blob, err := bs.client().Download(context.Background(), "a1", "blob9", &DownloadOptions{From: 9})
+	if err != nil {
+		t.Fatalf("Download: %v", err)
+	}
+	defer blob.Close()
+
+	if bs.downloadRange != "bytes=9-" {
+		t.Errorf("the client sent a Range of %q, want bytes=9-", bs.downloadRange)
+	}
+	body, err := io.ReadAll(blob)
+	if err != nil {
+		t.Fatalf("reading the blob: %v", err)
+	}
+	if string(body) != blobBody[9:] {
+		t.Errorf("body = %q, want %q", body, blobBody[9:])
+	}
+}
+
+// JMAP defines no range for the download endpoint, so a server may answer with
+// the whole blob. Returning it would leave the caller to write the start of the
+// blob at the offset it asked to continue from.
+func TestADownloadWhoseRangeWasIgnoredFails(t *testing.T) {
+	bs := newBlobServer(t)
+	bs.ignoreRange = true
+	_, err := bs.client().Download(context.Background(), "a1", "blob9", &DownloadOptions{From: 5, Length: 4})
+	if err == nil {
+		t.Fatal("Download succeeded where the server ignored the range")
+	}
+	if !strings.Contains(err.Error(), "ignored the range") {
+		t.Errorf("error = %v, want it to report the range was ignored", err)
+	}
+}
+
+func TestADownloadWithoutARangeSendsNone(t *testing.T) {
+	bs := newBlobServer(t)
+	blob, err := bs.client().Download(context.Background(), "a1", "blob9", &DownloadOptions{Name: "report.pdf"})
+	if err != nil {
+		t.Fatalf("Download: %v", err)
+	}
+	defer blob.Close()
+	if bs.downloadRange != "" {
+		t.Errorf("the client sent a Range of %q, want none", bs.downloadRange)
+	}
+	if blob.Range != nil {
+		t.Errorf("the blob reports a range of %+v, want none", *blob.Range)
+	}
+}
+
+func TestADownloadRangeCountsFromTheStart(t *testing.T) {
+	bs := newBlobServer(t)
+	for _, opts := range []*DownloadOptions{{From: -1}, {Length: -1}} {
+		if _, err := bs.client().Download(context.Background(), "a1", "blob9", opts); err == nil {
+			t.Errorf("Download(%+v) succeeded, want an error", *opts)
+		}
+	}
+}
+
+func TestParseContentRange(t *testing.T) {
+	for _, tt := range []struct {
+		header string
+		want   BlobRange
+	}{
+		{"bytes 0-99/1234", BlobRange{From: 0, To: 99, Total: 1234}},
+		{"bytes 5-8/*", BlobRange{From: 5, To: 8, Total: -1}},
+	} {
+		got, err := parseContentRange(tt.header)
+		if err != nil {
+			t.Errorf("parseContentRange(%q): %v", tt.header, err)
+			continue
+		}
+		if *got != tt.want {
+			t.Errorf("parseContentRange(%q) = %+v, want %+v", tt.header, *got, tt.want)
+		}
+	}
+	for _, header := range []string{"", "items 0-99/1234", "bytes 0-99", "bytes x-99/1234", "bytes 0-99/many"} {
+		if _, err := parseContentRange(header); err == nil {
+			t.Errorf("parseContentRange(%q) succeeded, want an error", header)
 		}
 	}
 }
