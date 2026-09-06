@@ -28,7 +28,7 @@
   </a>
 </p>
 
-jmapc は JMAP から**型安全なコード**を、Go、TypeScript、Rust で生成します。
+jmapc は JMAP から**型安全なコード**を、Go、Rust、TypeScript で生成します。
 
 1. JMAP でクエリを書きます。
 1. jmapc を実行して、そのクエリに型安全なインターフェースを持つコードを生成します。
@@ -113,7 +113,7 @@ go install github.com/linyows/jmapc/cmd/jmapc@latest
 ```
 
 Go のツールチェインがない環境では、[リリース](https://github.com/linyows/jmapc/releases)からバイナリを取得してください。
-TypeScript や Rust のプロジェクトではこちらを使います。
+Rust や TypeScript のプロジェクトではこちらを使います。
 
 ## 使い方
 
@@ -234,7 +234,7 @@ created := res.Created[jmapq.CreateMailboxNewMailbox]
 
 これがないと、同じ名前が二つのファイルに何の繋がりもなく存在することになります。
 クエリ側で改名してもビルドは通り、実行時にルックアップが外れるだけです。
-TypeScript では `createMailboxNewMailbox`、Rust では `CREATE_MAILBOX_NEW_MAILBOX` になります。
+Rust では `CREATE_MAILBOX_NEW_MAILBOX`、TypeScript では `createMailboxNewMailbox` になります。
 `{"{{creationId}}": ...}` のように呼び出し側に名前を委ねた場合は、呼び出し側がすでに名前を持っているので定数は作られません。
 
 パラメータを持たないクエリは、Params 引数自体を取りません。
@@ -254,36 +254,6 @@ Rust では関数名とモジュール名が snake_case になり、`list_inbox_
 
 [`example/queries`](example/queries) には、メール、連絡先、カレンダー、共有、フィルタにまたがる 25 個のクエリがあります。
 検索、既知の状態からの同期、送信、連絡先カードの作成、繰り返し予定のうち一回だけを他に触れずに動かす操作などです。
-
-## TypeScript
-
-同じクエリから TypeScript 用のクライアントを生成できます。
-
-```
-jmapc generate -lang typescript -out src/jmapq
-```
-
-```typescript
-import { Client } from "./jmapq/client.js"
-import { listInboxEmails } from "./jmapq/listInboxEmails.js"
-
-const client = new Client("https://example.com/.well-known/jmap", { auth: token })
-
-const res = await listInboxEmails(client, { mailboxId: inbox, limit: 25 })
-for (const email of res.list) {
-  console.log(email.receivedAt, email.from?.[0].email, email.subject)
-}
-```
-
-ランタイムも一緒に生成されます。
-`client.ts` と `types.ts` がクエリと並んで出力されるので、生成物には**依存がありません**。
-プラットフォームに求めるのは `fetch` だけです。
-
-TypeScript のほうが正確に言えることもあります。
-null を取りうるプロパティはポインタではなく union なので、`subject` は `string | null` です。
-複数の形を取る値も union で書けます。
-フィルタは `FilterOperator | EmailFilterCondition | null` で、Go では形ごとにフィールドを持つ構造体になるところです。
-形ではなく書式を持つプリミティブは `string` の名前付き別名になるので、`Id` と `TimeZoneId` を取り違えることがありません。
 
 ## Rust
 
@@ -354,6 +324,36 @@ null を取りうるプロパティは `Option` なので、`subject` は `Optio
 省略可能なプロパティを五十個持つ型を組み立てられるのはこれのおかげで、必要な二つだけを名指しして残りは任せられます。
 
 生成されるコードは rustfmt が整形した形そのものなので、クレートに `cargo fmt` をかけても何も動きません。
+
+## TypeScript
+
+同じクエリから TypeScript 用のクライアントを生成できます。
+
+```
+jmapc generate -lang typescript -out src/jmapq
+```
+
+```typescript
+import { Client } from "./jmapq/client.js"
+import { listInboxEmails } from "./jmapq/listInboxEmails.js"
+
+const client = new Client("https://example.com/.well-known/jmap", { auth: token })
+
+const res = await listInboxEmails(client, { mailboxId: inbox, limit: 25 })
+for (const email of res.list) {
+  console.log(email.receivedAt, email.from?.[0].email, email.subject)
+}
+```
+
+ランタイムも一緒に生成されます。
+`client.ts` と `types.ts` がクエリと並んで出力されるので、生成物には**依存がありません**。
+プラットフォームに求めるのは `fetch` だけです。
+
+TypeScript のほうが正確に言えることもあります。
+null を取りうるプロパティはポインタではなく union なので、`subject` は `string | null` です。
+複数の形を取る値も union で書けます。
+フィルタは `FilterOperator | EmailFilterCondition | null` で、Go では形ごとにフィールドを持つ構造体になるところです。
+形ではなく書式を持つプリミティブは `string` の名前付き別名になるので、`Id` と `TimeZoneId` を取り違えることがありません。
 
 ## クエリの書き方
 
@@ -433,7 +433,7 @@ jmapq.FindPeople(ctx, c, jmapq.FindPeopleParams{Phrase: "ada", Limit: &limit})
 jmapq.FindPeople(ctx, c, jmapq.FindPeopleParams{Phrase: "ada"}) // limit 引数は送られません
 ```
 
-TypeScript ではメンバー自体が省略可能になり (`limit?: number`)、Rust では `Option` に包まれます。
+Rust では `Option` に包まれ、TypeScript ではメンバー自体が省略可能になります (`limit?: number`)。
 `jmapc run` では、`-p` で指定しなかった引数がそのまま省略されます。
 
 省略できるのはメソッド呼び出しの引数そのものだけで、しかもそのパラメータが他の場所で使われていない場合に限ります。
@@ -875,7 +875,7 @@ obs := &jmapc.Observer{
 ```
 
 `Observer` は Go のクライアントにのみあります。
-TypeScript と Rust では、同じ処理をトランスポートの実装に書きます。
+Rust と TypeScript では、同じ処理をトランスポートの実装に書きます。
 
 ## テスト
 
@@ -1105,7 +1105,7 @@ err := c.Watch(ctx, accountID, "Email", state,
 ```
 
 `_watches` を追うのは Go のクライアントだけです。
-接続を保持するのは生成コードではなくランタイムの仕事で、TypeScript と Rust のランタイムはそれをしません。
+接続を保持するのは生成コードではなくランタイムの仕事で、Rust と TypeScript のランタイムはそれをしません。
 それらの言語で watch するクエリを生成すると、ループのないクエリだけが生成され、その旨が表示されます。
 
 `Watch` のさらに下にあるのが `Client.EventSource` で、プッシュエンドポイントに接続してイベントをそのまま返します。
@@ -1182,8 +1182,8 @@ go test ./...        # エンドツーエンドのテストを含むすべて
 go generate ./...    # ランタイムの型と、全言語のサンプルクライアントを再生成する
 ```
 
-サンプルは言語ごとに三度生成され、`example/jmapq`、`example/ts`、`example/rust/src/jmapq` に出力されます。
-残る二つがコンパイルできるかどうかは Go のテストでは分からないので、CI は TypeScript に `tsc --strict` を、Rust に `cargo fmt --check` と `cargo test` を実行します。
+サンプルは言語ごとに三度生成され、`example/jmapq`、`example/rust/src/jmapq`、`example/ts` に出力されます。
+残る二つがコンパイルできるかどうかは Go のテストでは分からないので、CI は Rust に `cargo fmt --check` と `cargo test` を、TypeScript に `tsc --strict` を実行します。
 どちらにも生成コードと並ぶ手書きの検査があり、スタブを相手にランタイムを動かします。
 ヘッダが送られること、認証がそれに優先すること、セッションがキャッシュされること、そして 200 を返しながら拒否を含む `/set` がやはりエラーになることを確かめます。
 
