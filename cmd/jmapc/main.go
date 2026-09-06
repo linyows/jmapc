@@ -1,5 +1,5 @@
 // Command jmapc generates a typed client from the JMAP queries in a directory,
-// in Go, TypeScript or Rust. Write the query you want the server to answer;
+// in Go, Rust or TypeScript. Write the query you want the server to answer;
 // jmapc checks it against the JMAP data model and writes the code that sends
 // it.
 package main
@@ -50,7 +50,7 @@ type Config struct {
 	// defaults to Go.
 	Lang string `json:"lang"`
 	// Package is the name of the generated package, defaulting to the base
-	// name of the output directory. It has no meaning for TypeScript or Rust,
+	// name of the output directory. It has no meaning for Rust or TypeScript,
 	// where a module is a file.
 	Package string `json:"package"`
 	// Schemas are files describing the types and methods a server offers
@@ -67,7 +67,7 @@ func main() {
 
 // usage describes the commands, and is printed when the arguments make no
 // sense.
-const usage = `jmapc generates a typed client from JMAP queries, in Go, TypeScript or Rust.
+const usage = `jmapc generates a typed client from JMAP queries, in Go, Rust or TypeScript.
 
 Usage:
 	jmapc generate [flags]   check the queries and write the generated client
@@ -80,7 +80,7 @@ Flags:
 	-config string    settings file to read (default ` + ConfigName + ` if present)
 	-queries string   directory holding the query files (default "queries")
 	-out string       directory to write the generated client to (default "jmapq")
-	-lang string      language to generate: go, typescript or rust (default go)
+	-lang string      language to generate: go, rust or typescript (default go)
 	-package string   name of the generated package, for Go (default: the name of -out)
 	-schema string    schema file describing a vendor extension; repeatable
 
@@ -123,7 +123,7 @@ func run(args []string) error {
 		configPath = fs.String("config", "", "settings file to read")
 		queries    = fs.String("queries", "", "directory holding the query files")
 		out        = fs.String("out", "", "directory to write the generated client to")
-		lang       = fs.String("lang", "", "language to generate: go, typescript or rust")
+		lang       = fs.String("lang", "", "language to generate: go, rust or typescript")
 		pkg        = fs.String("package", "", "name of the generated package")
 		schemas    stringList
 	)

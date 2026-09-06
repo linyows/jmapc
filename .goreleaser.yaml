@@ -3,7 +3,7 @@
 # A Go project is better served by `go get -tool`, which pins a version in its
 # own go.mod, so that everyone who builds the project — CI included —
 # generates with the same one. The binaries are for the projects that cannot:
-# jmapc generates TypeScript and Rust from the same queries, and those are
+# jmapc generates Rust and TypeScript from the same queries, and those are
 # users who need not have a Go toolchain at all.
 version: 2
 

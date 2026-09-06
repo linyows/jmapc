@@ -28,7 +28,7 @@
   </a>
 </p>
 
-jmapc generates **type-safe code** from JMAP, in Go, TypeScript or Rust. Here's
+jmapc generates **type-safe code** from JMAP, in Go, Rust or TypeScript. Here's
 how it works:
 
 1. You write queries in JMAP.
@@ -119,7 +119,7 @@ go install github.com/linyows/jmapc/cmd/jmapc@latest
 ```
 
 Or take a binary from the [releases](https://github.com/linyows/jmapc/releases),
-which is how a TypeScript or Rust project installs it, having no Go toolchain
+which is how a Rust or TypeScript project installs it, having no Go toolchain
 to run `go tool` with.
 
 ## Use
@@ -247,8 +247,8 @@ created := res.Created[jmapq.CreateMailboxNewMailbox]
 
 Without it the name appears in two files with no link between them, and
 renaming it in the query still builds: the lookup misses at run time instead.
-TypeScript writes `createMailboxNewMailbox` and Rust
-`CREATE_MAILBOX_NEW_MAILBOX`. A creation id the query leaves to the caller —
+Rust writes `CREATE_MAILBOX_NEW_MAILBOX` and TypeScript
+`createMailboxNewMailbox`. A creation id the query leaves to the caller —
 `{"{{creationId}}": ...}` — has no constant, since the caller already has the
 name.
 
@@ -259,14 +259,14 @@ function's arity and breaks every call site. That is a deliberate trade for
 the common case of a query with no parameters reading like a plain function
 call, not an oversight.
 
-TypeScript lowercases the first letter of the function and of the file —
-`listInboxEmails` in `listInboxEmails.ts` — and keeps the type names above.
-
 Rust writes the function and its module in snake_case — `list_inbox_emails` in
-`list_inbox_emails.rs` — and keeps the type names too, except that an initialism
-becomes a word, since that is how Rust spells one: a `UTCDate` is a `UtcDate`.
-Properties are snake_case, with a serde rename wherever that is not the name on
-the wire.
+`list_inbox_emails.rs` — and keeps the type names above, except that an
+initialism becomes a word, since that is how Rust spells one: a `UTCDate` is a
+`UtcDate`. Properties are snake_case, with a serde rename wherever that is not
+the name on the wire.
+
+TypeScript lowercases the first letter of the function and of the file —
+`listInboxEmails` in `listInboxEmails.ts` — and keeps the type names too.
 
 ### Examples
 
@@ -274,37 +274,6 @@ the wire.
 contacts, calendars, sharing and filtering: searching, syncing from a known state, sending,
 creating a contact card, moving one occurrence of a recurring meeting without
 touching the rest of the series.
-
-## TypeScript
-
-The same queries generate a TypeScript client:
-
-```
-jmapc generate -lang typescript -out src/jmapq
-```
-
-```typescript
-import { Client } from "./jmapq/client.js"
-import { listInboxEmails } from "./jmapq/listInboxEmails.js"
-
-const client = new Client("https://example.com/.well-known/jmap", { auth: token })
-
-const res = await listInboxEmails(client, { mailboxId: inbox, limit: 25 })
-for (const email of res.list) {
-  console.log(email.receivedAt, email.from?.[0].email, email.subject)
-}
-```
-
-The runtime comes with it — `client.ts` and `types.ts` are generated alongside
-the queries — so the output has **no dependencies**. The only platform
-requirement is `fetch`.
-
-TypeScript expresses some things more precisely than Go. A nullable property is
-a union rather than a pointer, so `subject` is `string | null`. A union of
-shapes is written as one: a filter is `FilterOperator | EmailFilterCondition |
-null`, where Go has a struct with a field per shape. And the primitives that carry a format
-rather than a shape are named aliases of `string`, so an `Id` and a
-`TimeZoneId` cannot be swapped by accident.
 
 ## Rust
 
@@ -379,6 +348,37 @@ that differ from the default and omitting the rest.
 
 The generated code is already formatted the way rustfmt formats it, so
 `cargo fmt` over the crate changes nothing.
+
+## TypeScript
+
+The same queries generate a TypeScript client:
+
+```
+jmapc generate -lang typescript -out src/jmapq
+```
+
+```typescript
+import { Client } from "./jmapq/client.js"
+import { listInboxEmails } from "./jmapq/listInboxEmails.js"
+
+const client = new Client("https://example.com/.well-known/jmap", { auth: token })
+
+const res = await listInboxEmails(client, { mailboxId: inbox, limit: 25 })
+for (const email of res.list) {
+  console.log(email.receivedAt, email.from?.[0].email, email.subject)
+}
+```
+
+The runtime comes with it — `client.ts` and `types.ts` are generated alongside
+the queries — so the output has **no dependencies**. The only platform
+requirement is `fetch`.
+
+TypeScript expresses some things more precisely than Go. A nullable property is
+a union rather than a pointer, so `subject` is `string | null`. A union of
+shapes is written as one: a filter is `FilterOperator | EmailFilterCondition |
+null`, where Go has a struct with a field per shape. And the primitives that carry a format
+rather than a shape are named aliases of `string`, so an `Id` and a
+`TimeZoneId` cannot be swapped by accident.
 
 ## Writing a query
 
@@ -463,8 +463,9 @@ jmapq.FindPeople(ctx, c, jmapq.FindPeopleParams{Phrase: "ada", Limit: &limit})
 jmapq.FindPeople(ctx, c, jmapq.FindPeopleParams{Phrase: "ada"}) // no limit argument
 ```
 
-TypeScript makes the member optional (`limit?: number`), Rust wraps it in an
-`Option`, and `jmapc run` leaves the argument out when no `-p` names it.
+Rust wraps it in an `Option`, TypeScript makes the member optional
+(`limit?: number`), and `jmapc run` leaves the argument out when no `-p` names
+it.
 
 Only a whole argument of a method call may be left out, and only where the
 parameter standing for it is used nowhere else, so that leaving it out has one
@@ -939,7 +940,7 @@ obs := &jmapc.Observer{
 }
 ```
 
-`Observer` exists only in the Go client. In TypeScript and Rust, the
+`Observer` exists only in the Go client. In Rust and TypeScript, the
 equivalent belongs in the transport.
 
 ## Testing
@@ -1201,7 +1202,7 @@ err := c.Watch(ctx, accountID, "Email", state,
 ```
 
 Only the Go client follows a watch. Holding a connection open is the runtime's
-responsibility rather than the generated code's, and the TypeScript and Rust
+responsibility rather than the generated code's, and the Rust and TypeScript
 runtimes do not implement it; generating either from a watching query writes
 the query without the loop and reports that.
 
@@ -1282,9 +1283,9 @@ go generate ./...    # regenerate the runtime types and every example client
 ```
 
 The example is generated three times, once per language, into `example/jmapq`,
-`example/ts` and `example/rust/src/jmapq`. Go's tests cannot say whether the
-other two compile, so CI runs `tsc --strict` over the TypeScript and
-`cargo fmt --check` and `cargo test` over the Rust. Each of the two has a
+`example/rust/src/jmapq` and `example/ts`. Go's tests cannot say whether the
+other two compile, so CI runs `cargo fmt --check` and `cargo test` over the
+Rust and `tsc --strict` over the TypeScript. Each of the two has a
 hand-written check beside the generated code, exercising the runtime against a
 stub: that the headers are sent, that authentication overrides them, that the
 session is cached, and that a `/set` answering 200 with a refusal in it is
