@@ -18,12 +18,12 @@ carries.
 
 A generated function returns the same thing: the calls the server answered are
 decoded, the ones it did not run are left at their zero value, and the result
-is returned with the error. A chained query fails this way routinely — the call
+is returned with the error. A chained request fails this way routinely — the call
 another depends on succeeds, and the dependent call cannot resolve its
 reference — and the first call's response usually explains why:
 
 ```go
-res, err := jmapq.DestroyThread(ctx, c, params)
+res, err := client.DestroyThread(ctx, c, params)
 if err != nil {
     if len(res.ThreadGet.NotFound) > 0 {
         return fmt.Errorf("no such thread: %s", res.ThreadGet.NotFound[0])
@@ -32,13 +32,13 @@ if err != nil {
 }
 ```
 
-The exception is a query naming one call in `_returns`: that call is the whole
+The exception is a request naming one call in `_returns`: that call is the whole
 of the answer, so if it is the one that failed, there is nothing to return and
 the result is nil.
 
 TypeScript throws rather than returning, so the decoded response is attached to
 the error. `MethodErrors` carries the response it came from, and `result` holds as much of
-what the query returns as the server answered. Read it as a `Partial`, since a
+what the request returns as the server answered. Read it as a `Partial`, since a
 call the server would not run is not in it at all:
 
 ```ts
@@ -56,7 +56,7 @@ try {
 ```
 
 Rust returns an `Err`, and attaches it there: `MethodErrors::result` returns the
-result the query would have returned, with a call the server did not run left at
+result the request would have returned, with a call the server did not run left at
 its default rather than missing, since Rust has `Default` for it:
 
 ```rust
@@ -79,7 +79,7 @@ Read only the transport error and this is a success where nothing happened.
 Generated code checks it, so a refused record is a `*jmapc.SetErrors`:
 
 ```go
-res, err := jmapq.SendEmail(ctx, c, params)
+res, err := client.SendEmail(ctx, c, params)
 if err != nil {
     var refused *jmapc.SetErrors
     if errors.As(err, &refused) {
@@ -92,7 +92,7 @@ if err != nil {
 ```
 
 `res` is returned alongside the error, since the part of the request the server
-did carry out still happened. Calls the query does not name in `_returns` are
+did carry out still happened. Calls the request does not name in `_returns` are
 checked too — naming one call should not exempt the others from the check.
 
 In TypeScript the same failure is a thrown `SetErrors`, with the response on
@@ -117,14 +117,14 @@ together with a `*jmapc.StateChanged`, which `errors.As` reaches — the same
 shape as a method error, so a caller that needs one snapshot can fetch again
 and one that does not can ignore it.
 
-Only the ids written into the query are counted, and two calls are sent as they
+Only the ids written into the request are counted, and two calls are sent as they
 are. One whose ids come from a back reference, since how many they resolve to
 is known to the server alone. And one that another call refers to, since a
 reference resolves within one request, and splitting the call it names would
 leave nothing to resolve against.
 
 The ids that did not fit travel in further requests of their own, no more calls
-in one request than `maxCallsInRequest` allows. The rest of the query is sent
+in one request than `maxCallsInRequest` allows. The rest of the request is sent
 once, in the first request, so the back references between its other calls
 resolve as they did before.
 

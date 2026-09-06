@@ -37,12 +37,12 @@ specification uses.
 JSCalendar also brings time types JMAP does not have. An event's `start` is a
 `LocalDateTime` with no zone, and its `duration` is an ISO 8601 `Duration`,
 because "P1D" across a daylight saving change is not always 24 hours. Both are
-checked in a query, so a `start` written with a `Z` on the end, or a duration
+checked in a request, so a `start` written with a `Z` on the end, or a duration
 written as `90m`, fails to build.
 
 Not every capability brings types of its own. S/MIME verification adds four
-properties to `Email` and nothing else, so a query needs it without any method
-name saying so. jmapc works out which capabilities the properties a query
+properties to `Email` and nothing else, so a request needs it without any method
+name saying so. jmapc works out which capabilities the properties a request
 touches belong to, and declares them: ask for `smimeStatus` and
 `urn:ietf:params:jmap:smimeverify` appears in `using` on its own.
 
@@ -59,7 +59,7 @@ err = session.Accounts[accountID].Capability(jmapc.CapabilitySieve, &limits)
 ```
 
 A capability that is not built in can still be used: describe its types in a
-[schema file](extensions.md) and queries against them are checked like any
+[schema file](extensions.md) and requests against them are checked like any
 other. That is the same mechanism a vendor extension uses, and the work is
 declarative — no Go to write.
 
@@ -69,23 +69,23 @@ declarative — no Go to write.
 
 | Type | Methods |
 |---|---|
-| `Mailbox` | `get` `changes` `set` `query` `queryChanges` |
+| `Mailbox` | `get` `changes` `set` `request` `queryChanges` |
 | `Thread` | `get` `changes` |
-| `Email` | `get` `changes` `set` `copy` `query` `queryChanges` `import` `parse` |
+| `Email` | `get` `changes` `set` `copy` `request` `queryChanges` `import` `parse` |
 | `SearchSnippet` | `get` |
 | `Identity` | `get` `changes` `set` |
-| `EmailSubmission` | `get` `changes` `set` `query` `queryChanges` |
+| `EmailSubmission` | `get` `changes` `set` `request` `queryChanges` |
 | `VacationResponse` | `get` `set` |
 | `AddressBook` | `get` `changes` `set` |
-| `ContactCard` | `get` `changes` `set` `copy` `query` `queryChanges` |
+| `ContactCard` | `get` `changes` `set` `copy` `request` `queryChanges` |
 | `Calendar` | `get` `changes` `set` |
-| `CalendarEvent` | `get` `changes` `set` `copy` `query` `queryChanges` `parse` |
-| `CalendarEventNotification` | `get` `changes` `set` `query` `queryChanges` |
+| `CalendarEvent` | `get` `changes` `set` `copy` `request` `queryChanges` `parse` |
+| `CalendarEventNotification` | `get` `changes` `set` `request` `queryChanges` |
 | `ParticipantIdentity` | `get` `changes` `set` |
-| `Principal` | `get` `changes` `set` `query` `queryChanges` `getAvailability` |
-| `ShareNotification` | `get` `changes` `set` `query` `queryChanges` |
-| `Quota` | `get` `changes` `query` `queryChanges` |
-| `SieveScript` | `get` `set` `query` `validate` |
+| `Principal` | `get` `changes` `set` `request` `queryChanges` `getAvailability` |
+| `ShareNotification` | `get` `changes` `set` `request` `queryChanges` |
+| `Quota` | `get` `changes` `request` `queryChanges` |
+| `SieveScript` | `get` `set` `request` `validate` |
 | `MDN` | `send` `parse` |
 | `Blob` | `copy` `upload` `get` `lookup` |
 | `PushSubscription` | `get` `set` |
@@ -104,5 +104,5 @@ through.
 ## Generation
 
 `internal/spec` is a plain Go declaration of the data model, and the runtime
-types in `types_gen.go` are generated from the same catalogue the queries are
+types in `types_gen.go` are generated from the same catalogue the requests are
 checked against, so the two cannot drift apart.

@@ -4,15 +4,15 @@
 
 ## Rust
 
-同じクエリから Rust 用のクライアントを生成できます。
+同じリクエストから Rust 用のクライアントを生成できます。
 
 ```
-jmapc generate -lang rust -out src/jmapq
+jmapc generate -lang rust -out src/jmap_client
 ```
 
 ```rust
-use jmapq::list_inbox_emails::{list_inbox_emails, ListInboxEmailsParams};
-use jmapq::Client;
+use jmap_client::list_inbox_emails::{list_inbox_emails, ListInboxEmailsParams};
+use jmap_client::Client;
 
 let client = Client::with_bearer_token("https://example.com/.well-known/jmap", http, token);
 
@@ -27,7 +27,7 @@ for email in &res.list {
 ```
 
 ランタイムも一緒に生成されます。
-`client.rs`、`types.rs`、そしてそれらをクエリと並べて宣言する `mod.rs` が出力されるので、クレート側が足すのは `mod jmapq;` の一行だけです。
+`client.rs`、`types.rs`、そしてそれらをリクエストと並べて宣言する `mod.rs` が出力されるので、クレート側が足すのは `mod jmap_client;` の一行だけです。
 生成されたコードが求めるのは **serde と serde_json** だけです。
 送受信は `Transport` として利用者が実装します。
 プログラムがすでに持っている HTTP クライアントの上に実装すればよく、HTTP スタックも TLS バックエンドも非同期ランタイムも生成物には付いてきません。
@@ -74,15 +74,15 @@ null を取りうるプロパティは `Option` なので、`subject` は `Optio
 
 ## TypeScript
 
-同じクエリから TypeScript 用のクライアントを生成できます。
+同じリクエストから TypeScript 用のクライアントを生成できます。
 
 ```
-jmapc generate -lang typescript -out src/jmapq
+jmapc generate -lang typescript -out src/jmapClient
 ```
 
 ```typescript
-import { Client } from "./jmapq/client.js"
-import { listInboxEmails } from "./jmapq/listInboxEmails.js"
+import { Client } from "./jmapClient/client.js"
+import { listInboxEmails } from "./jmapClient/listInboxEmails.js"
 
 const client = new Client("https://example.com/.well-known/jmap", { auth: token })
 
@@ -93,7 +93,7 @@ for (const email of res.list) {
 ```
 
 ランタイムも一緒に生成されます。
-`client.ts` と `types.ts` がクエリと並んで出力されるので、生成物には**依存がありません**。
+`client.ts` と `types.ts` がリクエストと並んで出力されるので、生成物には**依存がありません**。
 プラットフォームに求めるのは `fetch` だけです。
 
 TypeScript のほうが正確に言えることもあります。

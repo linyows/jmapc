@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <strong>jmapc</strong> is a JMAP compiler: you write the query, it writes the client.
+  <strong>jmapc</strong> is a JMAP compiler: you write the request, it writes the client.
 </p>
 
 <p align="center">
@@ -28,16 +28,16 @@
   </a>
 </p>
 
-jmapc is a compiler for JMAP. You write a query — a JMAP request, the JSON the
-specification already defines — and jmapc generates a **type-safe client** for
-it, in Go, Rust or TypeScript, having checked the query against the
-specification first.
+jmapc is a compiler for JMAP. You write the request you want the server to
+answer — the JSON the specification already defines — and jmapc generates a
+**type-safe client** for it, in Go, Rust or TypeScript, having checked the
+request against the specification first.
 
-1. You write queries in JMAP.
-1. You run jmapc to generate code with type-safe interfaces to those queries.
+1. You write requests in JMAP.
+1. You run jmapc to generate code with type-safe interfaces to those requests.
 1. You write application code that calls the generated code.
 
-A query, `queries/ListInboxEmails.jmap.json`:
+A request, `requests/ListInboxEmails.jmap.json`:
 
 ```json
 {
@@ -53,27 +53,27 @@ A query, `queries/ListInboxEmails.jmap.json`:
 and what `jmapc generate` makes of it:
 
 ```go
-res, err := jmapq.ListInboxEmails(ctx, c, jmapq.ListInboxEmailsParams{
+res, err := client.ListInboxEmails(ctx, c, client.ListInboxEmailsParams{
 	MailboxID: inbox,
 	Limit:     25,
 })
 ```
 
-`res.List` holds exactly the four properties the query asked for.
+`res.List` holds exactly the four properties the request asked for.
 
 ## Features
 
 The features that distinguish jmapc come down to these five.
 
-- Queries are written in JMAP itself, so there is no API of jmapc's own to learn
-- A query is checked before it generates a line of code, in the editor as it is
-  typed, and against a running server
+- Requests are written in JMAP itself, so there is no API of jmapc's own to learn
+- Every request is checked before a line of code is generated, in the editor as
+  it is typed, and against a running server
 - The generated code decodes a type-safe response, handles the errors JMAP
   reports at every level, and carries the loops for push and for paging
-- One query generates a Go, a Rust and a TypeScript client, with external
-  dependencies kept to a minimum
-- It comes with a command that sends a query to a real server, a JMAP server to
-  test your own code against, and a schema file that adds a capability jmapc
+- One set of requests generates a Go, a Rust and a TypeScript client, with
+  external dependencies kept to a minimum
+- It comes with a command that sends a request to a real server, a JMAP server
+  to test your own code against, and a schema file that adds a capability jmapc
   does not know
 
 ## Motivation
@@ -96,8 +96,8 @@ The ids never come back to the client, which is why a JMAP client does not look
 like a REST client, with a type per resource and a method per path.
 
 Most clients expose this through a builder, which means learning JMAP *and*
-learning the builder. But the query is the part you care about; the client is
-not. So write the query, and let jmapc write the client — an approach it
+learning the builder. But the request is the part you care about; the client is
+not. So write the request, and let jmapc write the client — an approach it
 takes from [sqlc](https://sqlc.dev).
 
 ## Compared with other JMAP clients
@@ -113,7 +113,7 @@ places.
 builder spells the request its own way: `req.Invoke(&email.Get{...})` with a
 `jmap.ResultReference{ResultOf, Name, Path}` in Go, `client.build()` and
 `.updated_reference()` in Rust. You learn JMAP, and then you learn how that
-library says it. A jmapc query is the request object RFC 8620 defines and
+library says it. A jmapc request file is the request object RFC 8620 defines and
 nothing besides, so it can be lifted out of the specification, sent as it
 stands with `jmapc run`, read by `jq`, and completed in an editor.
 
@@ -126,15 +126,15 @@ those are strings, and a wrong one comes back from the server. jmapc checks
 them against the data model as it generates, so a back reference naming the
 wrong method fails the build.
 
-**The response holds what the query asked for.** go-jmap returns
+**The response holds what the request asked for.** go-jmap returns
 `Invocation.Args` as an `any` to type-switch on; jmap-client unwraps a chain of
 `unwrap_method_responses()` and `unwrap_get_mailbox()`. A generated function
-returns a named type carrying exactly the properties the query listed. Jam
+returns a named type carrying exactly the properties the request listed. Jam
 reaches this in TypeScript, whose literal types can narrow a response by the
 `properties` given; jmapc gets the same narrowing in Go and Rust, where the
 type system cannot do it on its own.
 
-What you give up is that a query is fixed when jmapc runs. A request whose
+What you give up is that a request is fixed when jmapc runs. A request whose
 shape is decided at run time — a filter assembled from what a user typed — is
 handed over as one parameter rather than built call by call, and a program that
 assembles arbitrary requests is what a builder is for. Generated code is also
@@ -194,7 +194,7 @@ The file name is the name of the function to generate.
 }
 ```
 
-(`queries/ListInboxEmails.jmap.json`)
+(`requests/ListInboxEmails.jmap.json`)
 
 Generate:
 
@@ -207,7 +207,7 @@ Use it:
 ```go
 c := jmapc.New(jmapc.WellKnownURL("example.com"), jmapc.WithBearerToken(token))
 
-res, err := jmapq.ListInboxEmails(ctx, c, jmapq.ListInboxEmailsParams{
+res, err := client.ListInboxEmails(ctx, c, client.ListInboxEmailsParams{
 	MailboxID: inbox,
 	Limit:     25,
 })
@@ -219,7 +219,7 @@ for _, email := range res.List {
 }
 ```
 
-`res.List` is `[]ListInboxEmailsFetchEmail`, holding the four properties the query
+`res.List` is `[]ListInboxEmailsFetchEmail`, holding the four properties the request
 asked for and nothing else. Ask for another property and the struct grows; ask
 for one that does not exist and the build fails, with a suggestion.
 
@@ -230,20 +230,20 @@ names: `header:List-Id:asText` is a `*string`, `header:To:asAddresses` a
 
 The file name determines every name in the generated code, and the call ids
 determine the names within it: see
-[Writing a query](docs/queries.md#generated-names).
-[`example/queries`](example/queries) holds twenty-five queries, over mail,
+[Writing a request](docs/requests.md#generated-names).
+[`example/requests`](example/requests) holds twenty-five requests, over mail,
 contacts, calendars, sharing and filtering.
 
 ## Other languages
 
-The same queries generate a Rust or a TypeScript client:
+The same requests generate a Rust or a TypeScript client:
 
 ```
-jmapc generate -lang rust -out src/jmapq
-jmapc generate -lang typescript -out src/jmapq
+jmapc generate -lang rust -out src/jmap_client
+jmapc generate -lang typescript -out src/jmapClient
 ```
 
-Each runtime is generated alongside the queries, so the Rust output requires
+Each runtime is generated alongside the requests, so the Rust output requires
 serde and nothing else, and the TypeScript output has no dependencies at all,
 its one platform requirement being `fetch`. Each spells the generated names the
 way its own language spells them, and both express a nullable property and a
@@ -252,7 +252,7 @@ union of shapes more precisely than Go does:
 
 ## Verification
 
-A query is checked when jmapc runs, so a query that is wrong about JMAP is a
+Requests are checked when jmapc runs, so one that is wrong about JMAP is a
 build failure rather than a server round trip: that the method exists, that
 every argument belongs to it, that a back reference points at an earlier call
 and selects a value the target argument accepts, that filters, `properties`,
@@ -260,7 +260,7 @@ and selects a value the target argument accepts, that filters, `properties`,
 produces a suggestion:
 
 ```
-queries/BadQuery.jmap.json: methodCalls[0].arguments.filter.hasAttachmnt: EmailFilterCondition has no property "hasAttachmnt"
+requests/BadQuery.jmap.json: methodCalls[0].arguments.filter.hasAttachmnt: EmailFilterCondition has no property "hasAttachmnt"
 	did you mean "hasAttachment"?
 ```
 
@@ -275,9 +275,9 @@ editor too, from a JSON Schema jmapc writes. The whole list is in
 Everything above is the whole of jmapc in outline. The rest is under `docs/`,
 one file to a subject, in the order they are worth reading in.
 
-The first three are what you have in front of you while writing a query: what a
-query file may hold, what jmapc checks before it generates anything, and how to
-send a query and look at the answer before there is any code that calls it. The
+The first three are what you have in front of you while writing a request: what a
+request file may hold, what jmapc checks before it generates anything, and how to
+send a request and look at the answer before there is any code that calls it. The
 next four describe what the generated code calls into once it runs — errors,
 blobs, changes the server pushes, an answer that arrives one part at a time, and
 a server to test your own code against. The last four are reference: the Rust
@@ -286,9 +286,9 @@ jmapc itself.
 
 | | |
 |---|---|
-| [Writing a query](docs/queries.md) | The query file, its parameters, and the names generated from it |
+| [Writing a request](docs/requests.md) | The request file, its parameters, and the names generated from it |
 | [Verification](docs/verification.md) | What is checked at build time, against a server, and in the editor |
-| [The jmapc command](docs/cli.md) | Sending a query with `jmapc run`, and configuration |
+| [The jmapc command](docs/cli.md) | Sending a request with `jmapc run`, and configuration |
 | [The runtime](docs/runtime.md) | Errors, large `/get`s, tokens, retries, observability, and blobs |
 | [Push](docs/push.md) | Following changes as the server reports them |
 | [Walking an answer that does not fit in one request](docs/paging.md) | Reading a result the server returns one part at a time |

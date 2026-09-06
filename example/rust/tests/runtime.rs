@@ -1,4 +1,4 @@
-//! Hand-written, unlike everything under src/jmapq: what the generated runtime
+//! Hand-written, unlike everything under src/jmap_client: what the generated runtime
 //! does when it runs, which the compiler cannot say. That the headers go out,
 //! that auth wins over them, that the session is cached, and that a /set which
 //! answers 200 and refuses a record is still an error.
@@ -8,12 +8,12 @@ use std::sync::Mutex;
 use futures_lite::future::block_on;
 use serde_json::json;
 
-use jmapc_example::jmapq::create_mailbox::{create_mailbox, CreateMailboxParams};
-use jmapc_example::jmapq::file_into_new_mailbox::{
+use jmapc_example::jmap_client::create_mailbox::{create_mailbox, CreateMailboxParams};
+use jmapc_example::jmap_client::file_into_new_mailbox::{
     file_into_new_mailbox, FileIntoNewMailboxParams, FileIntoNewMailboxResult,
 };
-use jmapc_example::jmapq::search_emails::{search_emails_pages, SearchEmailsParams};
-use jmapc_example::jmapq::{
+use jmapc_example::jmap_client::search_emails::{search_emails_pages, SearchEmailsParams};
+use jmapc_example::jmap_client::{
     Auth, Client, ClientOptions, Error, HttpRequest, HttpResponse, Transport, TransportError,
 };
 
@@ -127,7 +127,7 @@ fn the_session_is_fetched_once() {
 }
 
 #[test]
-fn a_query_sends_the_request_it_was_generated_from() {
+fn a_request_sends_the_json_it_was_generated_from() {
     let stub = Stub::new(vec![
         session(),
         json!({
@@ -212,7 +212,7 @@ fn a_refused_record_is_an_error_even_though_the_status_was_200() {
 
     // The rest of the response happened, and is still there to be read.
     let result = refused
-        .result::<jmapc_example::jmapq::types::MailboxSetResponse>()
+        .result::<jmapc_example::jmap_client::types::MailboxSetResponse>()
         .expect("the response the request did get");
     assert_eq!(result.new_state, "s2");
 }

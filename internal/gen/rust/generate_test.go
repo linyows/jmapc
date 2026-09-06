@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/linyows/jmapc/internal/query"
+	"github.com/linyows/jmapc/internal/request"
 	"github.com/linyows/jmapc/internal/spec"
 )
 
@@ -14,10 +14,10 @@ import (
 const repoRoot = "../../.."
 
 // exampleDir is where the generated Rust is committed, under the example crate.
-var exampleDir = filepath.Join(repoRoot, "example", "rust", "src", "jmapq")
+var exampleDir = filepath.Join(repoRoot, "example", "rust", "src", "jmap_client")
 
 // TestGeneratedExampleIsUpToDate checks the committed Rust against what the
-// example queries produce now. The Go and TypeScript clients have the same
+// example requests produce now. The Go and TypeScript clients have the same
 // test; this one keeps the third language from drifting while the others are
 // kept in step.
 func TestGeneratedExampleIsUpToDate(t *testing.T) {
@@ -47,7 +47,7 @@ func TestGeneratedRustCompiles(t *testing.T) {
 			continue
 		}
 		if !strings.Contains(text, "pub async fn ") {
-			t.Errorf("%s holds no query function", name)
+			t.Errorf("%s holds no request function", name)
 		}
 		// Every module names the runtime and builds a request from it; a
 		// module that does not is one the generator wrote half of.
@@ -86,7 +86,7 @@ func TestGeneratedRustCompiles(t *testing.T) {
 func generateExample(t *testing.T) map[string][]byte {
 	t.Helper()
 	catalogue := spec.Standard()
-	files, err := (&QueryGenerator{Spec: catalogue, Queries: parseExample(t)}).Generate()
+	files, err := (&RequestGenerator{Spec: catalogue, Requests: parseExample(t)}).Generate()
 	if err != nil {
 		t.Fatalf("generating the example client: %v", err)
 	}
@@ -103,25 +103,25 @@ func generateExample(t *testing.T) map[string][]byte {
 	return files
 }
 
-// parseExample parses the example queries.
-func parseExample(t *testing.T) []*query.Query {
+// parseExample parses the example requests.
+func parseExample(t *testing.T) []*request.Request {
 	t.Helper()
-	dir := filepath.Join(repoRoot, "example", "queries")
+	dir := filepath.Join(repoRoot, "example", "requests")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatalf("reading %s: %v", dir, err)
 	}
-	parser := query.NewParser(spec.Standard())
-	var out []*query.Query
+	parser := request.NewParser(spec.Standard())
+	var out []*request.Request
 	for _, e := range entries {
-		if !strings.HasSuffix(e.Name(), query.Extension) {
+		if !strings.HasSuffix(e.Name(), request.Extension) {
 			continue
 		}
 		q, err := parser.ParseFile(filepath.Join(dir, e.Name()))
 		if err != nil {
 			t.Fatalf("checking %s:\n%v", e.Name(), err)
 		}
-		q.Path = filepath.ToSlash(filepath.Join("queries", e.Name()))
+		q.Path = filepath.ToSlash(filepath.Join("requests", e.Name()))
 		out = append(out, q)
 	}
 	return out
@@ -152,13 +152,13 @@ func compare(t *testing.T, path string, got []byte) {
 // out. The json! macro states an object as it is written, so the members that
 // are always there are stated and the rest are put in afterwards.
 func TestOptionalArgumentIsPutInAfterwards(t *testing.T) {
-	q, err := query.NewParser(spec.Standard()).Parse("GetChanges"+query.Extension, []byte(`{
+	q, err := request.NewParser(spec.Standard()).Parse("GetChanges"+request.Extension, []byte(`{
 	  "methodCalls": [["Email/changes", {"sinceState": "{{sinceState}}", "maxChanges": "{{maxChanges?}}"}, "changes"]]
 	}`))
 	if err != nil {
-		t.Fatalf("checking the query:\n%v", err)
+		t.Fatalf("checking the request:\n%v", err)
 	}
-	files, err := (&QueryGenerator{Spec: spec.Standard(), Queries: []*query.Query{q}}).Generate()
+	files, err := (&RequestGenerator{Spec: spec.Standard(), Requests: []*request.Request{q}}).Generate()
 	if err != nil {
 		t.Fatalf("generating: %v", err)
 	}
@@ -170,7 +170,7 @@ func TestOptionalArgumentIsPutInAfterwards(t *testing.T) {
 		`args["maxChanges"] = json!(value);`,
 	} {
 		if !strings.Contains(src, want) {
-			t.Errorf("the generated query does not contain %q:\n%s", want, src)
+			t.Errorf("the generated request does not contain %q:\n%s", want, src)
 		}
 	}
 }
@@ -180,13 +180,13 @@ func TestOptionalArgumentIsPutInAfterwards(t *testing.T) {
 // where rustfmt would put it, and the crate is checked with rustfmt rather
 // than formatted by it.
 func TestOnlyOptionalArgumentsStartFromAnEmptyObject(t *testing.T) {
-	q, err := query.NewParser(spec.Standard()).Parse("EchoMaybe"+query.Extension, []byte(`{
+	q, err := request.NewParser(spec.Standard()).Parse("EchoMaybe"+request.Extension, []byte(`{
 	  "methodCalls": [["Core/echo", {"value": "{{value?}}"}, "c0"]]
 	}`))
 	if err != nil {
-		t.Fatalf("checking the query:\n%v", err)
+		t.Fatalf("checking the request:\n%v", err)
 	}
-	files, err := (&QueryGenerator{Spec: spec.Standard(), Queries: []*query.Query{q}}).Generate()
+	files, err := (&RequestGenerator{Spec: spec.Standard(), Requests: []*request.Request{q}}).Generate()
 	if err != nil {
 		t.Fatalf("generating: %v", err)
 	}
@@ -200,16 +200,16 @@ func TestOnlyOptionalArgumentsStartFromAnEmptyObject(t *testing.T) {
 // shape share one struct here too, since a caller passing a record from one
 // call to a function written for the other should not have to convert it.
 func TestOneShapeIsOneType(t *testing.T) {
-	q, err := query.NewParser(spec.Standard()).Parse("TwoReads"+query.Extension, []byte(`{
+	q, err := request.NewParser(spec.Standard()).Parse("TwoReads"+request.Extension, []byte(`{
 	  "methodCalls": [
 	    ["Email/get", {"ids": ["{{a}}"], "properties": ["id", "subject"]}, "one"],
 	    ["Email/get", {"ids": ["{{b}}"], "properties": ["id", "subject"]}, "two"]
 	  ]
 	}`))
 	if err != nil {
-		t.Fatalf("checking the query:\n%v", err)
+		t.Fatalf("checking the request:\n%v", err)
 	}
-	files, err := (&QueryGenerator{Spec: spec.Standard(), Queries: []*query.Query{q}}).Generate()
+	files, err := (&RequestGenerator{Spec: spec.Standard(), Requests: []*request.Request{q}}).Generate()
 	if err != nil {
 		t.Fatalf("generating: %v", err)
 	}
@@ -222,12 +222,12 @@ func TestOneShapeIsOneType(t *testing.T) {
 	}
 }
 
-// TestTheResponseIsNotDropped checks that a generated query reads the response
+// TestTheResponseIsNotDropped checks that a generated request reads the response
 // even where the server would not run one of the calls, and carries what it
 // read on the error. JMAP runs the calls it can, so returning the failure
 // alone loses the part of the answer that usually says why.
 func TestTheResponseIsNotDropped(t *testing.T) {
-	q, err := query.NewParser(spec.Standard()).Parse("DestroyThread"+query.Extension, []byte(`{
+	q, err := request.NewParser(spec.Standard()).Parse("DestroyThread"+request.Extension, []byte(`{
 	  "methodCalls": [
 	    ["Thread/get", {"ids": ["{{threadId}}"]}, "thread"],
 	    ["Email/set", {"#destroy": {"resultOf": "thread", "name": "Thread/get",
@@ -235,9 +235,9 @@ func TestTheResponseIsNotDropped(t *testing.T) {
 	  ]
 	}`))
 	if err != nil {
-		t.Fatalf("checking the query:\n%v", err)
+		t.Fatalf("checking the request:\n%v", err)
 	}
-	files, err := (&QueryGenerator{Spec: spec.Standard(), Queries: []*query.Query{q}}).Generate()
+	files, err := (&RequestGenerator{Spec: spec.Standard(), Requests: []*request.Request{q}}).Generate()
 	if err != nil {
 		t.Fatalf("generating: %v", err)
 	}
@@ -249,36 +249,36 @@ func TestTheResponseIsNotDropped(t *testing.T) {
 		"return Err(Error::Method(errs.with_result(out)));",
 	} {
 		if !strings.Contains(src, want) {
-			t.Errorf("the generated query does not contain %q:\n%s", want, src)
+			t.Errorf("the generated request does not contain %q:\n%s", want, src)
 		}
 	}
 }
 
-// TestACreationIDGetsAName checks that the name a query gives a record it
+// TestACreationIDGetsAName checks that the name a request gives a record it
 // creates reaches the caller here too, rather than being a string to repeat.
 func TestACreationIDGetsAName(t *testing.T) {
-	q, err := query.NewParser(spec.Standard()).Parse("CreateMailbox"+query.Extension, []byte(`{
+	q, err := request.NewParser(spec.Standard()).Parse("CreateMailbox"+request.Extension, []byte(`{
 	  "_returns": "make",
 	  "methodCalls": [["Mailbox/set", {"create": {"newMailbox": {"name": "{{name}}"}}}, "make"]]
 	}`))
 	if err != nil {
-		t.Fatalf("checking the query:\n%v", err)
+		t.Fatalf("checking the request:\n%v", err)
 	}
-	files, err := (&QueryGenerator{Spec: spec.Standard(), Queries: []*query.Query{q}}).Generate()
+	files, err := (&RequestGenerator{Spec: spec.Standard(), Requests: []*request.Request{q}}).Generate()
 	if err != nil {
 		t.Fatalf("generating: %v", err)
 	}
 	src := string(files["create_mailbox.rs"])
 	if want := `pub const CREATE_MAILBOX_NEW_MAILBOX: &str = "newMailbox";`; !strings.Contains(src, want) {
-		t.Errorf("the generated query does not contain %q:\n%s", want, src)
+		t.Errorf("the generated request does not contain %q:\n%s", want, src)
 	}
 }
 
-// TestACallIDThatIsARustKeyword checks the call id a query may reasonably use
+// TestACallIDThatIsARustKeyword checks the call id a request may reasonably use
 // and Rust may not: a field named after it is written as a raw identifier
 // rather than colliding with the language.
 func TestACallIDThatIsARustKeyword(t *testing.T) {
-	q, err := query.NewParser(spec.Standard()).Parse("Keyword"+query.Extension, []byte(`{
+	q, err := request.NewParser(spec.Standard()).Parse("Keyword"+request.Extension, []byte(`{
 	  "methodCalls": [
 	    ["Email/query", {"limit": 1}, "type"],
 	    ["Email/get", {"#ids": {"resultOf": "type", "name": "Email/query", "path": "/ids"},
@@ -286,9 +286,9 @@ func TestACallIDThatIsARustKeyword(t *testing.T) {
 	  ]
 	}`))
 	if err != nil {
-		t.Fatalf("checking the query:\n%v", err)
+		t.Fatalf("checking the request:\n%v", err)
 	}
-	files, err := (&QueryGenerator{Spec: spec.Standard(), Queries: []*query.Query{q}}).Generate()
+	files, err := (&RequestGenerator{Spec: spec.Standard(), Requests: []*request.Request{q}}).Generate()
 	if err != nil {
 		t.Fatalf("generating: %v", err)
 	}

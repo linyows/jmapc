@@ -10,13 +10,13 @@ import (
 	"strings"
 
 	"github.com/linyows/jmapc/internal/gen/shared"
-	"github.com/linyows/jmapc/internal/query"
+	"github.com/linyows/jmapc/internal/request"
 	"github.com/linyows/jmapc/internal/spec"
 )
 
-// file writes the module for one query: the types it needs and the function
+// file writes the module for one request: the types it needs and the function
 // that sends it.
-func (g *QueryGenerator) file(p *plan) []byte {
+func (g *RequestGenerator) file(p *plan) []byte {
 	var body bytes.Buffer
 	g.writeParams(&body, p)
 	g.writeCreations(&body, p)
@@ -41,7 +41,7 @@ func (g *QueryGenerator) file(p *plan) []byte {
 //
 // The order is the one rustfmt settles on: the standard library, then the
 // crates, then this module's own siblings.
-func (g *QueryGenerator) writeUses(buf *bytes.Buffer, p *plan, body string) {
+func (g *RequestGenerator) writeUses(buf *bytes.Buffer, p *plan, body string) {
 	imports := &imports{types: map[string]bool{}}
 	for _, param := range p.q.Params {
 		imports.collect(param.ValueType())
@@ -232,7 +232,7 @@ func (i *imports) collect(t *spec.Type) {
 // collectRecordTypes adds the types the narrowed record and nested types refer
 // to, which are the properties they keep rather than the whole of the data
 // type.
-func (g *QueryGenerator) collectRecordTypes(c *query.Call, info *call, imports *imports) {
+func (g *RequestGenerator) collectRecordTypes(c *request.Call, info *call, imports *imports) {
 	add := func(o *spec.Object, properties []string) {
 		for _, name := range properties {
 			f, known := o.Field(name)
@@ -273,11 +273,11 @@ func isAliasName(s string) bool {
 	return false
 }
 
-// writeCreations writes a constant for each creation id the query invents. A
-// /set reports what it created under the name the query gave it, and without
+// writeCreations writes a constant for each creation id the request invents. A
+// /set reports what it created under the name the request gave it, and without
 // this the caller spells that name a second time, in another file, with
 // nothing holding the two together.
-func (g *QueryGenerator) writeCreations(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writeCreations(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.creations {
 		writeDoc(buf, "", fmt.Sprintf(
 			"%s is the creation id %s gives a record it creates, which the response reports it under.",
@@ -287,7 +287,7 @@ func (g *QueryGenerator) writeCreations(buf *bytes.Buffer, p *plan) {
 }
 
 // writeParams writes the struct holding what the caller supplies.
-func (g *QueryGenerator) writeParams(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writeParams(buf *bytes.Buffer, p *plan) {
 	if p.paramsType == "" {
 		return
 	}
@@ -306,7 +306,7 @@ func (g *QueryGenerator) writeParams(buf *bytes.Buffer, p *plan) {
 
 // writeNestedTypes writes the struct for a type nested inside the records,
 // whose properties a separate argument narrows.
-func (g *QueryGenerator) writeNestedTypes(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writeNestedTypes(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
 		if info.nestedType == "" {
@@ -332,7 +332,7 @@ func (g *QueryGenerator) writeNestedTypes(buf *bytes.Buffer, p *plan) {
 }
 
 // writeRecordTypes writes a struct for each call that narrows what it fetches.
-func (g *QueryGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
 		if info.recordType == "" || !info.writesTypes {
@@ -363,8 +363,8 @@ func (g *QueryGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 
 // writeRecordField writes one field of a generated record struct. A record
 // comes back from the server, so a property it asked for is there: what the
-// query narrowed to is not optional, only nullable where the type says so.
-func (g *QueryGenerator) writeRecordField(buf *bytes.Buffer, dataType *spec.Object, name, nestedTo, nestedFrom string) {
+// request narrowed to is not optional, only nullable where the type says so.
+func (g *RequestGenerator) writeRecordField(buf *bytes.Buffer, dataType *spec.Object, name, nestedTo, nestedFrom string) {
 	field, known := dataType.Field(name)
 	if !known {
 		if header, err := spec.ParseHeaderProperty(name); err == nil && header != nil {
@@ -411,7 +411,7 @@ func writeNestedMember(buf *bytes.Buffer, owner, wireName string, t *spec.Type, 
 
 // writeResponseTypes writes a response struct for each call whose records are a
 // generated type.
-func (g *QueryGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
 		if info.recordType == "" || !info.writesTypes {
@@ -443,9 +443,9 @@ func (g *QueryGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 	}
 }
 
-// writeResultType writes the struct holding every call's response, for a query
+// writeResultType writes the struct holding every call's response, for a request
 // that does not single one out.
-func (g *QueryGenerator) writeResultType(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writeResultType(buf *bytes.Buffer, p *plan) {
 	if p.resultType == "" {
 		return
 	}
@@ -474,7 +474,7 @@ func (g *QueryGenerator) writeResultType(buf *bytes.Buffer, p *plan) {
 // directory is a module a crate can take in with one line.
 func writeMod(modules []string) []byte {
 	var buf bytes.Buffer
-	writeHeader(&buf, "the JMAP queries jmapc generated this directory from")
+	writeHeader(&buf, "the JMAP requests jmapc generated this directory from")
 	buf.WriteString("pub mod client;\n")
 	buf.WriteString("pub mod types;\n\n")
 	for _, m := range modules {
@@ -499,7 +499,7 @@ func writeMod(modules []string) []byte {
 	return finish(&buf)
 }
 
-// literalExpr renders a JSON value the query stated outright. JSON is what the
+// literalExpr renders a JSON value the request stated outright. JSON is what the
 // json! macro takes, so it goes in as it is.
 func literalExpr(raw json.RawMessage) string {
 	var compact bytes.Buffer

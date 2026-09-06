@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-// ClientGenerator writes the runtime the generated queries call: a client, the
+// ClientGenerator writes the runtime the generated requests call: a client, the
 // request and response shapes, and the levels at which JMAP fails.
 //
 // It is generated rather than published, so that a project using jmapc takes on
@@ -24,7 +24,7 @@ func (g *ClientGenerator) Generate() ([]byte, error) {
 }
 
 // clientSource is the runtime itself. It is a literal rather than something
-// assembled, because none of it varies with the catalogue or the queries.
+// assembled, because none of it varies with the catalogue or the requests.
 const clientSource = `use std::any::Any;
 use std::collections::BTreeMap;
 use std::fmt;
@@ -131,7 +131,7 @@ pub type TransportError = Box<dyn std::error::Error + Send + Sync>;
 /// and no async runtime of its own.
 ///
 /// An implementation writes the method as an ordinary async fn. The future it
-/// returns has to be Send, which is what lets a query be spawned.
+/// returns has to be Send, which is what lets a request be spawned.
 ///
 /// Authentication that a bearer token does not cover — a signature over the
 /// request, a token refreshed on expiry — belongs here too, since this is the
@@ -253,7 +253,7 @@ impl MethodErrors {
     }
 
     /// Carry what the calls the server did run answered with, which a
-    /// generated query reads out of the response before it hands the error on.
+    /// generated request reads out of the response before it hands the error on.
     pub fn with_result(mut self, result: impl Any + Send + Sync) -> Self {
         self.result = Some(Box::new(result));
         self
@@ -345,7 +345,7 @@ fn set_verb(kind: &str) -> String {
 /// there was none; generated code collects those refusals and returns this.
 ///
 /// The part of the response that did succeed is kept, since it happened. Ask
-/// for it back with the type the query returns.
+/// for it back with the type the request returns.
 pub struct SetErrors {
     pub failures: Vec<SetFailure>,
     result: Box<dyn Any + Send + Sync>,
@@ -384,7 +384,7 @@ impl fmt::Display for SetErrors {
     }
 }
 
-/// Everything that can go wrong between writing a query and holding its answer.
+/// Everything that can go wrong between writing a request and holding its answer.
 #[derive(Debug)]
 pub enum Error {
     /// The server rejected the request whole.
@@ -393,7 +393,7 @@ pub enum Error {
     Method(MethodErrors),
     /// The server refused to act on records a /set named.
     Set(SetErrors),
-    /// The response did not have the shape the query asks for.
+    /// The response did not have the shape the request asks for.
     Decode(serde_json::Error),
     /// The response carries no result for a call the request made. The second
     /// field lists the call ids the response did carry.
@@ -446,7 +446,7 @@ impl std::error::Error for Error {
     }
 }
 
-/// A client for one JMAP server. It caches the session, so a query costs one
+/// A client for one JMAP server. It caches the session, so a request costs one
 /// round trip rather than two.
 pub struct Client<T> {
     session_url: String,
@@ -695,7 +695,7 @@ fn requested_method(req: &Request, call_id: &str) -> String {
     "error".to_string()
 }
 
-/// Read the response to one method call as the type the query asks for.
+/// Read the response to one method call as the type the request asks for.
 /// Called by generated code.
 pub fn decode<T: serde::de::DeserializeOwned>(
     req: &Request,

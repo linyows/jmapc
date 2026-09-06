@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/linyows/jmapc"
-	"github.com/linyows/jmapc/example/jmapq"
+	"github.com/linyows/jmapc/example/client"
 	"github.com/linyows/jmapc/jmaptest"
 )
 
@@ -34,8 +34,8 @@ func TestListInboxEmailsAgainstTheTestServer(t *testing.T) {
 		return map[string]any{"accountId": jmaptest.AccountID, "state": "s1", "list": list, "notFound": []string{}}, nil
 	})
 
-	res, err := jmapq.ListInboxEmails(context.Background(), srv.Client(),
-		jmapq.ListInboxEmailsParams{MailboxID: "mbx1", Limit: 10})
+	res, err := client.ListInboxEmails(context.Background(), srv.Client(),
+		client.ListInboxEmailsParams{MailboxID: "mbx1", Limit: 10})
 	if err != nil {
 		t.Fatalf("ListInboxEmails: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestSendEmailRefusedByTheServer(t *testing.T) {
 	})
 	srv.Reply("EmailSubmission/set", map[string]any{"accountId": jmaptest.AccountID, "newState": "sub2"})
 
-	_, err := jmapq.SendEmail(context.Background(), srv.Client(), jmapq.SendEmailParams{
+	_, err := client.SendEmail(context.Background(), srv.Client(), client.SendEmailParams{
 		DraftsMailboxID: "drafts", SentMailboxID: "sent", IdentityID: "id1",
 		FromAddress: "me@example.com", ToAddress: "you@example.com",
 		Subject: "Lunch", Body: "Thursday?",
@@ -116,8 +116,8 @@ func TestSyncEmailsWatchAgainstTheTestServer(t *testing.T) {
 	}()
 
 	var subjects []string
-	err := jmapq.SyncEmailsWatch(ctx, srv.Client(), jmapq.SyncEmailsParams{SinceState: "s1"},
-		func(ctx context.Context, res *jmapq.SyncEmailsResult) error {
+	err := client.SyncEmailsWatch(ctx, srv.Client(), client.SyncEmailsParams{SinceState: "s1"},
+		func(ctx context.Context, res *client.SyncEmailsResult) error {
 			for _, email := range res.Created.List {
 				subjects = append(subjects, *email.Subject)
 			}

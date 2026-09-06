@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/linyows/jmapc"
-	"github.com/linyows/jmapc/example/jmapq"
+	"github.com/linyows/jmapc/example/client"
 )
 
 // watchStub is a JMAP server with a push endpoint: it answers each request
@@ -108,8 +108,8 @@ func TestSyncEmailsWatch(t *testing.T) {
 	defer cancel()
 
 	var subjects []string
-	err := jmapq.SyncEmailsWatch(ctx, c, jmapq.SyncEmailsParams{SinceState: "s1"},
-		func(ctx context.Context, res *jmapq.SyncEmailsResult) error {
+	err := client.SyncEmailsWatch(ctx, c, client.SyncEmailsParams{SinceState: "s1"},
+		func(ctx context.Context, res *client.SyncEmailsResult) error {
 			for _, email := range res.Created.List {
 				subjects = append(subjects, *email.Subject)
 			}
@@ -140,8 +140,8 @@ func TestSyncEmailsWatchStopsOnTheCallersError(t *testing.T) {
 	c := jmapc.New(srv.URL+"/.well-known/jmap", jmapc.WithBearerToken("token"))
 
 	full := errors.New("the cache is full")
-	err := jmapq.SyncEmailsWatch(context.Background(), c, jmapq.SyncEmailsParams{SinceState: "s1"},
-		func(context.Context, *jmapq.SyncEmailsResult) error { return full })
+	err := client.SyncEmailsWatch(context.Background(), c, client.SyncEmailsParams{SinceState: "s1"},
+		func(context.Context, *client.SyncEmailsResult) error { return full })
 	if !errors.Is(err, full) {
 		t.Fatalf("SyncEmailsWatch: %v, want the caller's error", err)
 	}

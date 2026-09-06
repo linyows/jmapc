@@ -1,4 +1,4 @@
-// Package jmapc is the runtime for clients generated from JMAP queries.
+// Package jmapc is the runtime for clients generated from JMAP requests.
 //
 // JMAP is built around one idea: a request carries several method calls, and a
 // call may refer to the result of an earlier one, so that a chain of dependent
@@ -19,7 +19,7 @@
 //
 // # Getting started
 //
-// Write a query in queries/ListInboxEmails.jmap.json:
+// Write a request in requests/ListInboxEmails.jmap.json:
 //
 //	{
 //	  "_doc": "ListInboxEmails returns the newest emails in one mailbox.",
@@ -44,7 +44,7 @@
 // Then call it:
 //
 //	c := jmapc.New(jmapc.WellKnownURL("example.com"), jmapc.WithBearerToken(token))
-//	res, err := jmapq.ListInboxEmails(ctx, c, jmapq.ListInboxEmailsParams{
+//	res, err := client.ListInboxEmails(ctx, c, client.ListInboxEmailsParams{
 //		MailboxID: inbox,
 //		Limit:     25,
 //	})

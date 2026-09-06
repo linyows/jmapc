@@ -15,7 +15,7 @@ does not have to be written by hand.
 The call named in `_pages` is the one the walk resends on each step. Where the
 next request should start — `position` for a `/query`, `sinceState` for a
 `/changes` — is managed by the walk rather than by the caller, so it is written
-as a parameter in the query:
+as a parameter in the request:
 
 ```json
 {
@@ -32,7 +32,7 @@ as a parameter in the query:
 Go gets an iterator. Advancing it sends the next request:
 
 ```go
-for page, err := range jmapq.SearchEmailsPages(ctx, c, params) {
+for page, err := range client.SearchEmailsPages(ctx, c, params) {
 	if err != nil {
 		return err
 	}
@@ -43,7 +43,7 @@ for page, err := range jmapq.SearchEmailsPages(ctx, c, params) {
 ```
 
 TypeScript gets an async generator that does the same, one step at a time. A
-failure throws as it does from the query itself:
+failure throws as it does from the generated function itself:
 
 ```ts
 for await (const page of searchEmailsPages(client, params)) {
@@ -76,5 +76,5 @@ A `/changes` walk yields even an answer reporting no changes, because that
 answer still carries the `sinceState` to continue from. It ends only when the
 server reports no further changes.
 
-A watching query already repeats the request while the server reports more
-changes, so `_watches` and `_pages` are never written on the same query.
+A watched request is resent already while the server reports more changes, so
+`_watches` and `_pages` are never written on the same request.

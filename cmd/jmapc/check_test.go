@@ -11,7 +11,7 @@ import (
 )
 
 // serverSaying serves a session with the capabilities and limits a test wants
-// to check a query against, and counts what it was asked for.
+// to check a request against, and counts what it was asked for.
 func serverSaying(t *testing.T, capabilities, accounts, primary string) (*httptest.Server, *atomic.Int64) {
 	t.Helper()
 	var hits atomic.Int64
@@ -32,7 +32,7 @@ func serverSaying(t *testing.T, capabilities, accounts, primary string) (*httpte
 	return srv, &hits
 }
 
-// mailServer serves a session that would take the queries these tests write.
+// mailServer serves a session that would take the requests these tests write.
 func mailServer(t *testing.T, core string) (*httptest.Server, *atomic.Int64) {
 	t.Helper()
 	return serverSaying(t,
@@ -44,30 +44,30 @@ func mailServer(t *testing.T, core string) (*httptest.Server, *atomic.Int64) {
 // TestCheckAgainstAServer covers the checks a build cannot make: what this
 // server supports, and how much of it it does at once.
 func TestCheckAgainstAServer(t *testing.T) {
-	dir := workspace(t, map[string]string{"queries/ListMailboxes.jmap.json": listMailboxes})
-	queries := filepath.Join(dir, "queries")
+	dir := workspace(t, map[string]string{"requests/ListMailboxes.jmap.json": listMailboxes})
+	requests := filepath.Join(dir, "requests")
 
 	srv, _ := mailServer(t, `{"maxCallsInRequest": 16}`)
-	out, _, err := capture(t, []string{"check", "-queries", queries, "-session", srv.URL + "/.well-known/jmap"})
+	out, _, err := capture(t, []string{"check", "-requests", requests, "-session", srv.URL + "/.well-known/jmap"})
 	if err != nil {
 		t.Fatalf("check: %v", err)
 	}
-	if !strings.Contains(out, "checked 1 query against") || !strings.Contains(out, "as someone") {
+	if !strings.Contains(out, "checked 1 request against") || !strings.Contains(out, "as someone") {
 		t.Errorf("check said %q, want it to name the server and the user", out)
 	}
 }
 
-// TestCheckReportsWhatTheServerWouldRefuse checks a query that is right about
+// TestCheckReportsWhatTheServerWouldRefuse checks a request that is right about
 // JMAP and wrong about the server in front of it.
 func TestCheckReportsWhatTheServerWouldRefuse(t *testing.T) {
-	dir := workspace(t, map[string]string{"queries/ListMailboxes.jmap.json": listMailboxes})
-	queries := filepath.Join(dir, "queries")
+	dir := workspace(t, map[string]string{"requests/ListMailboxes.jmap.json": listMailboxes})
+	requests := filepath.Join(dir, "requests")
 
 	srv, _ := serverSaying(t,
 		`{"urn:ietf:params:jmap:core": {}}`,
 		`{"a1": {"name": "someone"}}`,
 		`{}`)
-	_, problems, err := capture(t, []string{"check", "-queries", queries, "-session", srv.URL + "/.well-known/jmap"})
+	_, problems, err := capture(t, []string{"check", "-requests", requests, "-session", srv.URL + "/.well-known/jmap"})
 	if err == nil {
 		t.Fatal("expected the check to fail")
 	}
@@ -85,15 +85,15 @@ func TestCheckReportsWhatTheServerWouldRefuse(t *testing.T) {
 // because of what is set around it is a build that fails somewhere it has
 // never been told about.
 func TestCheckReachesNothingWithoutBeingAsked(t *testing.T) {
-	dir := workspace(t, map[string]string{"queries/ListMailboxes.jmap.json": listMailboxes})
+	dir := workspace(t, map[string]string{"requests/ListMailboxes.jmap.json": listMailboxes})
 	srv, hits := mailServer(t, `{}`)
 	t.Setenv("JMAP_SESSION_URL", srv.URL+"/.well-known/jmap")
 
-	out, _, err := capture(t, []string{"check", "-queries", filepath.Join(dir, "queries")})
+	out, _, err := capture(t, []string{"check", "-requests", filepath.Join(dir, "requests")})
 	if err != nil {
 		t.Fatalf("check: %v", err)
 	}
-	if !strings.Contains(out, "checked 1 query\n") {
+	if !strings.Contains(out, "checked 1 request\n") {
 		t.Errorf("check said %q", out)
 	}
 	if n := hits.Load(); n != 0 {

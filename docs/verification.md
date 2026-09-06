@@ -26,24 +26,24 @@ Everything below is a compile-time failure rather than a server round trip:
 - ids, dates, and integers are well formed
 - the capabilities the request declares cover the methods it calls
 - a watched call is one that reports what changed since a state, and the state
-  it continues from is supplied by the loop rather than written into the query
+  it continues from is supplied by the loop rather than written into the request
 - a paged call is one that returns part of a longer result and reports where the
   rest is, and where the next request starts is supplied by the walk
 
 A misspelling produces a suggestion:
 
 ```
-queries/BadQuery.jmap.json: methodCalls[0].arguments.filter.hasAttachmnt: EmailFilterCondition has no property "hasAttachmnt"
+requests/BadQuery.jmap.json: methodCalls[0].arguments.filter.hasAttachmnt: EmailFilterCondition has no property "hasAttachmnt"
 	did you mean "hasAttachment"?
-queries/BadQuery.jmap.json: methodCalls[1].arguments.#ids.name: the referenced call is Email/query, but the reference names Email/get
+requests/BadQuery.jmap.json: methodCalls[1].arguments.#ids.name: the referenced call is Email/query, but the reference names Email/get
 	call "c0" invokes Email/query
 ```
 
-Two queries that differ only in what they call their parameters and their
-calls are one query written twice, and jmapc says so rather than failing:
+Two requests that differ only in what they call their parameters and their
+calls are one request written twice, and jmapc says so rather than failing:
 
 ```
-jmapc: ListArchiveEmails, ListInboxEmails are the same query under different names; one of them would do for all of them
+jmapc: ListArchiveEmails, ListInboxEmails are the same request under different names; one of them would do for all of them
 ```
 
 Both are generated all the same, since a project may want two names for one
@@ -56,19 +56,19 @@ generated types of its own.
 
 Everything above is what the specifications say. What they leave to the server —
 which capabilities it has, which accounts it holds, how much it accepts in one
-request — a build cannot know, and a query that is right about JMAP and wrong
+request — a build cannot know, and a request that is right about JMAP and wrong
 about the server it runs against fails at run time. `-session` checks against a
 running server:
 
 ```
 jmapc check -session jmap.example.com -token $JMAP_TOKEN
-checked 25 queries against https://jmap.example.com/api/, as someone@example.com
+checked 25 requests against https://jmap.example.com/api/, as someone@example.com
 ```
 
 What it reports:
 
 - a capability the request declares and the server does not advertise
-- an account the query names that the session does not hold, an account the
+- an account the request names that the session does not hold, an account the
   session cannot fill in because it has no primary account for the capability,
   and an account that does not support what the call needs
 - more calls than `maxCallsInRequest`, more records than `maxObjectsInGet`, more
@@ -76,9 +76,9 @@ What it reports:
   before its parameters are filled in
 - a `collation` the server does not compare strings with
 
-What the query leaves to its caller is not checked: a parameter standing for a
+What the request leaves to its caller is not checked: a parameter standing for a
 list of ids may be any length, and an assumption about it would report a
-problem in a query that is correct.
+problem in a request that is correct.
 
 The session URL is the one value not read from the environment — `-token` and
 `-user` fall back to `$JMAP_TOKEN` and `$JMAP_USER` — because a check that
@@ -87,7 +87,7 @@ triggered by whatever the environment happens to hold.
 
 ## Editor support
 
-The checks above run when jmapc does. Most of them can run while the query is
+The checks above run when jmapc does. Most of them can run while the request is
 being typed instead, because they are checks on the file itself, and a JSON file
 that names a schema is one an editor can already check and complete.
 
@@ -96,7 +96,7 @@ jmapc schema -out jmapc.schema.json
 ```
 
 That writes a JSON Schema for the catalogue, vendor extensions and all. Point a
-query file at it:
+request file at it:
 
 ```json
 {
@@ -105,7 +105,7 @@ query file at it:
 }
 ```
 
-or point the editor at every query at once, which in VS Code is:
+or point the editor at every request at once, which in VS Code is:
 
 ```json
 {

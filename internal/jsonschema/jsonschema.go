@@ -1,5 +1,5 @@
-// Package jsonschema describes the query files themselves. It turns the JMAP
-// data model into a JSON Schema, so that an editor completes a query while it
+// Package jsonschema describes the request files themselves. It turns the JMAP
+// data model into a JSON Schema, so that an editor completes a request while it
 // is being written and reports a mistake where it was made, rather than at the
 // next build.
 //
@@ -17,7 +17,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/linyows/jmapc/internal/query"
+	"github.com/linyows/jmapc/internal/request"
 	"github.com/linyows/jmapc/internal/spec"
 )
 
@@ -36,7 +36,7 @@ const (
 	methodDef            = "methodName"
 )
 
-// Generator turns a catalogue into a JSON Schema for the query files written
+// Generator turns a catalogue into a JSON Schema for the request files written
 // against it.
 type Generator struct {
 	// Spec is the catalogue to describe, vendor extensions included.
@@ -49,7 +49,7 @@ func (g *Generator) Generate() ([]byte, error) {
 	b.declare()
 	root := map[string]any{
 		"$schema":              Draft,
-		"title":                "JMAP query",
+		"title":                "JMAP request",
 		"description":          "A JMAP request, plus the members jmapc reads and the server never sees. The file is named after the function to generate.",
 		"type":                 "object",
 		"required":             []any{"methodCalls"},
@@ -57,25 +57,25 @@ func (g *Generator) Generate() ([]byte, error) {
 		"properties": map[string]any{
 			"$schema": map[string]any{
 				"type":        "string",
-				"description": "The schema this query is written against, which jmapc ignores.",
+				"description": "The schema this request is written against, which jmapc ignores.",
 			},
-			query.DocMember: map[string]any{
+			request.DocMember: map[string]any{
 				"type":        "string",
 				"description": "The generated function's documentation.",
 			},
-			query.ReturnsMember: map[string]any{
+			request.ReturnsMember: map[string]any{
 				"type":        "string",
 				"description": "The call id whose response the generated function returns. Without it, every response is returned.",
 			},
-			query.WatchesMember: map[string]any{
+			request.WatchesMember: map[string]any{
 				"type":        "string",
-				"description": "The call id whose state a watching client follows. It has to name a call that reports what changed since a state, and the generated client calls the query whenever the server says that type has moved on.",
+				"description": "The call id whose state a watching client follows. It has to name a call that reports what changed since a state, and the generated client calls the request whenever the server says that type has moved on.",
 			},
-			query.PagesMember: map[string]any{
+			request.PagesMember: map[string]any{
 				"type":        "string",
 				"description": "The call id a generated walk advances. It has to name a call that answers with part of a longer answer and says where the rest is — a /query, or a /changes — and the argument saying where the next request starts is left to the walk.",
 			},
-			query.CreatedIDsMember: map[string]any{
+			request.CreatedIDsMember: map[string]any{
 				"type":        "boolean",
 				"description": "Whether the generated function carries the creation ids of an earlier request in and reports its own, so that a reference to something created there still resolves here.",
 			},
@@ -120,7 +120,7 @@ type fieldContext struct {
 	sortTarget  string
 }
 
-// declare writes the definitions that describe the query language rather than
+// declare writes the definitions that describe the request language rather than
 // the data model, and the ones for every method the catalogue knows.
 func (b *builder) declare() {
 	b.defs[parameterDef] = map[string]any{
@@ -186,7 +186,7 @@ func (b *builder) declare() {
 
 // capabilities lists what a "using" may name — the capability URIs the
 // catalogue knows, and the short names jmapc accepts for them — as the examples
-// an editor offers for a query that states its capabilities itself.
+// an editor offers for a request that states its capabilities itself.
 func (b *builder) capabilities() []any {
 	seen := map[string]bool{}
 	for _, m := range b.spec.Methods() {
@@ -194,7 +194,7 @@ func (b *builder) capabilities() []any {
 			seen[m.Capability] = true
 		}
 	}
-	uris := append([]string(nil), query.CapabilityAliases()...)
+	uris := append([]string(nil), request.CapabilityAliases()...)
 	for uri := range seen {
 		uris = append(uris, uri)
 	}
@@ -207,7 +207,7 @@ func (b *builder) capabilities() []any {
 }
 
 // arguments defines the argument object of one method. It is the one object
-// that takes members the data model does not describe: the comment a query
+// that takes members the data model does not describe: the comment a request
 // leaves for the generator, and the back references that stand in for
 // arguments the server fills in itself.
 func (b *builder) arguments(m *spec.Method, o *spec.Object) {
@@ -216,7 +216,7 @@ func (b *builder) arguments(m *spec.Method, o *spec.Object) {
 	}
 	b.defs[o.Name] = true // claimed, so that a cycle through this type stops here
 	props := b.properties(m, o, true)
-	props[query.CommentArgument] = map[string]any{
+	props[request.CommentArgument] = map[string]any{
 		"type":        "string",
 		"description": "Why this call is there. It goes into the generated code and never into the request, since a server must reject an argument it does not know.",
 	}
@@ -327,7 +327,7 @@ func (b *builder) propertyNames(f *spec.Field, typeName string, dynamic bool) an
 }
 
 // value renders the schema for a value of the given type. Anywhere a value may
-// go, a parameter may go instead, since a query leaves to its caller whatever
+// go, a parameter may go instead, since a request leaves to its caller whatever
 // it does not state.
 func (b *builder) value(t *spec.Type, ctx fieldContext) any {
 	core := b.core(t, ctx)
@@ -495,7 +495,7 @@ func (b *builder) filter(t *spec.Type) (any, bool) {
 
 // primitive renders one of the types the specifications spell out, with what
 // they say about its form. A form checked here is a mistake caught while the
-// query is being written rather than when it is built.
+// request is being written rather than when it is built.
 func (b *builder) primitive(t *spec.Type, ctx fieldContext) any {
 	var s map[string]any
 	switch t.Name {

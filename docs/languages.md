@@ -4,15 +4,15 @@
 
 ## Rust
 
-The same queries generate a Rust client:
+The same requests generate a Rust client:
 
 ```
-jmapc generate -lang rust -out src/jmapq
+jmapc generate -lang rust -out src/jmap_client
 ```
 
 ```rust
-use jmapq::list_inbox_emails::{list_inbox_emails, ListInboxEmailsParams};
-use jmapq::Client;
+use jmap_client::list_inbox_emails::{list_inbox_emails, ListInboxEmailsParams};
+use jmap_client::Client;
 
 let client = Client::with_bearer_token("https://example.com/.well-known/jmap", http, token);
 
@@ -27,7 +27,7 @@ for email in &res.list {
 ```
 
 The runtime comes with it — `client.rs`, `types.rs`, and the `mod.rs` that
-declares them beside the queries — so `mod jmapq;` is the whole of what a crate
+declares them beside the requests — so `mod jmap_client;` is the whole of what a crate
 has to add. The generated code requires **serde and serde_json** and nothing
 else. Transmission is a `Transport` you implement over whichever HTTP client
 the program already has, so no HTTP stack, no TLS backend and no async runtime
@@ -78,15 +78,15 @@ The generated code is already formatted the way rustfmt formats it, so
 
 ## TypeScript
 
-The same queries generate a TypeScript client:
+The same requests generate a TypeScript client:
 
 ```
-jmapc generate -lang typescript -out src/jmapq
+jmapc generate -lang typescript -out src/jmapClient
 ```
 
 ```typescript
-import { Client } from "./jmapq/client.js"
-import { listInboxEmails } from "./jmapq/listInboxEmails.js"
+import { Client } from "./jmapClient/client.js"
+import { listInboxEmails } from "./jmapClient/listInboxEmails.js"
 
 const client = new Client("https://example.com/.well-known/jmap", { auth: token })
 
@@ -97,7 +97,7 @@ for (const email of res.list) {
 ```
 
 The runtime comes with it — `client.ts` and `types.ts` are generated alongside
-the queries — so the output has **no dependencies**. The only platform
+the requests — so the output has **no dependencies**. The only platform
 requirement is `fetch`.
 
 TypeScript expresses some things more precisely than Go. A nullable property is

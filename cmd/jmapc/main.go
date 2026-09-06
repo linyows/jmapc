@@ -1,5 +1,5 @@
-// Command jmapc generates a typed client from the JMAP queries in a directory,
-// in Go, Rust or TypeScript. Write the query you want the server to answer;
+// Command jmapc generates a typed client from the JMAP requests in a directory,
+// in Go, Rust or TypeScript. Write the request you want the server to answer;
 // jmapc checks it against the JMAP data model and writes the code that sends
 // it.
 package main
@@ -20,7 +20,7 @@ import (
 	"github.com/linyows/jmapc/internal/gen"
 	"github.com/linyows/jmapc/internal/gen/rust"
 	"github.com/linyows/jmapc/internal/gen/ts"
-	"github.com/linyows/jmapc/internal/query"
+	"github.com/linyows/jmapc/internal/request"
 	"github.com/linyows/jmapc/internal/spec"
 )
 
@@ -42,8 +42,8 @@ var version string
 // Config holds the settings for a run, whether they came from the config file
 // or from the command line.
 type Config struct {
-	// Queries is the directory holding the query files.
-	Queries string `json:"queries"`
+	// Requests is the directory holding the request files.
+	Requests string `json:"requests"`
 	// Out is the directory the generated code is written to.
 	Out string `json:"out"`
 	// Lang is the language to generate: "go", "typescript" or "rust". It
@@ -54,7 +54,7 @@ type Config struct {
 	// where a module is a file.
 	Package string `json:"package"`
 	// Schemas are files describing the types and methods a server offers
-	// beyond the specifications jmapc knows, which queries may then use.
+	// beyond the specifications jmapc knows, which requests may then use.
 	Schemas []string `json:"schemas"`
 }
 
@@ -67,32 +67,33 @@ func main() {
 
 // usage describes the commands, and is printed under the banner whenever the
 // arguments make no sense or help is asked for.
-const usage = `jmapc generates a typed client from JMAP queries, in Go, Rust or TypeScript.
+const usage = `jmapc generates a typed client from JMAP requests, in Go, Rust or TypeScript.
 
 Usage:
-	jmapc generate [flags]   check the queries and write the generated client
-	jmapc check [flags]      check the queries without writing anything
-	jmapc run <query>        send one query to a server and print the response
-	jmapc schema [flags]     write a JSON Schema describing the query files
+	jmapc generate [flags]   check the requests and write the generated client
+	jmapc check [flags]      check the requests without writing anything
+	jmapc run <request>      send one request to a server and print the response
+	jmapc schema [flags]     write a JSON Schema describing the request files
 	jmapc version            print the version
 
 Flags:
 	-config string    settings file to read (default ` + ConfigName + ` if present)
-	-queries string   directory holding the query files (default "queries")
-	-out string       directory to write the generated client to (default "jmapq")
+	-requests string  directory holding the request files (default "requests")
+	-out string       directory to write the generated client to (default "client")
 	-lang string      language to generate: go, rust or typescript (default go)
 	-package string   name of the generated package, for Go (default: the name of -out)
 	-schema string    schema file describing a vendor extension; repeatable
 
-The check command also takes -session, to check the queries against a server
+The check command also takes -session, to check the requests against a server
 rather than against the specifications alone, with -token or -user to
 authenticate and -timeout to bound the wait.
 
 The run and schema commands take flags of their own, which "jmapc run -h"
 and "jmapc schema -h" describe.
 
-A query file is named after the function to generate, as in
-ListInboxEmails` + query.Extension + `, and holds a JMAP request.
+A request file is named after the function to generate, as in
+ListInboxEmails` + request.Extension + `, and holds the JMAP request that
+function sends.
 `
 
 func run(args []string) error {
@@ -104,7 +105,7 @@ func run(args []string) error {
 	switch command {
 	case "generate", "check":
 	case "run":
-		return runQuery(args[1:])
+		return runRequest(args[1:])
 	case "schema":
 		return writeSchema(args[1:])
 	case "version", "-version", "--version":
@@ -121,7 +122,7 @@ func run(args []string) error {
 	fs := flag.NewFlagSet("jmapc "+command, flag.ContinueOnError)
 	var (
 		configPath = fs.String("config", "", "settings file to read")
-		queries    = fs.String("queries", "", "directory holding the query files")
+		requests   = fs.String("requests", "", "directory holding the request files")
 		out        = fs.String("out", "", "directory to write the generated client to")
 		lang       = fs.String("lang", "", "language to generate: go, rust or typescript")
 		pkg        = fs.String("package", "", "name of the generated package")
@@ -136,7 +137,7 @@ func run(args []string) error {
 		// The session URL is not read from the environment, unlike the
 		// credentials: a check that reaches the network should say so on the
 		// command line rather than because of what is set around it.
-		session = fs.String("session", "", "session URL to check the queries against, or the host to find it under")
+		session = fs.String("session", "", "session URL to check the requests against, or the host to find it under")
 		token = fs.String("token", os.Getenv("JMAP_TOKEN"), "bearer token to authenticate with")
 		user = fs.String("user", os.Getenv("JMAP_USER"), "user:password to authenticate with instead")
 		timeout = fs.Duration("timeout", 30*time.Second, "how long to wait for the server")
@@ -150,8 +151,8 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	if *queries != "" {
-		cfg.Queries = *queries
+	if *requests != "" {
+		cfg.Requests = *requests
 	}
 	if *out != "" {
 		cfg.Out = *out
@@ -175,16 +176,16 @@ func run(args []string) error {
 		return err
 	}
 
-	queryFiles, err := findQueries(cfg.Queries)
+	queryFiles, err := findRequests(cfg.Requests)
 	if err != nil {
 		return err
 	}
 	if len(queryFiles) == 0 {
-		return fmt.Errorf("no %s files under %s", query.Extension, cfg.Queries)
+		return fmt.Errorf("no %s files under %s", request.Extension, cfg.Requests)
 	}
 
-	parser := query.NewParser(catalogue)
-	parsed := make([]*query.Query, 0, len(queryFiles))
+	parser := request.NewParser(catalogue)
+	parsed := make([]*request.Request, 0, len(queryFiles))
 	var failures int
 	for _, path := range queryFiles {
 		q, err := parser.ParseFile(path)
@@ -196,15 +197,15 @@ func run(args []string) error {
 		parsed = append(parsed, q)
 	}
 	if failures > 0 {
-		return fmt.Errorf("%s", plural(failures, "query", "queries")+" did not check out")
+		return fmt.Errorf("%s", plural(failures, "request", "requests")+" did not check out")
 	}
-	noteSameQueries(parsed)
+	noteSameRequests(parsed)
 
 	if command == "check" {
 		if *session != "" {
 			return checkAgainstServer(catalogue, parsed, *session, *token, *user, *timeout)
 		}
-		fmt.Fprintf(stdout, "checked %s\n", plural(len(parsed), "query", "queries"))
+		fmt.Fprintf(stdout, "checked %s\n", plural(len(parsed), "request", "requests"))
 		return nil
 	}
 	return write(cfg, catalogue, parsed)
@@ -250,9 +251,9 @@ func (l *stringList) Set(v string) error {
 }
 
 // write generates the client and puts it on disk.
-func write(cfg *Config, catalogue *spec.Spec, queries []*query.Query) error {
-	noteUnwatched(cfg, queries)
-	files, err := generate(cfg, catalogue, queries)
+func write(cfg *Config, catalogue *spec.Spec, requests []*request.Request) error {
+	noteUnwatched(cfg, requests)
+	files, err := generate(cfg, catalogue, requests)
 	if err != nil {
 		return err
 	}
@@ -274,17 +275,17 @@ func write(cfg *Config, catalogue *spec.Spec, queries []*query.Query) error {
 	return nil
 }
 
-// noteSameQueries says so where two query files hold one query. A query that
+// noteSameRequests says so where two request files hold one request. A request that
 // differs from another only in what it calls its parameters and its calls
 // makes the same request, so one of them would do for both, and the second
 // brings a second set of generated types along with it.
 //
 // It is a note rather than an error: a project may want two names for one
 // request, and jmapc is not the one to say it may not.
-func noteSameQueries(queries []*query.Query) {
+func noteSameRequests(requests []*request.Request) {
 	byShape := map[string][]string{}
 	var order []string
-	for _, q := range queries {
+	for _, q := range requests {
 		if q.Shape == "" {
 			continue
 		}
@@ -299,38 +300,38 @@ func noteSameQueries(queries []*query.Query) {
 			continue
 		}
 		sort.Strings(names)
-		fmt.Fprintf(stderr, "jmapc: %s are the same query under different names; one of them would do for all of them\n",
+		fmt.Fprintf(stderr, "jmapc: %s are the same request under different names; one of them would do for all of them\n",
 			strings.Join(names, ", "))
 	}
 }
 
-// noteUnwatched says so where a query asks to be watched in a language that
+// noteUnwatched says so where a request asks to be watched in a language that
 // cannot follow it. Following a type's changes means holding a connection to
-// the server's push endpoint open, which only the Go runtime does; the query
+// the server's push endpoint open, which only the Go runtime does; the request
 // itself is generated all the same, so the note is a note rather than an
 // error.
-func noteUnwatched(cfg *Config, queries []*query.Query) {
+func noteUnwatched(cfg *Config, requests []*request.Request) {
 	if cfg.Lang == LangGo {
 		return
 	}
-	for _, q := range queries {
+	for _, q := range requests {
 		if q.Watches == nil {
 			continue
 		}
-		fmt.Fprintf(stderr, "jmapc: %s asks to be watched, which only the Go client does; the %s client has the query without the loop\n",
+		fmt.Fprintf(stderr, "jmapc: %s asks to be watched, which only the Go client does; the %s client has the request without the loop\n",
 			q.Name, cfg.Lang)
 	}
 }
 
 // generate produces the files for the configured language. TypeScript and Rust
 // take the runtime with them: there is no package to depend on, so the client
-// and the data types are written alongside the queries.
-func generate(cfg *Config, catalogue *spec.Spec, queries []*query.Query) (map[string][]byte, error) {
+// and the data types are written alongside the requests.
+func generate(cfg *Config, catalogue *spec.Spec, requests []*request.Request) (map[string][]byte, error) {
 	switch cfg.Lang {
 	case LangRust:
-		return generateRust(catalogue, queries)
+		return generateRust(catalogue, requests)
 	case LangTypeScript:
-		files, err := (&ts.QueryGenerator{Spec: catalogue, Queries: queries}).Generate()
+		files, err := (&ts.RequestGenerator{Spec: catalogue, Requests: requests}).Generate()
 		if err != nil {
 			return nil, err
 		}
@@ -351,18 +352,18 @@ func generate(cfg *Config, catalogue *spec.Spec, queries []*query.Query) (map[st
 		files["client.ts"] = client
 		return files, nil
 	}
-	return (&gen.QueryGenerator{
+	return (&gen.RequestGenerator{
 		Spec:      catalogue,
 		Package:   cfg.Package,
 		Qualifier: "jmapc.",
-		Queries:   queries,
+		Requests:  requests,
 	}).Generate()
 }
 
-// generateRust produces the Rust module directory: one file per query, the data
+// generateRust produces the Rust module directory: one file per request, the data
 // model, the runtime, and the mod.rs that declares them all.
-func generateRust(catalogue *spec.Spec, queries []*query.Query) (map[string][]byte, error) {
-	files, err := (&rust.QueryGenerator{Spec: catalogue, Queries: queries}).Generate()
+func generateRust(catalogue *spec.Spec, requests []*request.Request) (map[string][]byte, error) {
+	files, err := (&rust.RequestGenerator{Spec: catalogue, Requests: requests}).Generate()
 	if err != nil {
 		return nil, err
 	}
@@ -416,11 +417,11 @@ const (
 
 // applyDefaults fills in the settings that were not given.
 func (c *Config) applyDefaults() {
-	if c.Queries == "" {
-		c.Queries = "queries"
+	if c.Requests == "" {
+		c.Requests = "requests"
 	}
 	if c.Out == "" {
-		c.Out = "jmapq"
+		c.Out = "client"
 	}
 	if c.Lang == "" {
 		c.Lang = LangGo
@@ -440,14 +441,14 @@ func (c *Config) check() error {
 		c.Lang, LangGo, LangTypeScript, LangRust)
 }
 
-// findQueries returns the query files under dir, in a stable order.
-func findQueries(dir string) ([]string, error) {
+// findRequests returns the request files under dir, in a stable order.
+func findRequests(dir string) ([]string, error) {
 	var paths []string
 	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() || !strings.HasSuffix(d.Name(), query.Extension) {
+		if d.IsDir() || !strings.HasSuffix(d.Name(), request.Extension) {
 			return nil
 		}
 		paths = append(paths, path)

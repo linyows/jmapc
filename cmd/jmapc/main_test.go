@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// workspace lays out a directory holding queries, and returns its path.
+// workspace lays out a directory holding requests, and returns its path.
 func workspace(t *testing.T, files map[string]string) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -31,18 +31,18 @@ const listMailboxes = `{
 
 func TestGenerate(t *testing.T) {
 	dir := workspace(t, map[string]string{
-		"queries/ListMailboxes.jmap.json": listMailboxes,
+		"requests/ListMailboxes.jmap.json": listMailboxes,
 	})
-	out := filepath.Join(dir, "jmapq")
+	out := filepath.Join(dir, "client")
 
-	if err := run([]string{"generate", "-queries", filepath.Join(dir, "queries"), "-out", out}); err != nil {
+	if err := run([]string{"generate", "-requests", filepath.Join(dir, "requests"), "-out", out}); err != nil {
 		t.Fatalf("generate: %v", err)
 	}
 	src, err := os.ReadFile(filepath.Join(out, "listmailboxes_gen.go"))
 	if err != nil {
 		t.Fatalf("reading the generated client: %v", err)
 	}
-	for _, want := range []string{"package jmapq", "func ListMailboxes(", "ListMailboxesAllResponse"} {
+	for _, want := range []string{"package client", "func ListMailboxes(", "ListMailboxesAllResponse"} {
 		if !strings.Contains(string(src), want) {
 			t.Errorf("the generated client does not contain %q:\n%s", want, src)
 		}
@@ -51,15 +51,15 @@ func TestGenerate(t *testing.T) {
 
 func TestGenerateRust(t *testing.T) {
 	dir := workspace(t, map[string]string{
-		"queries/ListMailboxes.jmap.json": listMailboxes,
+		"requests/ListMailboxes.jmap.json": listMailboxes,
 	})
-	out := filepath.Join(dir, "jmapq")
+	out := filepath.Join(dir, "client")
 
-	args := []string{"generate", "-queries", filepath.Join(dir, "queries"), "-out", out, "-lang", "rust"}
+	args := []string{"generate", "-requests", filepath.Join(dir, "requests"), "-out", out, "-lang", "rust"}
 	if err := run(args); err != nil {
 		t.Fatalf("generate: %v", err)
 	}
-	// The runtime comes with the queries, since there is no crate to depend
+	// The runtime comes with the requests, since there is no crate to depend
 	// on, and the mod.rs is what makes the directory a module.
 	for _, name := range []string{"list_mailboxes.rs", "types.rs", "client.rs", "mod.rs"} {
 		if _, err := os.Stat(filepath.Join(out, name)); err != nil {
@@ -83,9 +83,9 @@ func TestGenerateRust(t *testing.T) {
 
 func TestUnknownLanguage(t *testing.T) {
 	dir := workspace(t, map[string]string{
-		"queries/ListMailboxes.jmap.json": listMailboxes,
+		"requests/ListMailboxes.jmap.json": listMailboxes,
 	})
-	err := run([]string{"generate", "-queries", filepath.Join(dir, "queries"), "-lang", "cobol"})
+	err := run([]string{"generate", "-requests", filepath.Join(dir, "requests"), "-lang", "cobol"})
 	if err == nil {
 		t.Fatal("generating a language jmapc does not write should have failed")
 	}
@@ -96,23 +96,23 @@ func TestUnknownLanguage(t *testing.T) {
 
 func TestCheck(t *testing.T) {
 	dir := workspace(t, map[string]string{
-		"queries/ListMailboxes.jmap.json": listMailboxes,
+		"requests/ListMailboxes.jmap.json": listMailboxes,
 	})
-	if err := run([]string{"check", "-queries", filepath.Join(dir, "queries")}); err != nil {
+	if err := run([]string{"check", "-requests", filepath.Join(dir, "requests")}); err != nil {
 		t.Fatalf("check: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "jmapq")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(dir, "client")); !os.IsNotExist(err) {
 		t.Error("check wrote something, and it should not have")
 	}
 }
 
-// TestCheckReportsBadQueries checks that a query that does not hold up stops the
+// TestCheckReportsBadQueries checks that a request that does not hold up stops the
 // run rather than producing a client that cannot work.
 func TestCheckReportsBadQueries(t *testing.T) {
 	dir := workspace(t, map[string]string{
-		"queries/Broken.jmap.json": `{"methodCalls": [["Mailbox/git", {}, "c0"]]}`,
+		"requests/Broken.jmap.json": `{"methodCalls": [["Mailbox/git", {}, "c0"]]}`,
 	})
-	err := run([]string{"check", "-queries", filepath.Join(dir, "queries")})
+	err := run([]string{"check", "-requests", filepath.Join(dir, "requests")})
 	if err == nil {
 		t.Fatal("expected an error")
 	}
@@ -125,7 +125,7 @@ func TestCheckReportsBadQueries(t *testing.T) {
 // directory, which is how go:generate invokes the tool.
 func TestConfigFile(t *testing.T) {
 	dir := workspace(t, map[string]string{
-		"jmapc.json":                `{"queries": "q", "out": "client", "package": "mailq"}`,
+		"jmapc.json":                `{"requests": "q", "out": "client", "package": "mailq"}`,
 		"q/ListMailboxes.jmap.json": listMailboxes,
 	})
 	t.Chdir(dir)
@@ -149,7 +149,7 @@ func TestConfigFile(t *testing.T) {
 // reported rather than silently ignored.
 func TestConfigFileRejectsUnknownSettings(t *testing.T) {
 	dir := workspace(t, map[string]string{
-		"jmapc.json":                `{"query": "q"}`,
+		"jmapc.json":                `{"request": "q"}`,
 		"q/ListMailboxes.jmap.json": listMailboxes,
 	})
 	t.Chdir(dir)
@@ -158,7 +158,7 @@ func TestConfigFileRejectsUnknownSettings(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error")
 	}
-	if !strings.Contains(err.Error(), `unknown field "query"`) {
+	if !strings.Contains(err.Error(), `unknown field "request"`) {
 		t.Errorf("error = %v", err)
 	}
 }
@@ -183,12 +183,12 @@ const notesSchema = `{
   ]
 }`
 
-// TestSchemaExtendsTheModel checks that a query against a vendor capability is
+// TestSchemaExtendsTheModel checks that a request against a vendor capability is
 // generated, and checked, just as one against a standard type is.
 func TestSchemaExtendsTheModel(t *testing.T) {
 	dir := workspace(t, map[string]string{
 		"schema/notes.json": notesSchema,
-		"queries/FindNotes.jmap.json": `{
+		"requests/FindNotes.jmap.json": `{
 		  "methodCalls": [
 		    ["Note/query", {"filter": {"text": "{{phrase}}"}}, "search"],
 		    ["Note/get", {
@@ -199,11 +199,11 @@ func TestSchemaExtendsTheModel(t *testing.T) {
 		  "_returns": "fetch"
 		}`,
 	})
-	out := filepath.Join(dir, "jmapq")
+	out := filepath.Join(dir, "client")
 
 	err := run([]string{"generate",
 		"-schema", filepath.Join(dir, "schema", "notes.json"),
-		"-queries", filepath.Join(dir, "queries"),
+		"-requests", filepath.Join(dir, "requests"),
 		"-out", out,
 	})
 	if err != nil {
@@ -224,18 +224,18 @@ func TestSchemaExtendsTheModel(t *testing.T) {
 	}
 }
 
-// TestSchemaIsChecked checks that a query using a vendor type wrongly fails, so
+// TestSchemaIsChecked checks that a request using a vendor type wrongly fails, so
 // that an extension is no less checked than the built-in model.
 func TestSchemaIsChecked(t *testing.T) {
 	dir := workspace(t, map[string]string{
 		"schema/notes.json": notesSchema,
-		"queries/FindNotes.jmap.json": `{
+		"requests/FindNotes.jmap.json": `{
 		  "methodCalls": [["Note/get", {"properties": ["id", "titel"]}, "c0"]]
 		}`,
 	})
 	err := run([]string{"check",
 		"-schema", filepath.Join(dir, "schema", "notes.json"),
-		"-queries", filepath.Join(dir, "queries"),
+		"-requests", filepath.Join(dir, "requests"),
 	})
 	if err == nil {
 		t.Fatal("expected an error")
@@ -254,7 +254,7 @@ func TestSchemaErrorsAreReported(t *testing.T) {
 	})
 	err := run([]string{"check",
 		"-schema", filepath.Join(dir, "schema", "broken.json"),
-		"-queries", filepath.Join(dir, "q"),
+		"-requests", filepath.Join(dir, "q"),
 	})
 	if err == nil {
 		t.Fatal("expected an error")
@@ -265,10 +265,10 @@ func TestSchemaErrorsAreReported(t *testing.T) {
 }
 
 func TestNoQueries(t *testing.T) {
-	dir := workspace(t, map[string]string{"queries/README.md": "nothing here"})
-	err := run([]string{"check", "-queries", filepath.Join(dir, "queries")})
+	dir := workspace(t, map[string]string{"requests/README.md": "nothing here"})
+	err := run([]string{"check", "-requests", filepath.Join(dir, "requests")})
 	if err == nil || !strings.Contains(err.Error(), "no .jmap.json files") {
-		t.Errorf("error = %v, want it to say there are no queries", err)
+		t.Errorf("error = %v, want it to say there are no requests", err)
 	}
 }
 
@@ -284,56 +284,56 @@ func TestUnknownCommand(t *testing.T) {
 	}
 }
 
-// TestSameQueryUnderTwoNames covers two query files holding one query. They
+// TestSameRequestUnderTwoNames covers two request files holding one request. They
 // differ only in what they call their parameters and their calls, so they make
 // the same request, and each brings a set of generated types along with it.
-func TestSameQueryUnderTwoNames(t *testing.T) {
+func TestSameRequestUnderTwoNames(t *testing.T) {
 	dir := workspace(t, map[string]string{
-		"queries/ListInbox.jmap.json": `{
+		"requests/ListInbox.jmap.json": `{
 		  "_doc": "ListInbox reads the inbox.",
 		  "methodCalls": [["Email/query", {"filter": {"inMailbox": "{{mailboxId}}"}, "limit": "{{limit}}"}, "search"]],
 		  "_returns": "search"
 		}`,
-		// The same query: other names for the parameters and the call, other
+		// The same request: other names for the parameters and the call, other
 		// documentation, and the members written in another order.
-		"queries/ListArchive.jmap.json": `{
+		"requests/ListArchive.jmap.json": `{
 		  "_returns": "c0",
 		  "methodCalls": [["Email/query", {"limit": "{{howMany}}", "filter": {"inMailbox": "{{folderId}}"}}, "c0"]]
 		}`,
-		// Not the same query: it asks the server for something else.
-		"queries/ListThreads.jmap.json": `{
+		// Not the same request: it asks the server for something else.
+		"requests/ListThreads.jmap.json": `{
 		  "methodCalls": [["Email/query", {"filter": {"inMailbox": "{{mailboxId}}"}, "limit": "{{limit}}",
 		                   "collapseThreads": true}, "search"]],
 		  "_returns": "search"
 		}`,
 	})
 
-	_, errOut, err := capture(t, []string{"check", "-queries", filepath.Join(dir, "queries")})
+	_, errOut, err := capture(t, []string{"check", "-requests", filepath.Join(dir, "requests")})
 	if err != nil {
 		t.Fatalf("check: %v", err)
 	}
-	want := "ListArchive, ListInbox are the same query under different names"
+	want := "ListArchive, ListInbox are the same request under different names"
 	if !strings.Contains(errOut, want) {
 		t.Errorf("the note does not say %q:\n%s", want, errOut)
 	}
 	if strings.Contains(errOut, "ListThreads") {
-		t.Errorf("a query asking for something else was reported as the same:\n%s", errOut)
+		t.Errorf("a request asking for something else was reported as the same:\n%s", errOut)
 	}
 }
 
-// TestSameQueryIsANoteRatherThanAnError checks that two names for one query
+// TestSameRequestIsANoteRatherThanAnError checks that two names for one request
 // still generate: a project may want both, and jmapc is not the one to say it
 // may not.
-func TestSameQueryIsANoteRatherThanAnError(t *testing.T) {
+func TestSameRequestIsANoteRatherThanAnError(t *testing.T) {
 	dir := workspace(t, map[string]string{
-		"queries/ListMailboxes.jmap.json": listMailboxes,
-		"queries/AllMailboxes.jmap.json": `{
+		"requests/ListMailboxes.jmap.json": listMailboxes,
+		"requests/AllMailboxes.jmap.json": `{
 		  "methodCalls": [["Mailbox/get", {"ids": null, "properties": ["id", "name", "role"]}, "every"]],
 		  "_returns": "every"
 		}`,
 	})
-	out := filepath.Join(dir, "jmapq")
-	if _, _, err := capture(t, []string{"generate", "-queries", filepath.Join(dir, "queries"), "-out", out}); err != nil {
+	out := filepath.Join(dir, "client")
+	if _, _, err := capture(t, []string{"generate", "-requests", filepath.Join(dir, "requests"), "-out", out}); err != nil {
 		t.Fatalf("generate: %v", err)
 	}
 	for _, name := range []string{"listmailboxes_gen.go", "allmailboxes_gen.go"} {

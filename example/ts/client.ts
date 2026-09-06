@@ -87,9 +87,9 @@ export class MethodError extends Error {
 // Several method-level failures from one response.
 //
 // JMAP runs the calls it can, so the response is carried here too, and a
-// generated query puts what it could read out of it on result: the calls the
+// generated request puts what it could read out of it on result: the calls the
 // server answered, and nothing for the ones it would not run. Read it as a
-// Partial of what the query returns.
+// Partial of what the request returns.
 export class MethodErrors extends Error {
   readonly errors: MethodError[]
   readonly response: Response
@@ -203,7 +203,7 @@ export interface ClientOptions {
   skipPreflight?: boolean
 }
 
-// A client for one JMAP server. It caches the session, so a query costs one
+// A client for one JMAP server. It caches the session, so a request costs one
 // round trip rather than two.
 export class Client {
   private readonly sessionUrl: string

@@ -2,9 +2,9 @@
 
 # jmapc コマンド
 
-## クエリを送る
+## リクエストを送る
 
-クエリは、それを呼ぶコードができる前に試せるほうがよいので、`jmapc run` が一つ送って、返ってきたものを表示します。
+リクエストは、それを呼ぶコードができる前に試せるほうがよいので、`jmapc run` が一つ送って、返ってきたものを表示します。
 
 ```
 jmapc run ListInboxEmails -p mailboxId=mbx1 -p limit=25
@@ -22,7 +22,7 @@ jmapc: parameter limit: "soon" is not a whole number
 セッションの URL でも、それが置かれているホスト名でも構いません。
 資格情報は `-token` か `-user` です。
 いずれも環境変数 `$JMAP_SESSION_URL`、`$JMAP_TOKEN`、`$JMAP_USER` にフォールバックするので、トークンをシェルの履歴に残さずに済みます。
-クエリが省いた account id は、生成された関数がそうするのと同じように、セッションから引かれます。
+リクエストが省いた account id は、生成された関数がそうするのと同じように、セッションから引かれます。
 `-account` を渡せばそちらが使われます。
 
 `-dry-run` は、送る代わりにリクエストを表示します。
@@ -65,9 +65,9 @@ account id だけは、dry run には知りようがありません。
 
 ```json
 {
-  "queries": "queries",
-  "out": "internal/jmapq",
-  "package": "jmapq",
+  "requests": "requests",
+  "out": "internal/client",
+  "package": "client",
   "schemas": ["schema/notes.json"]
 }
 ```
