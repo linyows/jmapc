@@ -49,6 +49,13 @@
 //		Limit:     25,
 //	})
 //
+// # Authentication
+//
+// [WithBearerToken] sends a fixed token. [WithTokenSource] takes a function
+// instead, for a token that expires: the client calls it when it has no token,
+// shortly before the one it holds expires, and when a server answers 401, and
+// requests arriving together share one call.
+//
 // # Blobs
 //
 // Attachments do not go through the API endpoint. [Client.Upload] and
