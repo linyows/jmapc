@@ -1,7 +1,7 @@
-// Package example holds a worked example: a few JMAP queries and the client
+// Package example holds a worked example: a few JMAP requests and the client
 // jmapc generates from them.
 package example
 
-//go:generate go run ../cmd/jmapc generate -queries queries -out jmapq -package jmapq
-//go:generate go run ../cmd/jmapc generate -queries queries -out ts -lang typescript
-//go:generate go run ../cmd/jmapc generate -queries queries -out rust/src/jmapq -lang rust
+//go:generate go run ../cmd/jmapc generate -requests requests -out client
+//go:generate go run ../cmd/jmapc generate -requests requests -out ts -lang typescript
+//go:generate go run ../cmd/jmapc generate -requests requests -out rust/src/jmap_client -lang rust

@@ -8,13 +8,13 @@ import (
 	"strings"
 
 	"github.com/linyows/jmapc/internal/gen/shared"
-	"github.com/linyows/jmapc/internal/query"
+	"github.com/linyows/jmapc/internal/request"
 	"github.com/linyows/jmapc/internal/spec"
 )
 
-// file writes the module for one query: the types it needs and the function
+// file writes the module for one request: the types it needs and the function
 // that sends it.
-func (g *QueryGenerator) file(p *plan) []byte {
+func (g *RequestGenerator) file(p *plan) []byte {
 	var buf bytes.Buffer
 	writeHeader(&buf, p.q.Path)
 	g.writeImports(&buf, p)
@@ -31,7 +31,7 @@ func (g *QueryGenerator) file(p *plan) []byte {
 
 // writeImports names what the module takes from the runtime and the types,
 // which TypeScript wants stated rather than inferred.
-func (g *QueryGenerator) writeImports(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writeImports(buf *bytes.Buffer, p *plan) {
 	// The specifier carries the .js extension that TypeScript asks for when it
 	// emits ES modules: Node resolves it against the compiled output, and a
 	// bundler resolves it against the source either way. Without it the module
@@ -85,7 +85,7 @@ func (g *QueryGenerator) writeImports(buf *bytes.Buffer, p *plan) {
 // collectRecordTypeNames adds the types the narrowed record and nested types
 // refer to, which are the properties they keep rather than the whole of the
 // data type.
-func (g *QueryGenerator) collectRecordTypeNames(c *query.Call, info *call, names map[string]bool) {
+func (g *RequestGenerator) collectRecordTypeNames(c *request.Call, info *call, names map[string]bool) {
 	add := func(o *spec.Object, properties []string) {
 		for _, name := range properties {
 			f, known := o.Field(name)
@@ -150,11 +150,11 @@ func isAliasName(s string) bool {
 	return false
 }
 
-// writeCreations writes a constant for each creation id the query invents. A
-// /set reports what it created under the name the query gave it, and without
+// writeCreations writes a constant for each creation id the request invents. A
+// /set reports what it created under the name the request gave it, and without
 // this the caller spells that name a second time, in another file, with
 // nothing holding the two together.
-func (g *QueryGenerator) writeCreations(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writeCreations(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.creations {
 		shared.WriteComment(buf, "", fmt.Sprintf(
 			"%s is the creation id %s gives a record it creates, which the response reports it under.",
@@ -164,7 +164,7 @@ func (g *QueryGenerator) writeCreations(buf *bytes.Buffer, p *plan) {
 }
 
 // writeParams writes the interface holding what the caller supplies.
-func (g *QueryGenerator) writeParams(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writeParams(buf *bytes.Buffer, p *plan) {
 	if p.paramsType == "" {
 		return
 	}
@@ -189,7 +189,7 @@ func (g *QueryGenerator) writeParams(buf *bytes.Buffer, p *plan) {
 
 // writeNestedTypes writes the type for a type nested inside the records, whose
 // properties a separate argument narrows.
-func (g *QueryGenerator) writeNestedTypes(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writeNestedTypes(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
 		if info.nestedType == "" {
@@ -213,7 +213,7 @@ func (g *QueryGenerator) writeNestedTypes(buf *bytes.Buffer, p *plan) {
 }
 
 // writeRecordTypes writes a type for each call that narrows what it fetches.
-func (g *QueryGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
 		if info.recordType == "" || !info.writesTypes {
@@ -241,7 +241,7 @@ func (g *QueryGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 }
 
 // writeRecordField writes one member of a generated record type.
-func (g *QueryGenerator) writeRecordField(buf *bytes.Buffer, dataType *spec.Object, name, nestedTo, nestedFrom string) {
+func (g *RequestGenerator) writeRecordField(buf *bytes.Buffer, dataType *spec.Object, name, nestedTo, nestedFrom string) {
 	memberName := name
 	if spec.TSNeedsQuoting(memberName) {
 		memberName = strconv.Quote(memberName)
@@ -264,7 +264,7 @@ func (g *QueryGenerator) writeRecordField(buf *bytes.Buffer, dataType *spec.Obje
 
 // nestedTSType renders a member's type, pointing any reference to the narrowed
 // type at the generated one.
-func (g *QueryGenerator) nestedTSType(t *spec.Type, nestedTo, nestedFrom string) string {
+func (g *RequestGenerator) nestedTSType(t *spec.Type, nestedTo, nestedFrom string) string {
 	rendered := t.TSType()
 	if nestedTo == "" {
 		return rendered
@@ -274,7 +274,7 @@ func (g *QueryGenerator) nestedTSType(t *spec.Type, nestedTo, nestedFrom string)
 
 // writeResponseTypes writes a response type for each call whose records are a
 // generated type.
-func (g *QueryGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
 		if info.recordType == "" || !info.writesTypes {
@@ -306,9 +306,9 @@ func (g *QueryGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 	}
 }
 
-// writeResultType writes the type holding every call's response, for a query
+// writeResultType writes the type holding every call's response, for a request
 // that does not single one out.
-func (g *QueryGenerator) writeResultType(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writeResultType(buf *bytes.Buffer, p *plan) {
 	if p.resultType == "" {
 		return
 	}

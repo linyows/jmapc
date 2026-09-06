@@ -1,5 +1,5 @@
 // What the JSON Schema does when a validator reads it, which Go's tests cannot
-// say: that it accepts every query in this repository and refuses the mistakes
+// say: that it accepts every request in this repository and refuses the mistakes
 // jmapc claims to catch. It throws on a failure, and Node exits non-zero, so it
 // needs no test framework.
 //
@@ -33,10 +33,10 @@ function refuses(name, doc) {
   }
 }
 
-// Every query the example holds is one jmapc generates a client from, so a
+// Every request the example holds is one jmapc generates a client from, so a
 // schema that reports any of them is wrong about the language rather than about
-// the query.
-const dir = "../queries"
+// the request.
+const dir = "../requests"
 for (const file of readdirSync(dir).filter((f) => f.endsWith(".jmap.json"))) {
   accepts(file, JSON.parse(readFileSync(join(dir, file), "utf8")))
 }
@@ -69,7 +69,7 @@ refuses("a member of jmapc's own that is misspelled", {
   _retruns: "c0",
 })
 refuses("a call that is not a triple", { methodCalls: [["Core/echo", {}]] })
-refuses("a query making no calls", { methodCalls: [] })
+refuses("a request making no calls", { methodCalls: [] })
 refuses("a patch key written with the leading slash it already has", {
   methodCalls: [["Email/set", { update: { e1: { "/keywords/$seen": true } } }, "c0"]],
 })
@@ -100,7 +100,7 @@ accepts("a creation id where an id goes", {
 accepts("the member a comparator adds", {
   methodCalls: [["Email/query", { sort: [{ property: "hasKeyword", keyword: "$seen" }] }, "c0"]],
 })
-accepts("a query naming the schema it is written against", {
+accepts("a request naming the schema it is written against", {
   $schema: "../jmapc.schema.json",
   methodCalls: [["Core/echo", {}, "c0"]],
 })
@@ -108,4 +108,4 @@ accepts("a query naming the schema it is written against", {
 if (failures.length > 0) {
   throw new Error(`${failures.length} checks failed:\n  ${failures.join("\n  ")}`)
 }
-console.log(`the schema accepts every query in ${dir} and refuses the mistakes it claims to catch`)
+console.log(`the schema accepts every request in ${dir} and refuses the mistakes it claims to catch`)

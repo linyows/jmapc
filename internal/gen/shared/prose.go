@@ -61,7 +61,7 @@ func HeaderPropertyDoc(h *spec.HeaderProperty) string {
 func DynamicPropertyDoc(name string) string {
 	switch {
 	case strings.HasPrefix(name, "header:"):
-		return "The " + name + " header field, in the form the query asked for."
+		return "The " + name + " header field, in the form the request asked for."
 	case strings.HasPrefix(name, "digest:"):
 		return "The digest of the blob under the " + strings.TrimPrefix(name, "digest:") +
 			" algorithm, as base64."
@@ -73,9 +73,9 @@ func DynamicPropertyDoc(name string) string {
 	return "The " + name + " property, whose meaning the server decides."
 }
 
-// PrimaryAccountPhrase describes the account a query is sent to where the
-// query does not say. A session has a primary account for each capability
-// rather than one for everything, so the capability is named: a query reading
+// PrimaryAccountPhrase describes the account a request is sent to where the
+// request does not say. A session has a primary account for each capability
+// rather than one for everything, so the capability is named: a request reading
 // identities and one creating a mailbox may be talking to two different
 // accounts, and the only place that shows is here.
 func PrimaryAccountPhrase(capabilities []string) string {
@@ -84,10 +84,10 @@ func PrimaryAccountPhrase(capabilities []string) string {
 	case 0:
 		return ""
 	case 1:
-		return "The query does not say which account to use, so the session's primary account for " +
+		return "The request does not say which account to use, so the session's primary account for " +
 			capabilities[0] + " is used" + cost
 	}
-	return "The query does not say which account to use, so the session's primary account is used for each of " +
+	return "The request does not say which account to use, so the session's primary account is used for each of " +
 		joinURIs(capabilities) + cost + " They need not be the same account."
 }
 

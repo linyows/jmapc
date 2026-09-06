@@ -1,6 +1,6 @@
-//! A worked example: the client jmapc generates from the queries in
-//! example/queries.
+//! A worked example: the client jmapc generates from the requests in
+//! example/requests.
 //!
-//! Everything under jmapq is generated. Nothing else here is.
+//! Everything under jmap_client is generated. Nothing else here is.
 
-pub mod jmapq;
+pub mod jmap_client;

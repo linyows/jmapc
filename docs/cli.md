@@ -2,9 +2,9 @@
 
 # The jmapc command
 
-## Sending a query
+## Sending a request
 
-A query is worth trying before there is any code that calls it, so `jmapc run`
+A request is worth trying before there is any code that calls it, so `jmapc run`
 sends one and prints what came back.
 
 ```
@@ -22,7 +22,7 @@ jmapc: parameter limit: "soon" is not a whole number
 The server comes from `-session`, which takes the session URL or the host to
 find it under, and the credentials from `-token` or `-user`. Each falls back to an
 environment variable — `$JMAP_SESSION_URL`, `$JMAP_TOKEN`, `$JMAP_USER` — which
-is what keeps a token out of shell history. The account id a query leaves out is looked up in the session, exactly
+is what keeps a token out of shell history. The account id a request leaves out is looked up in the session, exactly
 as the generated function looks it up, and `-account` overrides it.
 
 `-dry-run` prints the request rather than sending it — the same request the
@@ -67,9 +67,9 @@ Flags, or a `jmapc.json` beside your module:
 
 ```json
 {
-  "queries": "queries",
-  "out": "internal/jmapq",
-  "package": "jmapq",
+  "requests": "requests",
+  "out": "internal/client",
+  "package": "client",
   "schemas": ["schema/notes.json"]
 }
 ```

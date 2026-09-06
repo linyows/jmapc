@@ -1,4 +1,4 @@
-// Package rust writes Rust from the JMAP data model and the queries checked
+// Package rust writes Rust from the JMAP data model and the requests checked
 // against it. What it produces asks for serde and serde_json and nothing else:
 // how the bytes reach the server is a Transport the caller supplies, so the
 // generated code brings no HTTP stack, no TLS backend and no async runtime
@@ -157,7 +157,7 @@ func (g *TypeGenerator) writeObject(buf *bytes.Buffer, o *spec.Object) {
 //
 // Default is one of them, for two reasons. A record the caller builds can be
 // written as the two properties that matter and a rest, rather than as fifty.
-// And a query whose call the server would not run leaves that call's response
+// And a request whose call the server would not run leaves that call's response
 // at its default rather than losing the ones it did answer.
 func writeDerive(buf *bytes.Buffer) {
 	buf.WriteString("#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]\n")

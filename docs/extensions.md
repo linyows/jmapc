@@ -4,7 +4,7 @@
 
 JMAP is meant to be extended: a server advertises a capability URI of its own,
 bringing types and methods jmapc does not know. Describe them in a
-schema file and queries against them are checked exactly as ones against `Email`
+schema file and requests against them are checked exactly as ones against `Email`
 are — back references, property names, sort orders and all.
 
 ```json
@@ -18,7 +18,7 @@ are — back references, property names, sort orders and all.
         {"name": "id", "type": "Id", "serverSet": true, "immutable": true, "doc": "The id of the note."},
         {"name": "title", "type": "String", "doc": "The note's title."}
       ],
-      "methods": ["get", "changes", "set", "query"],
+      "methods": ["get", "changes", "set", "request"],
       "sort": [{"name": "createdAt", "doc": "Sorts by when the note was created."}]
     },
     {

@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/linyows/jmapc/internal/gen/shared"
-	"github.com/linyows/jmapc/internal/query"
+	"github.com/linyows/jmapc/internal/request"
 	"github.com/linyows/jmapc/internal/spec"
 )
 
@@ -22,8 +22,8 @@ const (
 	attrWidth = 70
 )
 
-// writeFunc writes the function that sends the query and reads its response.
-func (g *QueryGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
+// writeFunc writes the function that sends the request and reads its response.
+func (g *RequestGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
 	g.writeFuncDoc(buf, p)
 	g.writeSignature(buf, p)
 
@@ -87,7 +87,7 @@ func (g *QueryGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
 
 // writeSignature writes the function's signature, on one line where it fits and
 // broken up where it does not, as rustfmt would.
-func (g *QueryGenerator) writeSignature(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writeSignature(buf *bytes.Buffer, p *plan) {
 	args := []string{"client: &Client<T>"}
 	if p.paramsType != "" {
 		args = append(args, "p: "+p.paramsType)
@@ -111,7 +111,7 @@ func (g *QueryGenerator) writeSignature(buf *bytes.Buffer, p *plan) {
 // setErrorCheck is one method call whose response reports records the server
 // refused.
 type setErrorCheck struct {
-	call   *query.Call
+	call   *request.Call
 	object string // the expression holding the response
 	decode string // the type to read it from, empty where out holds it
 	groups []setErrorGroup
@@ -125,11 +125,11 @@ type setErrorGroup struct {
 }
 
 // setErrorChecks finds the calls whose responses report per-record failures.
-// A call the query does not return is read for its refusals alone, since
+// A call the request does not return is read for its refusals alone, since
 // otherwise naming one call in "_returns" would silently exempt the others
 // from
 // being checked.
-func (g *QueryGenerator) setErrorChecks(p *plan) []setErrorCheck {
+func (g *RequestGenerator) setErrorChecks(p *plan) []setErrorCheck {
 	var checks []setErrorCheck
 	for i, c := range p.q.Calls {
 		fields := g.Spec.SetErrorFields(c.Method.Name)
@@ -162,7 +162,7 @@ func (g *QueryGenerator) setErrorChecks(p *plan) []setErrorCheck {
 
 // writeSetErrorChecks writes the code that fails where the server refused a
 // record. The response is carried on the error, since the rest of it happened.
-func (g *QueryGenerator) writeSetErrorChecks(buf *bytes.Buffer, checks []setErrorCheck) {
+func (g *RequestGenerator) writeSetErrorChecks(buf *bytes.Buffer, checks []setErrorCheck) {
 	if len(checks) == 0 {
 		return
 	}
@@ -205,7 +205,7 @@ func (g *QueryGenerator) writeSetErrorChecks(buf *bytes.Buffer, checks []setErro
 }
 
 // writeFuncDoc writes the function's documentation.
-func (g *QueryGenerator) writeFuncDoc(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writeFuncDoc(buf *bytes.Buffer, p *plan) {
 	doc := strings.TrimSpace(p.q.Doc)
 	if doc == "" {
 		doc = fmt.Sprintf("%s sends the JMAP request in %s.", p.funcName, p.q.Path)
@@ -229,7 +229,7 @@ func (g *QueryGenerator) writeFuncDoc(buf *bytes.Buffer, p *plan) {
 }
 
 // writeRequest writes the request the function sends.
-func (g *QueryGenerator) writeRequest(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writeRequest(buf *bytes.Buffer, p *plan) {
 	buf.WriteString("    let req = Request {\n")
 	g.writeUsing(buf, p)
 
@@ -257,7 +257,7 @@ func (g *QueryGenerator) writeRequest(buf *bytes.Buffer, p *plan) {
 }
 
 // writeUsing writes the capabilities the request declares.
-func (g *QueryGenerator) writeUsing(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writeUsing(buf *bytes.Buffer, p *plan) {
 	uris := make([]string, len(p.q.Using))
 	for i, uri := range p.q.Using {
 		uris[i] = quote(uri) + ".to_string()"
@@ -276,7 +276,7 @@ func (g *QueryGenerator) writeUsing(buf *bytes.Buffer, p *plan) {
 // writeInvocation writes one method call of the request. indent is where the
 // Invocation itself sits; collapsed says that the line it starts on has already
 // been opened by the vec! holding it, and that it closes that vec! too.
-func (g *QueryGenerator) writeInvocation(buf *bytes.Buffer, p *plan, c *query.Call, indent string, collapsed bool) {
+func (g *RequestGenerator) writeInvocation(buf *bytes.Buffer, p *plan, c *request.Call, indent string, collapsed bool) {
 	if !collapsed {
 		if c.Comment != "" {
 			shared.WriteComment(buf, indent, c.Comment)
@@ -298,7 +298,7 @@ func (g *QueryGenerator) writeInvocation(buf *bytes.Buffer, p *plan, c *query.Ca
 	default:
 		fmt.Fprintf(buf, "%sjson!({\n", args)
 		if accountID != "" {
-			fmt.Fprintf(buf, "%s%s: %s,\n", members, quote(query.AccountIDArgument), accountID)
+			fmt.Fprintf(buf, "%s%s: %s,\n", members, quote(request.AccountIDArgument), accountID)
 		}
 		for _, field := range c.Args.Fields {
 			fmt.Fprintf(buf, "%s%s: %s,\n", members, g.keyExpr(field), g.expr(field.Value, members))
@@ -317,9 +317,9 @@ func (g *QueryGenerator) writeInvocation(buf *bytes.Buffer, p *plan, c *query.Ca
 // there when the caller supplied it. The json! macro states an object as it
 // is written, so the members that are always there are stated that way and
 // the rest are put in afterwards.
-func (g *QueryGenerator) writeBuiltArgs(buf *bytes.Buffer, c *query.Call, accountID, args, members string) {
+func (g *RequestGenerator) writeBuiltArgs(buf *bytes.Buffer, c *request.Call, accountID, args, members string) {
 	inner := members + "    "
-	stated := make([]query.ObjectField, 0, len(c.Args.Fields))
+	stated := make([]request.ObjectField, 0, len(c.Args.Fields))
 	for _, field := range c.Args.Fields {
 		if field.OptionalParam() == nil {
 			stated = append(stated, field)
@@ -333,7 +333,7 @@ func (g *QueryGenerator) writeBuiltArgs(buf *bytes.Buffer, c *query.Call, accoun
 	} else {
 		fmt.Fprintf(buf, "%slet mut args = json!({\n", members)
 		if accountID != "" {
-			fmt.Fprintf(buf, "%s%s: %s,\n", inner, quote(query.AccountIDArgument), accountID)
+			fmt.Fprintf(buf, "%s%s: %s,\n", inner, quote(request.AccountIDArgument), accountID)
 		}
 		for _, field := range stated {
 			fmt.Fprintf(buf, "%s%s: %s,\n", inner, g.keyExpr(field), g.expr(field.Value, inner))
@@ -353,10 +353,10 @@ func (g *QueryGenerator) writeBuiltArgs(buf *bytes.Buffer, c *query.Call, accoun
 	fmt.Fprintf(buf, "%s},\n", args)
 }
 
-// keyExpr renders an argument name, which a query may build from parameters. A
-// name the query states outright is a string literal; one it builds is a Rust
+// keyExpr renders an argument name, which a request may build from parameters. A
+// name the request states outright is a string literal; one it builds is a Rust
 // expression, which the json! macro takes in parentheses.
-func (g *QueryGenerator) keyExpr(f query.ObjectField) string {
+func (g *RequestGenerator) keyExpr(f request.ObjectField) string {
 	if len(f.KeySegments) == 0 {
 		return quote(f.Key)
 	}
@@ -377,24 +377,24 @@ func (g *QueryGenerator) keyExpr(f query.ObjectField) string {
 }
 
 // paramExpr names the field of the parameters struct a parameter reads from.
-func paramExpr(p *query.Param) string {
+func paramExpr(p *request.Param) string {
 	return "p." + spec.RustFieldName(p.Field)
 }
 
 // expr renders one argument value.
-func (g *QueryGenerator) expr(n query.Node, indent string) string {
+func (g *RequestGenerator) expr(n request.Node, indent string) string {
 	switch v := n.(type) {
-	case *query.ResultRef:
+	case *request.ResultRef:
 		return fmt.Sprintf("{%q: %s, %q: %s, %q: %s}",
 			"resultOf", quote(v.Ref.ResultOf), "name", quote(v.Ref.Name), "path", quote(v.Ref.Path))
 
-	case *query.ParamRef:
+	case *request.ParamRef:
 		return paramExpr(v.Param)
 
-	case *query.Literal:
+	case *request.Literal:
 		return literalExpr(v.JSON)
 
-	case *query.Object:
+	case *request.Object:
 		if !v.HasParam() {
 			return literalExpr(v.Raw)
 		}
@@ -406,7 +406,7 @@ func (g *QueryGenerator) expr(n query.Node, indent string) string {
 		b.WriteString(indent + "}")
 		return b.String()
 
-	case *query.Array:
+	case *request.Array:
 		if !v.HasParam() {
 			return literalExpr(v.Raw)
 		}
@@ -425,7 +425,7 @@ func (g *QueryGenerator) expr(n query.Node, indent string) string {
 // part of. Rust has no stream to hand back without a crate to define one, and
 // the generated code takes nothing but serde, so the walk is a value that
 // remembers where it is and a method that asks for the next part.
-func (g *QueryGenerator) writePages(buf *bytes.Buffer, p *plan) {
+func (g *RequestGenerator) writePages(buf *bytes.Buffer, p *plan) {
 	if p.pagesType == "" {
 		return
 	}
@@ -472,23 +472,23 @@ func (g *QueryGenerator) writePages(buf *bytes.Buffer, p *plan) {
 	fmt.Fprintf(buf, "        let window = %s;\n", window)
 
 	switch p.q.PageKind {
-	case query.PageQuery:
-		ids := spec.RustFieldName(spec.ExportedName(query.IDsProperty))
+	case request.PageQuery:
+		ids := spec.RustFieldName(spec.ExportedName(request.IDsProperty))
 		// A window with nothing in it is the end of the list rather than a
 		// part of it, and handing it back would make every caller check.
 		fmt.Fprintf(buf, "        if window.%s.is_empty() {\n            self.done = true;\n            return Ok(None);\n        }\n", ids)
 		fmt.Fprintf(buf, "        self.start = window.%s as %s + window.%s.len() as %s;\n",
-			spec.RustFieldName(spec.ExportedName(query.PositionArgument)), startType, ids, startType)
+			spec.RustFieldName(spec.ExportedName(request.PositionArgument)), startType, ids, startType)
 		// Where the call asked for the total, the end is known without asking
 		// for a part that is not there.
 		fmt.Fprintf(buf, "        if window.%[1]s > 0 && self.start as u64 >= window.%[1]s {\n            self.done = true;\n        }\n",
-			spec.RustFieldName(spec.ExportedName(query.TotalProperty)))
+			spec.RustFieldName(spec.ExportedName(request.TotalProperty)))
 
-	case query.PageChanges:
+	case request.PageChanges:
 		// An answer saying nothing changed still carries the state to go on
 		// from, so it is worth handing back.
-		fmt.Fprintf(buf, "        if window.%s {\n", spec.RustFieldName(spec.ExportedName(query.HasMoreChangesProperty)))
-		fmt.Fprintf(buf, "            self.start = window.%s.clone();\n", spec.RustFieldName(spec.ExportedName(query.NewStateProperty)))
+		fmt.Fprintf(buf, "        if window.%s {\n", spec.RustFieldName(spec.ExportedName(request.HasMoreChangesProperty)))
+		fmt.Fprintf(buf, "            self.start = window.%s.clone();\n", spec.RustFieldName(spec.ExportedName(request.NewStateProperty)))
 		buf.WriteString("        } else {\n            self.done = true;\n        }\n")
 	}
 
@@ -497,14 +497,14 @@ func (g *QueryGenerator) writePages(buf *bytes.Buffer, p *plan) {
 }
 
 // writePagesDoc writes the walk's documentation, on whichever item carries it.
-func (g *QueryGenerator) writePagesDoc(buf *bytes.Buffer, p *plan, marker string) {
+func (g *RequestGenerator) writePagesDoc(buf *bytes.Buffer, p *plan, marker string) {
 	doc := fmt.Sprintf("%s walks the whole of what %s returns one part of, calling it again for each part until none is left.",
 		p.pagesType, p.funcName)
 	switch p.q.PageKind {
-	case query.PageQuery:
+	case request.PageQuery:
 		doc += "\n\nAn empty window ends the walk instead of being returned, so every part it returns holds at least one record; " +
 			"where the call asked for the total, the walk ends without requesting a window past it."
-	case query.PageChanges:
+	case request.PageChanges:
 		doc += "\n\nAn answer reporting no changes is still returned, since it carries the state to continue from, and the walk ends when the server reports no more."
 	}
 	shared.WriteCommentMarker(buf, "", marker, doc)

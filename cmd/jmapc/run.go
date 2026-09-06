@@ -12,27 +12,27 @@ import (
 	"time"
 
 	"github.com/linyows/jmapc"
-	"github.com/linyows/jmapc/internal/query"
 	"github.com/linyows/jmapc/internal/request"
 	"github.com/linyows/jmapc/internal/spec"
+	"github.com/linyows/jmapc/internal/wire"
 )
 
 // runUsage describes the run command on its own, since it takes flags no other
 // command does.
-const runUsage = `jmapc run sends one query to a server and prints what comes back.
+const runUsage = `jmapc run sends one request to a server and prints what comes back.
 
 Usage:
-	jmapc run <query> [flags]
+	jmapc run <request> [flags]
 
 Flags:
 	-config string     settings file to read (default ` + ConfigName + ` if present)
-	-queries string    directory holding the query files (default "queries")
+	-requests string    directory holding the request files (default "requests")
 	-schema string     schema file describing a vendor extension; repeatable
-	-p name=value      value for a parameter the query leaves open; repeatable
+	-p name=value      value for a parameter the request leaves open; repeatable
 	-session string    session URL, or the host to find it under (default $JMAP_SESSION_URL)
 	-token string      bearer token to authenticate with (default $JMAP_TOKEN)
 	-user user:pass    credentials to authenticate with instead (default $JMAP_USER)
-	-account string    account id to use where the query leaves accountId out
+	-account string    account id to use where the request leaves accountId out
 	-created-id id=id  creation id carried in from an earlier request; repeatable
 	-timeout duration  how long to wait for the server (default 30s)
 	-dry-run           print the request and send nothing
@@ -46,18 +46,18 @@ nothing has to be quoted, and anything with a shape is written as JSON.
 // accept, with that one value replaced.
 const accountPlaceholder = "ACCOUNT_ID"
 
-// runQuery sends one query to a server, or prints the request it would send.
-// It is the shortest path from writing a query to seeing it answered: no code
+// runRequest sends one request to a server, or prints the request it would send.
+// It is the shortest path from writing a request to seeing it answered: no code
 // is generated, and nothing is written to disk.
-func runQuery(args []string) error {
+func runRequest(args []string) error {
 	fs := flag.NewFlagSet("jmapc run", flag.ContinueOnError)
 	var (
 		configPath = fs.String("config", "", "settings file to read")
-		queries    = fs.String("queries", "", "directory holding the query files")
+		requests   = fs.String("requests", "", "directory holding the request files")
 		session    = fs.String("session", os.Getenv("JMAP_SESSION_URL"), "session URL, or the host to find it under")
 		token      = fs.String("token", os.Getenv("JMAP_TOKEN"), "bearer token to authenticate with")
 		user       = fs.String("user", os.Getenv("JMAP_USER"), "user:password to authenticate with instead")
-		account    = fs.String("account", "", "account id to use where the query leaves accountId out")
+		account    = fs.String("account", "", "account id to use where the request leaves accountId out")
 		timeout    = fs.Duration("timeout", 30*time.Second, "how long to wait for the server")
 		dryRun     = fs.Bool("dry-run", false, "print the request and send nothing")
 		schemas    stringList
@@ -65,7 +65,7 @@ func runQuery(args []string) error {
 		createdIDs stringList
 	)
 	fs.Var(&schemas, "schema", "schema file describing a vendor extension; repeatable")
-	fs.Var(&params, "p", "value for a parameter the query leaves open; repeatable")
+	fs.Var(&params, "p", "value for a parameter the request leaves open; repeatable")
 	fs.Var(&createdIDs, "created-id", "creation id carried in from an earlier request; repeatable")
 	fs.SetOutput(stderr)
 	fs.Usage = func() { fmt.Fprint(stderr, runUsage) }
@@ -82,15 +82,15 @@ func runQuery(args []string) error {
 	}
 	if name == "" {
 		fmt.Fprint(stderr, runUsage)
-		return errors.New("no query named")
+		return errors.New("no request named")
 	}
 
 	cfg, err := loadConfig(*configPath)
 	if err != nil {
 		return err
 	}
-	if *queries != "" {
-		cfg.Queries = *queries
+	if *requests != "" {
+		cfg.Requests = *requests
 	}
 	if len(schemas) > 0 {
 		cfg.Schemas = append(cfg.Schemas, schemas...)
@@ -101,7 +101,7 @@ func runQuery(args []string) error {
 	if err != nil {
 		return err
 	}
-	q, err := findQuery(catalogue, cfg.Queries, name)
+	q, err := findRequest(catalogue, cfg.Requests, name)
 	if err != nil {
 		return err
 	}
@@ -110,7 +110,7 @@ func runQuery(args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := request.CheckValues(q, values); err != nil {
+	if err := wire.CheckValues(q, values); err != nil {
 		return err
 	}
 	carried, err := carriedIDs(createdIDs)
@@ -129,7 +129,7 @@ func runQuery(args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
 
-	req, err := request.Build(catalogue, q, values, accountsFrom(ctx, client, *account), carried)
+	req, err := wire.Build(catalogue, q, values, accountsFrom(ctx, client, *account), carried)
 	if err != nil {
 		return err
 	}
@@ -145,7 +145,7 @@ func runQuery(args []string) error {
 	return refusals(catalogue, q, resp)
 }
 
-// queryName peels the query name off the front of the arguments, where it
+// queryName peels the request name off the front of the arguments, where it
 // usually is. A name written after the flags is left to the flag package.
 func queryName(args []string) (string, []string) {
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
@@ -154,25 +154,25 @@ func queryName(args []string) (string, []string) {
 	return "", args
 }
 
-// findQuery parses the one query the run is about, rather than every query in
-// the directory: a mistake in a query nobody asked for should not stop this one
+// findRequest parses the one request the run is about, rather than every request in
+// the directory: a mistake in a request nobody asked for should not stop this one
 // from being sent.
-func findQuery(catalogue *spec.Spec, dir, name string) (*query.Query, error) {
-	paths, err := findQueries(dir)
+func findRequest(catalogue *spec.Spec, dir, name string) (*request.Request, error) {
+	paths, err := findRequests(dir)
 	if err != nil {
 		return nil, err
 	}
 	var names []string
 	for _, path := range paths {
-		if query.QueryName(path) == name {
-			return query.NewParser(catalogue).ParseFile(path)
+		if request.RequestName(path) == name {
+			return request.NewParser(catalogue).ParseFile(path)
 		}
-		names = append(names, query.QueryName(path))
+		names = append(names, request.RequestName(path))
 	}
-	return nil, fmt.Errorf("no query named %s under %s%s", name, dir, didYouMean(name, names))
+	return nil, fmt.Errorf("no request named %s under %s%s", name, dir, didYouMean(name, names))
 }
 
-// didYouMean suggests the query the caller probably meant, going by the case
+// didYouMean suggests the request the caller probably meant, going by the case
 // they wrote it in, which is the mistake a shell makes easy.
 func didYouMean(name string, names []string) string {
 	for _, candidate := range names {
@@ -184,17 +184,17 @@ func didYouMean(name string, names []string) string {
 		return ""
 	}
 	sort.Strings(names)
-	return "\n\tthe queries there are " + strings.Join(names, ", ")
+	return "\n\tthe requests there are " + strings.Join(names, ", ")
 }
 
 // paramValues reads the -p flags, checking each value against the type of the
 // parameter it stands in for.
-func paramValues(q *query.Query, params []string) (map[string]request.Value, error) {
-	byName := make(map[string]*query.Param, len(q.Params))
+func paramValues(q *request.Request, params []string) (map[string]wire.Value, error) {
+	byName := make(map[string]*request.Param, len(q.Params))
 	for _, p := range q.Params {
 		byName[p.Name] = p
 	}
-	values := make(map[string]request.Value, len(params))
+	values := make(map[string]wire.Value, len(params))
 	for _, pair := range params {
 		name, text, ok := strings.Cut(pair, "=")
 		if !ok {
@@ -204,10 +204,10 @@ func paramValues(q *query.Query, params []string) (map[string]request.Value, err
 		if !ok {
 			// Build reports this, along with everything else the caller got
 			// wrong, once every flag has been read.
-			values[name] = request.Value{Text: text, JSON: json.RawMessage(`null`)}
+			values[name] = wire.Value{Text: text, JSON: json.RawMessage(`null`)}
 			continue
 		}
-		value, err := request.ParseValue(p, text)
+		value, err := wire.ParseValue(p, text)
 		if err != nil {
 			return nil, err
 		}
@@ -233,11 +233,11 @@ func carriedIDs(pairs []string) (map[jmapc.ID]jmapc.ID, error) {
 	return ids, nil
 }
 
-// printRequest writes the request the query stands for and sends nothing. The
-// account id a query leaves out is looked up in the session at run time, and a
+// printRequest writes the request the request stands for and sends nothing. The
+// account id a request leaves out is looked up in the session at run time, and a
 // dry run has no session, so it reports that rather than omitting the id
 // silently.
-func printRequest(catalogue *spec.Spec, q *query.Query, values map[string]request.Value, account string, carried map[jmapc.ID]jmapc.ID) error {
+func printRequest(catalogue *spec.Spec, q *request.Request, values map[string]wire.Value, account string, carried map[jmapc.ID]jmapc.ID) error {
 	var stood []string
 	accounts := func(capability string) (jmapc.ID, error) {
 		if account != "" {
@@ -246,7 +246,7 @@ func printRequest(catalogue *spec.Spec, q *query.Query, values map[string]reques
 		stood = append(stood, capability)
 		return accountPlaceholder, nil
 	}
-	req, err := request.Build(catalogue, q, values, accounts, carried)
+	req, err := wire.Build(catalogue, q, values, accounts, carried)
 	if err != nil {
 		return err
 	}
@@ -283,9 +283,9 @@ func newClient(session, token, user string) (*jmapc.Client, error) {
 	return jmapc.New(session, opts...), nil
 }
 
-// accountsFrom resolves the account ids a query leaves out, from the account
+// accountsFrom resolves the account ids a request leaves out, from the account
 // the caller named or from the session's primary account.
-func accountsFrom(ctx context.Context, client *jmapc.Client, account string) request.Accounts {
+func accountsFrom(ctx context.Context, client *jmapc.Client, account string) wire.Accounts {
 	return func(capability string) (jmapc.ID, error) {
 		if account != "" {
 			return jmapc.ID(account), nil
@@ -297,7 +297,7 @@ func accountsFrom(ctx context.Context, client *jmapc.Client, account string) req
 // refusals reports the records the server would not act on. A /set answers 200
 // and lists them, so a run that read only the transport error would report
 // success where nothing happened.
-func refusals(catalogue *spec.Spec, q *query.Query, resp *jmapc.Response) error {
+func refusals(catalogue *spec.Spec, q *request.Request, resp *jmapc.Response) error {
 	var failures jmapc.SetErrors
 	for _, c := range q.Calls {
 		fields := catalogue.SetErrorFields(c.Method.Name)

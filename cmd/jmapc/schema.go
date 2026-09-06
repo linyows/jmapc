@@ -11,7 +11,7 @@ import (
 
 // schemaUsage describes the schema command, which writes rather than reads a
 // schema, and so takes different flags from the rest.
-const schemaUsage = `jmapc schema writes a JSON Schema describing the query files, for an editor
+const schemaUsage = `jmapc schema writes a JSON Schema describing the request files, for an editor
 to check and complete them against.
 
 Usage:
@@ -22,14 +22,14 @@ Flags:
 	-schema string   schema file describing a vendor extension, to describe too; repeatable
 	-out string      file to write to (default: standard output)
 
-Point an editor at what it writes, either from the query file itself:
+Point an editor at what it writes, either from the request file itself:
 
 	{"$schema": "../jmapc.schema.json", "methodCalls": [...]}
 
 or from the editor's own settings, matching every file at once.
 `
 
-// writeSchema writes the JSON Schema for the query files, which is what lets an
+// writeSchema writes the JSON Schema for the request files, which is what lets an
 // editor complete a method name and report a misspelled argument where it was
 // written rather than at the next build.
 func writeSchema(args []string) error {

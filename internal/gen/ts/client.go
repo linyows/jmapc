@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-// ClientGenerator writes the runtime the generated queries call: a client, the
+// ClientGenerator writes the runtime the generated requests call: a client, the
 // request and response shapes, and the two levels at which JMAP fails.
 //
 // It is generated rather than published, so that a project using jmapc takes on
@@ -22,7 +22,7 @@ func (g *ClientGenerator) Generate() ([]byte, error) {
 }
 
 // clientSource is the runtime itself. It is a literal rather than something
-// assembled, because none of it varies with the catalogue or the queries.
+// assembled, because none of it varies with the catalogue or the requests.
 const clientSource = `import type { Account, Id, SetError } from "./types.js"
 
 // A JMAP request: the capabilities it depends on, and the calls to make.
@@ -109,9 +109,9 @@ export class MethodError extends Error {
 // Several method-level failures from one response.
 //
 // JMAP runs the calls it can, so the response is carried here too, and a
-// generated query puts what it could read out of it on result: the calls the
+// generated request puts what it could read out of it on result: the calls the
 // server answered, and nothing for the ones it would not run. Read it as a
-// Partial of what the query returns.
+// Partial of what the request returns.
 export class MethodErrors extends Error {
   readonly errors: MethodError[]
   readonly response: Response
@@ -225,7 +225,7 @@ export interface ClientOptions {
   skipPreflight?: boolean
 }
 
-// A client for one JMAP server. It caches the session, so a query costs one
+// A client for one JMAP server. It caches the session, so a request costs one
 // round trip rather than two.
 export class Client {
   private readonly sessionUrl: string

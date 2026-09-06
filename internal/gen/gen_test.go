@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/linyows/jmapc/internal/query"
+	"github.com/linyows/jmapc/internal/request"
 	"github.com/linyows/jmapc/internal/spec"
 )
 
@@ -31,36 +31,36 @@ func TestGeneratedTypesAreUpToDate(t *testing.T) {
 }
 
 // TestGeneratedExampleIsUpToDate checks the committed example client against
-// what the example queries produce now.
+// what the example requests produce now.
 func TestGeneratedExampleIsUpToDate(t *testing.T) {
-	queries := parseExample(t)
-	g := &QueryGenerator{
+	requests := parseExample(t)
+	g := &RequestGenerator{
 		Spec:      spec.Standard(),
-		Package:   "jmapq",
+		Package:   "client",
 		Qualifier: "jmapc.",
-		Queries:   queries,
+		Requests:  requests,
 	}
 	files, err := g.Generate()
 	if err != nil {
 		t.Fatalf("generating the example client: %v", err)
 	}
-	if len(files) != len(queries) {
-		t.Errorf("generated %d files for %d queries", len(files), len(queries))
+	if len(files) != len(requests) {
+		t.Errorf("generated %d files for %d requests", len(files), len(requests))
 	}
 	for name, src := range files {
-		compare(t, filepath.Join(repoRoot, "example", "jmapq", name), src, "go generate ./...")
+		compare(t, filepath.Join(repoRoot, "example", "client", name), src, "go generate ./...")
 	}
 }
 
 // TestGenerationIsDeterministic checks that generating twice gives the same
 // bytes, so that a regenerated client never shows up as a spurious diff.
 func TestGenerationIsDeterministic(t *testing.T) {
-	newGen := func() *QueryGenerator {
-		return &QueryGenerator{
+	newGen := func() *RequestGenerator {
+		return &RequestGenerator{
 			Spec:      spec.Standard(),
-			Package:   "jmapq",
+			Package:   "client",
 			Qualifier: "jmapc.",
-			Queries:   parseExample(t),
+			Requests:  parseExample(t),
 		}
 	}
 	first, err := newGen().Generate()
@@ -78,18 +78,18 @@ func TestGenerationIsDeterministic(t *testing.T) {
 	}
 }
 
-// parseExample parses the example queries.
-func parseExample(t *testing.T) []*query.Query {
+// parseExample parses the example requests.
+func parseExample(t *testing.T) []*request.Request {
 	t.Helper()
-	dir := filepath.Join(repoRoot, "example", "queries")
+	dir := filepath.Join(repoRoot, "example", "requests")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatalf("reading %s: %v", dir, err)
 	}
-	parser := query.NewParser(spec.Standard())
-	var out []*query.Query
+	parser := request.NewParser(spec.Standard())
+	var out []*request.Request
 	for _, e := range entries {
-		if !strings.HasSuffix(e.Name(), query.Extension) {
+		if !strings.HasSuffix(e.Name(), request.Extension) {
 			continue
 		}
 		q, err := parser.ParseFile(filepath.Join(dir, e.Name()))
@@ -98,7 +98,7 @@ func parseExample(t *testing.T) []*query.Query {
 		}
 		// The generated file records the path the generator was given, which
 		// go:generate spells relative to the example directory.
-		q.Path = filepath.ToSlash(filepath.Join("queries", e.Name()))
+		q.Path = filepath.ToSlash(filepath.Join("requests", e.Name()))
 		out = append(out, q)
 	}
 	return out
@@ -143,15 +143,15 @@ func firstDifference(want, got string) string {
 // check that the committed client is up to date would fail on one platform and
 // pass on another.
 func TestGeneratedSourcePathIsPortable(t *testing.T) {
-	queries := parseExample(t)
-	for _, q := range queries {
+	requests := parseExample(t)
+	for _, q := range requests {
 		q.Path = strings.ReplaceAll(q.Path, "/", `\`)
 	}
-	g := &QueryGenerator{
+	g := &RequestGenerator{
 		Spec:      spec.Standard(),
-		Package:   "jmapq",
+		Package:   "client",
 		Qualifier: "jmapc.",
-		Queries:   queries,
+		Requests:  requests,
 	}
 	files, err := g.Generate()
 	if err != nil {
@@ -165,15 +165,15 @@ func TestGeneratedSourcePathIsPortable(t *testing.T) {
 	}
 }
 
-// generateOne generates the Go for one query written inline, and returns the
+// generateOne generates the Go for one request written inline, and returns the
 // source.
 func generateOne(t *testing.T, name, src string) string {
 	t.Helper()
-	q, err := query.NewParser(spec.Standard()).Parse(name+query.Extension, []byte(src))
+	q, err := request.NewParser(spec.Standard()).Parse(name+request.Extension, []byte(src))
 	if err != nil {
 		t.Fatalf("checking %s:\n%v", name, err)
 	}
-	g := &QueryGenerator{Spec: spec.Standard(), Package: "jmapq", Qualifier: "jmapc.", Queries: []*query.Query{q}}
+	g := &RequestGenerator{Spec: spec.Standard(), Package: "client", Qualifier: "jmapc.", Requests: []*request.Request{q}}
 	files, err := g.Generate()
 	if err != nil {
 		t.Fatalf("generating %s: %v", name, err)
@@ -182,7 +182,7 @@ func generateOne(t *testing.T, name, src string) string {
 }
 
 // TestWatchTakesTheAccountFromTheSession checks the account a watch listens
-// for, where the query leaves it to the primary account: the events are keyed
+// for, where the request leaves it to the primary account: the events are keyed
 // by account, so the loop has to resolve it before it makes any request.
 func TestWatchTakesTheAccountFromTheSession(t *testing.T) {
 	src := generateOne(t, "SyncMailboxes", `{
@@ -218,15 +218,15 @@ func TestOptionalArgumentIsPutInOnlyWhenGiven(t *testing.T) {
 		`{Name: "Email/changes", CallID: "changes", Args: changesArgs},`,
 	} {
 		if !strings.Contains(src, want) {
-			t.Errorf("the generated query does not contain %q:\n%s", want, src)
+			t.Errorf("the generated request does not contain %q:\n%s", want, src)
 		}
 	}
 }
 
-// TestQueriesWithoutOptionalArgumentsStateTheirArguments checks that a query
+// TestRequestsWithoutOptionalArgumentsStateTheirArguments checks that a request
 // that leaves nothing out still says its arguments outright, so that the code
-// keeps reading like the query it came from.
-func TestQueriesWithoutOptionalArgumentsStateTheirArguments(t *testing.T) {
+// keeps reading like the request it came from.
+func TestRequestsWithoutOptionalArgumentsStateTheirArguments(t *testing.T) {
 	src := generateOne(t, "GetChanges", `{
 	  "methodCalls": [["Email/changes", {"sinceState": "{{sinceState}}"}, "changes"]]
 	}`)
@@ -234,7 +234,7 @@ func TestQueriesWithoutOptionalArgumentsStateTheirArguments(t *testing.T) {
 		t.Errorf("the arguments were built where they could have been stated:\n%s", src)
 	}
 	if !strings.Contains(src, `{Name: "Email/changes", CallID: "changes", Args: map[string]any{`) {
-		t.Errorf("the generated query does not state its arguments:\n%s", src)
+		t.Errorf("the generated request does not state its arguments:\n%s", src)
 	}
 }
 
@@ -258,9 +258,9 @@ func TestPatchKeysGoOutAsWritten(t *testing.T) {
 	}
 }
 
-// TestWatchTakesTheAccountFromTheQuery checks the two ways a query names the
+// TestWatchTakesTheAccountFromTheRequest checks the two ways a request names the
 // account itself, neither of which costs a session lookup.
-func TestWatchTakesTheAccountFromTheQuery(t *testing.T) {
+func TestWatchTakesTheAccountFromTheRequest(t *testing.T) {
 	fromParameter := generateOne(t, "SyncEmails", `{
 	  "_watches": "changes",
 	  "methodCalls": [["Email/changes", {"accountId": "{{accountId}}", "sinceState": "{{sinceState}}"}, "changes"]]
@@ -269,7 +269,7 @@ func TestWatchTakesTheAccountFromTheQuery(t *testing.T) {
 		t.Errorf("the watch does not listen for the account the caller names:\n%s", fromParameter)
 	}
 	if strings.Contains(fromParameter, "PrimaryAccountID") {
-		t.Errorf("the watch looked up an account the query already names:\n%s", fromParameter)
+		t.Errorf("the watch looked up an account the request already names:\n%s", fromParameter)
 	}
 
 	stated := generateOne(t, "SyncOne", `{
@@ -277,11 +277,11 @@ func TestWatchTakesTheAccountFromTheQuery(t *testing.T) {
 	  "methodCalls": [["Email/changes", {"accountId": "a1", "sinceState": "{{sinceState}}"}, "changes"]]
 	}`)
 	if !strings.Contains(stated, `return c.Watch(ctx, jmapc.ID("a1"), "Email", p.SinceState,`) {
-		t.Errorf("the watch does not listen for the account the query states:\n%s", stated)
+		t.Errorf("the watch does not listen for the account the request states:\n%s", stated)
 	}
 }
 
-// TestWatchReadsTheStateItReturns checks a query that returns the watched call
+// TestWatchReadsTheStateItReturns checks a request that returns the watched call
 // alone, where the state is on the response itself rather than on a field of a
 // result holding every response.
 func TestWatchReadsTheStateItReturns(t *testing.T) {
@@ -295,15 +295,15 @@ func TestWatchReadsTheStateItReturns(t *testing.T) {
 	}
 }
 
-// TestUnwatchedQueriesGetNoLoop checks that the function is generated only
-// where the query asked for it.
-func TestUnwatchedQueriesGetNoLoop(t *testing.T) {
+// TestUnwatchedRequestsGetNoLoop checks that the function is generated only
+// where the request asked for it.
+func TestUnwatchedRequestsGetNoLoop(t *testing.T) {
 	src := generateOne(t, "ListMailboxes", `{
 	  "methodCalls": [["Mailbox/get", {"ids": null, "properties": ["id", "name"]}, "all"]],
 	  "_returns": "all"
 	}`)
 	if strings.Contains(src, "Watch") {
-		t.Errorf("a query that asked for no watch got one:\n%s", src)
+		t.Errorf("a request that asked for no watch got one:\n%s", src)
 	}
 }
 
@@ -361,7 +361,7 @@ func TestPagesWalksChanges(t *testing.T) {
 	}
 }
 
-// TestOneShapeIsOneType checks the query whose calls read the same records in
+// TestOneShapeIsOneType checks the request whose calls read the same records in
 // the same shape. Two types differing only by name would make a caller convert
 // between them to pass a record from one call to a function written for the
 // other, and the names are numbered by call position, so the second of them
@@ -448,15 +448,15 @@ func TestTheResponseIsNotDropped(t *testing.T) {
 		"return &out, err\n}",
 	} {
 		if !strings.Contains(src, want) {
-			t.Errorf("the generated query does not contain %q:\n%s", want, src)
+			t.Errorf("the generated request does not contain %q:\n%s", want, src)
 		}
 	}
 }
 
-// TestTheOneCallAQueryReturnsIsAllOrNothing checks the other shape: a query
+// TestTheOneCallARequestReturnsIsAllOrNothing checks the other shape: a request
 // naming one call in "_returns" has nothing to hand back when that call is the
 // one that failed.
-func TestTheOneCallAQueryReturnsIsAllOrNothing(t *testing.T) {
+func TestTheOneCallARequestReturnsIsAllOrNothing(t *testing.T) {
 	src := generateOne(t, "ReadOne", `{
 	  "_returns": "fetch",
 	  "methodCalls": [["Email/get", {"ids": ["{{emailId}}"]}, "fetch"]]
@@ -465,17 +465,17 @@ func TestTheOneCallAQueryReturnsIsAllOrNothing(t *testing.T) {
 		"\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n" +
 		"\t\treturn nil, e\n\t}\n"
 	if !strings.Contains(src, want) {
-		t.Errorf("the generated query does not contain %q:\n%s", want, src)
+		t.Errorf("the generated request does not contain %q:\n%s", want, src)
 	}
 	if !strings.Contains(src, "return &out, err\n}") {
-		t.Errorf("the query does not hand the error back with what it returns:\n%s", src)
+		t.Errorf("the request does not hand the error back with what it returns:\n%s", src)
 	}
 }
 
 // TestACreationIDGetsAName checks the one string a caller had to repeat by
-// hand. A /set reports what it created under the name the query gave it, so
+// hand. A /set reports what it created under the name the request gave it, so
 // the caller wrote that name again in Go, in another file, with nothing
-// holding the two together: renaming it in the query left the build green and
+// holding the two together: renaming it in the request left the build green and
 // the lookup missing.
 func TestACreationIDGetsAName(t *testing.T) {
 	src := generateOne(t, "CreateMailbox", `{
@@ -487,20 +487,20 @@ func TestACreationIDGetsAName(t *testing.T) {
 		`const CreateMailboxNewMailbox jmapc.ID = "newMailbox"`,
 	} {
 		if !strings.Contains(src, want) {
-			t.Errorf("the generated query does not contain %q:\n%s", want, src)
+			t.Errorf("the generated request does not contain %q:\n%s", want, src)
 		}
 	}
 }
 
 // TestARecordIDIsNotACreationID checks that the keys of an update are left
-// alone: they are record ids the caller already has, not names the query
+// alone: they are record ids the caller already has, not names the request
 // invents.
 func TestARecordIDIsNotACreationID(t *testing.T) {
 	src := generateOne(t, "MarkRead", `{
 	  "methodCalls": [["Email/set", {"update": {"e1": {"keywords/$seen": true}}}, "mark"]]
 	}`)
 	if strings.Contains(src, "const MarkRead") {
-		t.Errorf("a record id was named as though the query had invented it:\n%s", src)
+		t.Errorf("a record id was named as though the request had invented it:\n%s", src)
 	}
 }
 
@@ -543,7 +543,7 @@ func TestARecordKeepsItsNameWhenACallIsInserted(t *testing.T) {
 	}`)
 	for _, want := range []string{"type QOneEmail struct {", "type QTwoEmail struct {"} {
 		if !strings.Contains(before, want) {
-			t.Fatalf("the query does not declare %q:\n%s", want, before)
+			t.Fatalf("the request does not declare %q:\n%s", want, before)
 		}
 		if !strings.Contains(after, want) {
 			t.Errorf("inserting a call ahead of the others took %q away:\n%s", want, after)

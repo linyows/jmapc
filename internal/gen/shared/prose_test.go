@@ -30,7 +30,7 @@ func TestJoinMethods(t *testing.T) {
 }
 
 // TestRoundTripPhrase checks what the documentation claims batching buys, which
-// is nothing at all for a query making one call.
+// is nothing at all for a request making one call.
 func TestRoundTripPhrase(t *testing.T) {
 	tests := []struct {
 		in   int
@@ -116,7 +116,7 @@ func TestDynamicPropertyDoc(t *testing.T) {
 		{
 			name: "a header property the parser could not read",
 			in:   "header:To:asAddresses:all:extra",
-			want: "The header:To:asAddresses:all:extra header field, in the form the query asked for.",
+			want: "The header:To:asAddresses:all:extra header field, in the form the request asked for.",
 		},
 		{
 			name: "a blob digest",

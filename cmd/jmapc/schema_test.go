@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// TestSchema checks the command that describes the query files: it writes a
+// TestSchema checks the command that describes the request files: it writes a
 // schema an editor can load, covering the vendor extensions the configuration
 // names as well as the specifications jmapc knows.
 func TestSchema(t *testing.T) {

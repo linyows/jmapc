@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/linyows/jmapc/internal/query"
+	"github.com/linyows/jmapc/internal/request"
 	"github.com/linyows/jmapc/internal/spec"
 )
 
@@ -14,11 +14,11 @@ import (
 const repoRoot = "../../.."
 
 // TestGeneratedExampleIsUpToDate checks the committed TypeScript against what
-// the example queries produce now. The Go client has the same test; this one
+// the example requests produce now. The Go client has the same test; this one
 // keeps the second language from drifting while the first is kept in step.
 func TestGeneratedExampleIsUpToDate(t *testing.T) {
-	queries := parseExample(t)
-	files, err := (&QueryGenerator{Spec: spec.Standard(), Queries: queries}).Generate()
+	requests := parseExample(t)
+	files, err := (&RequestGenerator{Spec: spec.Standard(), Requests: requests}).Generate()
 	if err != nil {
 		t.Fatalf("generating the example client: %v", err)
 	}
@@ -42,7 +42,7 @@ func TestGeneratedExampleIsUpToDate(t *testing.T) {
 // reader would notice and a diff would not: that every module imports what it
 // uses from a path Node can resolve, and that nothing is left undefined.
 func TestGeneratedTypeScriptParses(t *testing.T) {
-	files, err := (&QueryGenerator{Spec: spec.Standard(), Queries: parseExample(t)}).Generate()
+	files, err := (&RequestGenerator{Spec: spec.Standard(), Requests: parseExample(t)}).Generate()
 	if err != nil {
 		t.Fatalf("generating: %v", err)
 	}
@@ -62,25 +62,25 @@ func TestGeneratedTypeScriptParses(t *testing.T) {
 	}
 }
 
-// parseExample parses the example queries.
-func parseExample(t *testing.T) []*query.Query {
+// parseExample parses the example requests.
+func parseExample(t *testing.T) []*request.Request {
 	t.Helper()
-	dir := filepath.Join(repoRoot, "example", "queries")
+	dir := filepath.Join(repoRoot, "example", "requests")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatalf("reading %s: %v", dir, err)
 	}
-	parser := query.NewParser(spec.Standard())
-	var out []*query.Query
+	parser := request.NewParser(spec.Standard())
+	var out []*request.Request
 	for _, e := range entries {
-		if !strings.HasSuffix(e.Name(), query.Extension) {
+		if !strings.HasSuffix(e.Name(), request.Extension) {
 			continue
 		}
 		q, err := parser.ParseFile(filepath.Join(dir, e.Name()))
 		if err != nil {
 			t.Fatalf("checking %s:\n%v", e.Name(), err)
 		}
-		q.Path = filepath.ToSlash(filepath.Join("queries", e.Name()))
+		q.Path = filepath.ToSlash(filepath.Join("requests", e.Name()))
 		out = append(out, q)
 	}
 	return out
@@ -112,13 +112,13 @@ func compare(t *testing.T, path string, got []byte) {
 // through a spread, so that leaving it out leaves the argument out rather than
 // sending undefined.
 func TestOptionalArgumentIsSpreadIn(t *testing.T) {
-	q, err := query.NewParser(spec.Standard()).Parse("GetChanges"+query.Extension, []byte(`{
+	q, err := request.NewParser(spec.Standard()).Parse("GetChanges"+request.Extension, []byte(`{
 	  "methodCalls": [["Email/changes", {"sinceState": "{{sinceState}}", "maxChanges": "{{maxChanges?}}"}, "changes"]]
 	}`))
 	if err != nil {
-		t.Fatalf("checking the query:\n%v", err)
+		t.Fatalf("checking the request:\n%v", err)
 	}
-	files, err := (&QueryGenerator{Spec: spec.Standard(), Queries: []*query.Query{q}}).Generate()
+	files, err := (&RequestGenerator{Spec: spec.Standard(), Requests: []*request.Request{q}}).Generate()
 	if err != nil {
 		t.Fatalf("generating: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestOptionalArgumentIsSpreadIn(t *testing.T) {
 		`...(p.maxChanges !== undefined ? { "maxChanges": p.maxChanges } : {}),`,
 	} {
 		if !strings.Contains(src, want) {
-			t.Errorf("the generated query does not contain %q:\n%s", want, src)
+			t.Errorf("the generated request does not contain %q:\n%s", want, src)
 		}
 	}
 }
@@ -137,16 +137,16 @@ func TestOptionalArgumentIsSpreadIn(t *testing.T) {
 // shape share one type here too, since a caller passing a record from one call
 // to a function written for the other should not have to convert it.
 func TestOneShapeIsOneType(t *testing.T) {
-	q, err := query.NewParser(spec.Standard()).Parse("TwoReads"+query.Extension, []byte(`{
+	q, err := request.NewParser(spec.Standard()).Parse("TwoReads"+request.Extension, []byte(`{
 	  "methodCalls": [
 	    ["Email/get", {"ids": ["{{a}}"], "properties": ["id", "subject"]}, "one"],
 	    ["Email/get", {"ids": ["{{b}}"], "properties": ["id", "subject"]}, "two"]
 	  ]
 	}`))
 	if err != nil {
-		t.Fatalf("checking the query:\n%v", err)
+		t.Fatalf("checking the request:\n%v", err)
 	}
-	files, err := (&QueryGenerator{Spec: spec.Standard(), Queries: []*query.Query{q}}).Generate()
+	files, err := (&RequestGenerator{Spec: spec.Standard(), Requests: []*request.Request{q}}).Generate()
 	if err != nil {
 		t.Fatalf("generating: %v", err)
 	}
@@ -159,12 +159,12 @@ func TestOneShapeIsOneType(t *testing.T) {
 	}
 }
 
-// TestTheResponseIsNotDropped checks that a generated query reads the response
+// TestTheResponseIsNotDropped checks that a generated request reads the response
 // even where the server would not run one of the calls, and puts what it read
 // on the error. JMAP runs the calls it can, so throwing the whole answer away
 // loses the part that usually says why.
 func TestTheResponseIsNotDropped(t *testing.T) {
-	q, err := query.NewParser(spec.Standard()).Parse("DestroyThread"+query.Extension, []byte(`{
+	q, err := request.NewParser(spec.Standard()).Parse("DestroyThread"+request.Extension, []byte(`{
 	  "methodCalls": [
 	    ["Thread/get", {"ids": ["{{threadId}}"]}, "thread"],
 	    ["Email/set", {"#destroy": {"resultOf": "thread", "name": "Thread/get",
@@ -172,9 +172,9 @@ func TestTheResponseIsNotDropped(t *testing.T) {
 	  ]
 	}`))
 	if err != nil {
-		t.Fatalf("checking the query:\n%v", err)
+		t.Fatalf("checking the request:\n%v", err)
 	}
-	files, err := (&QueryGenerator{Spec: spec.Standard(), Queries: []*query.Query{q}}).Generate()
+	files, err := (&RequestGenerator{Spec: spec.Standard(), Requests: []*request.Request{q}}).Generate()
 	if err != nil {
 		t.Fatalf("generating: %v", err)
 	}
@@ -186,28 +186,28 @@ func TestTheResponseIsNotDropped(t *testing.T) {
 		"failed.result = out",
 	} {
 		if !strings.Contains(src, want) {
-			t.Errorf("the generated query does not contain %q:\n%s", want, src)
+			t.Errorf("the generated request does not contain %q:\n%s", want, src)
 		}
 	}
 }
 
-// TestACreationIDGetsAName checks that the name a query gives a record it
+// TestACreationIDGetsAName checks that the name a request gives a record it
 // creates reaches the caller here too, rather than being a string to repeat.
 func TestACreationIDGetsAName(t *testing.T) {
-	q, err := query.NewParser(spec.Standard()).Parse("CreateMailbox"+query.Extension, []byte(`{
+	q, err := request.NewParser(spec.Standard()).Parse("CreateMailbox"+request.Extension, []byte(`{
 	  "_returns": "make",
 	  "methodCalls": [["Mailbox/set", {"create": {"newMailbox": {"name": "{{name}}"}}}, "make"]]
 	}`))
 	if err != nil {
-		t.Fatalf("checking the query:\n%v", err)
+		t.Fatalf("checking the request:\n%v", err)
 	}
-	files, err := (&QueryGenerator{Spec: spec.Standard(), Queries: []*query.Query{q}}).Generate()
+	files, err := (&RequestGenerator{Spec: spec.Standard(), Requests: []*request.Request{q}}).Generate()
 	if err != nil {
 		t.Fatalf("generating: %v", err)
 	}
 	src := string(files["createMailbox.ts"])
 	if want := `export const createMailboxNewMailbox: Id = "newMailbox"`; !strings.Contains(src, want) {
-		t.Errorf("the generated query does not contain %q:\n%s", want, src)
+		t.Errorf("the generated request does not contain %q:\n%s", want, src)
 	}
 	if !strings.Contains(src, "import type { Id") && !strings.Contains(src, ", Id ") && !strings.Contains(src, ", Id,") {
 		t.Errorf("the module does not bring in the type of the constant:\n%s", src)

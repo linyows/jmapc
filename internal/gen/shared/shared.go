@@ -1,4 +1,4 @@
-// Package shared holds the parts of query generation that do not depend on the
+// Package shared holds the parts of request generation that do not depend on the
 // language being generated: how a comment is wrapped, the prose the generated
 // documentation is written in, which properties a record type holds, and how a
 // name is kept unique.
@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/linyows/jmapc/internal/query"
+	"github.com/linyows/jmapc/internal/request"
 )
 
 // commentWidth is the column the generated comments wrap at, counting the
@@ -85,7 +85,7 @@ func Unique(taken map[string]bool, name string) string {
 }
 
 // RecordProperties returns the properties a record type holds. A /get response
-// always carries the id, whether or not the query asked for it.
+// always carries the id, whether or not the request asked for it.
 func RecordProperties(props []string) []string {
 	for _, p := range props {
 		if p == "id" {
@@ -96,18 +96,18 @@ func RecordProperties(props []string) []string {
 }
 
 // SameNarrowing maps each call that narrows what it fetches to the first call
-// of the query that narrows it the same way, and a call that is the first to
+// of the request that narrows it the same way, and a call that is the first to
 // itself. A call that narrows nothing is not in the map at all.
 //
-// Two calls of one query reading the same type through the same method and
+// Two calls of one request reading the same type through the same method and
 // asking for the same properties describe one record, so generating a type for
 // each would be two names for one shape, and a caller passing a record from one
 // to a function written for the other would have to convert between them. The
 // property lists have to agree in order as well as in content, since the order
 // is the order the generated fields are written in.
-func SameNarrowing(calls []*query.Call) map[*query.Call]*query.Call {
-	first := make(map[string]*query.Call, len(calls))
-	out := make(map[*query.Call]*query.Call, len(calls))
+func SameNarrowing(calls []*request.Call) map[*request.Call]*request.Call {
+	first := make(map[string]*request.Call, len(calls))
+	out := make(map[*request.Call]*request.Call, len(calls))
 	for _, c := range calls {
 		if c.Properties == nil && c.NestedProperties == nil {
 			continue
@@ -136,12 +136,12 @@ func SameNarrowing(calls []*query.Call) map[*query.Call]*query.Call {
 type Creation struct {
 	// Name is the identifier the constant goes by.
 	Name string
-	// ID is the creation id as the query wrote it.
+	// ID is the creation id as the request wrote it.
 	ID string
 }
 
-// Creations names the creation ids a query invents, keeping the names unique
-// among everything else the file declares. Renaming one in the query renames
+// Creations names the creation ids a request invents, keeping the names unique
+// among everything else the file declares. Renaming one in the request renames
 // the constant with it, which is what turns a rename into a compile error
 // rather than a lookup that quietly misses.
 func Creations(taken map[string]bool, prefix string, ids []string, name func(string) string) []Creation {

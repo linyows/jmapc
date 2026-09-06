@@ -168,7 +168,7 @@ func TestPropertyNamesAreOffered(t *testing.T) {
 }
 
 // TestVendorExtensionsAreDescribed checks that a server's own types are
-// described like any other, since a query against them is checked like any
+// described like any other, since a request against them is checked like any
 // other.
 func TestVendorExtensionsAreDescribed(t *testing.T) {
 	dir := t.TempDir()
