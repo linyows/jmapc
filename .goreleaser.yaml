@@ -49,31 +49,17 @@ archives:
 checksum:
   name_template: checksums.txt
 
+# The release notes are written by hand, in CHANGELOG.md, and the workflow
+# passes the section for the tag to goreleaser. A list of commit subjects says
+# what was done and not what it means for the code that uses this, and it
+# cannot separate a breaking change from the rest.
 changelog:
-  sort: asc
-  use: github
-  groups:
-    - title: Changes
-      order: 0
-  filters:
-    exclude:
-      - "^ci:"
-      - "^docs:"
-      - "^test:"
-      - "^Merge pull request"
+  disable: true
 
 release:
   # The tag is pushed once the work is on main, so the release is not a draft.
   draft: false
   prerelease: auto
-  footer: |
-    ## Install
-
-    The generator is a Go tool, and what it generates is Go, so the usual way
-    is to record it in the module that uses it:
-
-    ```
-    go get -tool github.com/linyows/jmapc/cmd/jmapc@{{ .Tag }}
-    ```
-
-    Binaries are attached below for anyone without a Go toolchain.
+  # The notes, the install section included, are the file the workflow builds
+  # and passes with --release-notes. A header or a footer here would be part
+  # of a changelog this no longer generates.

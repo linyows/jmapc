@@ -1304,6 +1304,12 @@ them against what the catalogue produces now, so a change to the data model
 that was not regenerated fails the build rather than going unnoticed. CI runs
 the same checks, plus gofmt, go vet, and govulncheck.
 
+A release is a tag pushed once the work is on main, and its notes are the
+section of [CHANGELOG.md](CHANGELOG.md) for that tag: what changed, grouped by
+what it means for the code that uses this, with the breaking changes first.
+Write that section before the tag. A tag with no section fails the release
+rather than publishing an empty one.
+
 ## Coverage
 
 JMAP is a family of specifications: a server advertises capability URIs, and
