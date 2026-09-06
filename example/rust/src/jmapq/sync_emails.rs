@@ -17,11 +17,11 @@ pub struct SyncEmailsParams {
     pub since_state: String,
 }
 
-/// SyncEmailsEmail holds the properties of Email that the Email/get call in
-/// SyncEmails asks for.
+/// SyncEmailsCreatedEmail holds the properties of Email that the Email/get
+/// call in SyncEmails asks for.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SyncEmailsEmail {
+pub struct SyncEmailsCreatedEmail {
     /// The id of the email.
     pub id: Id,
 
@@ -46,11 +46,11 @@ pub struct SyncEmailsEmail {
     pub received_at: UtcDate,
 }
 
-/// SyncEmailsEmail2 holds the properties of Email that the Email/get call in
-/// SyncEmails asks for.
+/// SyncEmailsUpdatedEmail holds the properties of Email that the Email/get
+/// call in SyncEmails asks for.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SyncEmailsEmail2 {
+pub struct SyncEmailsUpdatedEmail {
     /// The id of the email.
     pub id: Id,
 
@@ -78,7 +78,7 @@ pub struct SyncEmailsCreatedResponse {
 
     /// The records that were found, in an undefined order.
     #[serde(default)]
-    pub list: Vec<SyncEmailsEmail>,
+    pub list: Vec<SyncEmailsCreatedEmail>,
 
     /// The ids that were requested but do not exist.
     #[serde(default)]
@@ -99,7 +99,7 @@ pub struct SyncEmailsUpdatedResponse {
 
     /// The records that were found, in an undefined order.
     #[serde(default)]
-    pub list: Vec<SyncEmailsEmail2>,
+    pub list: Vec<SyncEmailsUpdatedEmail>,
 
     /// The ids that were requested but do not exist.
     #[serde(default)]

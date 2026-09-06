@@ -18,9 +18,9 @@ type WhatUsesBlobParams struct {
 	BlobID jmapc.ID
 }
 
-// WhatUsesBlobBlobData holds the properties of BlobData that the Blob/get
+// WhatUsesBlobPeekBlobData holds the properties of BlobData that the Blob/get
 // call in WhatUsesBlob asks for.
-type WhatUsesBlobBlobData struct {
+type WhatUsesBlobPeekBlobData struct {
 	// The id of the blob.
 	ID jmapc.ID `json:"id"`
 
@@ -41,7 +41,7 @@ type WhatUsesBlobPeekResponse struct {
 	AccountID jmapc.ID `json:"accountId"`
 
 	// The blobs that were found.
-	List []WhatUsesBlobBlobData `json:"list"`
+	List []WhatUsesBlobPeekBlobData `json:"list"`
 
 	// The ids that were requested but do not exist.
 	NotFound []jmapc.ID `json:"notFound"`

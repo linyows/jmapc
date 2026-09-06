@@ -26,9 +26,9 @@ type AgendaParams struct {
 	TimeZone jmapc.TimeZoneID
 }
 
-// AgendaCalendarEvent holds the properties of CalendarEvent that the
+// AgendaFetchCalendarEvent holds the properties of CalendarEvent that the
 // CalendarEvent/get call in Agenda asks for.
-type AgendaCalendarEvent struct {
+type AgendaFetchCalendarEvent struct {
 	// The id of the event.
 	ID jmapc.ID `json:"id"`
 
@@ -71,7 +71,7 @@ type AgendaFetchResponse struct {
 	State string `json:"state"`
 
 	// The records that were found, in an undefined order.
-	List []AgendaCalendarEvent `json:"list"`
+	List []AgendaFetchCalendarEvent `json:"list"`
 
 	// The ids that were requested but do not exist.
 	NotFound []jmapc.ID `json:"notFound"`

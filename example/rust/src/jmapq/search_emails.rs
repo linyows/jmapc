@@ -25,11 +25,11 @@ pub struct SearchEmailsParams {
     pub position: i64,
 }
 
-/// SearchEmailsEmail holds the properties of Email that the Email/get call in
-/// SearchEmails asks for.
+/// SearchEmailsFetchEmail holds the properties of Email that the Email/get
+/// call in SearchEmails asks for.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SearchEmailsEmail {
+pub struct SearchEmailsFetchEmail {
     /// The id of the email.
     pub id: Id,
 
@@ -60,7 +60,7 @@ pub struct SearchEmailsFetchResponse {
 
     /// The records that were found, in an undefined order.
     #[serde(default)]
-    pub list: Vec<SearchEmailsEmail>,
+    pub list: Vec<SearchEmailsFetchEmail>,
 
     /// The ids that were requested but do not exist.
     #[serde(default)]

@@ -373,10 +373,12 @@ func TestOneShapeIsOneType(t *testing.T) {
 	    ["Email/get", {"ids": ["{{b}}"], "properties": ["id", "subject"]}, "two"]
 	  ]
 	}`)
-	if strings.Contains(src, "TwoReadsEmail2") {
+	if strings.Contains(src, "TwoReadsTwoEmail") {
 		t.Errorf("the same shape was given a second type:\n%s", src)
 	}
-	if n := strings.Count(src, "type TwoReadsEmail struct {"); n != 1 {
+	// The shape is named after the first call that reads it, and the second
+	// call reads the same type rather than one of its own.
+	if n := strings.Count(src, "type TwoReadsOneEmail struct {"); n != 1 {
 		t.Errorf("the record type is declared %d times, want 1:\n%s", n, src)
 	}
 	if n := strings.Count(src, "type TwoReadsOneResponse struct {"); n != 1 {
@@ -403,8 +405,10 @@ func TestDifferentShapesKeepTheirOwnTypes(t *testing.T) {
 	    ["Email/get", {"ids": ["{{b}}"], "properties": ["id", "threadId"]}, "two"]
 	  ]
 	}`)
-	if !strings.Contains(src, "type TwoReadsEmail2 struct {") {
-		t.Errorf("two shapes were given one type:\n%s", src)
+	for _, want := range []string{"type TwoReadsOneEmail struct {", "type TwoReadsTwoEmail struct {"} {
+		if !strings.Contains(src, want) {
+			t.Errorf("two shapes were given one type, and %q is missing:\n%s", want, src)
+		}
 	}
 
 	bodies := generateOne(t, "TwoBodies", `{
@@ -413,8 +417,10 @@ func TestDifferentShapesKeepTheirOwnTypes(t *testing.T) {
 	    ["Email/get", {"ids": ["{{b}}"], "properties": ["id"], "bodyProperties": ["partId", "size"]}, "two"]
 	  ]
 	}`)
-	if !strings.Contains(bodies, "type TwoBodiesEmailBodyPart2 struct {") {
-		t.Errorf("two body shapes were given one type:\n%s", bodies)
+	for _, want := range []string{"type TwoBodiesOneEmailBodyPart struct {", "type TwoBodiesTwoEmailBodyPart struct {"} {
+		if !strings.Contains(bodies, want) {
+			t.Errorf("two body shapes were given one type, and %q is missing:\n%s", want, bodies)
+		}
 	}
 }
 
@@ -515,4 +521,51 @@ func TestAWholeFilterIsTyped(t *testing.T) {
 	if strings.Contains(src, "Filter any") {
 		t.Errorf("the filter parameter is still an any:\n%s", src)
 	}
+}
+
+// TestARecordKeepsItsNameWhenACallIsInserted is why a record is named after
+// the call that read it. Numbering the types by the position of the call meant
+// that inserting one moved a name onto a different shape, which a caller only
+// found out about where the two shapes differed enough to stop compiling.
+func TestARecordKeepsItsNameWhenACallIsInserted(t *testing.T) {
+	before := generateOne(t, "Q", `{
+	  "methodCalls": [
+	    ["Email/get", {"ids": ["{{a}}"], "properties": ["id", "subject"]}, "one"],
+	    ["Email/get", {"ids": ["{{b}}"], "properties": ["id", "keywords"]}, "two"]
+	  ]
+	}`)
+	after := generateOne(t, "Q", `{
+	  "methodCalls": [
+	    ["Email/get", {"ids": ["{{c}}"], "properties": ["id", "from"]}, "zero"],
+	    ["Email/get", {"ids": ["{{a}}"], "properties": ["id", "subject"]}, "one"],
+	    ["Email/get", {"ids": ["{{b}}"], "properties": ["id", "keywords"]}, "two"]
+	  ]
+	}`)
+	for _, want := range []string{"type QOneEmail struct {", "type QTwoEmail struct {"} {
+		if !strings.Contains(before, want) {
+			t.Fatalf("the query does not declare %q:\n%s", want, before)
+		}
+		if !strings.Contains(after, want) {
+			t.Errorf("inserting a call ahead of the others took %q away:\n%s", want, after)
+		}
+	}
+	// The shape each name stands for is the same before and after.
+	if !strings.Contains(shapeOf(t, before, "QOneEmail"), "Subject") ||
+		!strings.Contains(shapeOf(t, after, "QOneEmail"), "Subject") {
+		t.Error("QOneEmail no longer holds the subject the call it is named after asked for")
+	}
+}
+
+// shapeOf returns the body of a generated struct declaration.
+func shapeOf(t *testing.T, src, name string) string {
+	t.Helper()
+	start := strings.Index(src, "type "+name+" struct {")
+	if start < 0 {
+		t.Fatalf("%s is not declared:\n%s", name, src)
+	}
+	end := strings.Index(src[start:], "\n}")
+	if end < 0 {
+		t.Fatalf("%s is not closed:\n%s", name, src)
+	}
+	return src[start : start+end]
 }

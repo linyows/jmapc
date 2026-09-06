@@ -130,14 +130,14 @@ func (g *QueryGenerator) plan() ([]*plan, error) {
 				*info = *p.calls[same[c]]
 				info.writesTypes = false
 			case c.Properties != nil || c.NestedProperties != nil:
-				info.recordType = shared.Unique(taken, q.Name+spec.ExportedName(c.Method.DataType))
+				info.recordType = shared.Unique(taken, q.Name+c.Field+spec.ExportedName(c.Method.DataType))
 				info.responseType = shared.Unique(taken, q.Name+c.Field+"Response")
 				info.writesTypes = true
 			default:
 				info.responseType = g.Qualifier + spec.ExportedName(c.Method.Response)
 			}
 			if c.NestedProperties != nil && info.writesTypes {
-				info.nestedType = shared.Unique(taken, q.Name+spec.ExportedName(c.Method.NestedType))
+				info.nestedType = shared.Unique(taken, q.Name+c.Field+spec.ExportedName(c.Method.NestedType))
 			}
 			p.calls[c] = info
 		}

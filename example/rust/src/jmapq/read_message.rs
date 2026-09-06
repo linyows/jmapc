@@ -18,11 +18,11 @@ pub struct ReadMessageParams {
     pub email_id: Id,
 }
 
-/// ReadMessageEmailBodyPart holds the properties of EmailBodyPart that the
-/// Email/get call in ReadMessage asks for.
+/// ReadMessageFetchEmailBodyPart holds the properties of EmailBodyPart that
+/// the Email/get call in ReadMessage asks for.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ReadMessageEmailBodyPart {
+pub struct ReadMessageFetchEmailBodyPart {
     /// Identifies the part's content within the bodyValues map, or null if
     /// the part has no body of its own.
     #[serde(default)]
@@ -57,14 +57,14 @@ pub struct ReadMessageEmailBodyPart {
 
     /// The parts of a multipart part, or null if this part is not multipart.
     #[serde(default)]
-    pub sub_parts: Option<Vec<ReadMessageEmailBodyPart>>,
+    pub sub_parts: Option<Vec<ReadMessageFetchEmailBodyPart>>,
 }
 
-/// ReadMessageEmail holds the properties of Email that the Email/get call in
-/// ReadMessage asks for.
+/// ReadMessageFetchEmail holds the properties of Email that the Email/get
+/// call in ReadMessage asks for.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ReadMessageEmail {
+pub struct ReadMessageFetchEmail {
     /// The id of the email.
     pub id: Id,
 
@@ -85,19 +85,19 @@ pub struct ReadMessageEmail {
     pub received_at: UtcDate,
 
     /// The full MIME structure of the message body.
-    pub body_structure: ReadMessageEmailBodyPart,
+    pub body_structure: ReadMessageFetchEmailBodyPart,
 
     /// The parts to display as the plain-text body of the message.
     #[serde(default)]
-    pub text_body: Vec<ReadMessageEmailBodyPart>,
+    pub text_body: Vec<ReadMessageFetchEmailBodyPart>,
 
     /// The parts to display as the HTML body of the message.
     #[serde(default)]
-    pub html_body: Vec<ReadMessageEmailBodyPart>,
+    pub html_body: Vec<ReadMessageFetchEmailBodyPart>,
 
     /// The parts to present as attachments rather than as body content.
     #[serde(default)]
-    pub attachments: Vec<ReadMessageEmailBodyPart>,
+    pub attachments: Vec<ReadMessageFetchEmailBodyPart>,
 
     /// The decoded content of the body parts that were fetched, keyed by
     /// partId.
@@ -134,7 +134,7 @@ pub struct ReadMessageFetchResponse {
 
     /// The records that were found, in an undefined order.
     #[serde(default)]
-    pub list: Vec<ReadMessageEmail>,
+    pub list: Vec<ReadMessageFetchEmail>,
 
     /// The ids that were requested but do not exist.
     #[serde(default)]

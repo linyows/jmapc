@@ -19,9 +19,9 @@ type ListInboxEmailsParams struct {
 	Limit jmapc.UnsignedInt
 }
 
-// ListInboxEmailsEmail holds the properties of Email that the Email/get call
-// in ListInboxEmails asks for.
-type ListInboxEmailsEmail struct {
+// ListInboxEmailsFetchEmail holds the properties of Email that the Email/get
+// call in ListInboxEmails asks for.
+type ListInboxEmailsFetchEmail struct {
 	// The id of the email.
 	ID jmapc.ID `json:"id"`
 
@@ -57,7 +57,7 @@ type ListInboxEmailsFetchResponse struct {
 	State string `json:"state"`
 
 	// The records that were found, in an undefined order.
-	List []ListInboxEmailsEmail `json:"list"`
+	List []ListInboxEmailsFetchEmail `json:"list"`
 
 	// The ids that were requested but do not exist.
 	NotFound []jmapc.ID `json:"notFound"`

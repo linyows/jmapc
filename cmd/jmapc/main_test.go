@@ -215,7 +215,7 @@ func TestSchemaExtendsTheModel(t *testing.T) {
 	}
 	for _, want := range []string{
 		`"urn:example:params:jmap:notes"`,
-		"type FindNotesNote struct",
+		"type FindNotesFetchNote struct",
 		`Title string ` + "`json:\"title\"`",
 	} {
 		if !strings.Contains(string(src), want) {

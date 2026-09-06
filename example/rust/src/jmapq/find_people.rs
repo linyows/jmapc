@@ -18,11 +18,11 @@ pub struct FindPeopleParams {
     pub limit: Option<u64>,
 }
 
-/// FindPeoplePrincipal holds the properties of Principal that the
+/// FindPeopleFetchPrincipal holds the properties of Principal that the
 /// Principal/get call in FindPeople asks for.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct FindPeoplePrincipal {
+pub struct FindPeopleFetchPrincipal {
     /// The id of the principal.
     pub id: Id,
 
@@ -57,7 +57,7 @@ pub struct FindPeopleFetchResponse {
 
     /// The records that were found, in an undefined order.
     #[serde(default)]
-    pub list: Vec<FindPeoplePrincipal>,
+    pub list: Vec<FindPeopleFetchPrincipal>,
 
     /// The ids that were requested but do not exist.
     #[serde(default)]

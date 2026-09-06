@@ -7,11 +7,11 @@ use serde_json::json;
 use super::client::{decode, Client, Error, Invocation, Request, Transport};
 use super::types::Id;
 
-/// MailQuotaQuota holds the properties of Quota that the Quota/get call in
-/// MailQuota asks for.
+/// MailQuotaFetchQuota holds the properties of Quota that the Quota/get call
+/// in MailQuota asks for.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MailQuotaQuota {
+pub struct MailQuotaFetchQuota {
     /// The id of the quota.
     pub id: Id,
 
@@ -61,7 +61,7 @@ pub struct MailQuotaFetchResponse {
 
     /// The records that were found, in an undefined order.
     #[serde(default)]
-    pub list: Vec<MailQuotaQuota>,
+    pub list: Vec<MailQuotaFetchQuota>,
 
     /// The ids that were requested but do not exist.
     #[serde(default)]

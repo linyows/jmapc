@@ -174,7 +174,7 @@ for _, email := range res.List {
 }
 ```
 
-`res.List` is `[]ListInboxEmailsEmail`, holding the four properties the query
+`res.List` is `[]ListInboxEmailsFetchEmail`, holding the four properties the query
 asked for and nothing else. Ask for another property and the struct grows; ask
 for one that does not exist and the build fails, with a suggestion.
 
@@ -193,7 +193,7 @@ identifier: letters, digits and underscores, not starting with a digit.
 | --- | --- |
 | The function | `ListInboxEmails` |
 | Its parameters, where the query leaves any open | `ListInboxEmailsParams` |
-| A record whose properties the query narrows | `ListInboxEmailsEmail`, and `ListInboxEmailsEmailBodyPart` for a narrowed body part |
+| A record whose properties the query narrows | `ListInboxEmailsFetchEmail`, after the call id `fetch`, and `ListInboxEmailsFetchEmailBodyPart` for a narrowed body part |
 | The response to a call returning that record | `ListInboxEmailsFetchResponse`, after the call id `fetch` |
 | The result, where `_returns` names no call | `ListInboxEmailsResult` |
 | The function that follows changes, where the query is watched | `SyncEmailsWatch` |
@@ -201,10 +201,10 @@ identifier: letters, digits and underscores, not starting with a digit.
 | The file | `listinboxemails_gen.go` |
 
 The call ids are the names in the generated code: a result holds one field per
-call, named after the id the query gave it, and the response type of a call
-that narrows is named the same way. Nothing is numbered by position, since a
-call id is unique within a request already and inserting a call ahead of
-another would otherwise move a name onto a different call:
+call, named after the id the query gave it, and the record and response types
+of a call that narrows are named the same way. Nothing is numbered by position,
+since a call id is unique within a request already and inserting a call ahead
+of another would otherwise move a name onto a different shape:
 
 ```json
 ["Email/query", {...}, "search"],
@@ -222,12 +222,15 @@ to the method it invokes.
 A call the query does not narrow answers with the shared type instead, so
 `SendEmail` returns `*jmapc.EmailSubmissionSetResponse`. Two queries in one
 package cannot take the same name, and a generated type whose name is already
-taken gains a number: `ListInboxEmailsEmail2`.
+taken gains a number: `ListInboxEmailsFetchEmail2`.
 
 Two calls of one query that read the same type through the same method and ask
-for the same properties describe one record, so they share one type. Two names
-for one shape would make a caller convert between them to hand a record from
-one call to a function written for the other.
+for the same properties describe one record, so they share one type, named
+after the first of them. Two names for one shape would make a caller convert
+between them to hand a record from one call to a function written for the
+other. Inserting a call that reads that same shape ahead of both moves the name
+to the new call, which the build reports; the shape a name stands for does not
+change.
 
 A `/set` that creates gets a constant for each name it gives a record, since
 the response reports the record back under that name:

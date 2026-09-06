@@ -13,9 +13,9 @@ export interface VerifiedSignaturesParams {
   limit: number
 }
 
-// VerifiedSignaturesEmail holds the properties of Email that the Email/get
-// call in VerifiedSignatures asks for.
-export interface VerifiedSignaturesEmail {
+// VerifiedSignaturesFetchEmail holds the properties of Email that the
+// Email/get call in VerifiedSignatures asks for.
+export interface VerifiedSignaturesFetchEmail {
   // The id of the email.
   id: Id
 
@@ -62,7 +62,7 @@ export interface VerifiedSignaturesFetchResponse {
   state: string
 
   // The records that were found, in an undefined order.
-  list: VerifiedSignaturesEmail[]
+  list: VerifiedSignaturesFetchEmail[]
 
   // The ids that were requested but do not exist.
   notFound: Id[]

@@ -20,9 +20,9 @@ export interface AgendaParams {
   timeZone: TimeZoneId
 }
 
-// AgendaCalendarEvent holds the properties of CalendarEvent that the
+// AgendaFetchCalendarEvent holds the properties of CalendarEvent that the
 // CalendarEvent/get call in Agenda asks for.
-export interface AgendaCalendarEvent {
+export interface AgendaFetchCalendarEvent {
   // The id of the event.
   id: Id
 
@@ -65,7 +65,7 @@ export interface AgendaFetchResponse {
   state: string
 
   // The records that were found, in an undefined order.
-  list: AgendaCalendarEvent[]
+  list: AgendaFetchCalendarEvent[]
 
   // The ids that were requested but do not exist.
   notFound: Id[]
