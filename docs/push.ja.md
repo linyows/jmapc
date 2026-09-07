@@ -48,6 +48,36 @@ err := client.SyncEmailsWatch(ctx, c, client.SyncEmailsParams{SinceState: state}
 接続を明確に拒んだサーバのエラーは、待たずに返します。403 は待っても変わらないからです。
 `jmapc.WithPing` と `jmapc.WithReconnect` が、調整する価値のある二つです。
 
+十分に長く止まっていた後で再開したウォッチは、そのままでは先へ進めないエラーに出会います。
+`/changes` は、渡された state がサーバの保持する範囲より古いときに `cannotCalculateChanges` を返します。
+同じ state で問い直しても答えは変わりません。
+RFC 8620 はこの場合にレコードを取り直すことを求めていて、`jmapc.WithResync` がその置き場所です。
+
+```go
+err := client.SyncEmailsWatch(ctx, c, client.SyncEmailsParams{SinceState: state},
+	func(ctx context.Context, res *client.SyncEmailsResult) error {
+		state = res.Changes.NewState
+		return nil
+	},
+	jmapc.WithResync(func(ctx context.Context) (string, error) {
+		res, err := client.ListInboxEmails(ctx, c, client.ListInboxEmailsParams{
+			MailboxID: inbox,
+			Limit:     500,
+		})
+		if err != nil {
+			return "", err
+		}
+		cache.replace(res.List)
+		return res.State, nil
+	}))
+```
+
+ウォッチは、この関数が報告した state から続きます。
+渡さなかった場合、ウォッチはこのエラーを返して止まります。
+変更を追っていたプログラムは追わなくなり、それを伝えるものはそのエラーだけです。
+再同期が報告したばかりの state からもサーバが変更を計算できない場合は、ウォッチは止まります。
+もう一度取り直しても同じ state を報告し、同じ答えに出会うだけだからです。
+
 その下にあるのが `Client.Watch` で、追いつき方を関数で受け取ります。
 追いつきが一つのリクエストで済まないときは、これを直接呼びます。
 

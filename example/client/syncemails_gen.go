@@ -171,6 +171,11 @@ func SyncEmails(ctx context.Context, c *jmapc.Client, p SyncEmailsParams) (*Sync
 // from fn stops it and is returned unchanged. A dropped connection is not an
 // error: the loop opens another, resuming from the last event delivered, and
 // requests the changes made while no connection was open.
+//
+// A server that can no longer say what changed since the state it is given
+// answers cannotCalculateChanges, which stops the loop. jmapc.WithResync,
+// passed among the options, gives it a way back: read the records again and
+// report the state they were read at.
 func SyncEmailsWatch(ctx context.Context, c *jmapc.Client, p SyncEmailsParams, fn func(context.Context, *SyncEmailsResult) error, opts ...jmapc.WatchOption) error {
 	session, err := c.Session(ctx)
 	if err != nil {

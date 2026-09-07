@@ -430,6 +430,8 @@ func (g *RequestGenerator) writeWatchDoc(buf *bytes.Buffer, p *plan) {
 		p.q.WatchState.Name)
 	doc += "\n\nIt runs until the context ends, which is the error it returns; an error from fn stops it and is returned unchanged. " +
 		"A dropped connection is not an error: the loop opens another, resuming from the last event delivered, and requests the changes made while no connection was open."
+	doc += "\n\nA server that can no longer say what changed since the state it is given answers cannotCalculateChanges, which stops the loop. " +
+		"jmapc.WithResync, passed among the options, gives it a way back: read the records again and report the state they were read at."
 	shared.WriteComment(buf, "", doc)
 }
 
