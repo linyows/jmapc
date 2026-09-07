@@ -34,3 +34,7 @@ section of [CHANGELOG.md](../CHANGELOG.md) for that tag: what changed, grouped b
 what it means for the code that uses this, with the breaking changes first.
 Write that section before the tag. A tag with no section fails the release
 rather than publishing an empty one.
+
+Write each entry on one line, however long it is. GitHub renders a release body
+with the line breaks it was given, so a paragraph wrapped at 80 columns is a
+paragraph broken at 80 columns on the release page.
