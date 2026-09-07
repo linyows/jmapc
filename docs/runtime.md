@@ -99,6 +99,50 @@ In TypeScript the same failure is a thrown `SetErrors`, with the response on
 `err.result`. In Rust it is an `Error::Set`, and the response is retrieved with
 the type the function would have returned, through `err.result::<T>()`.
 
+### Deciding what to do with a failure
+
+A failure arrives as an error, and what to do with it depends on what the server
+said. Three functions answer that without the caller picking apart error types
+and status codes:
+
+```go
+res, err := client.SendEmail(ctx, c, params)
+if err != nil {
+    if d, ok := jmapc.RetryAfter(err); ok {
+        return job.again(d) // the server said when to come back
+    }
+    if jmapc.IsTemporary(err) {
+        return job.again(backoff(job.attempts))
+    }
+    return job.fail(err) // the request itself is wrong, and sending it again
+                         // gets the same answer
+}
+```
+
+`IsTemporary` is false for what the server reported about the request — a 4xx
+that is not a 429, and a method or record error such as `invalidArguments` or
+`invalidProperties` — and true for what it reported about itself: a 5xx, a 429,
+`serverUnavailable`, `serverFail`, `rateLimit`. A failure that cannot be
+classified, such as a request that never reached the server, is temporary, since
+nothing about it says the next attempt will fail as well. Where a request failed
+for several reasons at once, one reason that will not pass with time makes the
+whole of it permanent.
+
+It says what to do with a failure, not whether the request is safe to send
+again. A request that failed in transit may have been carried out, and a `/set`
+sent twice creates twice, which is why `RetryPolicy` retries a 429 and a 503 and
+nothing else by default.
+
+`IsRateLimited` picks out the server asking for fewer requests, which arrives in
+three shapes: a 429, a `rateLimit` reported for a call or a record, and a 400
+refusing the request for exceeding `maxConcurrentRequests` or
+`maxConcurrentUpload`.
+
+`RetryAfter` returns the delay the server asked for, and whether it asked. The
+client waits out a short one itself where the retry policy allows another
+attempt; this is how a long one reaches the caller, since a server asking for an
+hour is not waited out.
+
 ### The session object
 
 The session here is the Session object of RFC 8620, Section 2: the document a

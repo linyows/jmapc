@@ -2,10 +2,12 @@ package jmapc
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 )
 
 // RequestError is a request-level error as defined in RFC 8620, Section 3.6.1.
@@ -24,6 +26,11 @@ type RequestError struct {
 	// Limit names the exceeded limit when Type is
 	// "urn:ietf:params:jmap:error:limit".
 	Limit string `json:"limit,omitempty"`
+	// RetryAfter is how long the server asked the client to wait before
+	// sending the request again, and zero where it asked for no particular
+	// delay. It comes from the Retry-After header rather than from the
+	// problem details document, which is why it carries no JSON name.
+	RetryAfter time.Duration `json:"-"`
 }
 
 func (e *RequestError) Error() string {
@@ -267,4 +274,137 @@ func (e *SetErrors) Unwrap() []error {
 		errs[i] = f
 	}
 	return errs
+}
+
+// temporaryTypes are the error types a server reports for its own trouble
+// rather than for the request: it is unavailable, it failed, it failed part way
+// through, or it is being asked too often. Every other type JMAP defines
+// reports something about the request, and the answer to sending that request
+// again is the same, so a type that is not here is taken to be one that time
+// does not resolve. That applies to the types a vendor defines too, which are
+// almost always refusals of the request.
+var temporaryTypes = map[string]bool{
+	ErrServerUnavailable: true,
+	ErrServerFail:        true,
+	ErrServerPartialFail: true,
+	ErrRateLimit:         true,
+}
+
+// concurrencyLimits are the limits a request exceeds by being one request too
+// many at that moment, rather than by being too large. The server answers 400
+// for them, not 429, so a caller looking only at the status does not see that
+// it was asked to send fewer.
+var concurrencyLimits = map[string]bool{
+	"maxConcurrentRequests": true,
+	"maxConcurrentUpload":   true,
+}
+
+// IsTemporary reports whether err is a failure that time may resolve: the
+// server was unavailable, it failed, it asked for fewer requests, or the
+// request never reached it. It is false for a failure the server reported about
+// the request itself, which is the same however long the caller waits.
+//
+// It answers what to do with a failure, not whether the request is safe to send
+// again. A request that failed in transit may have been carried out, and a /set
+// sent twice creates twice; RetryPolicy is where that judgement belongs.
+//
+// A failure jmapc cannot classify is temporary, since nothing about it says the
+// next attempt will fail as well. A nil error is not a failure and is false.
+func IsTemporary(err error) bool {
+	if err == nil {
+		return false
+	}
+	classified, temporary := false, true
+
+	var reqErr *RequestError
+	if errors.As(err, &reqErr) {
+		classified = true
+		if !(reqErr.Status >= 500 || reqErr.Status == http.StatusTooManyRequests) {
+			temporary = false
+		}
+	}
+	for _, kind := range errorTypes(err) {
+		classified = true
+		if !temporaryTypes[kind] {
+			temporary = false
+		}
+	}
+	if !classified {
+		return true
+	}
+	return temporary
+}
+
+// IsRateLimited reports whether err is the server asking for fewer requests: a
+// 429, a rateLimit reported for a method call or for one record of a /set, or a
+// request refused for exceeding one of the concurrency limits the session
+// states.
+//
+// It is what tells a client that is being asked to slow down from one that is
+// being told it is wrong, both of which arrive as a failed request.
+func IsRateLimited(err error) bool {
+	var reqErr *RequestError
+	if errors.As(err, &reqErr) {
+		if reqErr.Status == http.StatusTooManyRequests {
+			return true
+		}
+		if reqErr.Type == ErrTypeLimit && concurrencyLimits[reqErr.Limit] {
+			return true
+		}
+	}
+	for _, kind := range errorTypes(err) {
+		if kind == ErrRateLimit {
+			return true
+		}
+	}
+	return false
+}
+
+// RetryAfter returns how long the server asked the client to wait before
+// sending the request again, and whether it asked at all. It is the Retry-After
+// header, which a server sends with a 429 or a 503, read as the seconds or the
+// date RFC 9110 writes it as.
+//
+// The client waits out a short delay itself where the retry policy allows
+// another attempt. This is how the caller learns of a long one: a server asking
+// for an hour is not waited out, because holding a request in memory for that
+// long is of no use to the caller, and the request is failed with the delay it
+// asked for attached.
+func RetryAfter(err error) (time.Duration, bool) {
+	var reqErr *RequestError
+	if errors.As(err, &reqErr) && reqErr.RetryAfter > 0 {
+		return reqErr.RetryAfter, true
+	}
+	return 0, false
+}
+
+// errorTypes returns the error type of every method-level and record-level
+// failure err carries. A request whose calls failed for different reasons is
+// classified by all of them, since the server answers a caller that sends it
+// again with every one of those reasons.
+func errorTypes(err error) []string {
+	var types []string
+	var methods MethodErrors
+	if errors.As(err, &methods) {
+		for _, m := range methods {
+			types = append(types, m.Type)
+		}
+	} else {
+		var method *MethodError
+		if errors.As(err, &method) {
+			types = append(types, method.Type)
+		}
+	}
+	var sets *SetErrors
+	if errors.As(err, &sets) {
+		for _, f := range sets.Failures {
+			types = append(types, f.Err.Type)
+		}
+	} else {
+		var set *SetError
+		if errors.As(err, &set) {
+			types = append(types, set.Type)
+		}
+	}
+	return types
 }

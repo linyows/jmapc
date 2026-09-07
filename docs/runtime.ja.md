@@ -96,6 +96,42 @@ if err != nil {
 TypeScript では同じ失敗が `SetErrors` の throw になり、レスポンスは `err.result` に載ります。
 Rust では `Error::Set` になり、レスポンスは関数が返すはずだった型を指定して `err.result::<T>()` で取り出します。
 
+### 失敗にどう対処するかを決める
+
+失敗はエラーとして届きますが、どうすべきかはサーバが何を述べたかで決まります。
+呼び出し側がエラー型やステータスコードを自分で解きほぐさずに済むよう、三つの関数がそれに答えます。
+
+```go
+res, err := client.SendEmail(ctx, c, params)
+if err != nil {
+    if d, ok := jmapc.RetryAfter(err); ok {
+        return job.again(d) // サーバがいつ戻ってくればよいか述べた
+    }
+    if jmapc.IsTemporary(err) {
+        return job.again(backoff(job.attempts))
+    }
+    return job.fail(err) // リクエスト自体が誤っていて、送り直しても答えは同じ
+}
+```
+
+`IsTemporary` は、サーバがリクエストについて述べたもの（429 以外の 4xx、`invalidArguments` や `invalidProperties` のようなメソッドやレコードのエラー）に対して false を返します。
+サーバが自分自身について述べたもの（5xx、429、`serverUnavailable`、`serverFail`、`rateLimit`）には true を返します。
+サーバに届かなかったリクエストのように分類できない失敗は一時的として扱います。
+次の試みも失敗すると言えるものが何もないからです。
+一つのリクエストが複数の理由で失敗した場合、時間で解消しない理由が一つでもあれば全体が恒久的な失敗になります。
+
+これが答えるのは失敗にどう対処するかであって、そのリクエストを送り直して安全かではありません。
+転送中に失敗したリクエストは実行済みかもしれませんし、`/set` を二度送れば二つ作られます。
+`RetryPolicy` が既定で 429 と 503 だけを送り直すのはそのためです。
+
+`IsRateLimited` は、サーバが「もっと少なく送れ」と述べている場合を取り出します。
+これは三つの形で届きます。
+429、呼び出しやレコードに対する `rateLimit`、そして `maxConcurrentRequests` や `maxConcurrentUpload` の超過を理由に 400 で拒否される場合です。
+
+`RetryAfter` は、サーバが求めた待ち時間と、そもそも求めたかどうかを返します。
+再送方針がもう一度の試行を許す場合、短い待ち時間はクライアントが自分で消化します。
+長いものが呼び出し側に届くのはこの関数を通してで、一時間待てというサーバの求めは消化されないからです。
+
 ### Session オブジェクト
 
 ここでいうセッションは、RFC 8620 の Section 2 が Session オブジェクトと呼ぶものです。
