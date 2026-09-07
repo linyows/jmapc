@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use super::client::{decode, Client, Error, Invocation, Request, Transport};
-use super::types::{EmailAddress, EmailQueryResponse, Id, UtcDate};
+use super::properties::EmailSummary;
+use super::types::{EmailQueryResponse, Id};
 
 /// SearchEmailsParams holds the values SearchEmails leaves open.
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -25,27 +26,6 @@ pub struct SearchEmailsParams {
     pub position: i64,
 }
 
-/// SearchEmailsFetchEmail holds the properties of Email that the Email/get
-/// call in SearchEmails asks for.
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SearchEmailsFetchEmail {
-    /// The id of the email.
-    pub id: Id,
-
-    /// The Subject header field value.
-    #[serde(default)]
-    pub subject: Option<String>,
-
-    /// The From header field value.
-    #[serde(default)]
-    pub from: Option<Vec<EmailAddress>>,
-
-    /// When the email was received, which is what the mailbox sorts on by
-    /// default.
-    pub received_at: UtcDate,
-}
-
 /// SearchEmailsFetchResponse holds the response to the Email/get call in
 /// SearchEmails.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
@@ -60,7 +40,7 @@ pub struct SearchEmailsFetchResponse {
 
     /// The records that were found, in an undefined order.
     #[serde(default)]
-    pub list: Vec<SearchEmailsFetchEmail>,
+    pub list: Vec<EmailSummary>,
 
     /// The ids that were requested but do not exist.
     #[serde(default)]
@@ -138,7 +118,7 @@ pub async fn search_emails<T: Transport>(
                 json!({
                     "accountId": mail_account_id,
                     "#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"},
-                    "properties": ["id","subject","from","receivedAt"],
+                    "properties": ["id","threadId","subject","from","receivedAt","preview","hasAttachment"],
                 }),
                 "fetch".to_string(),
             ),

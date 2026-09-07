@@ -2,6 +2,7 @@
 // Source: the JMAP requests jmapc generated this directory from
 
 pub mod client;
+pub mod properties;
 pub mod types;
 
 pub mod agenda;
@@ -53,6 +54,7 @@ pub use install_sieve_script::*;
 pub use list_inbox_emails::*;
 pub use mail_quota::*;
 pub use mark_email_read::*;
+pub use properties::*;
 pub use read_message::*;
 pub use recently_shared::*;
 pub use register_push::*;

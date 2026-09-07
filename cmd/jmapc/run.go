@@ -101,7 +101,11 @@ func runRequest(args []string) error {
 	if err != nil {
 		return err
 	}
-	q, err := findRequest(catalogue, cfg.Requests, name)
+	props, err := loadProperties(cfg.Requests, catalogue)
+	if err != nil {
+		return err
+	}
+	q, err := findRequest(catalogue, props, cfg.Requests, name)
 	if err != nil {
 		return err
 	}
@@ -157,7 +161,7 @@ func queryName(args []string) (string, []string) {
 // findRequest parses the one request the run is about, rather than every request in
 // the directory: a mistake in a request nobody asked for should not stop this one
 // from being sent.
-func findRequest(catalogue *spec.Spec, dir, name string) (*request.Request, error) {
+func findRequest(catalogue *spec.Spec, props *request.PropertySets, dir, name string) (*request.Request, error) {
 	paths, err := findRequests(dir)
 	if err != nil {
 		return nil, err
@@ -165,7 +169,9 @@ func findRequest(catalogue *spec.Spec, dir, name string) (*request.Request, erro
 	var names []string
 	for _, path := range paths {
 		if request.RequestName(path) == name {
-			return request.NewParser(catalogue).ParseFile(path)
+			parser := request.NewParser(catalogue)
+			parser.Properties = props
+			return parser.ParseFile(path)
 		}
 		names = append(names, request.RequestName(path))
 	}

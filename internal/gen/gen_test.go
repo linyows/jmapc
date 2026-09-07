@@ -33,18 +33,21 @@ func TestGeneratedTypesAreUpToDate(t *testing.T) {
 // TestGeneratedExampleIsUpToDate checks the committed example client against
 // what the example requests produce now.
 func TestGeneratedExampleIsUpToDate(t *testing.T) {
-	requests := parseExample(t)
+	requests, props := parseExample(t)
 	g := &RequestGenerator{
-		Spec:      spec.Standard(),
-		Package:   "client",
-		Qualifier: "jmapc.",
-		Requests:  requests,
+		Spec:       spec.Standard(),
+		Package:    "client",
+		Qualifier:  "jmapc.",
+		Requests:   requests,
+		Properties: props,
 	}
 	files, err := g.Generate()
 	if err != nil {
 		t.Fatalf("generating the example client: %v", err)
 	}
-	if len(files) != len(requests) {
+	// One file per request, and one holding the types for the named sets of
+	// properties.
+	if len(files) != len(requests)+1 {
 		t.Errorf("generated %d files for %d requests", len(files), len(requests))
 	}
 	for name, src := range files {
@@ -56,11 +59,13 @@ func TestGeneratedExampleIsUpToDate(t *testing.T) {
 // bytes, so that a regenerated client never shows up as a spurious diff.
 func TestGenerationIsDeterministic(t *testing.T) {
 	newGen := func() *RequestGenerator {
+		requests, props := parseExample(t)
 		return &RequestGenerator{
-			Spec:      spec.Standard(),
-			Package:   "client",
-			Qualifier: "jmapc.",
-			Requests:  parseExample(t),
+			Spec:       spec.Standard(),
+			Package:    "client",
+			Qualifier:  "jmapc.",
+			Requests:   requests,
+			Properties: props,
 		}
 	}
 	first, err := newGen().Generate()
@@ -78,15 +83,22 @@ func TestGenerationIsDeterministic(t *testing.T) {
 	}
 }
 
-// parseExample parses the example requests.
-func parseExample(t *testing.T) []*request.Request {
+// parseExample parses the example requests, together with the sets of
+// properties they ask for by name.
+func parseExample(t *testing.T) ([]*request.Request, *request.PropertySets) {
 	t.Helper()
 	dir := filepath.Join(repoRoot, "example", "requests")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatalf("reading %s: %v", dir, err)
 	}
+	props, err := request.LoadPropertySets(filepath.Join(dir, request.PropertiesName), spec.Standard())
+	if err != nil {
+		t.Fatalf("checking %s:\n%v", request.PropertiesName, err)
+	}
+	props.Path = filepath.ToSlash(filepath.Join("requests", request.PropertiesName))
 	parser := request.NewParser(spec.Standard())
+	parser.Properties = props
 	var out []*request.Request
 	for _, e := range entries {
 		if !strings.HasSuffix(e.Name(), request.Extension) {
@@ -101,7 +113,7 @@ func parseExample(t *testing.T) []*request.Request {
 		q.Path = filepath.ToSlash(filepath.Join("requests", e.Name()))
 		out = append(out, q)
 	}
-	return out
+	return out, props
 }
 
 // compare checks a generated file against the one on disk.
@@ -143,15 +155,17 @@ func firstDifference(want, got string) string {
 // check that the committed client is up to date would fail on one platform and
 // pass on another.
 func TestGeneratedSourcePathIsPortable(t *testing.T) {
-	requests := parseExample(t)
+	requests, props := parseExample(t)
 	for _, q := range requests {
 		q.Path = strings.ReplaceAll(q.Path, "/", `\`)
 	}
+	props.Path = strings.ReplaceAll(props.Path, "/", `\`)
 	g := &RequestGenerator{
-		Spec:      spec.Standard(),
-		Package:   "client",
-		Qualifier: "jmapc.",
-		Requests:  requests,
+		Spec:       spec.Standard(),
+		Package:    "client",
+		Qualifier:  "jmapc.",
+		Requests:   requests,
+		Properties: props,
 	}
 	files, err := g.Generate()
 	if err != nil {

@@ -259,9 +259,12 @@ fn window(position: u64, total: u64, ids: &[&str]) -> serde_json::Value {
         .map(|id| {
             json!({
                 "id": id,
+                "threadId": format!("t{id}"),
                 "subject": format!("message {id}"),
                 "from": [{"email": "someone@example.com"}],
                 "receivedAt": "2026-09-04T09:00:00Z",
+                "preview": format!("the body of {id}"),
+                "hasAttachment": false,
             })
         })
         .collect();

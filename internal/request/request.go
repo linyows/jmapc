@@ -78,6 +78,13 @@ type Call struct {
 	// inside the records, as bodyProperties selects them for the body parts of
 	// an Email. It is nil when the call narrows nothing.
 	NestedProperties []string
+	// PropertySet is the named set of properties the call selects, empty when
+	// it lists the properties itself. The generated record type takes the
+	// set's name, so every call asking for the same set answers with one type.
+	PropertySet *PropertySet
+	// NestedPropertySet is the named set the nested properties come from,
+	// empty when the call lists them itself.
+	NestedPropertySet *PropertySet
 	// Comment is what the request said this call is for, carried into the
 	// generated code. It comes from the _comment member of the arguments,
 	// which never reaches the server.

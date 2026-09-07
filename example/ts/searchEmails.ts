@@ -2,7 +2,8 @@
 // Source: requests/SearchEmails.jmap.json
 
 import { type Client, type Request, type Response, MethodErrors, answered, decode } from "./client.js"
-import type { EmailAddress, EmailQueryResponse, Id, UTCDate } from "./types.js"
+import type { EmailQueryResponse, Id } from "./types.js"
+import type { EmailSummary } from "./properties.js"
 
 // SearchEmailsParams holds the values SearchEmails leaves open.
 export interface SearchEmailsParams {
@@ -21,23 +22,6 @@ export interface SearchEmailsParams {
   position: number
 }
 
-// SearchEmailsFetchEmail holds the properties of Email that the Email/get
-// call in SearchEmails asks for.
-export interface SearchEmailsFetchEmail {
-  // The id of the email.
-  id: Id
-
-  // The Subject header field value.
-  subject: string | null
-
-  // The From header field value.
-  from: EmailAddress[] | null
-
-  // When the email was received, which is what the mailbox sorts on by
-  // default.
-  receivedAt: UTCDate
-}
-
 // SearchEmailsFetchResponse holds the response to the Email/get call in
 // SearchEmails.
 export interface SearchEmailsFetchResponse {
@@ -49,7 +33,7 @@ export interface SearchEmailsFetchResponse {
   state: string
 
   // The records that were found, in an undefined order.
-  list: SearchEmailsFetchEmail[]
+  list: EmailSummary[]
 
   // The ids that were requested but do not exist.
   notFound: Id[]
@@ -111,7 +95,7 @@ export async function searchEmails(client: Client, p: SearchEmailsParams): Promi
       ["Email/get", {
         "accountId": mailAccountId,
         "#ids": { resultOf: "search", name: "Email/query", path: "/ids" },
-        "properties": ["id","subject","from","receivedAt"],
+        "properties": ["id","threadId","subject","from","receivedAt","preview","hasAttachment"],
       }, "fetch"],
     ],
   }

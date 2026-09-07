@@ -2,7 +2,8 @@
 // Source: requests/ListInboxEmails.jmap.json
 
 import { type Client, type Request, type Response, MethodErrors, answered, decode } from "./client.js"
-import type { EmailAddress, EmailQueryResponse, Id, UTCDate } from "./types.js"
+import type { EmailQueryResponse, Id } from "./types.js"
+import type { EmailSummary } from "./properties.js"
 
 // ListInboxEmailsParams holds the values ListInboxEmails leaves open.
 export interface ListInboxEmailsParams {
@@ -11,33 +12,6 @@ export interface ListInboxEmailsParams {
 
   // The maximum number of ids to return.
   limit: number
-}
-
-// ListInboxEmailsFetchEmail holds the properties of Email that the Email/get
-// call in ListInboxEmails asks for.
-export interface ListInboxEmailsFetchEmail {
-  // The id of the email.
-  id: Id
-
-  // The id of the thread the email belongs to.
-  threadId: Id
-
-  // The Subject header field value.
-  subject: string | null
-
-  // The From header field value.
-  from: EmailAddress[] | null
-
-  // When the email was received, which is what the mailbox sorts on by
-  // default.
-  receivedAt: UTCDate
-
-  // A short plain-text excerpt of the message body.
-  preview: string
-
-  // Whether the message has at least one part the server considers an
-  // attachment.
-  hasAttachment: boolean
 }
 
 // ListInboxEmailsFetchResponse holds the response to the Email/get call in
@@ -51,7 +25,7 @@ export interface ListInboxEmailsFetchResponse {
   state: string
 
   // The records that were found, in an undefined order.
-  list: ListInboxEmailsFetchEmail[]
+  list: EmailSummary[]
 
   // The ids that were requested but do not exist.
   notFound: Id[]

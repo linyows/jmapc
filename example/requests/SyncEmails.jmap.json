@@ -11,7 +11,7 @@
 
     ["Email/get", {
       "#ids": {"resultOf": "changes", "name": "Email/changes", "path": "/created"},
-      "properties": ["id", "threadId", "mailboxIds", "keywords", "subject", "receivedAt"]
+      "properties": "@EmailWithFlags"
     }, "created"],
 
     ["Email/get", {

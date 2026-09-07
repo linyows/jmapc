@@ -1,0 +1,13 @@
+{
+  "EmailSummary": {
+    "doc": "EmailSummary is what a list of messages shows: enough to draw a row and to group the rows into threads, and none of the body.",
+    "type": "Email",
+    "properties": ["id", "threadId", "subject", "from", "receivedAt", "preview", "hasAttachment"]
+  },
+
+  "EmailWithFlags": {
+    "doc": "EmailWithFlags is a summary and where the message sits: which mailboxes hold it, and which keywords it carries. A cache catching up needs both.",
+    "extends": "EmailSummary",
+    "properties": ["mailboxIds", "keywords"]
+  }
+}

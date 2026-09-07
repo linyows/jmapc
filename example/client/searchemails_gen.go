@@ -28,23 +28,6 @@ type SearchEmailsParams struct {
 	Position jmapc.Int
 }
 
-// SearchEmailsFetchEmail holds the properties of Email that the Email/get
-// call in SearchEmails asks for.
-type SearchEmailsFetchEmail struct {
-	// The id of the email.
-	ID jmapc.ID `json:"id"`
-
-	// The Subject header field value.
-	Subject *string `json:"subject"`
-
-	// The From header field value.
-	From []jmapc.EmailAddress `json:"from"`
-
-	// When the email was received, which is what the mailbox sorts on by
-	// default.
-	ReceivedAt jmapc.UTCDate `json:"receivedAt"`
-}
-
 // SearchEmailsFetchResponse holds the response to the Email/get call in
 // SearchEmails.
 type SearchEmailsFetchResponse struct {
@@ -56,7 +39,7 @@ type SearchEmailsFetchResponse struct {
 	State string `json:"state"`
 
 	// The records that were found, in an undefined order.
-	List []SearchEmailsFetchEmail `json:"list"`
+	List []EmailSummary `json:"list"`
 
 	// The ids that were requested but do not exist.
 	NotFound []jmapc.ID `json:"notFound"`
@@ -125,7 +108,7 @@ func SearchEmails(ctx context.Context, c *jmapc.Client, p SearchEmailsParams) (*
 			{Name: "Email/get", CallID: "fetch", Args: map[string]any{
 				"accountId":  mailAccountID,
 				"#ids":       jmapc.ResultReference{ResultOf: "search", Name: "Email/query", Path: "/ids"},
-				"properties": json.RawMessage(`["id","subject","from","receivedAt"]`),
+				"properties": json.RawMessage(`["id","threadId","subject","from","receivedAt","preview","hasAttachment"]`),
 			}},
 		},
 	}

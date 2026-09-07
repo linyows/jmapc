@@ -28,7 +28,7 @@
 
     ["Email/get", {
       "#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"},
-      "properties": ["id", "subject", "from", "receivedAt"]
+      "properties": "@EmailSummary"
     }, "fetch"]
   ]
 }

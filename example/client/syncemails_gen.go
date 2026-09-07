@@ -17,30 +17,6 @@ type SyncEmailsParams struct {
 	SinceState string
 }
 
-// SyncEmailsCreatedEmail holds the properties of Email that the Email/get
-// call in SyncEmails asks for.
-type SyncEmailsCreatedEmail struct {
-	// The id of the email.
-	ID jmapc.ID `json:"id"`
-
-	// The id of the thread the email belongs to.
-	ThreadID jmapc.ID `json:"threadId"`
-
-	// The mailboxes the email is in, as a set of ids mapped to true.
-	MailboxIDs map[jmapc.ID]bool `json:"mailboxIds"`
-
-	// The keywords set on the email, such as "$seen" or "$flagged", mapped to
-	// true.
-	Keywords map[string]bool `json:"keywords"`
-
-	// The Subject header field value.
-	Subject *string `json:"subject"`
-
-	// When the email was received, which is what the mailbox sorts on by
-	// default.
-	ReceivedAt jmapc.UTCDate `json:"receivedAt"`
-}
-
 // SyncEmailsUpdatedEmail holds the properties of Email that the Email/get
 // call in SyncEmails asks for.
 type SyncEmailsUpdatedEmail struct {
@@ -66,7 +42,7 @@ type SyncEmailsCreatedResponse struct {
 	State string `json:"state"`
 
 	// The records that were found, in an undefined order.
-	List []SyncEmailsCreatedEmail `json:"list"`
+	List []EmailWithFlags `json:"list"`
 
 	// The ids that were requested but do not exist.
 	NotFound []jmapc.ID `json:"notFound"`
@@ -131,7 +107,7 @@ func SyncEmails(ctx context.Context, c *jmapc.Client, p SyncEmailsParams) (*Sync
 			{Name: "Email/get", CallID: "created", Args: map[string]any{
 				"accountId":  mailAccountID,
 				"#ids":       jmapc.ResultReference{ResultOf: "changes", Name: "Email/changes", Path: "/created"},
-				"properties": json.RawMessage(`["id","threadId","mailboxIds","keywords","subject","receivedAt"]`),
+				"properties": json.RawMessage(`["id","threadId","subject","from","receivedAt","preview","hasAttachment","mailboxIds","keywords"]`),
 			}},
 			{Name: "Email/get", CallID: "updated", Args: map[string]any{
 				"accountId":  mailAccountID,

@@ -3,7 +3,6 @@ package request
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -56,6 +55,9 @@ const (
 type Parser struct {
 	// Spec is the catalogue the requests are checked against.
 	Spec *spec.Spec
+	// Properties are the named sets of properties a request may ask for by
+	// name, and is nil where the project declares none.
+	Properties *PropertySets
 }
 
 // NewParser returns a parser that checks requests against s.
@@ -160,6 +162,7 @@ func (p *Parser) Parse(path string, src []byte) (*Request, error) {
 	c := &checker{
 		spec:   p.Spec,
 		file:   path,
+		props:  p.Properties,
 		params: newParamSet(),
 		byID:   make(map[string]*Call),
 		used:   make(map[string]bool),
@@ -409,6 +412,10 @@ type checker struct {
 	byID   map[string]*Call
 	order  []string
 
+	// props are the named sets of properties a call may ask for instead of
+	// listing them, and is nil where the project names none.
+	props *PropertySets
+
 	// filterUnion is the type a /query filter may take, carried down so that
 	// the conditions nested inside a FilterOperator can be checked against the
 	// data type being queried instead of being waved through as Any.
@@ -518,7 +525,95 @@ func (c *checker) methodCall(raw json.RawMessage, where string) *Call {
 	call.Args = c.arguments(call, args, parts[1], where+".arguments")
 	call.Properties = c.properties(call, where+".arguments")
 	call.NestedProperties = c.nestedProperties(call, where+".arguments")
+	c.checkPropertySetUse(call, where+".arguments")
 	return call
+}
+
+// propertySet resolves an argument written as a reference to a named set of
+// properties, and reports whether the argument was one. The properties go into
+// the request as the set spells them, so what reaches the server is the list
+// the set holds and nothing else.
+//
+// Only the arguments that select properties may be written this way. Anywhere
+// else a string beginning with "@" is a value in its own right, and is checked
+// as one.
+func (c *checker) propertySet(call *Call, name string, raw json.RawMessage, where string) (Node, bool) {
+	nested := name == call.Method.NestedPropertiesArgument
+	if name != call.Method.PropertiesArgument && !nested {
+		return nil, false
+	}
+	text, isString := stringValue(raw)
+	if !isString || !strings.HasPrefix(text, "@") {
+		return nil, false
+	}
+	m := setPattern.FindStringSubmatch(text)
+	if m == nil {
+		c.errorf(where, "a set is named as @EmailSummary", "%q is not the name of a set of properties", text)
+		return nil, true
+	}
+	set, known := c.props.Find(m[1])
+	if !known {
+		hint := hintFor(m[1], c.props.Names())
+		if hint == "" {
+			hint = "sets of properties are declared in " + PropertiesName + ", beside the requests"
+		}
+		c.errorf(where, hint, "no set of properties is named %q", m[1])
+		return nil, true
+	}
+
+	want := call.Method.DataType
+	if nested {
+		want = call.Method.NestedType
+	}
+	if set.Type != want {
+		c.errorf(where, "",
+			"%s selects properties of %s, and %s of %s selects properties of %s",
+			set.Name, set.Type, name, call.Method.Name, want)
+		return nil, true
+	}
+	if nested {
+		call.NestedPropertySet = set
+	} else {
+		call.PropertySet = set
+	}
+	return propertyArray(set.Properties()), true
+}
+
+// propertyArray renders a list of property names as the array the request
+// sends, so that what goes on the wire is what a request writing the list out
+// would have sent.
+func propertyArray(props []string) *Array {
+	raw, err := json.Marshal(props)
+	if err != nil {
+		return &Array{Raw: json.RawMessage("[]")}
+	}
+	arr := &Array{Raw: raw, Items: make([]Node, 0, len(props))}
+	for _, name := range props {
+		item, err := json.Marshal(name)
+		if err != nil {
+			continue
+		}
+		arr.Items = append(arr.Items, &Literal{JSON: item})
+	}
+	return arr
+}
+
+// checkPropertySetUse holds a call asking for a named set to the one thing that
+// makes the set worth naming: that the type generated for it is the same
+// wherever it is asked for.
+//
+// Narrowing the nested type changes the record type with it, since the fields
+// referring to the nested type refer to the generated one instead. A set
+// narrowed differently in two calls would be two shapes under one name, so a
+// call that asks for a set spells out nothing else about the records.
+func (c *checker) checkPropertySetUse(call *Call, where string) {
+	if call.PropertySet == nil || call.NestedProperties == nil {
+		return
+	}
+	c.errorf(fmt.Sprintf("%s.%s", where, call.Method.NestedPropertiesArgument),
+		"write the properties out in this call, or narrow nothing beside the set",
+		"%s asks for the set %s and narrows %s as well, which would give %s a different shape here than where it is asked for on its own",
+		call.Method.Name, call.PropertySet.Name, call.Method.NestedPropertiesArgument, call.PropertySet.Name)
 }
 
 // arguments checks the argument object of a method call. Only here, at the top
@@ -573,6 +668,12 @@ func (c *checker) arguments(call *Call, argsType *spec.Object, raw json.RawMessa
 			ref := c.resultRef(call, field, members[key], where+"."+key)
 			if ref != nil {
 				out.Fields = append(out.Fields, ObjectField{Key: key, Value: ref})
+			}
+			continue
+		}
+		if node, isSet := c.propertySet(call, name, members[key], where+"."+key); isSet {
+			if node != nil {
+				out.Fields = append(out.Fields, ObjectField{Key: key, Value: node})
 			}
 			continue
 		}
@@ -674,31 +775,10 @@ func (c *checker) properties(call *Call, where string) []string {
 		if err := json.Unmarshal(lit.JSON, &name); err != nil {
 			return nil
 		}
-		selected, known := dataType.Field(name)
-		if !known {
-			where := fmt.Sprintf("%s.%s[%d]", where, call.Method.PropertiesArgument, i)
-			header, err := spec.ParseHeaderProperty(name)
-			switch {
-			case err != nil:
-				var badForm *spec.HeaderPropertyError
-				hint := ""
-				if errors.As(err, &badForm) && len(badForm.Forms) > 0 {
-					hint = hintFor(badForm.Property, badForm.Forms)
-					if hint == "" {
-						hint = "the parsed forms are " + strings.Join(badForm.Forms, ", ")
-					}
-				}
-				c.errorf(where, hint, "%v", err)
-				continue
-			case header != nil:
-				// A property naming one header field of the message. Its type
-				// comes from the form asked for, so it is not a member of the
-				// data type and cannot be checked against one.
-			case !isDynamicProperty(name):
-				c.errorf(where, hintFor(name, dataType.PropertyNames()),
-					"%s has no property %q", dataType.Name, name)
-				continue
-			}
+		selected, hint, err := checkProperty(dataType, name)
+		if err != nil {
+			c.errorf(fmt.Sprintf("%s.%s[%d]", where, call.Method.PropertiesArgument, i), hint, "%v", err)
+			continue
 		}
 		c.useCapability(selected)
 		props = append(props, name)

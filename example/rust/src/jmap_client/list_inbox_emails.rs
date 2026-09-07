@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use super::client::{decode, Client, Error, Invocation, Request, Transport};
-use super::types::{EmailAddress, Id, UtcDate};
+use super::properties::EmailSummary;
+use super::types::Id;
 
 /// ListInboxEmailsParams holds the values ListInboxEmails leaves open.
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -15,37 +16,6 @@ pub struct ListInboxEmailsParams {
 
     /// The maximum number of ids to return.
     pub limit: u64,
-}
-
-/// ListInboxEmailsFetchEmail holds the properties of Email that the Email/get
-/// call in ListInboxEmails asks for.
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ListInboxEmailsFetchEmail {
-    /// The id of the email.
-    pub id: Id,
-
-    /// The id of the thread the email belongs to.
-    pub thread_id: Id,
-
-    /// The Subject header field value.
-    #[serde(default)]
-    pub subject: Option<String>,
-
-    /// The From header field value.
-    #[serde(default)]
-    pub from: Option<Vec<EmailAddress>>,
-
-    /// When the email was received, which is what the mailbox sorts on by
-    /// default.
-    pub received_at: UtcDate,
-
-    /// A short plain-text excerpt of the message body.
-    pub preview: String,
-
-    /// Whether the message has at least one part the server considers an
-    /// attachment.
-    pub has_attachment: bool,
 }
 
 /// ListInboxEmailsFetchResponse holds the response to the Email/get call in
@@ -62,7 +32,7 @@ pub struct ListInboxEmailsFetchResponse {
 
     /// The records that were found, in an undefined order.
     #[serde(default)]
-    pub list: Vec<ListInboxEmailsFetchEmail>,
+    pub list: Vec<EmailSummary>,
 
     /// The ids that were requested but do not exist.
     #[serde(default)]

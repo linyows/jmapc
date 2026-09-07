@@ -17,6 +17,10 @@ type RequestGenerator struct {
 	Spec *spec.Spec
 	// Requests are the requests to generate.
 	Requests []*request.Request
+	// Properties are the named sets of properties the requests ask for, whose
+	// types go into a module of their own so that every request asking for one
+	// answers with the same type. It is nil where the project names no set.
+	Properties *request.PropertySets
 }
 
 // call holds the names settled for one method call.
@@ -29,6 +33,11 @@ type call struct {
 	// call reading the same records in the same shape as an earlier one shares
 	// its types rather than declaring them again.
 	writesTypes bool
+	// sharedRecord says the record type is one of the named sets, which the
+	// properties module declares rather than this one.
+	sharedRecord bool
+	// sharedNested says the same of the nested type.
+	sharedNested bool
 }
 
 // plan is the naming decided for one request before any code is written.
@@ -56,13 +65,17 @@ func (g *RequestGenerator) Generate() (map[string][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := make(map[string][]byte, len(plans)+1)
+	out := make(map[string][]byte, len(plans)+2)
 	modules := make([]string, 0, len(plans))
+	properties := len(g.Properties.Names()) > 0
+	if properties {
+		out[PropertiesFileName] = g.propertiesFile()
+	}
 	for _, p := range plans {
 		out[p.module+".rs"] = g.file(p)
 		modules = append(modules, p.module)
 	}
-	out["mod.rs"] = writeMod(modules)
+	out["mod.rs"] = writeMod(modules, properties)
 	return out, nil
 }
 
@@ -80,8 +93,13 @@ func (g *RequestGenerator) plan() ([]*plan, error) {
 	plans := make([]*plan, 0, len(requests))
 	for _, q := range requests {
 		// Each request is its own module, so a name need only be unique within
-		// one file rather than across the directory.
+		// one file rather than across the directory. The names of the sets are
+		// taken all the same: they are brought into every module that asks for
+		// one, and a local type of the same name would clash with the use.
 		taken := make(map[string]bool)
+		for _, name := range g.Properties.Names() {
+			taken[spec.RustTypeName(name)] = true
+		}
 		prefix := spec.RustTypeName(q.Name)
 		p := &plan{
 			q:        q,
@@ -102,6 +120,13 @@ func (g *RequestGenerator) plan() ([]*plan, error) {
 				// same shape, and one shape is one type.
 				*info = *p.calls[same[c]]
 				info.writesTypes = false
+			case c.PropertySet != nil:
+				// The set names the type, so every call asking for it answers
+				// with the one the properties module declares.
+				info.recordType = spec.RustTypeName(c.PropertySet.Name)
+				info.responseType = shared.Unique(taken, prefix+spec.RustTypeName(c.Field)+"Response")
+				info.writesTypes = true
+				info.sharedRecord = true
 			case c.Properties != nil || c.NestedProperties != nil:
 				info.recordType = shared.Unique(taken, prefix+spec.RustTypeName(c.Field)+spec.RustTypeName(c.Method.DataType))
 				info.responseType = shared.Unique(taken, prefix+spec.RustTypeName(c.Field)+"Response")
@@ -109,7 +134,11 @@ func (g *RequestGenerator) plan() ([]*plan, error) {
 			default:
 				info.responseType = spec.RustTypeName(c.Method.Response)
 			}
-			if c.NestedProperties != nil && info.writesTypes {
+			switch {
+			case c.NestedPropertySet != nil:
+				info.nestedType = spec.RustTypeName(c.NestedPropertySet.Name)
+				info.sharedNested = true
+			case c.NestedProperties != nil && info.writesTypes:
 				info.nestedType = shared.Unique(taken, prefix+spec.RustTypeName(c.Field)+spec.RustTypeName(c.Method.NestedType))
 			}
 			p.calls[c] = info

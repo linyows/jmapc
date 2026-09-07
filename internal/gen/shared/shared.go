@@ -110,6 +110,12 @@ func RecordProperties(props []string) []string {
 // to a function written for the other would have to convert between them. The
 // property lists have to agree in order as well as in content, since the order
 // is the order the generated fields are written in.
+//
+// A call asking for a named set is grouped with the calls asking for that set,
+// and not with one that happens to list the same properties: the set is the
+// name the author chose, and a call that spells the list out has not asked for
+// it. The two shapes are the same and the two names are not, which is the
+// author's to settle by asking for the set in both places.
 func SameNarrowing(calls []*request.Call) map[*request.Call]*request.Call {
 	first := make(map[string]*request.Call, len(calls))
 	out := make(map[*request.Call]*request.Call, len(calls))
@@ -122,8 +128,10 @@ func SameNarrowing(calls []*request.Call) map[*request.Call]*request.Call {
 		key := strings.Join([]string{
 			c.Method.Name,
 			c.Method.DataType,
+			setName(c.PropertySet),
 			strings.Join(c.Properties, "\x00"),
 			c.Method.NestedType,
+			setName(c.NestedPropertySet),
 			strings.Join(c.NestedProperties, "\x00"),
 		}, "\x01")
 		if seen, dup := first[key]; dup {
@@ -134,6 +142,15 @@ func SameNarrowing(calls []*request.Call) map[*request.Call]*request.Call {
 		out[c] = c
 	}
 	return out
+}
+
+// setName returns the name of a property set, and an empty string where a call
+// asked for none.
+func setName(s *request.PropertySet) string {
+	if s == nil {
+		return ""
+	}
+	return s.Name
 }
 
 // Creation is the name a generated file gives one creation id, so that a

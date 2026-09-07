@@ -19,33 +19,6 @@ type ListInboxEmailsParams struct {
 	Limit jmapc.UnsignedInt
 }
 
-// ListInboxEmailsFetchEmail holds the properties of Email that the Email/get
-// call in ListInboxEmails asks for.
-type ListInboxEmailsFetchEmail struct {
-	// The id of the email.
-	ID jmapc.ID `json:"id"`
-
-	// The id of the thread the email belongs to.
-	ThreadID jmapc.ID `json:"threadId"`
-
-	// The Subject header field value.
-	Subject *string `json:"subject"`
-
-	// The From header field value.
-	From []jmapc.EmailAddress `json:"from"`
-
-	// When the email was received, which is what the mailbox sorts on by
-	// default.
-	ReceivedAt jmapc.UTCDate `json:"receivedAt"`
-
-	// A short plain-text excerpt of the message body.
-	Preview string `json:"preview"`
-
-	// Whether the message has at least one part the server considers an
-	// attachment.
-	HasAttachment bool `json:"hasAttachment"`
-}
-
 // ListInboxEmailsFetchResponse holds the response to the Email/get call in
 // ListInboxEmails.
 type ListInboxEmailsFetchResponse struct {
@@ -57,7 +30,7 @@ type ListInboxEmailsFetchResponse struct {
 	State string `json:"state"`
 
 	// The records that were found, in an undefined order.
-	List []ListInboxEmailsFetchEmail `json:"list"`
+	List []EmailSummary `json:"list"`
 
 	// The ids that were requested but do not exist.
 	NotFound []jmapc.ID `json:"notFound"`
