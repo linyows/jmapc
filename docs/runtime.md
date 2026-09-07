@@ -99,11 +99,17 @@ In TypeScript the same failure is a thrown `SetErrors`, with the response on
 `err.result`. In Rust it is an `Error::Set`, and the response is retrieved with
 the type the function would have returned, through `err.result::<T>()`.
 
-### The session
+### The session object
 
-The session says where a request is sent, which capabilities the server has,
-which accounts the user can reach, and what the limits are. The client fetches
-it when something first needs it and holds it from then on.
+The session here is the Session object of RFC 8620, Section 2: the document a
+server answers with at its session resource, saying where a request is sent,
+which capabilities the server has, which accounts the user can reach, and what
+the limits are. It is not a login session and it carries no credentials. What
+authenticates a request is the Authorization header, and a token that expires is
+a separate matter, in Tokens that expire below.
+
+The client fetches the session when something first needs it and holds it from
+then on.
 
 A server's session changes: an account is added or removed, a limit is raised,
 an endpoint moves, a push key is rotated. Every response carries the server's

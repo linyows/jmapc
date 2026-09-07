@@ -58,9 +58,13 @@
 //
 // # The session
 //
-// The session states where a request is sent, what the server supports and
-// what its limits are. [Client.Session] fetches it when something first needs
-// it and holds it afterwards, and fetches it again once a response reports a
+// The session is the Session object of RFC 8620, Section 2: what a server
+// answers with at its session resource, stating where a request is sent, what
+// the server supports and what its limits are. It is not a login session and
+// carries no credentials; authentication is the Authorization header, above.
+//
+// [Client.Session] fetches it when something first needs it and holds it
+// afterwards, and fetches it again once a response reports a
 // sessionState other than the one held, which is how an account added, a limit
 // changed or an endpoint moved reaches a client that outlives it.
 // [WithoutSessionRefresh] turns that off, and [Client.RefreshSession] fetches
