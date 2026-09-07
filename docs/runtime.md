@@ -99,6 +99,36 @@ In TypeScript the same failure is a thrown `SetErrors`, with the response on
 `err.result`. In Rust it is an `Error::Set`, and the response is retrieved with
 the type the function would have returned, through `err.result::<T>()`.
 
+### The session object
+
+The session here is the Session object of RFC 8620, Section 2: the document a
+server answers with at its session resource, saying where a request is sent,
+which capabilities the server has, which accounts the user can reach, and what
+the limits are. It is not a login session and it carries no credentials. What
+authenticates a request is the Authorization header, and a token that expires is
+a separate matter, in Tokens that expire below.
+
+The client fetches the session when something first needs it and holds it from
+then on.
+
+A server's session changes: an account is added or removed, a limit is raised,
+an endpoint moves, a push key is rotated. Every response carries the server's
+`sessionState` for this reason, and the client compares it with the session it
+holds. Where the two differ, the next call that needs the session fetches it
+again. The comparison costs nothing, and the fetch happens where the session is
+needed rather than in the response that reported the change.
+
+Requests that arrive together after a change share one fetch between them. A
+fetch that fails leaves the session as it was: what the client holds is out of
+date, which is what it was a moment ago, so the request goes on and the next
+call tries again. The failure reaches an `Observer` as a request of
+`KindSession` that did not succeed.
+
+`WithoutSessionRefresh` turns this off, for a client that will not outlive a
+change and has no use for the comparison. `RefreshSession` fetches the session
+whether or not a response reported a change, for a client that learns of one by
+some other means.
+
 ### Splitting a large /get
 
 A `/get` naming more ids than the server's `maxObjectsInGet` is refused.

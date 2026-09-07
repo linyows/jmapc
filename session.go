@@ -46,7 +46,9 @@ const (
 )
 
 // Session is the Session object described in RFC 8620, Section 2. It states
-// where to send requests and what the server supports.
+// where to send requests and what the server supports. It is not a login
+// session and holds no credentials: what authenticates a request is the
+// Authorization header, which WithBearerToken and WithTokenSource set.
 type Session struct {
 	// Capabilities lists the capabilities the server supports, keyed by URI.
 	Capabilities map[string]json.RawMessage `json:"capabilities"`

@@ -34,6 +34,7 @@ type Client struct {
 	observer   *Observer
 	tokens     *tokenHolder
 	splitGets  bool
+	refresh    bool
 
 	// api and uploads limit the client to the number of each the server
 	// accepts at once.
@@ -42,6 +43,16 @@ type Client struct {
 
 	mu      sync.Mutex
 	session *Session
+	// stale records that a response reported a session other than the one
+	// held, so that the next caller needing the session fetches it again.
+	stale bool
+	// fetching is closed when the fetch in progress returns, and is nil where
+	// there is none. It is what makes requests arriving together share one
+	// fetch of the session resource.
+	fetching chan struct{}
+	// fetchErr is what the last fetch returned, for the callers that waited on
+	// it rather than making one of their own.
+	fetchErr error
 }
 
 // Option configures a Client.
@@ -104,6 +115,16 @@ func WithoutPreflightChecks() Option {
 	return func(c *Client) { c.strict = false }
 }
 
+// WithoutSessionRefresh stops the client from fetching the session again when a
+// response reports that the server's has changed. The session then stays as it
+// was first fetched, which is what a client that never outlives a change wants,
+// and a long-running one does not: an account added or removed, a limit
+// changed, an endpoint moved, and a key rotated all reach a client only through
+// the session.
+func WithoutSessionRefresh() Option {
+	return func(c *Client) { c.refresh = false }
+}
+
 // New returns a client that discovers the server through the session resource
 // at sessionURL. Use WellKnownURL to build that URL from a bare hostname.
 func New(sessionURL string, opts ...Option) *Client {
@@ -112,6 +133,7 @@ func New(sessionURL string, opts ...Option) *Client {
 		httpClient: http.DefaultClient,
 		userAgent:  DefaultUserAgent,
 		strict:     true,
+		refresh:    true,
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -119,22 +141,96 @@ func New(sessionURL string, opts ...Option) *Client {
 	return c
 }
 
-// Session returns the server's Session object, fetching it on first use and
-// caching it afterwards.
+// Session returns the server's Session object. It is fetched on first use, and
+// again where a response has reported a sessionState other than the one the
+// cached session carries, unless the client was given WithoutSessionRefresh.
+//
+// A fetch that fails is not passed on to the caller once there is a session to
+// fall back on: the one held is out of date, which is what it was a moment ago,
+// and the fetch is made again the next time the session is needed. The failure
+// is reported to an Observer as a request of KindSession that did not succeed.
 func (c *Client) Session(ctx context.Context) (*Session, error) {
 	c.mu.Lock()
-	s := c.session
+	s, stale := c.session, c.stale
 	c.mu.Unlock()
-	if s != nil {
+	if s != nil && !stale {
 		return s, nil
 	}
-	return c.RefreshSession(ctx)
+	fresh, err := c.fetchSession(ctx)
+	if err != nil {
+		if s != nil {
+			return s, nil
+		}
+		return nil, err
+	}
+	return fresh, nil
 }
 
-// RefreshSession re-fetches the Session object and replaces the cached copy.
-// Call it when a response reports a sessionState different from the one the
-// cached session carries.
+// RefreshSession fetches the Session object and replaces the cached copy,
+// whether or not a response has reported that it changed. A client that is
+// told about a change by some other means calls it; one that learns of it from
+// a response does not have to, since the next call to Session fetches it.
 func (c *Client) RefreshSession(ctx context.Context) (*Session, error) {
+	return c.fetchSession(ctx)
+}
+
+// fetchSession fetches the session, or waits for the fetch another caller
+// started rather than making a second one. Requests arriving together after a
+// change therefore cost one request to the session resource between them.
+func (c *Client) fetchSession(ctx context.Context) (*Session, error) {
+	c.mu.Lock()
+	if wait := c.fetching; wait != nil {
+		c.mu.Unlock()
+		select {
+		case <-wait:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+		c.mu.Lock()
+		s, err := c.session, c.fetchErr
+		c.mu.Unlock()
+		if err != nil {
+			return nil, err
+		}
+		return s, nil
+	}
+	wait := make(chan struct{})
+	c.fetching = wait
+	c.mu.Unlock()
+
+	s, err := c.getSession(ctx)
+
+	c.mu.Lock()
+	c.fetching, c.fetchErr = nil, err
+	if err == nil {
+		c.session, c.stale = s, false
+	}
+	c.mu.Unlock()
+	close(wait)
+	return s, err
+}
+
+// noteSessionState records that a response reported a session other than the
+// one held. RFC 8620 has the server return its sessionState on every response
+// so that a client can tell, without asking, that the session it holds no
+// longer describes the server.
+func (c *Client) noteSessionState(state string) {
+	if !c.refresh || state == "" {
+		return
+	}
+	c.mu.Lock()
+	// A session carrying no state of its own says nothing about whether it has
+	// changed, and comparing against it would fetch the session on every
+	// response.
+	if c.session != nil && c.session.State != "" && c.session.State != state {
+		c.stale = true
+	}
+	c.mu.Unlock()
+}
+
+// getSession fetches and decodes the session resource. It is fetchSession
+// without the sharing, and the caller stores what it returns.
+func (c *Client) getSession(ctx context.Context) (*Session, error) {
 	if c.sessionURL == "" {
 		return nil, fmt.Errorf("jmapc: no session URL configured")
 	}
@@ -163,9 +259,6 @@ func (c *Client) RefreshSession(ctx context.Context) (*Session, error) {
 		return nil, fmt.Errorf("jmapc: parsing session URL: %w", err)
 	}
 	s.resolveURLs(sessionURL)
-	c.mu.Lock()
-	c.session = &s
-	c.mu.Unlock()
 	return &s, nil
 }
 
@@ -254,6 +347,7 @@ func (c *Client) post(ctx context.Context, apiURL string, r *Request) (*Response
 	if err := json.NewDecoder(httpResp.Body).Decode(&resp); err != nil {
 		return nil, fmt.Errorf("jmapc: decoding response: %w", err)
 	}
+	c.noteSessionState(resp.SessionState)
 	return &resp, nil
 }
 
