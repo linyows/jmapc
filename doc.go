@@ -119,4 +119,10 @@
 // method-level failure, where some calls ran and others did not, is a
 // [MethodErrors]; the response is returned alongside it, because the calls that
 // did run still have results worth reading.
+//
+// [IsTemporary] says whether a failure is one time may resolve, [IsRateLimited]
+// whether the server is asking for fewer requests, and [RetryAfter] how long it
+// asked the caller to wait. Together they are what a caller needs to decide
+// between sending the request again later and reporting it as wrong, without
+// reading status codes and error types itself.
 package jmapc

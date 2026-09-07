@@ -3,7 +3,6 @@ package jmapc
 import (
 	"context"
 	"errors"
-	"net/http"
 	"time"
 )
 
@@ -138,7 +137,7 @@ func (c *Client) Watch(ctx context.Context, accountID ID, typeName, state string
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			if permanent(err) {
+			if !IsTemporary(err) {
 				return err
 			}
 			attempt++
@@ -193,18 +192,6 @@ func (c *Client) Watch(ctx context.Context, accountID ID, typeName, state string
 func cannotCalculateChanges(err error) bool {
 	var method *MethodError
 	return errors.As(err, &method) && method.Type == ErrCannotCalcChanges
-}
-
-// permanent reports whether an error will persist after a delay. A server that
-// refused the request reported something about the request itself; one that is
-// unreachable, overloaded, or broken did not.
-func permanent(err error) bool {
-	var reqErr *RequestError
-	if !errors.As(err, &reqErr) {
-		return false
-	}
-	return reqErr.Status >= 400 && reqErr.Status < 500 &&
-		reqErr.Status != http.StatusTooManyRequests
 }
 
 // wait sleeps before the nth attempt, or returns as soon as the context ends.

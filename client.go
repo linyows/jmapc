@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 )
 
 // DefaultUserAgent identifies this client to servers.
@@ -439,15 +440,18 @@ func (c *Client) send(req *http.Request, kind RequestKind, attempt int) (*http.R
 // requestError turns a non-200 response into a *RequestError, decoding the RFC
 // 7807 problem details document when the server sent one.
 func (c *Client) requestError(resp *http.Response) error {
-	e := &RequestError{Status: resp.StatusCode}
+	e := &RequestError{Status: resp.StatusCode, RetryAfter: retryAfter(resp, time.Now())}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody))
 	if err != nil || len(body) == 0 {
 		return e
 	}
 	ct := resp.Header.Get("Content-Type")
 	if strings.HasPrefix(ct, "application/problem+json") || strings.HasPrefix(ct, "application/json") {
+		// Decoding overwrites the fields the document names, so what was read
+		// from the response itself is put back afterwards.
+		delay := e.RetryAfter
 		if err := json.Unmarshal(body, e); err == nil && e.Type != "" {
-			e.Status = resp.StatusCode
+			e.Status, e.RetryAfter = resp.StatusCode, delay
 			return e
 		}
 	}
