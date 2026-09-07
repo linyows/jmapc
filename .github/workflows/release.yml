@@ -28,12 +28,11 @@ jobs:
           go-version: stable
           cache-dependency-path: go.mod
 
-      # The release notes are the section of CHANGELOG.md for this tag, with
-      # the install section after it. A release without a section is a release
-      # nobody wrote notes for, and stops here rather than being published
-      # with an empty body. They are written outside the checkout, since
-      # goreleaser refuses to release from a work tree that holds a file git
-      # does not know about.
+      # The release notes are the section of CHANGELOG.md for this tag. A
+      # release without a section is a release nobody wrote notes for, and
+      # stops here rather than being published with an empty body. They are
+      # written outside the checkout, since goreleaser refuses to release from
+      # a work tree that holds a file git does not know about.
       - name: Read the release notes
         run: |
           awk -v tag="$TAG" '
@@ -45,7 +44,6 @@ jobs:
             echo "CHANGELOG.md has no section for $TAG" >&2
             exit 1
           fi
-          sed "s|{{TAG}}|$TAG|" .github/release-install.md >> "$NOTES"
         env:
           TAG: ${{ github.ref_name }}
           NOTES: ${{ runner.temp }}/release-notes.md
