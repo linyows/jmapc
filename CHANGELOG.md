@@ -6,6 +6,65 @@ The release on GitHub carries the same text.
 This starts at v0.12.0. What went into the releases before it is in the commit
 history.
 
+## v0.14.0 (2026-09-07)
+
+### Added
+
+- **`jmapc generate -check` reports a generated client that is out of date.**
+  It generates into memory, compares the result with what is on disk, writes
+  nothing, and exits non-zero where the two differ. Each file is named with the
+  reason: it is not what its request generates now, it was never generated, or
+  it was left behind by a request that has since been deleted. A file jmapc did
+  not write is neither reported nor touched. A build step or a workflow runs it
+  so that a request changed without the client being generated again stops the
+  build. ([#74](https://github.com/linyows/jmapc/pull/74))
+- **`WithResync` gives a watch a way back from `cannotCalculateChanges`.** A
+  `/changes` call answers that where the state it was given is older than the
+  server keeps, which is what a server answers when a watch is resumed after a
+  long enough pause. `Watch` used to stop and return the error, and a program
+  that followed changes stopped following them. The option takes a function
+  that reads the records again and reports the state they were read at, and the
+  watch continues from there. It is called for that error alone, and not a
+  second time for a state a resync has just reported.
+  ([#77](https://github.com/linyows/jmapc/pull/77))
+- **`IsTemporary`, `IsRateLimited` and `RetryAfter` say what a failure is.**
+  `IsTemporary` is false for what the server reported about the request — a 4xx
+  that is not a 429, and an error type such as `invalidArguments` — and true for
+  what it reported about itself. `IsRateLimited` picks out the server asking for
+  fewer requests, including the 400 that refuses a request for exceeding
+  `maxConcurrentRequests`, which does not look like rate limiting from the
+  status alone. `RequestError` carries a `RetryAfter` field, read from the
+  header when the error is built: a server asking for longer than the client
+  waits out used to fail the request with that number dropped.
+  ([#78](https://github.com/linyows/jmapc/pull/78))
+
+### Changed
+
+- **The client fetches the session again when a response reports it changed.**
+  Every response carries the server's `sessionState`, which the client now
+  compares with the session it holds; where the two differ, the next call that
+  needs the session fetches it. An account added or moved, a capability the
+  server has since gained, an endpoint that moved and a limit that changed
+  therefore reach a client that outlives them, where before the session was
+  fetched once and held for the life of the client. Requests arriving together
+  share one fetch, and a fetch that fails leaves the session as it was rather
+  than failing the request. `WithoutSessionRefresh` turns it off.
+  ([#75](https://github.com/linyows/jmapc/pull/75))
+- **The number of requests in flight follows `maxConcurrentRequests`.** It was
+  read once, at the first request, and kept from then on. Where the number goes
+  down, the requests already in flight are not cancelled: each returns its slot
+  as it finishes, and no further slot is given out until fewer than the new
+  number are held, so the count never rises above what the server last stated.
+  Slots are handed out in the order they were asked for, which the previous
+  implementation did not guarantee.
+  ([#76](https://github.com/linyows/jmapc/pull/76))
+- **A request larger than `maxSizeRequest` is refused before it is sent**, as a
+  `*RequestError` naming that limit, in the shape `Upload` already returns for
+  `maxSizeUpload`. How large a request is becomes known only once it is
+  encoded, which is why this is the one preflight check made at that point
+  rather than before. `WithoutPreflightChecks` turns it off with the rest.
+  ([#79](https://github.com/linyows/jmapc/pull/79))
+
 ## v0.13.0 (2026-09-06)
 
 ### Breaking changes
