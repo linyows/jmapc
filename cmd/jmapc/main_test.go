@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -340,5 +341,128 @@ func TestSameRequestIsANoteRatherThanAnError(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(out, name)); err != nil {
 			t.Errorf("%s was not generated: %v", name, err)
 		}
+	}
+}
+
+// generated lays out a workspace holding the requests, generates the client
+// into it, and returns the directory and the arguments that generated it, so
+// that a test can run the same generation again with -check.
+func generated(t *testing.T, requests map[string]string) (string, []string) {
+	t.Helper()
+	files := map[string]string{}
+	for name, content := range requests {
+		files["requests/"+name] = content
+	}
+	dir := workspace(t, files)
+	args := []string{"generate", "-requests", filepath.Join(dir, "requests"), "-out", filepath.Join(dir, "client")}
+	if err := run(args); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	return dir, args
+}
+
+// TestGenerateCheckPassesOnAGeneratedClient checks that -check accepts what
+// generating just wrote, and that it leaves the files alone.
+func TestGenerateCheckPassesOnAGeneratedClient(t *testing.T) {
+	dir, args := generated(t, map[string]string{"ListMailboxes.jmap.json": listMailboxes})
+	path := filepath.Join(dir, "client", "listmailboxes_gen.go")
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading the generated client: %v", err)
+	}
+
+	out, _, err := capture(t, append(args, "-check"))
+	if err != nil {
+		t.Fatalf("generate -check: %v", err)
+	}
+	if !strings.Contains(out, "up to date") {
+		t.Errorf("generate -check does not say the client is up to date:\n%s", out)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading the generated client: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Error("generate -check wrote to the client, and it should not have")
+	}
+}
+
+// TestGenerateCheckReportsAFileThatChanged covers the file that is on disk but
+// is no longer what the request generates, which is what a request changed
+// without the client being generated again leaves behind.
+func TestGenerateCheckReportsAFileThatChanged(t *testing.T) {
+	dir, args := generated(t, map[string]string{"ListMailboxes.jmap.json": listMailboxes})
+	path := filepath.Join(dir, "client", "listmailboxes_gen.go")
+	src, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading the generated client: %v", err)
+	}
+	if err := os.WriteFile(path, append(src, []byte("\n// changed by hand\n")...), 0o644); err != nil {
+		t.Fatalf("writing the generated client: %v", err)
+	}
+
+	_, errOut, err := capture(t, append(args, "-check"))
+	if err == nil {
+		t.Fatal("generate -check accepted a client that is not what jmapc would generate")
+	}
+	if !strings.Contains(errOut, "listmailboxes_gen.go: out of date") {
+		t.Errorf("generate -check does not name the file that differs:\n%s", errOut)
+	}
+	if !strings.Contains(err.Error(), "run jmapc generate") {
+		t.Errorf("the error does not say what to do about it: %v", err)
+	}
+}
+
+// TestGenerateCheckReportsAFileThatIsNotThere covers a client that was never
+// generated, and checks that -check reports it rather than writing it.
+func TestGenerateCheckReportsAFileThatIsNotThere(t *testing.T) {
+	dir := workspace(t, map[string]string{"requests/ListMailboxes.jmap.json": listMailboxes})
+	out := filepath.Join(dir, "client")
+
+	_, errOut, err := capture(t, []string{"generate", "-check",
+		"-requests", filepath.Join(dir, "requests"), "-out", out})
+	if err == nil {
+		t.Fatal("generate -check accepted a client that was never generated")
+	}
+	if !strings.Contains(errOut, "listmailboxes_gen.go: not generated yet") {
+		t.Errorf("generate -check does not name the file that is missing:\n%s", errOut)
+	}
+	if _, err := os.Stat(out); !os.IsNotExist(err) {
+		t.Error("generate -check wrote the client, and it should not have")
+	}
+}
+
+// TestGenerateCheckReportsWhatADeletedRequestLeftBehind covers the other way a
+// client goes stale: the request is gone and the file it generated is still
+// there, sending a request nobody asks for any more. A file jmapc did not write
+// is left out of it, since the output directory is not jmapc's alone.
+func TestGenerateCheckReportsWhatADeletedRequestLeftBehind(t *testing.T) {
+	dir, args := generated(t, map[string]string{
+		"ListMailboxes.jmap.json": listMailboxes,
+		"AllMailboxes.jmap.json": `{
+		  "methodCalls": [["Mailbox/get", {"ids": null, "properties": ["id", "name"]}, "every"]],
+		  "_returns": "every"
+		}`,
+	})
+	if err := os.Remove(filepath.Join(dir, "requests", "AllMailboxes.jmap.json")); err != nil {
+		t.Fatalf("removing a request: %v", err)
+	}
+	byHand := filepath.Join(dir, "client", "helpers.go")
+	if err := os.WriteFile(byHand, []byte("package client\n"), 0o644); err != nil {
+		t.Fatalf("writing a file by hand: %v", err)
+	}
+
+	_, errOut, err := capture(t, append(args, "-check"))
+	if err == nil {
+		t.Fatal("generate -check accepted a client holding a request that is gone")
+	}
+	if !strings.Contains(errOut, "allmailboxes_gen.go: generated from a request that is no longer there") {
+		t.Errorf("generate -check does not name the file left behind:\n%s", errOut)
+	}
+	if strings.Contains(errOut, "helpers.go") {
+		t.Errorf("generate -check reported a file it did not write:\n%s", errOut)
+	}
+	if _, err := os.Stat(byHand); err != nil {
+		t.Errorf("generate -check removed a file it did not write: %v", err)
 	}
 }
