@@ -119,14 +119,26 @@ func (a *answers) catchUp(ctx context.Context, since string) (string, bool, erro
 // the states each catch-up was asked about.
 func watch(t *testing.T, ws *watchServer, state string, steps ...step) ([]string, error) {
 	t.Helper()
+	return watchWith(t, ws, state, nil, steps...)
+}
+
+// watchWith is watch with options of its own, for the tests that vary one.
+func watchWith(t *testing.T, ws *watchServer, state string, opts []WatchOption, steps ...step) ([]string, error) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	a := &answers{steps: steps, stop: cancel}
-	err := New(ws.URL+"/session").Watch(ctx, "a1", "Email", state, a.catchUp,
-		// A test has no use for the wait that keeps a real client from
-		// hammering a server that is down.
-		WithReconnect(func(int) time.Duration { return 0 }))
+	// A test has no use for the wait that keeps a real client from hammering a
+	// server that is down.
+	opts = append([]WatchOption{WithReconnect(func(int) time.Duration { return 0 })}, opts...)
+	err := New(ws.URL+"/session").Watch(ctx, "a1", "Email", state, a.catchUp, opts...)
 	return a.seen, err
+}
+
+// tooOld is a server refusing to say what changed since a state it no longer
+// holds, which is the one error a watch has a way back from.
+func tooOld() error {
+	return &MethodError{MethodName: "Email/changes", CallID: "changes", Type: ErrCannotCalcChanges}
 }
 
 // TestWatchCatchesUpOnConnectingAndOnEvents covers the shape of the thing: what
@@ -268,5 +280,99 @@ func TestBackoffDoubles(t *testing.T) {
 		if got := backoff(attempt); got != want {
 			t.Errorf("backoff(%d) = %v, want %v", attempt, got, want)
 		}
+	}
+}
+
+// TestWatchResyncsWhereTheServerCannotCalculateChanges covers the watch resumed
+// after a long enough pause: the server no longer holds the state it was given,
+// no further /changes call will do better, and the caller reads the records
+// again and says where it got to.
+func TestWatchResyncsWhereTheServerCannotCalculateChanges(t *testing.T) {
+	var resyncs int
+	resync := WithResync(func(context.Context) (string, error) {
+		resyncs++
+		return "e9", nil
+	})
+	ws := newWatchServer(t)
+	seen, err := watchWith(t, ws, "e1", []WatchOption{resync},
+		step{err: tooOld()},   // the state the watch holds is too old
+		step{newState: "e10"}, // and the watch goes on from where the resync got to
+	)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Watch: %v", err)
+	}
+	if resyncs != 1 {
+		t.Errorf("the records were read again %d times, want once", resyncs)
+	}
+	if len(seen) != 2 || seen[0] != "e1" || seen[1] != "e9" {
+		t.Errorf("caught up from %v, want e1 and then the e9 the resync reported", seen)
+	}
+}
+
+// TestWatchStopsWhereThereIsNoResync checks that a watch given no way back is
+// left as it was: the error reaches the caller, who is the only one that can do
+// anything about it.
+func TestWatchStopsWhereThereIsNoResync(t *testing.T) {
+	ws := newWatchServer(t)
+	_, err := watch(t, ws, "e1", step{err: tooOld()})
+	var method *MethodError
+	if !errors.As(err, &method) || method.Type != ErrCannotCalcChanges {
+		t.Fatalf("Watch returned %v, want the server's cannotCalculateChanges", err)
+	}
+}
+
+// TestWatchStopsWhereAResyncDoesNotHelp covers the server that will not
+// calculate changes from the state a resync has just reported. Reading the
+// records again would report that state again, and the server would answer it
+// the same way, so the watch stops rather than looping.
+func TestWatchStopsWhereAResyncDoesNotHelp(t *testing.T) {
+	var resyncs int
+	resync := WithResync(func(context.Context) (string, error) {
+		resyncs++
+		return "e9", nil
+	})
+	ws := newWatchServer(t)
+	_, err := watchWith(t, ws, "e1", []WatchOption{resync},
+		step{err: tooOld()},
+		step{err: tooOld()},
+	)
+	var method *MethodError
+	if !errors.As(err, &method) || method.Type != ErrCannotCalcChanges {
+		t.Fatalf("Watch returned %v, want the server's cannotCalculateChanges", err)
+	}
+	if resyncs != 1 {
+		t.Errorf("the records were read again %d times, want once", resyncs)
+	}
+}
+
+// TestWatchStopsOnAResyncThatFails checks that the caller's error on the way
+// back is the watch's error, as the caller's error from a catch-up is.
+func TestWatchStopsOnAResyncThatFails(t *testing.T) {
+	broken := errors.New("the cache could not be filled")
+	ws := newWatchServer(t)
+	_, err := watchWith(t, ws, "e1", []WatchOption{WithResync(func(context.Context) (string, error) {
+		return "", broken
+	})}, step{err: tooOld()})
+	if !errors.Is(err, broken) {
+		t.Fatalf("Watch returned %v, want the error the resync reported", err)
+	}
+}
+
+// TestWatchDoesNotResyncOnOtherErrors checks that reading every record again,
+// which is the most expensive thing a watch can ask of its caller, happens only
+// for the error that calls for it.
+func TestWatchDoesNotResyncOnOtherErrors(t *testing.T) {
+	var resyncs int
+	ws := newWatchServer(t)
+	_, err := watchWith(t, ws, "e1", []WatchOption{WithResync(func(context.Context) (string, error) {
+		resyncs++
+		return "e9", nil
+	})}, step{err: &MethodError{MethodName: "Email/changes", CallID: "changes", Type: ErrServerFail}})
+	var method *MethodError
+	if !errors.As(err, &method) || method.Type != ErrServerFail {
+		t.Fatalf("Watch returned %v, want the server's serverFail", err)
+	}
+	if resyncs != 0 {
+		t.Errorf("the records were read again %d times for an error that does not call for it", resyncs)
 	}
 }

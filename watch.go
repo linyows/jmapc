@@ -20,8 +20,31 @@ type WatchOption func(*watchConfig)
 
 // watchConfig holds the settings a watch runs with.
 type watchConfig struct {
-	ping  time.Duration
-	retry func(attempt int) time.Duration
+	ping   time.Duration
+	retry  func(attempt int) time.Duration
+	resync Resync
+}
+
+// Resync reads the records again and reports the state they were read at. It is
+// what a client is left with when the server can no longer say what changed:
+// RFC 8620 has it discard what it holds and read the records afresh.
+type Resync func(ctx context.Context) (state string, err error)
+
+// WithResync gives a watch a way back from a server that cannot say what
+// changed since the state the watch holds. A /changes call answers
+// cannotCalculateChanges where the state it was given is too old to work from,
+// which is what a server answers when a watch is resumed after a long enough
+// pause, and asking again with the same state does not help. Without this the watch stops
+// and returns that error, and a program that followed changes stops following
+// them.
+//
+// f reads the records again, however that is done for the records the caller
+// keeps, and returns the state they were read at. The watch continues from
+// there. Where the server cannot calculate changes from a state f has just
+// reported either, the watch stops: a second resync would report the same
+// state, and the server would answer it the same way.
+func WithResync(f Resync) WatchOption {
+	return func(c *watchConfig) { c.resync = f }
 }
 
 // WithPing requests a comment from the server at that interval, so that a
@@ -76,11 +99,24 @@ func (c *Client) Watch(ctx context.Context, accountID ID, typeName, state string
 	// A /changes call returns as many changes as the server chooses, so
 	// catching up is a loop of its own.
 	settle := func() error {
+		// resynced records that the state was last set by a resync rather than
+		// by the server, so that a resync the server answers the same way is
+		// not repeated.
+		resynced := false
 		for {
 			newState, more, err := catchUp(ctx, state)
 			if err != nil {
-				return err
+				if cfg.resync == nil || resynced || !cannotCalculateChanges(err) {
+					return err
+				}
+				fresh, err := cfg.resync(ctx)
+				if err != nil {
+					return err
+				}
+				state, resynced = fresh, true
+				continue
 			}
+			resynced = false
 			if newState != "" {
 				state = newState
 			}
@@ -148,6 +184,15 @@ func (c *Client) Watch(ctx context.Context, accountID ID, typeName, state string
 			return err
 		}
 	}
+}
+
+// cannotCalculateChanges reports whether err carries a server saying it cannot
+// work out what changed since the state it was given. The state is too far
+// behind what the server keeps, and the client reads the records again
+// instead.
+func cannotCalculateChanges(err error) bool {
+	var method *MethodError
+	return errors.As(err, &method) && method.Type == ErrCannotCalcChanges
 }
 
 // permanent reports whether an error will persist after a delay. A server that

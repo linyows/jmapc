@@ -97,6 +97,12 @@
 // [EventStream.Next] as a signal to reconnect, passing the stream's
 // [EventStream.LastEventID] so that nothing is missed in between.
 //
+// [Client.Watch] is that loop written out: it reconnects, catches up after
+// every connection, and asks again while the server reports more.
+// [WithResync] gives it a way back from a server that can no longer say what
+// changed since the state the watch holds, which is what a server answers when
+// a watch is resumed after a long pause.
+//
 // # Observability
 //
 // [WithObserver] takes an [Observer], which receives a report of what the
