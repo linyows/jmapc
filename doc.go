@@ -100,8 +100,8 @@
 // [Client.Watch] is that loop written out: it reconnects, catches up after
 // every connection, and asks again while the server reports more.
 // [WithResync] gives it a way back from a server that can no longer say what
-// changed since the state the watch holds, which is what a watch resumed after
-// a long pause meets.
+// changed since the state the watch holds, which is what a server answers when
+// a watch is resumed after a long pause.
 //
 // # Observability
 //

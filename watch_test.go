@@ -323,8 +323,8 @@ func TestWatchStopsWhereThereIsNoResync(t *testing.T) {
 
 // TestWatchStopsWhereAResyncDoesNotHelp covers the server that will not
 // calculate changes from the state a resync has just reported. Reading the
-// records again would report that state again and meet the same answer, so the
-// watch stops rather than looping.
+// records again would report that state again, and the server would answer it
+// the same way, so the watch stops rather than looping.
 func TestWatchStopsWhereAResyncDoesNotHelp(t *testing.T) {
 	var resyncs int
 	resync := WithResync(func(context.Context) (string, error) {

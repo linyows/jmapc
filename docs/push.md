@@ -56,7 +56,7 @@ refuses the connection outright returns that error immediately rather than
 retrying, because retrying will not change a 403. `jmapc.WithPing` and
 `jmapc.WithReconnect` configure the two values worth tuning.
 
-A watch resumed after a long enough pause meets one error it cannot go on from.
+There is one error a watch resumed after a long enough pause cannot go on from.
 A `/changes` call answers `cannotCalculateChanges` where the state it is given
 is older than the server keeps, and asking again with the same state gets the
 same answer. RFC 8620 has the client read the records again instead, and
@@ -85,8 +85,8 @@ The watch continues from the state that function reports. Without it the watch
 stops and returns the error, and a program that followed changes stops following
 them, with nothing but that error to say so. Where the server will not calculate
 changes from the state a resync has just reported either, the watch stops:
-reading the records again would report that state again and meet the same
-answer.
+reading the records again would report that state again, and the server would
+answer it the same way.
 
 Underneath is `Client.Watch`, which takes the catch-up as a function and is what
 to call where the catching up is not one request:
