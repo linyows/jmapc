@@ -99,11 +99,11 @@ In TypeScript the same failure is a thrown `SetErrors`, with the response on
 `err.result`. In Rust it is an `Error::Set`, and the response is retrieved with
 the type the function would have returned, through `err.result::<T>()`.
 
-### Deciding what to do with a failure
+### Temporary and permanent failures
 
 A failure arrives as an error, and what to do with it depends on what the server
-said. Three functions answer that without the caller picking apart error types
-and status codes:
+said. Three functions classify it, so that a caller does not pick apart status
+codes and error type strings itself:
 
 ```go
 res, err := client.SendEmail(ctx, c, params)
