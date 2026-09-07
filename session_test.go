@@ -60,6 +60,15 @@ type stateServer struct {
 	// slow holds the session resource open long enough for the requests
 	// behind the first one to arrive while it is still being fetched.
 	slow atomic.Bool
+	// concurrent is the maxConcurrentRequests the session states, and zero
+	// states no limit.
+	concurrent atomic.Int64
+	// apiDelay holds each API request open, so that requests sent together
+	// are in flight together.
+	apiDelay atomic.Int64
+	// inFlight counts the API requests being answered, and inFlightHigh keeps
+	// the most there were at once.
+	inFlight, inFlightHigh atomic.Int64
 }
 
 func newStateServer(t *testing.T) *stateServer {
@@ -82,15 +91,29 @@ func newStateServer(t *testing.T) *stateServer {
 		}
 		account := ts.account.Load().(string)
 		fmt.Fprintf(w, `{
-		  "capabilities": {"urn:ietf:params:jmap:core": {}, "urn:ietf:params:jmap:mail": {}},
+		  "capabilities": {
+		    "urn:ietf:params:jmap:core": {"maxConcurrentRequests": %d},
+		    "urn:ietf:params:jmap:mail": {}
+		  },
 		  "accounts": {%q: {"name": "someone", "isPersonal": true}},
 		  "primaryAccounts": {"urn:ietf:params:jmap:mail": %q},
 		  "username": "someone",
 		  "apiUrl": %q,
 		  "state": %q
-		}`, account, account, ts.URL+"/api", ts.state.Load().(string))
+		}`, ts.concurrent.Load(), account, account, ts.URL+"/api", ts.state.Load().(string))
 	})
 	mux.HandleFunc("/api", func(w http.ResponseWriter, r *http.Request) {
+		now := ts.inFlight.Add(1)
+		for {
+			high := ts.inFlightHigh.Load()
+			if now <= high || ts.inFlightHigh.CompareAndSwap(high, now) {
+				break
+			}
+		}
+		if d := ts.apiDelay.Load(); d > 0 {
+			time.Sleep(time.Duration(d) * time.Millisecond)
+		}
+		ts.inFlight.Add(-1)
 		fmt.Fprintf(w, `{"sessionState":%q,"methodResponses":[]}`, ts.state.Load().(string))
 	})
 	return ts

@@ -124,6 +124,14 @@ date, which is what it was a moment ago, so the request goes on and the next
 call tries again. The failure reaches an `Observer` as a request of
 `KindSession` that did not succeed.
 
+The number of requests the client keeps in flight follows the session as well.
+Where `maxConcurrentRequests` has gone down, the requests already in flight are
+not cancelled: each returns its slot as it finishes, and no further slot is
+given out until fewer than the new number are held. The client therefore never
+has more in flight than the server last stated, which matters because a server
+refuses the request that goes over with a 400, and a 400 is not sent again by
+any retry policy.
+
 `WithoutSessionRefresh` turns this off, for a client that will not outlive a
 change and has no use for the comparison. `RefreshSession` fetches the session
 whether or not a response reported a change, for a client that learns of one by
