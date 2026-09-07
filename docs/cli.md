@@ -61,6 +61,41 @@ A run reads the response the way generated code does: a `/set` that answers 200
 with a refusal in it is an error here too, printed after the response that
 carries it.
 
+## Checking that the generated client is up to date
+
+The generated client is committed to the repository, so it can fall behind the
+requests it was generated from: a request is changed and the client is not
+generated again, or jmapc is upgraded and nothing is regenerated. `generate
+-check` compares what is on disk with what generating now would produce. It
+writes nothing, and it fails where the two differ.
+
+```
+jmapc generate -check
+client/listinboxemails_gen.go: out of date
+client/oldreport_gen.go: generated from a request that is no longer there
+jmapc: 2 files are out of date; run jmapc generate
+```
+
+It reports three things:
+
+- a file that is not what its request generates now,
+- a file that has not been generated at all,
+- a file jmapc wrote earlier that no request generates any more, which is what
+  deleting a request file leaves behind.
+
+A file that does not start with the banner every generated file carries was
+written by hand, so it is neither reported nor touched.
+
+Give it the arguments the generation it checks was given. The path a request
+came from is written into the file generated from it, so a check run with a
+different `-requests` path reports every file as out of date.
+
+In a workflow:
+
+```yaml
+- run: go tool jmapc generate -check
+```
+
 ## Configuration
 
 Flags, or a `jmapc.json` beside your module:
