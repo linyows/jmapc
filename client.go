@@ -320,6 +320,9 @@ func (c *Client) post(ctx context.Context, apiURL string, r *Request) (*Response
 	if err != nil {
 		return nil, fmt.Errorf("jmapc: encoding request: %w", err)
 	}
+	if err := c.checkRequestSize(body); err != nil {
+		return nil, err
+	}
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("jmapc: building request: %w", err)
@@ -409,6 +412,26 @@ func preflight(s *Session, r *Request) error {
 		}
 	}
 	return nil
+}
+
+// checkRequestSize refuses a request larger than the session says the server
+// accepts. How large a request is becomes known only once it is encoded, which
+// is why this is here rather than in preflight with the checks that read the
+// request itself. A server answers an oversized request with a 400 that no
+// retry policy sends again, so the round trip buys nothing.
+func (c *Client) checkRequestSize(body []byte) error {
+	if !c.strict {
+		return nil
+	}
+	max := c.limit(func(core *CoreCapability) UnsignedInt { return core.MaxSizeRequest })
+	if max <= 0 || len(body) <= max {
+		return nil
+	}
+	return &RequestError{
+		Type:   ErrTypeLimit,
+		Limit:  "maxSizeRequest",
+		Detail: fmt.Sprintf("the request is %d octets, and the server accepts at most %d", len(body), max),
+	}
 }
 
 // send applies the configured request editors and performs the HTTP request.

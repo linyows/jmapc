@@ -80,6 +80,14 @@ What the request leaves to its caller is not checked: a parameter standing for a
 list of ids may be any length, and an assumption about it would report a
 problem in a request that is correct.
 
+What those parameters turn out to be is checked at run time, where the request
+has been encoded and its size is known. A request larger than `maxSizeRequest`
+is refused before it is sent, as is one declaring a capability the session does
+not advertise or holding more calls than `maxCallsInRequest`. The server answers
+each of those with a 400 that no retry policy sends again, so the round trip
+buys nothing. `jmapc.WithoutPreflightChecks` turns them off for a client whose
+server under-reports what it takes.
+
 The session URL is the one value not read from the environment — `-token` and
 `-user` fall back to `$JMAP_TOKEN` and `$JMAP_USER` — because a check that
 reaches the network should be requested on the command line rather than

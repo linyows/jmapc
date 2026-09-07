@@ -437,3 +437,105 @@ func TestCapabilityReading(t *testing.T) {
 		t.Error("expected an error for a capability the account does not support")
 	}
 }
+
+// sizedRequest returns a request whose encoded form carries n octets of text,
+// for the tests about maxSizeRequest.
+func sizedRequest(n int) *Request {
+	return &Request{
+		Using: []string{CapabilityCore},
+		MethodCalls: []Invocation{
+			{Name: "Core/echo", CallID: "c0", Args: map[string]any{"text": strings.Repeat("x", n)}},
+		},
+	}
+}
+
+// sessionAccepting returns a session document stating how large a request the
+// server takes.
+func sessionAccepting(apiURL string, max int) string {
+	return fmt.Sprintf(`{
+	  "capabilities": {"urn:ietf:params:jmap:core": {"maxSizeRequest": %d}},
+	  "accounts": {}, "primaryAccounts": {}, "username": "someone",
+	  "apiUrl": %q, "state": "s1"
+	}`, max, apiURL)
+}
+
+// TestARequestLargerThanTheServerTakesIsNotSent covers the limit that cannot be
+// checked before the request is encoded. A server answers an oversized request
+// with a 400, so the round trip buys nothing.
+func TestARequestLargerThanTheServerTakesIsNotSent(t *testing.T) {
+	r := sizedRequest(500)
+	body, err := json.Marshal(r)
+	if err != nil {
+		t.Fatalf("encoding the request: %v", err)
+	}
+
+	ts := newTestServer(t)
+	ts.sessionHandler = sessionAccepting(ts.URL+"/api", len(body)-1)
+	c := ts.client()
+
+	_, err = c.Do(context.Background(), r)
+	var reqErr *RequestError
+	if !errors.As(err, &reqErr) {
+		t.Fatalf("Do returned %v, want a request error", err)
+	}
+	if reqErr.Type != ErrTypeLimit || reqErr.Limit != "maxSizeRequest" {
+		t.Errorf("the error is %v, want it to name maxSizeRequest", reqErr)
+	}
+	if n := ts.apiHits.Load(); n != 0 {
+		t.Errorf("the request was sent %d times, and it was never going to be accepted", n)
+	}
+	if IsTemporary(err) {
+		t.Error("a request the server will not take was reported as a failure that time resolves")
+	}
+}
+
+// TestARequestTheSizeOfTheLimitIsSent checks the boundary, since a client that
+// refuses what the server would have taken is worse than one that does not
+// check at all.
+func TestARequestTheSizeOfTheLimitIsSent(t *testing.T) {
+	r := sizedRequest(500)
+	body, err := json.Marshal(r)
+	if err != nil {
+		t.Fatalf("encoding the request: %v", err)
+	}
+
+	ts := newTestServer(t)
+	ts.sessionHandler = sessionAccepting(ts.URL+"/api", len(body))
+	c := ts.client()
+
+	if _, err := c.Do(context.Background(), r); err != nil {
+		t.Fatalf("a request the size of the limit was refused: %v", err)
+	}
+	if n := ts.apiHits.Load(); n != 1 {
+		t.Errorf("the request was sent %d times, want once", n)
+	}
+}
+
+// TestAnOversizedRequestIsSentWhereTheChecksAreOff covers the client told that
+// the session under-reports what the server takes.
+func TestAnOversizedRequestIsSentWhereTheChecksAreOff(t *testing.T) {
+	r := sizedRequest(500)
+	ts := newTestServer(t)
+	ts.sessionHandler = sessionAccepting(ts.URL+"/api", 10)
+	c := ts.client(WithoutPreflightChecks())
+
+	if _, err := c.Do(context.Background(), r); err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	if n := ts.apiHits.Load(); n != 1 {
+		t.Errorf("the request was sent %d times, want once", n)
+	}
+}
+
+// TestASizeTheServerDoesNotStateIsNotChecked covers the server that says
+// nothing about how large a request it takes, which RFC 8620 allows.
+func TestASizeTheServerDoesNotStateIsNotChecked(t *testing.T) {
+	ts := newTestServer(t)
+	c := ts.client()
+	if _, err := c.Do(context.Background(), sizedRequest(5000)); err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	if n := ts.apiHits.Load(); n != 1 {
+		t.Errorf("the request was sent %d times, want once", n)
+	}
+}
