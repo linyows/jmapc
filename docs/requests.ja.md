@@ -87,7 +87,7 @@ Rust では `Option` に包まれ、TypeScript ではメンバー自体が省略
 そこだけ落とすと、空の `AND` と、フィルタが無いことのどちらなのかという、リクエストが答えていない問いが残ります。
 形の変わるフィルタは、フィルタ全体を一つのパラメータとして渡してください。
 
-## 名前付きのプロパティ集合
+## プロパティの共通化
 
 同じ 14 個の `Email` のプロパティを読む 6 本のリクエストからは、呼び出しごとに 1 つずつ、6 つのレコード型が生成されます。
 メールを描画する関数はそのうち 1 つに対して書かれ、残りの 5 つからは詰め替えることになります。
@@ -209,7 +209,7 @@ creation id はリクエスト全体のものであって、その中のどの�
 |---|---|
 | 関数 | `ListInboxEmails` |
 | パラメータ。リクエストが値を開けている場合に生成されます | `ListInboxEmailsParams` |
-| プロパティを絞り込んだレコード | call id `fetch` から `ListInboxEmailsFetchEmail`。ボディパートを絞り込めば `ListInboxEmailsFetchEmailBodyPart` も生成されます。名前付きの集合を求める呼び出しは、代わりにその集合の名前を返します。[名前付きのプロパティ集合](#名前付きのプロパティ集合)を参照してください |
+| プロパティを絞り込んだレコード | call id `fetch` から `ListInboxEmailsFetchEmail`。ボディパートを絞り込めば `ListInboxEmailsFetchEmailBodyPart` も生成されます。名前付きの集合を求める呼び出しは、代わりにその集合の名前を返します。[プロパティの共通化](#プロパティの共通化)を参照してください |
 | そのレコードを返す呼び出しのレスポンス | `ListInboxEmailsFetchResponse`（call id の `fetch` から） |
 | 結果。`_returns` が呼び出しを指定しない場合に生成されます | `ListInboxEmailsResult` |
 | 変更を追う関数。リクエストが `_watches` を持つ場合に生成されます | `SyncEmailsWatch` |

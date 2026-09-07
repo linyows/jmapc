@@ -105,4 +105,4 @@ jmapc: 2 files are out of date; run jmapc generate
 
 `requests` ディレクトリにはリクエストを 1 ファイルに 1 つずつ置きます。
 リクエストが求めるプロパティ集合を宣言する `properties.json` を置くこともできます。
-[名前付きのプロパティ集合](requests.ja.md#名前付きのプロパティ集合)を参照してください。
+[プロパティの共通化](requests.ja.md#プロパティの共通化)を参照してください。

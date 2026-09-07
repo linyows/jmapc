@@ -95,7 +95,7 @@ not answer, since an empty `AND` and no filter at all are different requests.
 For a filter whose shape varies, hand the whole filter over as one parameter
 instead.
 
-## Named sets of properties
+## Sharing properties across requests
 
 Six requests reading the same fourteen properties of an `Email` get six record
 types, one per call, and a function that renders a message is written for one of
@@ -219,7 +219,7 @@ identifier: letters, digits and underscores, not starting with a digit.
 | --- | --- |
 | The function | `ListInboxEmails` |
 | Its parameters, where the request leaves any open | `ListInboxEmailsParams` |
-| A record whose properties the request narrows | `ListInboxEmailsFetchEmail`, after the call id `fetch`, and `ListInboxEmailsFetchEmailBodyPart` for a narrowed body part. A call asking for a named set answers with the set's own name instead; see [Named sets of properties](#named-sets-of-properties) |
+| A record whose properties the request narrows | `ListInboxEmailsFetchEmail`, after the call id `fetch`, and `ListInboxEmailsFetchEmailBodyPart` for a narrowed body part. A call asking for a named set answers with the set's own name instead; see [Sharing properties across requests](#sharing-properties-across-requests) |
 | The response to a call returning that record | `ListInboxEmailsFetchResponse`, after the call id `fetch` |
 | The result, where `_returns` names no call | `ListInboxEmailsResult` |
 | The function that follows changes, where the request is watched | `SyncEmailsWatch` |

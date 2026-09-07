@@ -111,4 +111,4 @@ Flags, or a `jmapc.json` beside your module:
 
 The `requests` directory holds one file per request, and may hold a
 `properties.json` naming the sets of properties they ask for; see
-[Named sets of properties](requests.md#named-sets-of-properties).
+[Sharing properties across requests](requests.md#sharing-properties-across-requests).
