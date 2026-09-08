@@ -160,7 +160,7 @@ interface, so the same holds in each.
 
 A set's name is the name of a type a caller writes, so a request cannot take it:
 a request file named `EmailSummary.jmap.json` beside a set of that name is
-reported rather than renamed around.
+reported rather than quietly renamed.
 
 A call that asks for a set narrows nothing else about the records it reads, so a
 set and `bodyProperties` in one call is reported. Narrowing the body parts
