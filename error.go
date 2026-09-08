@@ -92,7 +92,14 @@ func (e *MethodError) Error() string {
 	return b.String()
 }
 
-// Method-level error types defined by RFC 8620, Section 3.6.2.
+// The error types a method call and a record of a /set are refused with:
+// those RFC 8620, Section 3.6.2 defines for every method, those a method
+// defines for itself, and those Section 5.3 defines for a record a /set would
+// not act on. One type is reported at whichever level the server refused at,
+// which is why they are one list; HasErrorType asks about any of them.
+//
+// A server may report a type of its own, and a type these do not name is
+// compared as it was given.
 const (
 	ErrServerUnavailable = "serverUnavailable"
 	ErrServerFail        = "serverFail"
@@ -117,6 +124,7 @@ const (
 	ErrWillDestroy       = "willDestroy"
 	ErrInvalidProperties = "invalidProperties"
 	ErrSingleton         = "singleton"
+	ErrAlreadyExists     = "alreadyExists"
 )
 
 // MethodErrors collects every method-level error in one response. A request
@@ -158,7 +166,7 @@ type SetError struct {
 	// Properties names the offending properties when Type is
 	// "invalidProperties".
 	Properties []string `json:"properties,omitempty"`
-	// ExistingID is set when Type is "alreadyExists".
+	// ExistingID is set when Type is ErrAlreadyExists.
 	ExistingID ID `json:"existingId,omitempty"`
 }
 
@@ -354,6 +362,45 @@ func IsRateLimited(err error) bool {
 	}
 	for _, kind := range errorTypes(err) {
 		if kind == ErrRateLimit {
+			return true
+		}
+	}
+	return false
+}
+
+// HasErrorType reports whether any of the failures err carries is of the given
+// type: a request refused as a whole, a method call that failed, or one record
+// a /set would not act on.
+//
+// JMAP reports one condition at three levels. A server out of quota answers
+// Email/set with an overQuota method error where the call is refused, and with
+// an overQuota SetError against a single record where the rest of the call went
+// through, and a request that is too large is refused as a whole before any of
+// it runs. The type is the same in each, and so is what the caller does about
+// it, so this asks the question the caller has rather than making it ask three
+// times:
+//
+//	if jmapc.HasErrorType(err, jmapc.ErrOverQuota) {
+//		return errFull
+//	}
+//
+// The type is one of the constants above: ErrNotFound and the other method and
+// record types, or ErrTypeLimit and the other request types, which are URIs and
+// so cannot be mistaken for one another. A type the specifications do not
+// define is compared as it was given, since a server may report its own.
+//
+// It answers whether a type is there, not which record it was reported for.
+// Use errors.As with a *SetErrors to read that, from its Failures.
+func HasErrorType(err error, typ string) bool {
+	if err == nil || typ == "" {
+		return false
+	}
+	var reqErr *RequestError
+	if errors.As(err, &reqErr) && reqErr.Type == typ {
+		return true
+	}
+	for _, kind := range errorTypes(err) {
+		if kind == typ {
 			return true
 		}
 	}

@@ -125,4 +125,9 @@
 // asked the caller to wait. Together they are what a caller needs to decide
 // between sending the request again later and reporting it as wrong, without
 // reading status codes and error types itself.
+//
+// [HasErrorType] says whether a particular error type is among what failed,
+// wherever the server reported it: against the request, against a call, or
+// against one record of a /set. A caller that answers overQuota the same way in
+// each asks once rather than three times.
 package jmapc
