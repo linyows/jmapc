@@ -48,6 +48,54 @@ const listInboxEmails = `{
   "_returns": "c1"
 }`
 
+// TestBackReferenceReadsWhatTheCallFetches covers the references a narrowed
+// call still answers: the id it returns whether or not it was asked for, a
+// property it did ask for, and a call whose properties the caller supplies,
+// which says nothing about what comes back.
+func TestBackReferenceReadsWhatTheCallFetches(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+	}{{
+		name: "the property is one the call fetches",
+		src: `{"methodCalls": [
+			["Email/get", {"ids": ["a"], "properties": ["subject", "threadId"]}, "matched"],
+			["Thread/get", {"#ids": {"resultOf": "matched", "name": "Email/get", "path": "/list/*/threadId"}}, "threads"]
+		]}`,
+	}, {
+		name: "the id comes back whether or not it was asked for",
+		src: `{"methodCalls": [
+			["Email/get", {"ids": ["a"], "properties": ["subject"]}, "matched"],
+			["Email/get", {"#ids": {"resultOf": "matched", "name": "Email/get", "path": "/list/*/id"}}, "again"]
+		]}`,
+	}, {
+		name: "the call fetches every property",
+		src: `{"methodCalls": [
+			["Email/get", {"ids": ["a"]}, "matched"],
+			["Thread/get", {"#ids": {"resultOf": "matched", "name": "Email/get", "path": "/list/*/threadId"}}, "threads"]
+		]}`,
+	}, {
+		name: "the caller supplies the properties",
+		src: `{"methodCalls": [
+			["Email/get", {"ids": ["a"], "properties": "{{properties}}"}, "matched"],
+			["Thread/get", {"#ids": {"resultOf": "matched", "name": "Email/get", "path": "/list/*/threadId"}}, "threads"]
+		]}`,
+	}, {
+		name: "the reference reads the response rather than a record",
+		src: `{"methodCalls": [
+			["Email/query", {}, "search"],
+			["Email/get", {"#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"},
+			               "properties": ["subject"]}, "matched"]
+		]}`,
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parse(t, "Q"+Extension, tt.src)
+		})
+	}
+}
+
 func TestParse(t *testing.T) {
 	q := parse(t, "ListInboxEmails"+Extension, listInboxEmails)
 
@@ -178,6 +226,23 @@ func TestParseErrors(t *testing.T) {
 			["Email/get", {"#ids": {"resultOf": "c0", "name": "Email/query", "path": "/queryState"}}, "c1"]
 		]}`,
 		want: `expects Id[]|null`,
+	}, {
+		name: "back reference reads a property the call did not fetch",
+		src: `{"methodCalls": [
+			["Email/query", {}, "search"],
+			["Email/get", {"#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"},
+			               "properties": ["id", "subject"]}, "matched"],
+			["Thread/get", {"#ids": {"resultOf": "matched", "name": "Email/get", "path": "/list/*/threadId"}}, "threads"]
+		]}`,
+		want: `/list/*/threadId selects threadId from the Email/get call, which does not fetch it`,
+	}, {
+		name: "back reference reads a nested property the call did not fetch",
+		src: `{"methodCalls": [
+			["Email/get", {"ids": ["a"], "properties": ["id", "textBody"],
+			               "bodyProperties": ["partId", "type"]}, "fetch"],
+			["Blob/get", {"#ids": {"resultOf": "fetch", "name": "Email/get", "path": "/list/*/textBody/*/blobId"}}, "blobs"]
+		]}`,
+		want: `selects blobId from the Email/get call, which does not fetch it`,
 	}, {
 		name: "duplicate call id",
 		src:  `{"methodCalls": [["Email/query", {}, "c0"], ["Email/get", {}, "c0"]]}`,

@@ -261,6 +261,29 @@ func TestRequestPropertySetErrors(t *testing.T) {
 	}
 }
 
+// TestBackReferenceIntoASetSaysWhereToAddIt checks that a reference reading a
+// property the set does not hold points at the set, which is where the property
+// is added, rather than at the call, where it cannot be.
+func TestBackReferenceIntoASetSaysWhereToAddIt(t *testing.T) {
+	_, err := parseWith(t, sets(t, emailSets), `{
+	  "methodCalls": [
+	    ["Email/get", {"ids": "{{ids}}", "properties": "@EmailSummary"}, "matched"],
+	    ["Blob/get", {"#ids": {"resultOf": "matched", "name": "Email/get",
+	                           "path": "/list/*/blobId"}}, "blobs"]
+	  ]
+	}`)
+	if err == nil {
+		t.Fatal("expected an error, got none")
+	}
+	got := err.Error()
+	if !strings.Contains(got, "which does not fetch it") {
+		t.Errorf("error was:\n%s\nwant it to say the call does not fetch the property", got)
+	}
+	if !strings.Contains(got, `add "blobId" to the set EmailSummary`) {
+		t.Errorf("error was:\n%s\nwant it to point at the set", got)
+	}
+}
+
 func TestRequestAsksForSetWithoutAnyDeclared(t *testing.T) {
 	_, err := parseWith(t, nil, getWithSet)
 	if err == nil {
