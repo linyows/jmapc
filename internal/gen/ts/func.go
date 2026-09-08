@@ -79,6 +79,9 @@ func (g *RequestGenerator) writeImports(buf *bytes.Buffer, p *plan) {
 		sort.Strings(sorted)
 		fmt.Fprintf(buf, "import type { %s } from \"./types.js\"\n", strings.Join(sorted, ", "))
 	}
+	if sets := g.setsUsed(p); len(sets) > 0 {
+		fmt.Fprintf(buf, "import type { %s } from \"./%s.js\"\n", strings.Join(sets, ", "), PropertiesModule)
+	}
 	buf.WriteString("\n")
 }
 
@@ -98,14 +101,14 @@ func (g *RequestGenerator) collectRecordTypeNames(c *request.Call, info *call, n
 			collectTypeNames(f.ParsedType(), names)
 		}
 	}
-	if dataType, ok := g.Spec.Object(c.Method.DataType); ok {
+	if dataType, ok := g.Spec.Object(c.Method.DataType); ok && !info.sharedRecord {
 		properties := c.Properties
 		if properties == nil {
 			properties = dataType.PropertyNames()
 		}
 		add(dataType, shared.RecordProperties(properties))
 	}
-	if info.nestedType != "" {
+	if info.nestedType != "" && !info.sharedNested {
 		if nested, ok := g.Spec.Object(c.Method.NestedType); ok {
 			add(nested, c.NestedProperties)
 		}
@@ -192,7 +195,7 @@ func (g *RequestGenerator) writeParams(buf *bytes.Buffer, p *plan) {
 func (g *RequestGenerator) writeNestedTypes(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
-		if info.nestedType == "" {
+		if info.nestedType == "" || info.sharedNested {
 			continue
 		}
 		nested, ok := g.Spec.Object(c.Method.NestedType)
@@ -216,7 +219,7 @@ func (g *RequestGenerator) writeNestedTypes(buf *bytes.Buffer, p *plan) {
 func (g *RequestGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
-		if info.recordType == "" || !info.writesTypes {
+		if info.recordType == "" || !info.writesTypes || info.sharedRecord {
 			continue
 		}
 		dataType, ok := g.Spec.Object(c.Method.DataType)

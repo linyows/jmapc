@@ -2,37 +2,14 @@
 // Source: requests/SyncEmails.jmap.json
 
 import { type Client, type Request, type Response, MethodErrors, answered, decode } from "./client.js"
-import type { EmailChangesResponse, Id, UTCDate } from "./types.js"
+import type { EmailChangesResponse, Id } from "./types.js"
+import type { EmailWithFlags } from "./properties.js"
 
 // SyncEmailsParams holds the values SyncEmails leaves open.
 export interface SyncEmailsParams {
   // The state string the client already has, as returned by an earlier
   // Email/get or Email/changes.
   sinceState: string
-}
-
-// SyncEmailsCreatedEmail holds the properties of Email that the Email/get
-// call in SyncEmails asks for.
-export interface SyncEmailsCreatedEmail {
-  // The id of the email.
-  id: Id
-
-  // The id of the thread the email belongs to.
-  threadId: Id
-
-  // The mailboxes the email is in, as a set of ids mapped to true.
-  mailboxIds: { [key: Id]: boolean }
-
-  // The keywords set on the email, such as "$seen" or "$flagged", mapped to
-  // true.
-  keywords: { [key: string]: boolean }
-
-  // The Subject header field value.
-  subject: string | null
-
-  // When the email was received, which is what the mailbox sorts on by
-  // default.
-  receivedAt: UTCDate
 }
 
 // SyncEmailsUpdatedEmail holds the properties of Email that the Email/get
@@ -60,7 +37,7 @@ export interface SyncEmailsCreatedResponse {
   state: string
 
   // The records that were found, in an undefined order.
-  list: SyncEmailsCreatedEmail[]
+  list: EmailWithFlags[]
 
   // The ids that were requested but do not exist.
   notFound: Id[]
@@ -118,7 +95,7 @@ export async function syncEmails(client: Client, p: SyncEmailsParams): Promise<S
       ["Email/get", {
         "accountId": mailAccountId,
         "#ids": { resultOf: "changes", name: "Email/changes", path: "/created" },
-        "properties": ["id","threadId","mailboxIds","keywords","subject","receivedAt"],
+        "properties": ["id","threadId","subject","from","receivedAt","preview","hasAttachment","mailboxIds","keywords"],
       }, "created"],
       ["Email/get", {
         "accountId": mailAccountId,

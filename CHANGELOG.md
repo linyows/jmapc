@@ -4,6 +4,12 @@ What changed in each release, and what it means for the code that uses it. The r
 
 This starts at v0.12.0. What went into the releases before it is in the commit history.
 
+## Unreleased
+
+### Added
+
+- **A set of properties can be named once and asked for by name.** `properties.json`, beside the requests, gives a name to a shape — `{"EmailSummary": {"type": "Email", "properties": [...]}}` — and a request asks for it with `"properties": "@EmailSummary"` in place of the list. The generated record type takes the set's name, so every request asking for the set answers with one type rather than one type per call, and a function written for that type takes what any of them returned. The property list is written once as well, so adding a property is one edit rather than one edit per request. A set may `extend` another, which the generated type embeds in Go, flattens with serde in Rust and extends as an interface in TypeScript, so a function written for the base takes a record of the derived set without a conversion. `jmapc check` reads the file and reports a misspelled property where it was declared. ([#83](https://github.com/linyows/jmapc/pull/83))
+
 ## v0.14.0 (2026-09-07)
 
 ### Added

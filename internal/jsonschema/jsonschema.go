@@ -32,6 +32,7 @@ const (
 	parameterDef         = "parameter"
 	optionalParameterDef = "optionalParameter"
 	referenceDef         = "resultReference"
+	propertySetDef       = "propertySet"
 	callDef              = "methodCall"
 	methodDef            = "methodName"
 )
@@ -132,6 +133,11 @@ func (b *builder) declare() {
 		"type":        "string",
 		"pattern":     `^\{\{\s*[A-Za-z_][A-Za-z0-9_]*\s*\?\s*\}\}$`,
 		"description": "An argument the caller may leave out, written {{name?}}. Leaving it out leaves the argument out of the request, which is not the same as sending null. Only a whole argument may be written this way.",
+	}
+	b.defs[propertySetDef] = map[string]any{
+		"type":        "string",
+		"pattern":     `^@[A-Za-z_][A-Za-z0-9_]*$`,
+		"description": "A named set of properties, written @EmailSummary and declared in properties.json beside the requests. The generated record type takes the set's name, so every request asking for the set answers with one type.",
 	}
 	b.defs[referenceDef] = map[string]any{
 		"type":                 "object",
@@ -322,6 +328,7 @@ func (b *builder) propertyNames(f *spec.Field, typeName string, dynamic bool) an
 			map[string]any{"type": "array", "items": map[string]any{"anyOf": alternatives}},
 			map[string]any{"type": "null"},
 			ref(parameterDef),
+			ref(propertySetDef),
 		},
 	}
 }

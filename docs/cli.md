@@ -108,3 +108,7 @@ Flags, or a `jmapc.json` beside your module:
   "schemas": ["schema/notes.json"]
 }
 ```
+
+The `requests` directory holds one file per request, and may hold a
+`properties.json` naming the sets of properties they ask for; see
+[Sharing properties across requests](requests.md#sharing-properties-across-requests).

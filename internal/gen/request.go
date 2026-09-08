@@ -26,6 +26,10 @@ type RequestGenerator struct {
 	Qualifier string
 	// Requests are the requests to generate, in file name order.
 	Requests []*request.Request
+	// Properties are the named sets of properties the requests ask for, whose
+	// types are generated once for the whole package. It is nil where the
+	// project names no set.
+	Properties *request.PropertySets
 }
 
 // call holds the names the generator settled on for one method call.
@@ -46,6 +50,11 @@ type call struct {
 	// A call reading the same records in the same shape as an earlier one
 	// shares its types rather than declaring them again.
 	writesTypes bool
+	// sharedRecord says the record type is one of the named sets, which is
+	// written once for the package rather than by the request that asks for it.
+	sharedRecord bool
+	// sharedNested says the same of the nested type.
+	sharedNested bool
 }
 
 // plan is the naming decided for one request before any code is written.
@@ -81,13 +90,20 @@ func (g *RequestGenerator) Generate() (map[string][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := make(map[string][]byte, len(plans))
+	out := make(map[string][]byte, len(plans)+1)
 	for _, p := range plans {
 		src, err := g.file(p)
 		if err != nil {
 			return nil, err
 		}
 		out[fileName(p.q.Name)] = src
+	}
+	if len(g.Properties.Names()) > 0 {
+		src, err := g.propertiesFile()
+		if err != nil {
+			return nil, err
+		}
+		out[PropertiesFileName] = src
 	}
 	return out, nil
 }
@@ -104,8 +120,17 @@ func (g *RequestGenerator) plan() ([]*plan, error) {
 	sort.Slice(requests, func(i, j int) bool { return requests[i].Name < requests[j].Name })
 
 	taken := make(map[string]bool)
+	// The sets are named first, because their names are the ones an author
+	// chose for a type a caller names: a request has to give way to them
+	// rather than the other way about.
+	for _, name := range g.Properties.Names() {
+		taken[name] = true
+	}
 	for _, q := range requests {
 		if taken[q.Name] {
+			if _, set := g.Properties.Find(q.Name); set {
+				return nil, fmt.Errorf("gen: the request %s and the set of properties of the same name would both be generated as %s", q.Name, q.Name)
+			}
 			return nil, fmt.Errorf("gen: two requests are named %s", q.Name)
 		}
 		taken[q.Name] = true
@@ -129,6 +154,13 @@ func (g *RequestGenerator) plan() ([]*plan, error) {
 				// same shape, and one shape is one type.
 				*info = *p.calls[same[c]]
 				info.writesTypes = false
+			case c.PropertySet != nil:
+				// The set names the type, so every call asking for it answers
+				// with the one the package declares.
+				info.recordType = c.PropertySet.Name
+				info.responseType = shared.Unique(taken, q.Name+c.Field+"Response")
+				info.writesTypes = true
+				info.sharedRecord = true
 			case c.Properties != nil || c.NestedProperties != nil:
 				info.recordType = shared.Unique(taken, q.Name+c.Field+spec.ExportedName(c.Method.DataType))
 				info.responseType = shared.Unique(taken, q.Name+c.Field+"Response")
@@ -136,7 +168,11 @@ func (g *RequestGenerator) plan() ([]*plan, error) {
 			default:
 				info.responseType = g.Qualifier + spec.ExportedName(c.Method.Response)
 			}
-			if c.NestedProperties != nil && info.writesTypes {
+			switch {
+			case c.NestedPropertySet != nil:
+				info.nestedType = c.NestedPropertySet.Name
+				info.sharedNested = true
+			case c.NestedProperties != nil && info.writesTypes:
 				info.nestedType = shared.Unique(taken, q.Name+c.Field+spec.ExportedName(c.Method.NestedType))
 			}
 			p.calls[c] = info
@@ -273,14 +309,14 @@ func (g *RequestGenerator) writeParams(buf *bytes.Buffer, p *plan) {
 func (g *RequestGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
-		if info.recordType == "" || !info.writesTypes {
+		if info.recordType == "" || !info.writesTypes || info.sharedRecord {
 			continue
 		}
 		dataType, ok := g.Spec.Object(c.Method.DataType)
 		if !ok {
 			continue
 		}
-		if info.nestedType != "" {
+		if info.nestedType != "" && !info.sharedNested {
 			g.writeNestedType(buf, p, c, info)
 		}
 

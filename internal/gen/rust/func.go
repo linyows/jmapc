@@ -93,6 +93,11 @@ func (g *RequestGenerator) writeUses(buf *bytes.Buffer, p *plan, body string) {
 			used = append(used, name)
 		}
 	}
+	// The sets come before the data model, which is the order rustfmt sorts
+	// the paths of a block into.
+	if sets := g.setsUsed(p); len(sets) > 0 {
+		writeUse(buf, "super::"+PropertiesModule, sets)
+	}
 	if len(used) > 0 {
 		sortUse(used)
 		writeUse(buf, "super::types", used)
@@ -245,7 +250,7 @@ func (g *RequestGenerator) collectRecordTypes(c *request.Call, info *call, impor
 			imports.collect(f.ParsedType())
 		}
 	}
-	if dataType, ok := g.Spec.Object(c.Method.DataType); ok {
+	if dataType, ok := g.Spec.Object(c.Method.DataType); ok && !info.sharedRecord {
 		properties := c.Properties
 		if properties == nil {
 			properties = dataType.PropertyNames()
@@ -253,7 +258,7 @@ func (g *RequestGenerator) collectRecordTypes(c *request.Call, info *call, impor
 		add(dataType, shared.RecordProperties(properties))
 	}
 	if info.nestedType != "" {
-		if nested, ok := g.Spec.Object(c.Method.NestedType); ok {
+		if nested, ok := g.Spec.Object(c.Method.NestedType); ok && !info.sharedNested {
 			add(nested, c.NestedProperties)
 		}
 		// A narrowed type replaces the shared one, so that name is not brought
@@ -309,7 +314,7 @@ func (g *RequestGenerator) writeParams(buf *bytes.Buffer, p *plan) {
 func (g *RequestGenerator) writeNestedTypes(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
-		if info.nestedType == "" {
+		if info.nestedType == "" || info.sharedNested {
 			continue
 		}
 		nested, ok := g.Spec.Object(c.Method.NestedType)
@@ -335,7 +340,7 @@ func (g *RequestGenerator) writeNestedTypes(buf *bytes.Buffer, p *plan) {
 func (g *RequestGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
-		if info.recordType == "" || !info.writesTypes {
+		if info.recordType == "" || !info.writesTypes || info.sharedRecord {
 			continue
 		}
 		dataType, ok := g.Spec.Object(c.Method.DataType)
@@ -472,10 +477,17 @@ func (g *RequestGenerator) writeResultType(buf *bytes.Buffer, p *plan) {
 
 // writeMod writes the mod.rs that declares the generated modules, so that the
 // directory is a module a crate can take in with one line.
-func writeMod(modules []string) []byte {
+func writeMod(modules []string, properties bool) []byte {
 	var buf bytes.Buffer
 	writeHeader(&buf, "the JMAP requests jmapc generated this directory from")
 	buf.WriteString("pub mod client;\n")
+	// The sets of properties sit with the data model rather than with the
+	// requests: they are not one request's to declare, and every request
+	// asking for one takes its type from here. The order is the one rustfmt
+	// settles on, which sorts the declarations of a block.
+	if properties {
+		fmt.Fprintf(&buf, "pub mod %s;\n", PropertiesModule)
+	}
 	buf.WriteString("pub mod types;\n\n")
 	for _, m := range modules {
 		fmt.Fprintf(&buf, "pub mod %s;\n", m)
@@ -493,7 +505,15 @@ func writeMod(modules []string) []byte {
 	sortUse(reexported)
 	writeUse(&reexport, "client", reexported)
 	buf.WriteString("pub " + reexport.String() + "\n")
-	for _, m := range modules {
+	// The sets of properties are re-exported among the requests rather than
+	// before them, because rustfmt sorts the paths of a block and a module
+	// out of order would be moved on the next run.
+	reexports := modules
+	if properties {
+		reexports = append(append([]string(nil), modules...), PropertiesModule)
+		sort.Strings(reexports)
+	}
+	for _, m := range reexports {
 		fmt.Fprintf(&buf, "pub use %s::*;\n", m)
 	}
 	return finish(&buf)

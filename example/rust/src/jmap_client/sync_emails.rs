@@ -7,7 +7,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use super::client::{decode, Client, Error, Invocation, Request, Transport};
-use super::types::{EmailChangesResponse, Id, UtcDate};
+use super::properties::EmailWithFlags;
+use super::types::{EmailChangesResponse, Id};
 
 /// SyncEmailsParams holds the values SyncEmails leaves open.
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -15,35 +16,6 @@ pub struct SyncEmailsParams {
     /// The state string the client already has, as returned by an earlier
     /// Email/get or Email/changes.
     pub since_state: String,
-}
-
-/// SyncEmailsCreatedEmail holds the properties of Email that the Email/get
-/// call in SyncEmails asks for.
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SyncEmailsCreatedEmail {
-    /// The id of the email.
-    pub id: Id,
-
-    /// The id of the thread the email belongs to.
-    pub thread_id: Id,
-
-    /// The mailboxes the email is in, as a set of ids mapped to true.
-    #[serde(default)]
-    pub mailbox_ids: BTreeMap<Id, bool>,
-
-    /// The keywords set on the email, such as "$seen" or "$flagged", mapped
-    /// to true.
-    #[serde(default)]
-    pub keywords: BTreeMap<String, bool>,
-
-    /// The Subject header field value.
-    #[serde(default)]
-    pub subject: Option<String>,
-
-    /// When the email was received, which is what the mailbox sorts on by
-    /// default.
-    pub received_at: UtcDate,
 }
 
 /// SyncEmailsUpdatedEmail holds the properties of Email that the Email/get
@@ -78,7 +50,7 @@ pub struct SyncEmailsCreatedResponse {
 
     /// The records that were found, in an undefined order.
     #[serde(default)]
-    pub list: Vec<SyncEmailsCreatedEmail>,
+    pub list: Vec<EmailWithFlags>,
 
     /// The ids that were requested but do not exist.
     #[serde(default)]
@@ -156,7 +128,7 @@ pub async fn sync_emails<T: Transport>(
                 json!({
                     "accountId": mail_account_id,
                     "#ids": {"resultOf": "changes", "name": "Email/changes", "path": "/created"},
-                    "properties": ["id","threadId","mailboxIds","keywords","subject","receivedAt"],
+                    "properties": ["id","threadId","subject","from","receivedAt","preview","hasAttachment","mailboxIds","keywords"],
                 }),
                 "created".to_string(),
             ),

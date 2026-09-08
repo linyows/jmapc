@@ -102,3 +102,7 @@ jmapc: 2 files are out of date; run jmapc generate
   "schemas": ["schema/notes.json"]
 }
 ```
+
+`requests` ディレクトリにはリクエストを 1 ファイルに 1 つずつ置きます。
+リクエストが指定するプロパティ集合を宣言した `properties.json` を置くこともできます。
+[プロパティの共通化](requests.ja.md#プロパティの共通化)を参照してください。

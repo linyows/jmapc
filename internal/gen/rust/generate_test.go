@@ -43,7 +43,7 @@ func TestGeneratedRustCompiles(t *testing.T) {
 		if strings.Contains(text, "\n\n\n") {
 			t.Errorf("%s has a run of blank lines rustfmt would take out", name)
 		}
-		if name == "mod.rs" || name == "types.rs" || name == "client.rs" {
+		if name == "mod.rs" || name == "types.rs" || name == "client.rs" || name == PropertiesFileName {
 			continue
 		}
 		if !strings.Contains(text, "pub async fn ") {
@@ -86,7 +86,8 @@ func TestGeneratedRustCompiles(t *testing.T) {
 func generateExample(t *testing.T) map[string][]byte {
 	t.Helper()
 	catalogue := spec.Standard()
-	files, err := (&RequestGenerator{Spec: catalogue, Requests: parseExample(t)}).Generate()
+	requests, props := parseExample(t)
+	files, err := (&RequestGenerator{Spec: catalogue, Requests: requests, Properties: props}).Generate()
 	if err != nil {
 		t.Fatalf("generating the example client: %v", err)
 	}
@@ -103,15 +104,22 @@ func generateExample(t *testing.T) map[string][]byte {
 	return files
 }
 
-// parseExample parses the example requests.
-func parseExample(t *testing.T) []*request.Request {
+// parseExample parses the example requests, together with the sets of
+// properties they ask for by name.
+func parseExample(t *testing.T) ([]*request.Request, *request.PropertySets) {
 	t.Helper()
 	dir := filepath.Join(repoRoot, "example", "requests")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatalf("reading %s: %v", dir, err)
 	}
+	props, err := request.LoadPropertySets(filepath.Join(dir, request.PropertiesName), spec.Standard())
+	if err != nil {
+		t.Fatalf("checking %s:\n%v", request.PropertiesName, err)
+	}
+	props.Path = filepath.ToSlash(filepath.Join("requests", request.PropertiesName))
 	parser := request.NewParser(spec.Standard())
+	parser.Properties = props
 	var out []*request.Request
 	for _, e := range entries {
 		if !strings.HasSuffix(e.Name(), request.Extension) {
@@ -124,7 +132,7 @@ func parseExample(t *testing.T) []*request.Request {
 		q.Path = filepath.ToSlash(filepath.Join("requests", e.Name()))
 		out = append(out, q)
 	}
-	return out
+	return out, props
 }
 
 // compare checks a generated file against the one on disk.
