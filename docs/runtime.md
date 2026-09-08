@@ -143,6 +143,36 @@ client waits out a short one itself where the retry policy allows another
 attempt; this is how a long one reaches the caller, since a server asking for an
 hour is not waited out.
 
+`HasErrorType` answers a different question: whether a particular error type is
+among what failed. JMAP reports one condition at whichever level the server
+refused at. A request that is too large is refused as a whole, an `Email/set`
+that would take the account over its quota is refused as a call, and a single
+message over the quota is refused as a record while the rest of the call goes
+through. What the caller does about `overQuota` is usually the same in all
+three:
+
+```go
+switch {
+case jmapc.HasErrorType(err, jmapc.ErrOverQuota):
+    return status(http.StatusInsufficientStorage)
+case jmapc.HasErrorType(err, jmapc.ErrNotFound):
+    return status(http.StatusNotFound)
+case jmapc.HasErrorType(err, jmapc.ErrInvalidProperties):
+    return status(http.StatusBadRequest)
+}
+```
+
+The type is one of the constants the package declares — `ErrNotFound` and the
+rest for a call and a record, `ErrTypeLimit` and the rest for a request, which
+are URIs and so cannot be confused with them — or a string a server defines
+itself. A `/set` that refused several records is read in full, so a type
+reported for any one of them is found.
+
+Which record was refused, and why, is `SetErrors.Failures`, reached with
+`errors.As`. Which HTTP status a JMAP error type becomes, or which of them the
+application retries, is the application's own table: jmapc says what the server
+reported, not what it means to the program that asked.
+
 ### The session object
 
 The session here is the Session object of RFC 8620, Section 2: the document a

@@ -132,6 +132,33 @@ if err != nil {
 再送方針がもう一度の試行を許す場合、短い待ち時間はクライアントが自分で消化します。
 長いものが呼び出し側に届くのはこの関数を通してで、一時間待てというサーバの求めは消化されないからです。
 
+`HasErrorType` が答えるのは別の問いです。
+失敗した中に特定のエラー型が含まれているかどうかを返します。
+JMAP では、同じ事情がサーバの拒否した階層で報告されます。
+大きすぎるリクエストはリクエスト全体が拒否され、アカウントの容量を超える `Email/set` は呼び出しが拒否され、容量を超えるメッセージが 1 通だけなら、そのレコードだけが拒否されて残りは実行されます。
+`overQuota` に対して呼び出し側がすることは、三つとも同じであることがほとんどです。
+
+```go
+switch {
+case jmapc.HasErrorType(err, jmapc.ErrOverQuota):
+    return status(http.StatusInsufficientStorage)
+case jmapc.HasErrorType(err, jmapc.ErrNotFound):
+    return status(http.StatusNotFound)
+case jmapc.HasErrorType(err, jmapc.ErrInvalidProperties):
+    return status(http.StatusBadRequest)
+}
+```
+
+型にはパッケージが宣言している定数を渡します。
+呼び出しとレコードには `ErrNotFound` などを、リクエストには `ErrTypeLimit` などを使います。
+後者は URI なので前者と取り違えることはありません。
+サーバが独自に定義した型を文字列で渡すこともできます。
+`/set` が複数のレコードを拒否した場合も全件を対象にするので、そのうち 1 件の型でも見つかります。
+
+どのレコードがなぜ拒否されたかは `SetErrors.Failures` にあり、`errors.As` で取り出します。
+JMAP のエラー型をどの HTTP ステータスに対応させるか、どれを再送するかは、アプリケーション側の対応表です。
+jmapc が示すのはサーバの報告した内容までで、それが呼び出し側にとって何を意味するかは扱いません。
+
 ### Session オブジェクト
 
 ここでいうセッションは、RFC 8620 の Section 2 が Session オブジェクトと呼ぶものです。

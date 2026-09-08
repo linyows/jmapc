@@ -98,6 +98,66 @@ func TestIsTemporary(t *testing.T) {
 	}
 }
 
+func TestHasErrorType(t *testing.T) {
+	overQuotaRecord := &SetErrors{Failures: []SetFailure{
+		{Key: "m1", Err: SetError{Type: ErrInvalidProperties}},
+		{Key: "m2", Err: SetError{Type: ErrOverQuota}},
+	}}
+
+	cases := []struct {
+		name string
+		err  error
+		typ  string
+		want bool
+	}{
+		{"nothing failed", nil, ErrOverQuota, false},
+		{"no type asked about", &MethodError{Type: ErrOverQuota}, "", false},
+		{"the call was refused for that reason", &MethodError{Type: ErrOverQuota}, ErrOverQuota, true},
+		{"the call was refused for another", &MethodError{Type: ErrInvalidArguments}, ErrOverQuota, false},
+		{"one call of several", MethodErrors{{Type: ErrServerFail}, {Type: ErrOverQuota}}, ErrOverQuota, true},
+		{"one record of several", overQuotaRecord, ErrOverQuota, true},
+		{"a record refused for another reason", overQuotaRecord, ErrNotFound, false},
+		{"one record on its own", &SetError{Type: ErrNotFound}, ErrNotFound, true},
+		{"the whole request was refused", &RequestError{Status: 400, Type: ErrTypeLimit}, ErrTypeLimit, true},
+		{"the request was refused for another", &RequestError{Status: 400, Type: ErrTypeNotJSON}, ErrTypeLimit, false},
+		{"a status with no type", &RequestError{Status: 503}, ErrTypeLimit, false},
+		{"a type the server defines itself", &MethodError{Type: "vendorSaysNo"}, "vendorSaysNo", true},
+		{
+			"a refusal wrapped in context",
+			fmt.Errorf("filing the message: %w", &MethodError{Type: ErrOverQuota}),
+			ErrOverQuota,
+			true,
+		},
+		{"a failure that carries no type", errors.New("dial tcp: connection refused"), ErrOverQuota, false},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := HasErrorType(tt.err, tt.typ); got != tt.want {
+				t.Errorf("HasErrorType(%v, %q) = %v, want %v", tt.err, tt.typ, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestHasErrorTypeReadsEveryLevel checks the case the function is for: one
+// condition reported at the level the server happened to refuse at, which the
+// caller answers the same way whichever level that was.
+func TestHasErrorTypeReadsEveryLevel(t *testing.T) {
+	atEveryLevel := []error{
+		&RequestError{Status: 400, Type: ErrTypeLimit},
+		&MethodError{MethodName: "Email/set", Type: ErrOverQuota},
+		&SetErrors{Failures: []SetFailure{{Key: "m1", Err: SetError{Type: ErrOverQuota}}}},
+	}
+	full := func(err error) bool {
+		return HasErrorType(err, ErrOverQuota) || HasErrorType(err, ErrTypeLimit)
+	}
+	for _, err := range atEveryLevel {
+		if !full(err) {
+			t.Errorf("%T was not recognised: %v", err, err)
+		}
+	}
+}
+
 func TestIsRateLimited(t *testing.T) {
 	cases := []struct {
 		name string
