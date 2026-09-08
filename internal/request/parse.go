@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/linyows/jmapc"
@@ -730,11 +731,12 @@ func (c *checker) resultRef(call *Call, field *spec.Field, raw json.RawMessage, 
 		return nil
 	}
 
-	got, err := c.spec.ResolvePath(from.Method.Name, ref.Path)
+	got, selected, err := c.spec.ResolvePathSelections(from.Method.Name, ref.Path)
 	if err != nil {
 		c.errorf(where+".path", propertyHint(err), "%v", err)
 		return nil
 	}
+	c.checkFetched(from, selected, ref.Path, where+".path")
 	want := field.ParsedType()
 	if !assignable(got, want) {
 		c.errorf(where, "",
@@ -743,6 +745,54 @@ func (c *checker) resultRef(call *Call, field *spec.Field, raw json.RawMessage, 
 		return nil
 	}
 	return &ResultRef{Argument: field.Name, Ref: ref, From: from}
+}
+
+// checkFetched holds a back reference to what the call it reads from fetches. A
+// call that narrows its properties answers with those and no others, so a
+// reference reading a property the call did not ask for reads nothing: the
+// server resolves the pointer against the records it is sending, and finds the
+// property missing.
+//
+// The data model alone cannot report this, since the property is a property of
+// the type either way. It is the narrowing that takes it out of the answer, and
+// the narrowing belongs to the call rather than to the type.
+func (c *checker) checkFetched(from *Call, selected []spec.Selection, path, where string) {
+	for _, sel := range selected {
+		var fetched []string
+		var argument string
+		switch {
+		case sel.Type == from.Method.DataType && from.Properties != nil:
+			fetched, argument = from.Properties, from.Method.PropertiesArgument
+		case sel.Type == from.Method.NestedType && from.NestedProperties != nil:
+			fetched, argument = from.NestedProperties, from.Method.NestedPropertiesArgument
+		default:
+			continue
+		}
+		// A /get answers with the id whether or not it was asked for, as
+		// RFC 8620, Section 5.1 has it.
+		if sel.Property == "id" || slices.Contains(fetched, sel.Property) {
+			continue
+		}
+		c.errorf(where, fetchedHint(from, sel.Property, argument, fetched),
+			"%s selects %s from the %s call, which does not fetch it",
+			path, sel.Property, from.Method.Name)
+	}
+}
+
+// fetchedHint says where the missing property is added, which is the set where
+// the call asks for one and the call itself otherwise.
+func fetchedHint(from *Call, property, argument string, fetched []string) string {
+	set := from.PropertySet
+	if argument == from.Method.NestedPropertiesArgument {
+		set = from.NestedPropertySet
+	}
+	if set != nil {
+		return fmt.Sprintf("add %q to the set %s, which call %q asks for", property, set.Name, from.ID)
+	}
+	if guess := nearest(property, fetched); guess != "" {
+		return fmt.Sprintf("call %q fetches %q; did you mean that?", from.ID, guess)
+	}
+	return fmt.Sprintf("add %q to the %s of call %q", property, argument, from.ID)
 }
 
 // properties extracts the property names a /get call selects, when the request

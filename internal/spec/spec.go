@@ -326,25 +326,57 @@ func (e *UnknownPropertyError) Error() string {
 // value it selects. This is what lets a back reference be checked against the
 // argument it feeds, instead of failing at the server.
 func (s *Spec) ResolvePath(method, path string) (*Type, error) {
+	t, _, err := s.ResolvePathSelections(method, path)
+	return t, err
+}
+
+// Selection is one step a path takes through an object: the type it was taken
+// on, and the property it selected.
+type Selection struct {
+	// Type is the name of the object the property was selected from.
+	Type string
+	// Property is the name of the property.
+	Property string
+}
+
+// ResolvePathSelections is ResolvePath, and reports the properties the path
+// selected on its way as well. A call that narrows what it fetches answers with
+// the properties it asked for and no others, so a reference reading a property
+// of those records is checked against what that call fetches rather than
+// against what the data model has.
+func (s *Spec) ResolvePathSelections(method, path string) (*Type, []Selection, error) {
 	resp, err := s.ResponseOf(method)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if path == "" {
-		return &Type{Name: resp.Name}, nil
+		return &Type{Name: resp.Name}, nil, nil
 	}
 	if !strings.HasPrefix(path, "/") {
-		return nil, fmt.Errorf("path %q must start with %q", path, "/")
+		return nil, nil, fmt.Errorf("path %q must start with %q", path, "/")
 	}
 	tokens := strings.Split(path[1:], "/")
 	for i := range tokens {
 		tokens[i] = unescapePointer(tokens[i])
 	}
-	return s.walk(&Type{Name: resp.Name}, tokens, path)
+	w := &pathWalk{spec: s}
+	t, err := w.walk(&Type{Name: resp.Name}, tokens, path)
+	if err != nil {
+		return nil, nil, err
+	}
+	return t, w.selections, nil
+}
+
+// pathWalk carries what walking a path selected, so that the properties a
+// reference reads can be held to what the call it reads from fetched.
+type pathWalk struct {
+	spec       *Spec
+	selections []Selection
 }
 
 // walk applies the remaining pointer tokens to t.
-func (s *Spec) walk(t *Type, tokens []string, path string) (*Type, error) {
+func (w *pathWalk) walk(t *Type, tokens []string, path string) (*Type, error) {
+	s := w.spec
 	if len(tokens) == 0 {
 		return t, nil
 	}
@@ -357,7 +389,7 @@ func (s *Spec) walk(t *Type, tokens []string, path string) (*Type, error) {
 			// A "*" maps the remainder of the pointer over the array's
 			// elements and flattens one level of the result, so that
 			// "/list/*/id" yields Id[] rather than Id[][].
-			inner, err := s.walk(t.Elem, rest, path)
+			inner, err := w.walk(t.Elem, rest, path)
 			if err != nil {
 				return nil, err
 			}
@@ -369,10 +401,10 @@ func (s *Spec) walk(t *Type, tokens []string, path string) (*Type, error) {
 		if _, err := strconv.Atoi(token); err != nil {
 			return nil, fmt.Errorf("path %q: %q indexes an array of %s but is neither a number nor %q", path, token, t.Elem, "*")
 		}
-		return s.walk(t.Elem, rest, path)
+		return w.walk(t.Elem, rest, path)
 
 	case t.IsMap():
-		return s.walk(t.Value, rest, path)
+		return w.walk(t.Value, rest, path)
 
 	case t.IsUnion():
 		return nil, fmt.Errorf("path %q: cannot select %q from union type %s", path, token, t)
@@ -389,7 +421,8 @@ func (s *Spec) walk(t *Type, tokens []string, path string) (*Type, error) {
 	if !ok {
 		return nil, &UnknownPropertyError{TypeName: o.Name, Property: token, Known: o.PropertyNames()}
 	}
-	return s.walk(f.ParsedType(), rest, path)
+	w.selections = append(w.selections, Selection{Type: o.Name, Property: token})
+	return w.walk(f.ParsedType(), rest, path)
 }
 
 // unescapePointer decodes the "~1" and "~0" escapes of RFC 6901.

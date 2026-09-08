@@ -8,6 +8,9 @@ Everything below is a compile-time failure rather than a server round trip:
 - every argument belongs to the method, with the type the method requires
 - a back reference points at an *earlier* call, names that call's method
   correctly, and selects a value the target argument can accept
+- a back reference reading a property of the records reads one that call
+  fetches: `/list/*/threadId` against a call that narrowed its `properties` to
+  the subject would resolve to nothing at the server
 - filter conditions are checked against the type being queried, including the
   ones nested inside `AND`, `OR`, and `NOT` operators
 - `properties` names properties the type has, and `bodyProperties` names
