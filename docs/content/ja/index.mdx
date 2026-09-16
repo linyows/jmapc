@@ -1,0 +1,176 @@
+---
+title: JMAP のコンパイラ
+description: jmapc は JMAP のリクエストを Go、Rust、TypeScript の型安全なクライアントにコンパイルします。
+---
+
+import {
+  Action,
+  Actions,
+  Compile,
+  Generated,
+  Hero,
+  Landing,
+  Lede,
+  Section,
+  Trait,
+  Traits
+} from '@/app/_components/landing.jsx'
+
+<Landing>
+
+<Hero title={['リクエストを書く。', 'クライアントはjmapcが書く。']}>
+  <Lede>
+    jmapc は JMAP のコンパイラです。リクエストは仕様がすでに定めている
+    JSON そのもので、jmapc はそれを仕様に照らして検証し、正しくしか呼べない
+    クライアントを書きます。
+  </Lede>
+  <Actions>
+    <Action href="/ja/requests" primary>ドキュメントを読む</Action>
+    <Action href="https://github.com/linyows/jmapc">GitHub で見る</Action>
+  </Actions>
+</Hero>
+
+<Compile command="jmapc generate">
+
+```json filename="requests/ListInboxEmails.jmap.json"
+{
+  "methodCalls": [
+    ["Email/query", {
+      "filter": {"inMailbox": "{{mailboxId}}"},
+      "limit": "{{limit}}"
+    }, "search"],
+    ["Email/get", {
+      "#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"},
+      "properties": ["id", "subject", "from", "receivedAt"]
+    }, "fetch"]
+  ],
+  "_returns": "fetch"
+}
+```
+
+<Generated label="生成されるクライアントの言語" languages={['Go', 'Rust', 'TypeScript']}>
+
+```go filename="inbox.go"
+res, err := client.ListInboxEmails(ctx, c, client.ListInboxEmailsParams{
+	MailboxID: inbox,
+	Limit:     25,
+})
+if err != nil {
+	return err
+}
+for _, email := range res.List {
+	fmt.Println(email.ReceivedAt, email.From[0].Email, *email.Subject)
+}
+```
+
+```rust filename="inbox.rs"
+let res = list_inbox_emails(&client, ListInboxEmailsParams {
+    mailbox_id: inbox,
+    limit: 25,
+})
+.await?;
+
+for email in &res.list {
+    println!("{} {:?}", email.received_at, email.subject);
+}
+```
+
+```typescript filename="inbox.ts"
+const res = await listInboxEmails(client, {
+  mailboxId: inbox,
+  limit: 25,
+})
+
+for (const email of res.list) {
+  console.log(email.receivedAt, email.from?.[0].email, email.subject)
+}
+```
+
+</Generated>
+
+</Compile>
+
+<Section
+  title="間違ったリクエストはサーバに届かない"
+  lede="リクエストはコードが生成される前に仕様と突き合わされます。書いている最中のエディタで、ビルド時に、そして指定すれば実際のサーバに対しても。綴りを間違えれば、意図した名前が返ってきます。"
+>
+
+```ansi
+requests/BadQuery.jmap.json: methodCalls[0].arguments.filter.hasAttachmnt: EmailFilterCondition has no property "hasAttachmnt"
+	did you mean "hasAttachment"?
+requests/BadQuery.jmap.json: methodCalls[1].arguments.#ids.name: the referenced call is Email/query, but the reference names Email/get
+	call "c0" invokes Email/query
+```
+
+</Section>
+
+<Section
+  title="3つの言語に対応し、依存は最低限"
+  lede="ランタイムはライブラリとして配られるのではなく、リクエストと一緒に生成されます。プロジェクトが抱えるのは生成されたディレクトリだけで、そのほかはほとんどありません。"
+>
+
+<Traits>
+  <Trait title="Go" lang="go">
+    生成されたパッケージは標準ライブラリしか使いません。通信はすでに手元にある
+    `http.Client` です。
+  </Trait>
+  <Trait title="Rust" lang="rust">
+    `serde` と `serde_json` だけです。HTTP スタックも TLS バックエンドも async
+    ランタイムも付いてきません。通信は、プログラムがすでに使っているクライアント
+    の上に実装する `Transport` です。
+  </Trait>
+  <Trait title="TypeScript" lang="typescript">
+    依存はありません。プラットフォームに求めるのは `fetch` だけです。
+  </Trait>
+</Traits>
+
+</Section>
+
+<Section
+  invert
+  title="ラッパーではなく、コンパイラであること"
+  lede="次の5つは、どれもこの違いから導かれます。"
+>
+
+<Traits>
+  <Trait title="独自の API がない">
+    リクエストファイルは JMAP そのものです。覚えるのは仕様であり、3つの言語で
+    同じ知識が通用します。
+  </Trait>
+  <Trait title="訊いたとおりの形で返る">
+    結果はリクエストが要求したプロパティだけを持ちます。ひとつ増やせば型が育ち、
+    存在しないものを要求すればビルドが止まります。
+  </Trait>
+  <Trait title="JMAP が報告するすべての層のエラー">
+    リクエスト全体の失敗、メソッド呼び出しの失敗、200 を返しながら拒否している
+    /set。生成されたコードがこれらを区別するので、呼び出し側は区別せずに済みます。
+  </Trait>
+  <Trait title="プッシュとページングはループとして">
+    watch を指定したリクエストは、サーバが報告する変更を追い続けます。paged を
+    指定したリクエストは、一部ずつ返る結果を最後まで読み通します。
+  </Trait>
+  <Trait title="まわりの道具">
+    実際のサーバにリクエストを送るコマンド、自分のコードをテストするための JMAP
+    サーバ、そして jmapc がまだ知らないケイパビリティを書くスキーマファイル。
+  </Trait>
+</Traits>
+
+</Section>
+
+<Section
+  title="インストール"
+  lede="クライアントは go generate で生成するので、それを使うモジュールにツールを記録します。go tool を動かす Go ツールチェインを持たない Rust や TypeScript のプロジェクトは、リリースのバイナリを取ります。"
+>
+
+```sh
+go get -tool github.com/linyows/jmapc/cmd/jmapc
+```
+
+<Actions>
+  <Action href="/ja/requests" primary>最初のリクエストを書く</Action>
+  <Action href="/ja/coverage">対応範囲を見る</Action>
+</Actions>
+
+</Section>
+
+</Landing>
