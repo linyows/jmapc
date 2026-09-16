@@ -131,3 +131,22 @@ samp {
 .jmapc-locale:hover {
   opacity: 1;
 }
+
+/* Every page but the landing page starts a little way below the navbar, so
+   that the breadcrumb, the first item of the sidebar and the table of contents
+   do not sit against its rule. The landing page opens with its own hero, which
+   has room enough of its own. The sidebar and the table of contents are sticky
+   and sized to the viewport under the navbar, so the space is padding inside
+   them rather than a margin that would push their ends off the screen. */
+:root {
+  --jmapc-below-navbar: 1.75rem;
+}
+
+body:not(:has(.lp)) article {
+  padding-top: calc(1rem + var(--jmapc-below-navbar));
+}
+
+body:not(:has(.lp)) .nextra-sidebar,
+body:not(:has(.lp)) .nextra-toc > div {
+  padding-top: var(--jmapc-below-navbar);
+}
