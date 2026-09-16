@@ -230,7 +230,7 @@ names: `header:List-Id:asText` is a `*string`, `header:To:asAddresses` a
 
 The file name determines every name in the generated code, and the call ids
 determine the names within it: see
-[Writing a request](docs/content/en/requests.md#generated-names).
+[Generated names](docs/content/en/generated-code.md).
 [`example/requests`](example/requests) holds twenty-five requests, over mail,
 contacts, calendars, sharing and filtering.
 
@@ -248,7 +248,7 @@ serde and nothing else, and the TypeScript output has no dependencies at all,
 its one platform requirement being `fetch`. Each spells the generated names the
 way its own language spells them, and both express a nullable property and a
 union of shapes more precisely than Go does:
-[Other languages](docs/content/en/languages.md).
+[Rust and TypeScript](docs/content/en/languages.md).
 
 ## Verification
 
@@ -273,27 +273,39 @@ editor too, from a JSON Schema jmapc writes. The whole list is in
 ## Documentation
 
 Everything above is the whole of jmapc in outline. The rest is under `docs/`,
-one file to a subject, in the order they are worth reading in.
+one file to a subject, and published at <https://jmapc.linyo.ws>, in four
+groups.
 
-The first three are what you have in front of you while writing a request: what a
-request file may hold, what jmapc checks before it generates anything, and how to
-send a request and look at the answer before there is any code that calls it. The
-next four describe what the generated code calls into once it runs — errors,
-blobs, changes the server pushes, an answer that arrives one part at a time, and
-a server to test your own code against. The last four are reference: the Rust
-and TypeScript clients, capabilities jmapc does not know, the ones it does, and
-jmapc itself.
+The overview introduces JMAP, explains why jmapc compiles requests rather than offering a
+builder, and takes a module from nothing to a working call. The pages on
+requests are what you have in front of you while writing one: what a request
+file may hold, what jmapc checks, and how to send a request before there is any
+code that calls it. The pages on generated code describe what the client does
+once it runs. The reference covers the command, capabilities jmapc does not
+know, the ones it does, and jmapc itself.
 
 | | |
 |---|---|
-| [Writing a request](docs/content/en/requests.md) | The request file, its parameters, and the names generated from it |
+| **Overview** | |
+| [Introduction](docs/content/en/introduction.md) | What JMAP is, and where jmapc comes in |
+| [Why jmapc](docs/content/en/why.md) | The motivation, and how jmapc differs from JMAP client libraries |
+| [Getting started](docs/content/en/getting-started.md) | Installing, writing a request, generating and calling a client |
+| **Requests** | |
+| [Writing a request](docs/content/en/requests.md) | The request file, its parameters, creation ids and account ids |
+| [Property sets](docs/content/en/properties.md) | Naming a set of properties once for several requests |
 | [Verification](docs/content/en/verification.md) | What is checked at build time, against a server, and in the editor |
-| [The jmapc command](docs/content/en/cli.md) | Sending a request with `jmapc run`, and configuration |
-| [The runtime](docs/content/en/runtime.md) | Errors, large `/get`s, tokens, retries, observability, and blobs |
+| [Sending a request](docs/content/en/run.md) | Trying a request against a server with `jmapc run` |
+| **Generated code** | |
+| [Generated names](docs/content/en/generated-code.md) | The names generated from the file name and the call ids |
+| [Errors](docs/content/en/errors.md) | Request-level, method-level and `/set` failures, and how to classify them |
 | [Push](docs/content/en/push.md) | Following changes as the server reports them |
 | [Paging](docs/content/en/paging.md) | Reading a result the server returns one part at a time |
+| [Blobs](docs/content/en/blobs.md) | Uploading and downloading attachments |
+| [Configuring the client](docs/content/en/client.md) | The session, large `/get`s, tokens, retries and observability |
 | [Testing](docs/content/en/testing.md) | jmaptest, a JMAP server to test your code against |
-| [Other languages](docs/content/en/languages.md) | The Rust and the TypeScript client |
+| [Rust and TypeScript](docs/content/en/languages.md) | The Rust and the TypeScript client |
+| **Reference** | |
+| [The jmapc command](docs/content/en/cli.md) | The subcommands, checking generated files, and configuration |
 | [Vendor extensions](docs/content/en/extensions.md) | Types and methods jmapc does not know, described in a schema file |
 | [Coverage](docs/content/en/coverage.md) | The capabilities and the methods supported |
 | [Working on jmapc](docs/content/en/contributing.md) | Building, testing and releasing jmapc itself |

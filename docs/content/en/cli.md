@@ -1,69 +1,17 @@
 # The jmapc command
 
-The command does more than generate. It sends a request to a running server,
-so that a request can be tried before there is any code that calls it. It
-reports a generated client that has fallen behind the requests it came from.
-And it reads the paths and the server it works against from a file, rather than
-from the flags every time.
+`jmapc` has five subcommands.
 
-## Sending a request
+| Subcommand | |
+|---|---|
+| `jmapc generate` | Checks the requests and writes the generated client. |
+| `jmapc check` | Checks the requests and writes nothing; with `-session`, against a running server as well. See [Verification](verification.md). |
+| `jmapc run <request>` | Sends one request to a server and prints the response. See [Sending a request](run.md). |
+| `jmapc schema` | Writes a JSON Schema describing the request files, for an editor. See [Editor support](verification.md#editor-support). |
+| `jmapc version` | Prints the version. |
 
-A request is worth trying before there is any code that calls it, so `jmapc run`
-sends one and prints what came back.
-
-```
-jmapc run ListInboxEmails -p mailboxId=mbx1 -p limit=25
-```
-
-A value is written the way its type requires. A `String` or an `Id` is the text
-itself, so nothing has to be quoted past the shell, and anything with a shape is
-JSON. A value the type does not accept is refused before anything is sent:
-
-```
-jmapc: parameter limit: "soon" is not a whole number
-```
-
-The server comes from `-session`, which takes the session URL or the host to
-find it under, and the credentials from `-token` or `-user`. Each falls back to an
-environment variable — `$JMAP_SESSION_URL`, `$JMAP_TOKEN`, `$JMAP_USER` — which
-is what keeps a token out of shell history. The account id a request leaves out is looked up in the session, exactly
-as the generated function looks it up, and `-account` overrides it.
-
-`-dry-run` prints the request rather than sending it — the same request the
-generated function builds, which is the thing to look at when a server answers
-something unexpected:
-
-```
-jmapc run MarkEmailRead -dry-run -p emailId=m1
-{
-  "using": [
-    "urn:ietf:params:jmap:core",
-    "urn:ietf:params:jmap:mail"
-  ],
-  "methodCalls": [
-    [
-      "Email/set",
-      {
-        "accountId": "ACCOUNT_ID",
-        "update": {
-          "m1": {
-            "keywords/$seen": true
-          }
-        }
-      },
-      "mark"
-    ]
-  ]
-}
-```
-
-The account id is the one value a dry run cannot know, since it comes from a
-session it never fetches, so `ACCOUNT_ID` stands in for it and the run says so
-on standard error.
-
-A run reads the response the way generated code does: a `/set` that answers 200
-with a refusal in it is an error here too, printed after the response that
-carries it.
+`jmapc -h` lists the flags `generate` and `check` take, and `jmapc run -h` and
+`jmapc schema -h` the flags of their own.
 
 ## Checking that the generated client is up to date
 
@@ -102,7 +50,9 @@ In a workflow:
 
 ## Configuration
 
-Flags, or a `jmapc.json` beside your module:
+Every subcommand reads its settings from `jmapc.json` in the directory it runs
+in, where there is one, or from the file `-config` names. A flag overrides the
+setting of the same name.
 
 ```json
 {
@@ -113,6 +63,14 @@ Flags, or a `jmapc.json` beside your module:
 }
 ```
 
+| Setting | Flag | Default | |
+|---|---|---|---|
+| `requests` | `-requests` | `requests` | The directory holding the request files |
+| `out` | `-out` | `client` | The directory the generated client is written to |
+| `lang` | `-lang` | `go` | The language to generate: `go`, `rust` or `typescript` |
+| `package` | `-package` | the last element of `out` | The name of the generated Go package |
+| `schemas` | `-schema` | | Schema files describing a vendor extension; see [Vendor extensions](extensions.md). The flag may be repeated, and adds to the files the setting lists |
+
 The `requests` directory holds one file per request, and may hold a
 `properties.json` naming the sets of properties they ask for; see
-[Sharing properties across requests](requests.md#sharing-properties-across-requests).
+[Property sets](properties.md).

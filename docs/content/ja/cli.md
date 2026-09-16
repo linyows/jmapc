@@ -1,66 +1,16 @@
 # jmapc コマンド
 
-コマンドは生成するだけではありません。
-動いているサーバにリクエストを送るので、それを呼ぶコードができる前に試せます。
-リクエストから遅れた生成物があれば報告します。
-そして、パスや相手のサーバを毎回のフラグではなくファイルから読みます。
+`jmapc` には5つのサブコマンドがあります。
 
-## リクエストを送る
+| サブコマンド | |
+|---|---|
+| `jmapc generate` | リクエストを検証し、クライアントを生成します。 |
+| `jmapc check` | リクエストを検証するだけで、何も書き出しません。`-session` を付けると稼働中のサーバに対しても検証します。[検証](verification.md)を参照してください。 |
+| `jmapc run <request>` | リクエストを1つサーバに送り、レスポンスを表示します。[リクエストを送る](run.md)を参照してください。 |
+| `jmapc schema` | リクエストファイルを記述する JSON Schema を、エディタのために書き出します。[エディタ対応](verification.md#エディタ対応)を参照してください。 |
+| `jmapc version` | バージョンを表示します。 |
 
-リクエストは、それを呼ぶコードができる前に試せるほうがよいので、`jmapc run` が1つ送って、返ってきたものを表示します。
-
-```
-jmapc run ListInboxEmails -p mailboxId=mbx1 -p limit=25
-```
-
-値は型の言うとおりに書きます。
-`String` や `Id` はテキストそのものなので、シェルの先で引用符を付ける必要はなく、形を持つものは JSON で書きます。
-型が受け付けない値は、何かが送られる前に拒まれます。
-
-```
-jmapc: parameter limit: "soon" is not a whole number
-```
-
-サーバは `-session` で指定します。
-セッションの URL でも、それが置かれているホスト名でも構いません。
-資格情報は `-token` か `-user` です。
-いずれも環境変数 `$JMAP_SESSION_URL`、`$JMAP_TOKEN`、`$JMAP_USER` にフォールバックするので、トークンをシェルの履歴に残さずに済みます。
-リクエストが省いた account id は、生成された関数がそうするのと同じように、セッションから引かれます。
-`-account` を渡せばそちらが使われます。
-
-`-dry-run` は、送る代わりにリクエストを表示します。
-生成された関数が組み立てるのと同じリクエストで、サーバが予期しない答えを返したときに見るべきものです。
-
-```
-jmapc run MarkEmailRead -dry-run -p emailId=m1
-{
-  "using": [
-    "urn:ietf:params:jmap:core",
-    "urn:ietf:params:jmap:mail"
-  ],
-  "methodCalls": [
-    [
-      "Email/set",
-      {
-        "accountId": "ACCOUNT_ID",
-        "update": {
-          "m1": {
-            "keywords/$seen": true
-          }
-        }
-      },
-      "mark"
-    ]
-  ]
-}
-```
-
-account id だけは、dry run には知りようがありません。
-取りにいかないセッションから来る値だからです。
-そこで `ACCOUNT_ID` がその場に立ち、そのことを標準エラーに書きます。
-
-実行は、生成されたコードと同じようにレスポンスを読みます。
-200 で拒否を返す `/set` はここでもエラーで、それを運んできたレスポンスを表示した後に報告されます。
+`generate` と `check` が取るフラグは `jmapc -h` で、`run` と `schema` が取るフラグは `jmapc run -h` と `jmapc schema -h` で表示できます。
 
 ## 生成物が最新かを確かめる
 
@@ -95,7 +45,9 @@ jmapc: 2 files are out of date; run jmapc generate
 
 ## 設定
 
-フラグで指定するか、モジュールの隣に `jmapc.json` を置きます。
+どのサブコマンドも、実行したディレクトリに `jmapc.json` があればそこから設定を読みます。
+別のファイルを読ませるには `-config` で指定します。
+フラグは同じ名前の設定より優先されます。
 
 ```json
 {
@@ -106,6 +58,14 @@ jmapc: 2 files are out of date; run jmapc generate
 }
 ```
 
+| 設定 | フラグ | 既定値 | |
+|---|---|---|---|
+| `requests` | `-requests` | `requests` | リクエストファイルを置くディレクトリ |
+| `out` | `-out` | `client` | 生成したクライアントを書き出すディレクトリ |
+| `lang` | `-lang` | `go` | 生成する言語。`go`、`rust`、`typescript` のいずれか |
+| `package` | `-package` | `out` の最後の要素 | 生成する Go パッケージの名前 |
+| `schemas` | `-schema` | | ベンダ拡張を記述したスキーマファイル。[ベンダ拡張](extensions.md)を参照してください。フラグは繰り返し指定でき、設定に列挙したファイルに追加されます |
+
 `requests` ディレクトリにはリクエストを 1 ファイルに 1 つずつ置きます。
 リクエストが指定するプロパティ集合を宣言した `properties.json` を置くこともできます。
-[プロパティの共通化](requests.md#プロパティの共通化)を参照してください。
+[プロパティ集合](properties.md)を参照してください。

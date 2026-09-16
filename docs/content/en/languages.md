@@ -1,4 +1,4 @@
-# Other languages
+# Rust and TypeScript
 
 The requests are not written in Go, so nothing about them is. `jmapc generate
 -lang` writes the same client in Rust or in TypeScript, from the same files,
