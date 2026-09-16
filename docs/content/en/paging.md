@@ -1,4 +1,4 @@
-# Walking an answer that does not fit in one request
+# Paging
 
 A JMAP answer is often only part of an answer. A `/query` returns just the
 window of results the caller asked for, and says where that window sits in the

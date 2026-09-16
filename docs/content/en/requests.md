@@ -15,7 +15,7 @@ else is the request as RFC 8620 defines it.
 | `_returns` | The call whose response the function returns. Optional: without it, every response is returned. |
 | `_createdIds` | Carry the creation ids of an earlier request in, and this request's out. Optional; see below. |
 | `_watches` | The call a generated client follows the changes of, so that it catches up whenever the server reports a change. Optional; see [Push](push.md). |
-| `_pages` | The call a generated walk advances, so that a result returned one part at a time can be read in full. Optional; see [Walking an answer that does not fit in one request](paging.md). |
+| `_pages` | The call a generated walk advances, so that a result returned one part at a time can be read in full. Optional; see [Paging](paging.md). |
 | `_comment` | Why a call is there. Goes in that call's arguments; see below. |
 
 A request file is plain JSON, so `jq` can read it and an editor can check it. To

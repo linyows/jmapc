@@ -291,7 +291,7 @@ jmapc itself.
 | [The jmapc command](docs/content/en/cli.md) | Sending a request with `jmapc run`, and configuration |
 | [The runtime](docs/content/en/runtime.md) | Errors, large `/get`s, tokens, retries, observability, and blobs |
 | [Push](docs/content/en/push.md) | Following changes as the server reports them |
-| [Walking an answer that does not fit in one request](docs/content/en/paging.md) | Reading a result the server returns one part at a time |
+| [Paging](docs/content/en/paging.md) | Reading a result the server returns one part at a time |
 | [Testing](docs/content/en/testing.md) | jmaptest, a JMAP server to test your code against |
 | [Other languages](docs/content/en/languages.md) | The Rust and the TypeScript client |
 | [Vendor extensions](docs/content/en/extensions.md) | Types and methods jmapc does not know, described in a schema file |

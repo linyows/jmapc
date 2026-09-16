@@ -12,9 +12,13 @@ export const generateStaticParams = async () =>
 const page = async params =>
   importPage(contentPathOf(params.mdxPath), localeOf(params.mdxPath))
 
+// Next.js applies a layout's title template to the segments below it, and the
+// layout here is the one this page is in rather than one above it, so the site
+// name is put on the end where the title is made.
 export async function generateMetadata(props) {
   const { metadata } = await page(await props.params)
-  return metadata
+  const title = typeof metadata.title === 'string' ? metadata.title : null
+  return { ...metadata, title: title ? `${title} | jmapc` : 'jmapc' }
 }
 
 const Wrapper = getMDXComponents().wrapper

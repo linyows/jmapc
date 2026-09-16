@@ -1,5 +1,9 @@
 # Working on jmapc
 
+Two commands cover most of the work on jmapc itself. The first runs the tests,
+the second regenerates everything the catalogue produces, and both are what CI
+runs first.
+
 ```
 go test ./...        # everything, including the end-to-end tests
 go generate ./...    # regenerate the runtime types and every example client
