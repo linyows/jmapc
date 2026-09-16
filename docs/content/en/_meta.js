@@ -3,6 +3,7 @@
 export default {
   index: {
     title: 'Home',
+    display: 'hidden',
     theme: {
       layout: 'full',
       sidebar: false,

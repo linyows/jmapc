@@ -3,6 +3,7 @@
 export default {
   index: {
     title: 'ホーム',
+    display: 'hidden',
     theme: {
       layout: 'full',
       sidebar: false,
