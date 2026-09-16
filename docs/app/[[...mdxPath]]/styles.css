@@ -139,7 +139,7 @@ samp {
    and sized to the viewport under the navbar, so the space is padding inside
    them rather than a margin that would push their ends off the screen. */
 :root {
-  --jmapc-below-navbar: 1.5rem;
+  --jmapc-below-navbar: 1.75rem;
 }
 
 body:not(:has(.lp)) article {
