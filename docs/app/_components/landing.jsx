@@ -20,7 +20,9 @@ export const Hero = ({ title, children }) => (
   </header>
 )
 
-export const Lede = ({ children }) => <p className="lp-lede">{children}</p>
+// MDX wraps the lede's text in a paragraph of its own, so the wrapper cannot be
+// one too: a <p> inside a <p> is invalid HTML, and fails hydration.
+export const Lede = ({ children }) => <div className="lp-lede">{children}</div>
 
 export const Actions = ({ children }) => <p className="lp-actions">{children}</p>
 
