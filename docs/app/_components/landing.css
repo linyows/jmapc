@@ -60,6 +60,11 @@
   color: var(--lp-muted);
 }
 
+.lp .lp-lede > p {
+  margin: 0;
+  line-height: inherit;
+}
+
 .lp .lp-actions {
   display: flex;
   flex-wrap: wrap;
