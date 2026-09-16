@@ -211,7 +211,7 @@ for _, email := range res.List {
 `header:List-Id:asText` は `*string`、`header:To:asAddresses` は `[]jmapc.EmailAddress` です。
 
 生成されるコードの名前はファイル名から、その中の名前は呼び出し id から決まります。
-[リクエストの書き方](docs/content/ja/requests.md#生成される名前)を参照してください。
+[生成される名前](docs/content/ja/generated-code.md)を参照してください。
 [`example/requests`](example/requests) には、メール、連絡先、カレンダー、共有、フィルタにまたがる 25 個のリクエストがあります。
 
 ## 他の言語
@@ -226,7 +226,7 @@ jmapc generate -lang typescript -out src/jmapClient
 ランタイムはリクエストと一緒に生成されます。
 Rust の出力が要求するのは serde だけで、TypeScript の出力に依存はなく、必要なのは `fetch` だけです。
 生成される名前はそれぞれの言語の綴り方に従い、null を取りうるプロパティと複数の形を取る値は、どちらも Go より正確に表現されます。
-詳しくは[他の言語](docs/content/ja/languages.md)を参照してください。
+詳しくは[Rust と TypeScript](docs/content/ja/languages.md)を参照してください。
 
 ## 検証
 
@@ -247,26 +247,37 @@ requests/BadQuery.jmap.json: methodCalls[0].arguments.filter.hasAttachmnt: Email
 ## ドキュメント
 
 ここまでが jmapc の全体像です。
-残りは `docs/` の下に、主題ごとに1つのファイルとして置いてあります。
-並びは読む順序でもあります。
+残りは `docs/` の下に主題ごとに1つのファイルとして置いてあり、<https://jmapc.linyo.ws> で公開しています。
+ページは4つのグループに分かれます。
 
-はじめの3つは、リクエストを書いているあいだ手元に置くものです。
-リクエストファイルに何を書けるか、生成の前に jmapc が何を検証するか、そして呼び出すコードを書く前にリクエストを送って答えを見る方法です。
-続く4つは、生成されたコードが実行時に何を呼ぶかを説明します。
-エラー、blob、サーバが送ってくる変更、一部ずつ返ってくる答え、そして自分のコードをテストするためのサーバです。
-最後の4つはリファレンスです。
-Rust と TypeScript のクライアント、jmapc が知らないケイパビリティ、知っているケイパビリティ、そして jmapc 自体です。
+概要は、JMAP の説明と、jmapc がビルダーではなくリクエストのコンパイラである理由と、空のモジュールから呼び出しが動くまでの手順です。
+リクエストのページは、リクエストを書いているあいだ手元に置くものです。
+リクエストファイルに何を書けるか、jmapc が何を検証するか、そして呼び出すコードを書く前にリクエストを送る方法です。
+生成されたコードのページは、クライアントが実行時に何をするかを説明します。
+リファレンスは、コマンド、jmapc が知らないケイパビリティ、知っているケイパビリティ、そして jmapc 自体です。
 
 | | |
 |---|---|
-| [リクエストの書き方](docs/content/ja/requests.md) | リクエストファイル、パラメータ、そこから生成される名前 |
+| **概要** | |
+| [はじめに](docs/content/ja/introduction.md) | JMAP とは何か、そして jmapc の役割 |
+| [なぜ jmapc か](docs/content/ja/why.md) | 動機と、JMAP クライアントのライブラリとの違い |
+| [はじめてのクライアント](docs/content/ja/getting-started.md) | インストール、リクエストの記述、クライアントの生成と呼び出し |
+| **リクエスト** | |
+| [リクエストの書き方](docs/content/ja/requests.md) | リクエストファイル、パラメータ、creation id、アカウント id |
+| [プロパティ集合](docs/content/ja/properties.md) | 複数のリクエストで共有するプロパティの集合 |
 | [検証](docs/content/ja/verification.md) | ビルド時、サーバに対して、エディタで、それぞれ何が検証されるか |
-| [jmapc コマンド](docs/content/ja/cli.md) | `jmapc run` でリクエストを送る方法と設定 |
-| [ランタイム](docs/content/ja/runtime.md) | エラー、大きな `/get`、トークン、再送、可観測性、blob |
+| [リクエストを送る](docs/content/ja/run.md) | `jmapc run` でリクエストをサーバに送る方法 |
+| **生成されたコード** | |
+| [生成される名前](docs/content/ja/generated-code.md) | ファイル名と call id から生成される名前 |
+| [エラー](docs/content/ja/errors.md) | リクエスト、メソッド、`/set` の各レベルの失敗と、その分類 |
 | [プッシュ](docs/content/ja/push.md) | サーバが報告する変更を追い続ける |
 | [ページング](docs/content/ja/paging.md) | 一部ずつ返ってくる結果を最後まで読む |
+| [Blob](docs/content/ja/blobs.md) | 添付ファイルのアップロードとダウンロード |
+| [クライアントの設定](docs/content/ja/client.md) | セッション、大きな `/get`、トークン、再送、可観測性 |
 | [テスト](docs/content/ja/testing.md) | 自分のコードをテストするための JMAP サーバ、jmaptest |
-| [他の言語](docs/content/ja/languages.md) | Rust と TypeScript のクライアント |
+| [Rust と TypeScript](docs/content/ja/languages.md) | Rust と TypeScript のクライアント |
+| **リファレンス** | |
+| [jmapc コマンド](docs/content/ja/cli.md) | サブコマンド、生成物の検査、設定 |
 | [ベンダ拡張](docs/content/ja/extensions.md) | jmapc が知らない型とメソッドをスキーマファイルに記述する |
 | [対応範囲](docs/content/ja/coverage.md) | 対応しているケイパビリティとメソッド |
 | [jmapc の開発](docs/content/ja/contributing.md) | jmapc 自体のビルド、テスト、リリース |

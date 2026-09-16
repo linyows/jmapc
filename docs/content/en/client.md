@@ -1,0 +1,192 @@
+# Configuring the client
+
+A generated function sends its request through a `*jmapc.Client`, which
+`jmapc.New` builds from the session URL and a list of options:
+
+```go
+c := jmapc.New(jmapc.WellKnownURL("example.com"), jmapc.WithBearerToken(token))
+```
+
+`WithBearerToken` and `WithBasicAuth` authenticate the requests. The client
+also keeps the session and fetches it again when the server says it changed,
+splits a `/get` too large to send at once, renews a token that expires, retries
+what is worth retrying, and reports what it did. Each of those is described
+below, with the option that changes it.
+
+## The session object
+
+The session here is the Session object of RFC 8620, Section 2: the document a
+server answers with at its session resource, saying where a request is sent,
+which capabilities the server has, which accounts the user can reach, and what
+the limits are. It is not a login session and it carries no credentials. What
+authenticates a request is the Authorization header, and a token that expires is
+a separate matter, in Tokens that expire below.
+
+The client fetches the session when something first needs it and holds it from
+then on.
+
+A server's session changes: an account is added or removed, a limit is raised,
+an endpoint moves, a push key is rotated. Every response carries the server's
+`sessionState` for this reason, and the client compares it with the session it
+holds. Where the two differ, the next call that needs the session fetches it
+again. The comparison costs nothing, and the fetch happens where the session is
+needed rather than in the response that reported the change.
+
+Requests that arrive together after a change share one fetch between them. A
+fetch that fails leaves the session as it was: what the client holds is out of
+date, which is what it was a moment ago, so the request goes on and the next
+call tries again. The failure reaches an `Observer` as a request of
+`KindSession` that did not succeed.
+
+The number of requests the client keeps in flight follows the session as well.
+Where `maxConcurrentRequests` has gone down, the requests already in flight are
+not cancelled: each returns its slot as it finishes, and no further slot is
+given out until fewer than the new number are held. The client therefore never
+has more in flight than the server last stated, which matters because a server
+refuses the request that goes over with a 400, and a 400 is not sent again by
+any retry policy.
+
+`WithoutSessionRefresh` turns this off, for a client that will not outlive a
+change and has no use for the comparison. `RefreshSession` fetches the session
+whether or not a response reported a change, for a client that learns of one by
+some other means.
+
+## Splitting a large /get
+
+A `/get` naming more ids than the server's `maxObjectsInGet` is refused.
+`WithSplitGets` sends it in several requests instead, and joins the answers
+into the one response the caller asked for:
+
+```go
+c := jmapc.New(url, jmapc.WithBearerToken(token), jmapc.WithSplitGets())
+```
+
+It is off by default, for two reasons. One call to `Do` then costs several
+round trips. And the records no longer arrive as one snapshot: each request is
+answered separately, and the account may change between them. Where the `state`
+a `/get` reports differs between requests, the joined response is returned
+together with a `*jmapc.StateChanged`, which `errors.As` reaches — the same
+shape as a method error, so a caller that needs one snapshot can fetch again
+and one that does not can ignore it.
+
+Only the ids written into the request are counted, and two calls are sent as they
+are. One whose ids come from a back reference, since how many they resolve to
+is known to the server alone. And one that another call refers to, since a
+reference resolves within one request, and splitting the call it names would
+leave nothing to resolve against.
+
+The ids that did not fit travel in further requests of their own, no more calls
+in one request than `maxCallsInRequest` allows. The rest of the request is sent
+once, in the first request, so the back references between its other calls
+resolve as they did before.
+
+## Tokens that expire
+
+`WithBearerToken` holds one string for the life of the client. An OAuth 2.0
+access token does not last that long, and replacing it means building another
+client, which discards the cached session and the count of the requests in
+flight along with it. `WithTokenSource` takes a function instead:
+
+```go
+c := jmapc.New(url, jmapc.WithTokenSource(func(ctx context.Context) (jmapc.Token, error) {
+	tok, err := oauthConfig.TokenSource(ctx, refreshToken).Token()
+	if err != nil {
+		return jmapc.Token{}, err
+	}
+	return jmapc.Token{Value: tok.AccessToken, Expiry: tok.Expiry}, nil
+}))
+```
+
+The token is held until it expires. A source that reports an `Expiry` is called
+again shortly before it; one that reports none is called again only when a
+server answers 401. Requests arriving together share one call, so a source that
+exchanges a refresh token is not asked to do so several times at once — some
+servers accept a refresh token only once.
+
+A 401 also sends that one request again, once, with a newly fetched token. A
+second 401 is reported to the caller, since a source returning a token the
+server does not accept is not resolved by sending the request again. This is
+separate from `WithRetry`, which retries what a server reported it did not
+carry out.
+
+## Retries
+
+`WithRetry` retries when the server answers with HTTP 429 or 503.
+
+```go
+c := jmapc.New(url, jmapc.WithBearerToken(token), jmapc.WithRetry(3))
+```
+
+The argument is how many attempts to make. The delay is the value of the
+server's `Retry-After`, or, where the server sends none, a delay that doubles
+from 0.2 seconds to 30 seconds.
+
+## Observability
+
+`WithObserver` makes the client report what it does. The report affects
+neither the request sent nor the response received, and a hook left nil is
+never called.
+
+```go
+c := jmapc.New(url, jmapc.WithBearerToken(token),
+	jmapc.WithObserver(jmapc.SlogObserver(slog.Default())))
+```
+
+There are three hooks, and they nest. `SlogObserver` writes a debug record for
+each. `Request` covers one JMAP request: the calls it carries and its outcome.
+`Attempt` covers one HTTP request under it, which includes the session fetch a
+first request triggers and every retry. `Wait` covers a delay applied instead
+of sending — for one of the slots `maxConcurrentRequests` allows, or before a
+retry after a 429 or a 503.
+
+```
+Request   Email/query, Email/get
+  Attempt GET  /.well-known/jmap  200
+  Wait    for a slot, where the server accepts two requests at once
+  Attempt POST /jmap/api          429
+  Wait    for the two seconds of the server's Retry-After
+  Attempt POST /jmap/api          200
+```
+
+An HTTP-level instrument already records the round trips, and where that is
+enough, `WithHTTPClient` takes a client with an instrumented transport. What it
+cannot record is the JMAP: which methods were sent together in one request, how
+long the caller waited for a slot, and that a call was refused although the
+request returned 200.
+
+There is no dependency on OpenTelemetry, and none is needed. `Request` and
+`Attempt` return the context used for the operation they cover, so a span
+started in one becomes the parent of the spans started under it:
+
+```go
+tracer := otel.Tracer("jmapc")
+
+obs := &jmapc.Observer{
+	Request: func(ctx context.Context, info jmapc.RequestInfo) (context.Context, func(jmapc.ResponseInfo)) {
+		methods := make([]string, len(info.Calls))
+		for i, call := range info.Calls {
+			methods[i] = call.Name
+		}
+		ctx, span := tracer.Start(ctx, "jmap.request",
+			trace.WithAttributes(attribute.StringSlice("jmap.methods", methods)))
+		return ctx, func(done jmapc.ResponseInfo) {
+			span.SetAttributes(attribute.Int("jmap.method_errors", len(done.Errors)))
+			if done.Err != nil {
+				span.RecordError(done.Err)
+			}
+			span.End()
+		}
+	},
+	Attempt: func(ctx context.Context, info jmapc.AttemptInfo) (context.Context, func(jmapc.AttemptInfo, jmapc.Answer)) {
+		ctx, span := tracer.Start(ctx, "jmap."+string(info.Kind),
+			trace.WithAttributes(attribute.Int("http.attempt", info.Attempt)))
+		return ctx, func(info jmapc.AttemptInfo, answer jmapc.Answer) {
+			span.SetAttributes(attribute.Int("http.status_code", answer.Status))
+			span.End()
+		}
+	},
+}
+```
+
+`Observer` exists only in the Go client. In Rust and TypeScript, the
+equivalent belongs in the transport.

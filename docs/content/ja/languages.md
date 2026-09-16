@@ -1,4 +1,4 @@
-# 他の言語
+# Rust と TypeScript
 
 リクエストは Go で書かれていないので、Go に縛られるところもありません。
 `jmapc generate -lang` は、同じファイルから Rust か TypeScript のクライアントを書き、それぞれに必要なランタイムも一緒に生成します。
