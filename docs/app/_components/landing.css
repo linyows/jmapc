@@ -1,0 +1,466 @@
+.lp {
+  --lp-ink: var(--jmapc-ink);
+  --lp-paper: var(--jmapc-paper);
+  --lp-muted: var(--jmapc-muted);
+  --lp-rule: var(--jmapc-rule);
+  --lp-accent: var(--jmapc-accent);
+  max-width: 72rem;
+  margin: 0 auto;
+  /* The theme's full-width layout supplies the side gutter. */
+  padding-bottom: clamp(4rem, 8vw, 7rem);
+  color: var(--lp-ink);
+}
+
+/* The hero */
+
+.lp-hero {
+  padding: clamp(3rem, 9vw, 6.5rem) 0 clamp(4.25rem, 8vw, 7rem);
+}
+
+.lp-mark {
+  /* "jmapc" is all lowercase, so much of the height of the drawing is the
+     space above the x-height and the descenders below it. The mark has to be
+     set well above the headline to weigh the same as it. */
+  height: clamp(3rem, 6.5vw, 5rem);
+  width: auto;
+  margin-bottom: clamp(2.25rem, 5vw, 3.75rem);
+  /* The mark is the one thing on the page allowed to be the vermilion itself:
+     a logotype is not text, and is not held to the contrast text is. */
+  color: var(--lp-accent);
+}
+
+/* Set in the monospace of the thing the page is about: what jmapc reads and
+   what it writes are both text someone typed. */
+.lp .lp-title {
+  font-family: var(--font-mono), var(--font-jp), ui-monospace, monospace;
+  /* Capped where the longer of the two headlines still sets on one line
+     within the measure above: "jmapc writes the client." is 24 monospaced
+     characters, which at this size is a little over 65rem. */
+  font-size: clamp(2.4rem, 5.4vw, 4.9rem);
+  font-weight: 700;
+  line-height: 1.06;
+  letter-spacing: -0.04em;
+  margin: 0;
+  text-wrap: balance;
+}
+
+.lp .lp-title span {
+  display: block;
+}
+
+.lp .lp-title span + span {
+  color: var(--lp-muted);
+}
+
+.lp .lp-lede {
+  margin: 2rem 0 0;
+  max-width: 34em;
+  font-size: 1.125rem;
+  line-height: 1.7;
+  color: var(--lp-muted);
+}
+
+.lp .lp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 2.25rem 0 0;
+}
+
+.lp .lp-action {
+  display: inline-block;
+  padding: 0.6rem 1.15rem;
+  border: 1px solid var(--lp-rule);
+  border-radius: 6px;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  text-decoration: none;
+  color: var(--lp-ink);
+  transition: border-color 120ms ease;
+}
+
+.lp .lp-action:hover {
+  border-color: var(--lp-ink);
+}
+
+.lp .lp-action-primary {
+  background: var(--lp-ink);
+  border-color: var(--lp-ink);
+  color: var(--lp-paper);
+}
+
+/* Input, seam, output */
+
+/* The request and what it compiles to are the same window, side by side: one
+   row that both stretch to fill, and the languages on a row of their own so
+   that they do not make the right-hand window taller than the left. */
+.lp-compile {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: stretch;
+  column-gap: 1.5rem;
+}
+
+.lp-compile-in {
+  grid-area: 1 / 1;
+}
+
+.lp-generated-stack {
+  grid-area: 1 / 3;
+}
+
+.lp-generated-pick {
+  grid-area: 2 / 3;
+}
+
+/* Nextra's code block is a filename bar of a fixed height and a <pre> under
+   it; the <pre> is what has to grow. */
+.lp-compile-in,
+.lp-generated-panel,
+.lp-compile .nextra-code {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.lp-compile .nextra-code {
+  height: 100%;
+}
+
+.lp-compile pre {
+  flex: 1;
+  font-size: 0.78rem !important;
+  line-height: 1.6;
+}
+
+/* The one place the page inverts, because it is the one place something is
+   turned into something else. */
+.lp-seam {
+  grid-area: 1 / 2;
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+/* The axis the page turns on is the one line drawn in the vermilion. */
+.lp-seam::before {
+  content: '';
+  position: absolute;
+  inset: 0 50%;
+  border-left: 1px solid var(--lp-accent);
+}
+
+.lp .lp-seam code {
+  position: relative;
+  white-space: nowrap;
+  padding: 0.4rem 0.7rem;
+  border-radius: 5px;
+  background: var(--lp-ink);
+  color: var(--lp-paper);
+  font-family: var(--font-mono), var(--font-jp), ui-monospace, monospace;
+  font-size: 0.75rem;
+  writing-mode: vertical-rl;
+}
+
+/* The one kind of motion on the page: code being emitted from the seam. It
+   runs when the page arrives and again each time the same request is compiled
+   into another language. */
+.lp-generated-stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.lp-generated-panel {
+  grid-area: 1 / 1;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.lp-generated-panel[data-state='shown'] {
+  opacity: 1;
+  visibility: visible;
+  z-index: 2;
+  animation: lp-emit 560ms cubic-bezier(0.32, 0.9, 0.3, 1) 180ms backwards;
+}
+
+/* The language being replaced stays put until the new one has covered it, so
+   the wipe paints over code rather than over an empty panel. */
+.lp-generated-panel[data-state='leaving'] {
+  z-index: 1;
+  animation: lp-hold 740ms steps(1, end) forwards;
+}
+
+@keyframes lp-emit {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes lp-hold {
+  from {
+    opacity: 1;
+    visibility: visible;
+  }
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+/* The request is the same whatever comes out of it, so the left-hand window
+   stays grey and only the generated one is coloured, in the colour the
+   language is known by. It is the one hue on the page that is not syntax. */
+/* A hairline and a word made of the same colour need different values of it:
+   Go's blue is far too pale to read as text on white, so the name is set in
+   the darker blue that go.dev sets its own in. */
+.lp [data-lang='go'] {
+  --lp-lang: #00add8;
+  --lp-lang-text: #007d9c;
+}
+
+.lp [data-lang='rust'] {
+  --lp-lang: #ce422b;
+  --lp-lang-text: #ce422b;
+}
+
+.lp [data-lang='typescript'] {
+  --lp-lang: #3178c6;
+  --lp-lang-text: #3178c6;
+}
+
+/* Against black, the darker three need lifting. */
+:is(html.dark) .lp [data-lang='go'] {
+  --lp-lang-text: #00add8;
+}
+
+:is(html.dark) .lp [data-lang='rust'] {
+  --lp-lang: #e8603c;
+  --lp-lang-text: #e8603c;
+}
+
+:is(html.dark) .lp [data-lang='typescript'] {
+  --lp-lang: #58a6e8;
+  --lp-lang-text: #58a6e8;
+}
+
+/* The filename bar is drawn with a border and the code with an inset ring. */
+.lp-generated-panel .nextra-code > div:first-child {
+  border-color: var(--lp-lang);
+}
+
+.lp-generated-panel pre {
+  box-shadow: inset 0 0 0 1px var(--lp-lang);
+}
+
+.lp-generated-pick {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  margin-top: 0.6rem;
+}
+
+.lp .lp-generated-lang {
+  padding: 0.15rem 0.45rem;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: none;
+  color: var(--lp-muted);
+  font-family: var(--font-mono), var(--font-jp), ui-monospace, monospace;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  cursor: pointer;
+}
+
+.lp .lp-generated-lang {
+  transition:
+    color 160ms ease,
+    border-color 160ms ease;
+}
+
+.lp .lp-generated-lang:hover {
+  color: var(--lp-ink);
+}
+
+.lp .lp-generated-lang[aria-pressed='true'] {
+  color: var(--lp-ink);
+  border-bottom-color: var(--lp-lang);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-generated-panel[data-state='shown'] {
+    animation: none;
+  }
+
+  .lp-generated-panel[data-state='leaving'] {
+    animation: none;
+  }
+}
+
+/* Sections */
+
+/* Nothing is drawn between the sections; the space is what separates them, so
+   there has to be enough of it to do the job a rule was doing. */
+.lp-section {
+  margin-top: clamp(8rem, 14vw, 12rem);
+}
+
+/* One section is laid on the oxblood rather than on the cream. It is the same
+   ground in either theme, because the vermilion its heading is set in only has
+   the contrast to be read on the dark one. */
+.lp-section[data-invert] {
+  --lp-ink: #f8e9e0;
+  --lp-paper: #5d181f;
+  --lp-muted: #dfc5e5;
+  --lp-rule: color-mix(in srgb, #d6a73c 45%, #5d181f);
+  background: #5d181f;
+  color: #f8e9e0;
+  border-radius: 14px;
+  padding: clamp(2.25rem, 4.5vw, 3.75rem);
+}
+
+:is(html.dark) .lp-section[data-invert] {
+  background: color-mix(in srgb, #f8e9e0 6%, #5d181f);
+}
+
+.lp .lp-section[data-invert] .lp-section-title {
+  color: var(--lp-accent);
+}
+
+.lp .lp-section-title {
+  font-family: var(--font-mono), var(--font-jp), ui-monospace, monospace;
+  font-size: clamp(1.8rem, 4vw, 2.75rem);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+  /* The longer of these no longer sets on one line; let it break evenly
+     rather than leaving a word on its own. */
+  text-wrap: balance;
+  max-width: 24ch;
+}
+
+/* The measure is counted in noughts of the monospace, a little over half an em
+   each. Japanese sets full width, so the same count of characters is nearly
+   twice as wide and every heading would break. Let the window decide instead:
+   the longest of them fits on one line on anything but a phone. */
+:lang(ja) .lp .lp-section-title {
+  max-width: none;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.lp .lp-section-lede {
+  margin: 1.35rem 0 2.5rem;
+  max-width: 36em;
+  font-size: 1.0625rem;
+  line-height: 1.7;
+  color: var(--lp-muted);
+}
+
+/* What the project is, one line each */
+
+.lp .lp-traits {
+  margin: 0;
+}
+
+.lp-trait {
+  display: grid;
+  grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
+  gap: 0.5rem 2.5rem;
+  padding: 1.25rem 0;
+  border-top: 1px solid var(--lp-rule);
+}
+
+.lp-trait:last-child {
+  border-bottom: 1px solid var(--lp-rule);
+}
+
+/* On the cream, none of the three language colours has the contrast to set
+   17px of text. At this size and weight they are large text, which asks for
+   less, and they clear it. */
+.lp .lp-trait[data-lang] dt {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.lp .lp-trait dt {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  font-family: var(--font-mono), var(--font-jp), ui-monospace, monospace;
+  font-weight: 500;
+  font-size: 1.0625rem;
+  letter-spacing: -0.02em;
+  line-height: 1.5;
+}
+
+/* A row about one language wears that language's colour, mark and name alike. */
+.lp .lp-trait[data-lang] dt {
+  color: var(--lp-lang-text);
+}
+
+.lp-lang-icon {
+  flex: none;
+}
+
+.lp .lp-trait dd {
+  margin: 0;
+  line-height: 1.65;
+  color: var(--lp-muted);
+}
+
+@media (max-width: 60rem) {
+  .lp-compile {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: repeat(4, auto);
+    row-gap: 1rem;
+  }
+
+  .lp-compile-in {
+    grid-area: 1 / 1;
+  }
+
+  .lp-generated-stack {
+    grid-area: 3 / 1;
+  }
+
+  .lp-generated-pick {
+    grid-area: 4 / 1;
+  }
+
+  .lp-seam {
+    grid-area: 2 / 1;
+    justify-self: start;
+  }
+
+  .lp-seam::before {
+    inset: 50% 0;
+    border-left: 0;
+    border-top: 1px solid var(--lp-accent);
+  }
+
+  .lp .lp-seam code {
+    writing-mode: horizontal-tb;
+  }
+
+  .lp-trait {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.35rem;
+  }
+}
+
+/* The landing page carries the wordmark itself, at the size it deserves, so
+   the navbar does not repeat it; and with nothing above the hero, the rule
+   under the navbar has nothing to separate. Both are scoped to the page by
+   the presence of its own root, so the documentation keeps them. */
+body:has(.lp) .nextra-navbar-blur {
+  border-bottom-color: transparent;
+}
+
+body:has(.lp) .nextra-navbar a[aria-label='Home page'] {
+  display: none;
+}

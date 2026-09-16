@@ -57,22 +57,22 @@ res, err := client.ListInboxEmails(ctx, c, client.ListInboxEmailsParams{
 })
 ```
 
-`res.List` は、リクエストが要求した四つのプロパティだけを持ちます。
+`res.List` は、リクエストが要求した4つのプロパティだけを持ちます。
 
 ## 機能
 
-jmapc を特徴づける機能は、次の五つにまとめられます。
+jmapc を特徴づける機能は、次の5つにまとめられます。
 
 - リクエストは jmapc 独自の API ではなく、JMAP そのもので書きます
 - リクエストの検証は、コードを生成する前、エディタで書いている最中、そして稼働中のサーバに対しても行えます
 - 生成されるコードは、型安全なレスポンス、網羅的なエラー処理、プッシュとページングのループを備えます
-- 一つのリクエストから Go、Rust、TypeScript のクライアントを生成でき、外部への依存は最低限です
+- 1つのリクエストから Go、Rust、TypeScript のクライアントを生成でき、外部への依存は最低限です
 - 実際にリクエストを送信するコマンドやテスト用の JMAP サーバ、そして jmapc が知らないケイパビリティを足すスキーマファイルが付属します
 
 ## 動機
 
-JMAP は一つのリクエスト中に複数のメソッド呼び出しを記述でき、後の呼び出しは前の呼び出しの結果を参照できます。
-依存関係のある一連の操作が、一往復で済みます。
+JMAP は1つのリクエスト中に複数のメソッド呼び出しを記述でき、後の呼び出しは前の呼び出しの結果を参照できます。
+依存関係のある一連の操作が、1往復で済みます。
 
 ```json
 {
@@ -84,7 +84,7 @@ JMAP は一つのリクエスト中に複数のメソッド呼び出しを記述
 }
 ```
 
-一つ目のメソッドの戻りで得られるid はクライアントに戻ってきません。
+1つ目のメソッドの戻りで得られるid はクライアントに戻ってきません。
 この設計が、JMAP クライアントが REST クライアントのような形、つまりリソースごとの型とパスごとのメソッドという形にならない理由です。
 
 ほとんどの JMAP クライアントはこれをビルダーとして提供します。
@@ -99,7 +99,7 @@ JMAP は一つのリクエスト中に複数のメソッド呼び出しを記述
 Go の [go-jmap](https://github.com/rockorager/go-jmap)、Rust の [jmap-client](https://github.com/stalwartlabs/jmap-client)、TypeScript の [Jam](https://github.com/htunnicliff/jmap-jam)、そして [jmap.io が挙げている](https://jmap.io/software/)ものがあります。
 いずれもプロトコルを、実行時に呼ぶ API として提供します。
 jmapc が動くのは、それより前、コードを生成する時点です。
-違いは次の三つです。
+違いは次の3つです。
 
 **リクエストを、ライブラリ独自の API ではなく JMAP で書きます。**
 ビルダーは、リクエストを独自の書き方で表現します。
@@ -123,7 +123,7 @@ TypeScript の Jam は同じことを実現しています。リテラル型が 
 jmapc は、型システムだけではそれができない Go と Rust でも同じ絞り込みを得ます。
 
 引き換えになるのは、リクエストが jmapc の実行時に固定されることです。
-実行時に形が決まるリクエスト、たとえば利用者の入力から組み立てるフィルタは、呼び出しを一つずつ組み立てるのではなく、一つのパラメータとして渡すことになります。
+実行時に形が決まるリクエスト、たとえば利用者の入力から組み立てるフィルタは、呼び出しを1つずつ組み立てるのではなく、1つのパラメータとして渡すことになります。
 任意のリクエストを組み立てるプログラムは、ビルダーの領分です。
 生成されたコードも、リポジトリで管理するコードです。ビルドに一手間が加わり、生成物をコミットすることになります。
 
@@ -203,7 +203,7 @@ for _, email := range res.List {
 }
 ```
 
-`res.List` の型は `[]ListInboxEmailsFetchEmail` で、リクエストが要求した四つのプロパティだけを持ちます。
+`res.List` の型は `[]ListInboxEmailsFetchEmail` で、リクエストが要求した4つのプロパティだけを持ちます。
 別のプロパティを要求すれば構造体が増え、存在しないプロパティを要求すればビルドが失敗し、候補が提示されます。
 
 `bodyProperties` はメッセージのパートを同じように絞り込み、その絞り込みは入れ子のサブパートにも及びます。
@@ -211,7 +211,7 @@ for _, email := range res.List {
 `header:List-Id:asText` は `*string`、`header:To:asAddresses` は `[]jmapc.EmailAddress` です。
 
 生成されるコードの名前はファイル名から、その中の名前は呼び出し id から決まります。
-[リクエストの書き方](docs/requests.ja.md#生成される名前)を参照してください。
+[リクエストの書き方](docs/content/ja/requests.md#生成される名前)を参照してください。
 [`example/requests`](example/requests) には、メール、連絡先、カレンダー、共有、フィルタにまたがる 25 個のリクエストがあります。
 
 ## 他の言語
@@ -226,7 +226,7 @@ jmapc generate -lang typescript -out src/jmapClient
 ランタイムはリクエストと一緒に生成されます。
 Rust の出力が要求するのは serde だけで、TypeScript の出力に依存はなく、必要なのは `fetch` だけです。
 生成される名前はそれぞれの言語の綴り方に従い、null を取りうるプロパティと複数の形を取る値は、どちらも Go より正確に表現されます。
-詳しくは[他の言語](docs/languages.ja.md)を参照してください。
+詳しくは[他の言語](docs/content/ja/languages.md)を参照してください。
 
 ## 検証
 
@@ -242,41 +242,41 @@ requests/BadQuery.jmap.json: methodCalls[0].arguments.filter.hasAttachmnt: Email
 `jmapc check` は何も書き出さずに検証だけを行います。
 `-session` を付けると、稼働中のサーバにしか分からないこと、つまりサーバが広告するケイパビリティ、保持するアカウント、一度のリクエストに受け付ける量も検証されます。
 検証の多くは、jmapc が書き出す JSON Schema を使ってエディタでも動きます。
-検証の一覧は[検証](docs/verification.ja.md)にあります。
+検証の一覧は[検証](docs/content/ja/verification.md)にあります。
 
 ## ドキュメント
 
 ここまでが jmapc の全体像です。
-残りは `docs/` の下に、主題ごとに一つのファイルとして置いてあります。
+残りは `docs/` の下に、主題ごとに1つのファイルとして置いてあります。
 並びは読む順序でもあります。
 
-はじめの三つは、リクエストを書いているあいだ手元に置くものです。
+はじめの3つは、リクエストを書いているあいだ手元に置くものです。
 リクエストファイルに何を書けるか、生成の前に jmapc が何を検証するか、そして呼び出すコードを書く前にリクエストを送って答えを見る方法です。
-続く四つは、生成されたコードが実行時に何を呼ぶかを説明します。
+続く4つは、生成されたコードが実行時に何を呼ぶかを説明します。
 エラー、blob、サーバが送ってくる変更、一部ずつ返ってくる答え、そして自分のコードをテストするためのサーバです。
-最後の四つはリファレンスです。
+最後の4つはリファレンスです。
 Rust と TypeScript のクライアント、jmapc が知らないケイパビリティ、知っているケイパビリティ、そして jmapc 自体です。
 
 | | |
 |---|---|
-| [リクエストの書き方](docs/requests.ja.md) | リクエストファイル、パラメータ、そこから生成される名前 |
-| [検証](docs/verification.ja.md) | ビルド時、サーバに対して、エディタで、それぞれ何が検証されるか |
-| [jmapc コマンド](docs/cli.ja.md) | `jmapc run` でリクエストを送る方法と設定 |
-| [ランタイム](docs/runtime.ja.md) | エラー、大きな `/get`、トークン、再送、可観測性、blob |
-| [プッシュ](docs/push.ja.md) | サーバが報告する変更を追い続ける |
-| [一度のリクエストに収まらない答えを読み通す](docs/paging.ja.md) | 一部ずつ返ってくる結果を最後まで読む |
-| [テスト](docs/testing.ja.md) | 自分のコードをテストするための JMAP サーバ、jmaptest |
-| [他の言語](docs/languages.ja.md) | Rust と TypeScript のクライアント |
-| [ベンダ拡張](docs/extensions.ja.md) | jmapc が知らない型とメソッドをスキーマファイルに記述する |
-| [対応範囲](docs/coverage.ja.md) | 対応しているケイパビリティとメソッド |
-| [jmapc の開発](docs/contributing.ja.md) | jmapc 自体のビルド、テスト、リリース |
+| [リクエストの書き方](docs/content/ja/requests.md) | リクエストファイル、パラメータ、そこから生成される名前 |
+| [検証](docs/content/ja/verification.md) | ビルド時、サーバに対して、エディタで、それぞれ何が検証されるか |
+| [jmapc コマンド](docs/content/ja/cli.md) | `jmapc run` でリクエストを送る方法と設定 |
+| [ランタイム](docs/content/ja/runtime.md) | エラー、大きな `/get`、トークン、再送、可観測性、blob |
+| [プッシュ](docs/content/ja/push.md) | サーバが報告する変更を追い続ける |
+| [一度のリクエストに収まらない答えを読み通す](docs/content/ja/paging.md) | 一部ずつ返ってくる結果を最後まで読む |
+| [テスト](docs/content/ja/testing.md) | 自分のコードをテストするための JMAP サーバ、jmaptest |
+| [他の言語](docs/content/ja/languages.md) | Rust と TypeScript のクライアント |
+| [ベンダ拡張](docs/content/ja/extensions.md) | jmapc が知らない型とメソッドをスキーマファイルに記述する |
+| [対応範囲](docs/content/ja/coverage.md) | 対応しているケイパビリティとメソッド |
+| [jmapc の開発](docs/content/ja/contributing.md) | jmapc 自体のビルド、テスト、リリース |
 
 ## 対応範囲
 
 jmapc は [IANA が挙げている](https://www.iana.org/assignments/jmap/jmap.xhtml) JMAP のケイパビリティをすべてサポートします。
 core、mail、submission、contacts、calendars、principals、sieve、quota、blob などで、そこに含まれる 81 個のメソッドはすべて同じように検証され、生成されます。
-そこに含まれないケイパビリティも、[スキーマファイル](docs/extensions.ja.md)に記述すれば他と同じように検証されます。
-ケイパビリティごとの内容と、jmapc があえて検証しない一つのことは[対応範囲](docs/coverage.ja.md)にあります。
+そこに含まれないケイパビリティも、[スキーマファイル](docs/content/ja/extensions.md)に記述すれば他と同じように検証されます。
+ケイパビリティごとの内容と、jmapc があえて検証しない1つのことは[対応範囲](docs/content/ja/coverage.md)にあります。
 
 ## Author
 

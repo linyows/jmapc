@@ -1,0 +1,125 @@
+/* The palette, and the two ways round it goes: a cream ground with oxblood
+   ink, and the same two swapped in the dark. The other three are accents --
+   the vermilion is too light to set text on cream, so it marks and fills
+   rather than speaks; the ochre rules; the lilac carries the quieter words
+   where the ground is dark enough to let it. */
+:root {
+  --jmapc-paper: #f8e9e0;
+  --jmapc-ink: #5d181f;
+  --jmapc-accent: #f1563d;
+  --jmapc-ochre: #d6a73c;
+  --jmapc-lilac: #dfc5e5;
+  --jmapc-muted: color-mix(in srgb, var(--jmapc-ink) 70%, var(--jmapc-paper));
+  --jmapc-rule: color-mix(in srgb, var(--jmapc-ochre) 62%, var(--jmapc-paper));
+}
+
+html.dark {
+  --jmapc-paper: #5d181f;
+  --jmapc-ink: #f8e9e0;
+  --jmapc-muted: var(--jmapc-lilac);
+  --jmapc-rule: color-mix(in srgb, var(--jmapc-ochre) 42%, var(--jmapc-paper));
+}
+
+/* The theme reaches for Tailwind's neutrals, which are cool, and for slate as
+   the colour of prose. Both were left over from before the palette and read
+   grey-blue on a cream ground. The ramp is redrawn here as one warm scale,
+   from the cream at the light end to a maroon-black at the dark end, so that
+   every surface, border and quiet word the theme draws belongs to the same
+   family. The ramp does not swap with the theme: the theme picks which end of
+   it to use. */
+:root {
+  --x-color-white: #fffaf6;
+  --x-color-black: #2e0c10;
+
+  --x-color-gray-50: #f3e3da;
+  --x-color-gray-100: #eddad2;
+  --x-color-gray-200: #e2ccc5;
+  --x-color-gray-300: #d3b7b2;
+  --x-color-gray-400: #b7918f;
+  --x-color-gray-600: #8c5759;
+  --x-color-gray-700: #7c4246;
+  --x-color-gray-800: #703136;
+  --x-color-gray-900: #632027;
+
+  --x-color-neutral-400: #b28b89;
+  --x-color-neutral-700: #793e42;
+  --x-color-neutral-800: #6c2d32;
+  --x-color-neutral-900: #652229;
+
+  /* Prose. The theme sets it in slate, one value per theme. */
+  --x-color-slate-700: #5d181f;
+  --x-color-slate-200: #f8e9e0;
+}
+
+/* The code sits on a tint of the page rather than on a white of its own: the
+   same cream with a little of the ink in it, and its chrome a step further.
+   What makes it a window is the rule around it, not a change of family. */
+:root {
+  --jmapc-code: #efdcd4;
+  --jmapc-code-chrome: #e7d0c7;
+}
+
+html.dark {
+  --jmapc-code: #2e0c10;
+  --jmapc-code-chrome: #3b1217;
+}
+
+.nextra-code pre {
+  background: var(--jmapc-code);
+}
+
+.nextra-code > div:first-child {
+  background: var(--jmapc-code-chrome);
+}
+
+body {
+  color: var(--jmapc-ink);
+}
+
+.nextra-border {
+  border-color: var(--jmapc-rule);
+}
+
+::selection {
+  background: var(--jmapc-ochre);
+  color: #5d181f;
+}
+
+/* The wordmark draws in currentColor, so in the navbar it takes the ink of
+   whichever ground it is on. Only the landing page sets it in the vermilion,
+   where it is the mark rather than a way back to the top. */
+.jmapc-logo {
+  height: 1.4rem;
+  width: auto;
+  color: var(--jmapc-ink);
+}
+
+/* One voice across the site: Plex Sans for prose, Plex Mono for anything that
+   is typed, and Noto Sans JP behind both for the Japanese neither of them
+   carries. */
+body {
+  font-family: var(--font-sans), var(--font-jp), sans-serif;
+}
+
+code,
+kbd,
+pre,
+samp {
+  font-family: var(--font-mono), var(--font-jp), ui-monospace, monospace;
+}
+
+/* The language link in the navbar, sized to sit beside the theme's own
+   buttons rather than to compete with them. */
+.jmapc-locale {
+  font-size: 0.8125rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 5px;
+  text-decoration: none;
+  color: inherit;
+  opacity: 0.7;
+  transition: opacity 120ms ease;
+}
+
+.jmapc-locale:hover {
+  opacity: 1;
+}

@@ -1,0 +1,72 @@
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    # The site is docs/pages/*.md read through the rest of docs/, wearing the
+    # logo from misc/. Nothing else changes what is published.
+    paths:
+      - docs/**
+      - misc/*.svg
+      - .github/workflows/pages.yml
+  # A deploy that has to happen without a commit: a rebuild after the domain
+  # or the Pages settings change.
+  workflow_dispatch:
+
+# Deploying to Pages needs more than reading the repository: the artifact is
+# claimed with an OIDC token rather than with a stored credential.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Pages holds one published site, so two deploys racing would leave whichever
+# finished last. Queue them instead, and let the one in flight finish: a
+# half-deployed site is worse than a stale one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docs
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The build only reads the repository; the deploy is a separate job
+          # with a token of its own.
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          # The Node the other workflows name, for the reason they name one.
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: Install
+        run: npm ci
+
+      # next build writes the whole site to docs/out, and pagefind then
+      # indexes the HTML it finds there.
+      - name: Build
+        run: npm run build
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: docs/out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

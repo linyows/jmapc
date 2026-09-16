@@ -1,0 +1,179 @@
+---
+title: A compiler for JMAP
+description: jmapc compiles a JMAP request into a type-safe client for Go, Rust and TypeScript.
+---
+
+import {
+  Action,
+  Actions,
+  Compile,
+  Generated,
+  Hero,
+  Landing,
+  Lede,
+  Section,
+  Trait,
+  Traits
+} from '@/app/_components/landing.jsx'
+
+<Landing>
+
+<Hero title={['You write the request.', 'jmapc writes the client.']}>
+  <Lede>
+    jmapc is a compiler for JMAP. The request is the JSON the specification
+    already defines; jmapc checks it against the specification and writes a
+    client that can only call it correctly.
+  </Lede>
+  <Actions>
+    <Action href="/requests" primary>Read the documentation</Action>
+    <Action href="https://github.com/linyows/jmapc">Source on GitHub</Action>
+  </Actions>
+</Hero>
+
+<Compile command="jmapc generate">
+
+```json filename="requests/ListInboxEmails.jmap.json"
+{
+  "methodCalls": [
+    ["Email/query", {
+      "filter": {"inMailbox": "{{mailboxId}}"},
+      "limit": "{{limit}}"
+    }, "search"],
+    ["Email/get", {
+      "#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"},
+      "properties": ["id", "subject", "from", "receivedAt"]
+    }, "fetch"]
+  ],
+  "_returns": "fetch"
+}
+```
+
+<Generated label="Generated client language" languages={['Go', 'Rust', 'TypeScript']}>
+
+```go filename="inbox.go"
+res, err := client.ListInboxEmails(ctx, c, client.ListInboxEmailsParams{
+	MailboxID: inbox,
+	Limit:     25,
+})
+if err != nil {
+	return err
+}
+for _, email := range res.List {
+	fmt.Println(email.ReceivedAt, email.From[0].Email, *email.Subject)
+}
+```
+
+```rust filename="inbox.rs"
+let res = list_inbox_emails(&client, ListInboxEmailsParams {
+    mailbox_id: inbox,
+    limit: 25,
+})
+.await?;
+
+for email in &res.list {
+    println!("{} {:?}", email.received_at, email.subject);
+}
+```
+
+```typescript filename="inbox.ts"
+const res = await listInboxEmails(client, {
+  mailboxId: inbox,
+  limit: 25,
+})
+
+for (const email of res.list) {
+  console.log(email.receivedAt, email.from?.[0].email, email.subject)
+}
+```
+
+</Generated>
+
+</Compile>
+
+<Section
+  title="A request that is wrong never reaches a server"
+  lede="Every request is read against the specification before a line of code is generated — as you type, when you build, and against a running server when you ask. A misspelling comes back with the name you meant."
+>
+
+```ansi
+requests/BadQuery.jmap.json: methodCalls[0].arguments.filter.hasAttachmnt: EmailFilterCondition has no property "hasAttachmnt"
+	did you mean "hasAttachment"?
+requests/BadQuery.jmap.json: methodCalls[1].arguments.#ids.name: the referenced call is Email/query, but the reference names Email/get
+	call "c0" invokes Email/query
+```
+
+</Section>
+
+<Section
+  title="Three languages, and almost nothing to install"
+  lede="The runtime is generated alongside the requests rather than shipped as a library, so what a project takes on is the generated directory and little else."
+>
+
+<Traits>
+  <Trait title="Go" lang="go">
+    The generated package uses the standard library and nothing outside it.
+    Transmission is an `http.Client` you already have.
+  </Trait>
+  <Trait title="Rust" lang="rust">
+    `serde` and `serde_json`, and no more: no HTTP stack, no TLS backend and no
+    async runtime come with it. Transmission is a `Transport` you implement over
+    whichever client the program already uses.
+  </Trait>
+  <Trait title="TypeScript" lang="typescript">
+    No dependencies at all. The only thing the platform has to provide is
+    `fetch`.
+  </Trait>
+</Traits>
+
+</Section>
+
+<Section
+  invert
+  title="A compiler, not a wrapper"
+  lede="These five all follow from that one difference."
+>
+
+<Traits>
+  <Trait title="No API of its own">
+    The request file is JMAP. What you learn is the specification, and it is the
+    same knowledge in all three languages.
+  </Trait>
+  <Trait title="A response shaped like the question">
+    The result carries the properties the request asked for and nothing else.
+    Ask for one more and the type grows; ask for one that does not exist and the
+    build stops.
+  </Trait>
+  <Trait title="Errors at every level JMAP reports them">
+    A failed request, a failed method call, a /set that answers 200 with a
+    refusal — the generated code tells them apart so the caller does not have to.
+  </Trait>
+  <Trait title="Push and paging as loops, not plumbing">
+    A request marked as watched follows the changes the server reports. One
+    marked as paged reads a result the server returns a part at a time.
+  </Trait>
+  <Trait title="Tools around the edges">
+    A command that sends a request to a real server, a JMAP server to test your
+    own code against, and a schema file for the capabilities jmapc does not
+    know yet.
+  </Trait>
+</Traits>
+
+</Section>
+
+<Section
+  title="Install"
+  lede="The client is generated with go generate, so record the tool in the module that uses it. A Rust or TypeScript project has no Go toolchain to run go tool with, and takes a binary from the releases instead."
+>
+
+```sh
+go get -tool github.com/linyows/jmapc/cmd/jmapc
+```
+
+<Actions>
+  <Action href="/requests" primary>Write your first request</Action>
+  <Action href="/coverage">See what is covered</Action>
+</Actions>
+
+</Section>
+
+</Landing>

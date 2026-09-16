@@ -1,0 +1,25 @@
+{
+  "name": "jmapc-website",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "postinstall": "node scripts/patch-nextra-theme.mjs",
+    "logo": "node scripts/copy-logo.mjs",
+    "predev": "npm run logo",
+    "dev": "next dev",
+    "prebuild": "npm run logo",
+    "build": "next build",
+    "postbuild": "pagefind --site out --output-path out/_pagefind"
+  },
+  "dependencies": {
+    "next": "^16.3.5",
+    "nextra": "^4.6.1",
+    "nextra-theme-docs": "^4.6.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "pagefind": "^1.5.2"
+  }
+}

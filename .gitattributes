@@ -3,3 +3,8 @@
 # tree with CRLF, as Git does by default on Windows, would make that comparison
 # fail for a reason that has nothing to do with the code.
 * text=auto eol=lf
+
+# docs/ holds the documentation and the site that publishes it, and nothing the
+# module ships. Counting the site's JavaScript as the language of the repository
+# would say the wrong thing about what this is.
+docs/** linguist-documentation

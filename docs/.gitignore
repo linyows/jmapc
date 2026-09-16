@@ -1,0 +1,6 @@
+# The favicon is copied in from misc/, which keeps the one copy of it.
+/public/logo.svg
+# What next build writes, and what pagefind indexes into it.
+/.next/
+/out/
+/node_modules/

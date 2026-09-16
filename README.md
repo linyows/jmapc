@@ -230,7 +230,7 @@ names: `header:List-Id:asText` is a `*string`, `header:To:asAddresses` a
 
 The file name determines every name in the generated code, and the call ids
 determine the names within it: see
-[Writing a request](docs/requests.md#generated-names).
+[Writing a request](docs/content/en/requests.md#generated-names).
 [`example/requests`](example/requests) holds twenty-five requests, over mail,
 contacts, calendars, sharing and filtering.
 
@@ -248,7 +248,7 @@ serde and nothing else, and the TypeScript output has no dependencies at all,
 its one platform requirement being `fetch`. Each spells the generated names the
 way its own language spells them, and both express a nullable property and a
 union of shapes more precisely than Go does:
-[Other languages](docs/languages.md).
+[Other languages](docs/content/en/languages.md).
 
 ## Verification
 
@@ -268,7 +268,7 @@ requests/BadQuery.jmap.json: methodCalls[0].arguments.filter.hasAttachmnt: Email
 only a running server can answer — the capabilities it advertises, the accounts
 it holds, how much it accepts in one request. Most of the checks run in the
 editor too, from a JSON Schema jmapc writes. The whole list is in
-[Verification](docs/verification.md).
+[Verification](docs/content/en/verification.md).
 
 ## Documentation
 
@@ -286,17 +286,17 @@ jmapc itself.
 
 | | |
 |---|---|
-| [Writing a request](docs/requests.md) | The request file, its parameters, and the names generated from it |
-| [Verification](docs/verification.md) | What is checked at build time, against a server, and in the editor |
-| [The jmapc command](docs/cli.md) | Sending a request with `jmapc run`, and configuration |
-| [The runtime](docs/runtime.md) | Errors, large `/get`s, tokens, retries, observability, and blobs |
-| [Push](docs/push.md) | Following changes as the server reports them |
-| [Walking an answer that does not fit in one request](docs/paging.md) | Reading a result the server returns one part at a time |
-| [Testing](docs/testing.md) | jmaptest, a JMAP server to test your code against |
-| [Other languages](docs/languages.md) | The Rust and the TypeScript client |
-| [Vendor extensions](docs/extensions.md) | Types and methods jmapc does not know, described in a schema file |
-| [Coverage](docs/coverage.md) | The capabilities and the methods supported |
-| [Working on jmapc](docs/contributing.md) | Building, testing and releasing jmapc itself |
+| [Writing a request](docs/content/en/requests.md) | The request file, its parameters, and the names generated from it |
+| [Verification](docs/content/en/verification.md) | What is checked at build time, against a server, and in the editor |
+| [The jmapc command](docs/content/en/cli.md) | Sending a request with `jmapc run`, and configuration |
+| [The runtime](docs/content/en/runtime.md) | Errors, large `/get`s, tokens, retries, observability, and blobs |
+| [Push](docs/content/en/push.md) | Following changes as the server reports them |
+| [Walking an answer that does not fit in one request](docs/content/en/paging.md) | Reading a result the server returns one part at a time |
+| [Testing](docs/content/en/testing.md) | jmaptest, a JMAP server to test your code against |
+| [Other languages](docs/content/en/languages.md) | The Rust and the TypeScript client |
+| [Vendor extensions](docs/content/en/extensions.md) | Types and methods jmapc does not know, described in a schema file |
+| [Coverage](docs/content/en/coverage.md) | The capabilities and the methods supported |
+| [Working on jmapc](docs/content/en/contributing.md) | Building, testing and releasing jmapc itself |
 
 ## Coverage
 
@@ -305,9 +305,9 @@ lists](https://www.iana.org/assignments/jmap/jmap.xhtml) — core, mail,
 submission, contacts, calendars, principals, sieve, quota, blob and the rest —
 and the 81 methods they bring, all checked and generated the same way. A
 capability that is not among them is described in a
-[schema file](docs/extensions.md) and checked like any other. What each
+[schema file](docs/content/en/extensions.md) and checked like any other. What each
 capability brings, and the one thing jmapc deliberately does not check, is in
-[Coverage](docs/coverage.md).
+[Coverage](docs/content/en/coverage.md).
 
 ## Author
 
