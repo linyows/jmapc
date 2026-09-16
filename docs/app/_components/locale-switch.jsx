@@ -10,7 +10,7 @@ export const LocaleSwitch = ({ labels }) => {
   const japanese = pathname === '/ja' || pathname.startsWith('/ja/')
   const other = japanese
     ? pathname.replace(/^\/ja(?=\/|$)/, '') || '/'
-    : `/ja${pathname === '/' ? '/' : pathname}`
+    : `/ja${pathname === '/' ? '' : pathname}`
 
   return (
     <a className="jmapc-locale" href={other} lang={japanese ? 'en' : 'ja'}>

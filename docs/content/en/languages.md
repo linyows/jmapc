@@ -1,5 +1,11 @@
 # Other languages
 
+The requests are not written in Go, so nothing about them is. `jmapc generate
+-lang` writes the same client in Rust or in TypeScript, from the same files,
+and the runtime each one needs is generated with it. What differs between the
+three is what each language has to say about a shape: where Go writes a struct
+with a field per form, Rust writes an enum and TypeScript writes a union.
+
 ## Rust
 
 The same requests generate a Rust client:

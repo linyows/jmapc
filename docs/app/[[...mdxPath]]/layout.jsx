@@ -63,7 +63,7 @@ const DICTIONARY = {
 export async function generateMetadata({ params }) {
   const lang = localeOf((await params).mdxPath)
   return {
-    title: { absolute: '', template: '%s | jmapc' },
+    title: 'jmapc',
     description: DICTIONARY[lang].description,
     metadataBase: new URL(SITE),
     icons: { icon: '/logo.svg' },

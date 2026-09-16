@@ -1,5 +1,11 @@
 # The jmapc command
 
+The command does more than generate. It sends a request to a running server,
+so that a request can be tried before there is any code that calls it. It
+reports a generated client that has fallen behind the requests it came from.
+And it reads the paths and the server it works against from a file, rather than
+from the flags every time.
+
 ## Sending a request
 
 A request is worth trying before there is any code that calls it, so `jmapc run`

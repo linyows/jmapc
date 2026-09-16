@@ -17,7 +17,7 @@ export default {
   cli: 'jmapc コマンド',
   runtime: 'ランタイム',
   push: 'プッシュ',
-  paging: '一度のリクエストに収まらない答えを読み通す',
+  paging: 'ページング',
   testing: 'テスト',
   languages: '他の言語',
   extensions: 'ベンダ拡張',

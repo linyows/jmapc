@@ -17,7 +17,7 @@ export default {
   cli: 'The jmapc command',
   runtime: 'The runtime',
   push: 'Push',
-  paging: 'Walking an answer that does not fit in one request',
+  paging: 'Paging',
   testing: 'Testing',
   languages: 'Other languages',
   extensions: 'Vendor extensions',

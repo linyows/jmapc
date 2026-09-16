@@ -1,5 +1,13 @@
 # The runtime
 
+The generated code is the shape of the request and nothing more. What happens
+between the call and the answer belongs to the client this package provides: it
+reports a failure at whichever of the levels JMAP reported one, keeps the
+session and fetches it again when the server says it changed, splits a `/get`
+too large to send at once, renews a token that expires, retries what is worth
+retrying, and reports what it did. Each of those is a default, and an option
+changes it.
+
 ## Errors at run time
 
 JMAP fails at two levels, and so does the runtime.

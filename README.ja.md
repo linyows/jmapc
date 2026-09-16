@@ -264,7 +264,7 @@ Rust と TypeScript のクライアント、jmapc が知らないケイパビリ
 | [jmapc コマンド](docs/content/ja/cli.md) | `jmapc run` でリクエストを送る方法と設定 |
 | [ランタイム](docs/content/ja/runtime.md) | エラー、大きな `/get`、トークン、再送、可観測性、blob |
 | [プッシュ](docs/content/ja/push.md) | サーバが報告する変更を追い続ける |
-| [一度のリクエストに収まらない答えを読み通す](docs/content/ja/paging.md) | 一部ずつ返ってくる結果を最後まで読む |
+| [ページング](docs/content/ja/paging.md) | 一部ずつ返ってくる結果を最後まで読む |
 | [テスト](docs/content/ja/testing.md) | 自分のコードをテストするための JMAP サーバ、jmaptest |
 | [他の言語](docs/content/ja/languages.md) | Rust と TypeScript のクライアント |
 | [ベンダ拡張](docs/content/ja/extensions.md) | jmapc が知らない型とメソッドをスキーマファイルに記述する |

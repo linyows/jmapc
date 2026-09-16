@@ -80,6 +80,14 @@ body {
   border-color: var(--jmapc-rule);
 }
 
+/* The breadcrumb names the page that the heading under it names again, so it
+   is set in the quiet colour and at the weight of ordinary text rather than in
+   the ink, which is what made the two read as one repeated line. */
+.nextra-breadcrumb span {
+  color: var(--jmapc-muted);
+  font-weight: 400;
+}
+
 ::selection {
   background: var(--jmapc-ochre);
   color: #5d181f;
