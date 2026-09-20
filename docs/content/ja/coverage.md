@@ -1,8 +1,8 @@
 # 対応範囲
 
-JMAP は仕様の集まりです。
-サーバはケイパビリティ URI を広告し、それぞれが固有の型とメソッドを持ち込みます。
-以下は [IANA が登録しているもの](https://www.iana.org/assignments/jmap/jmap.xhtml)と、それぞれに対する jmapc の状況です。
+JMAPは仕様の集まりです。
+サーバはケイパビリティURIを広告し、それぞれが固有の型とメソッドを持ち込みます。
+以下は[IANAが登録しているもの](https://www.iana.org/assignments/jmap/jmap.xhtml)と、それぞれに対するjmapcの状況です。
 
 | ケイパビリティ | 仕様 | サポート |
 |---|---|---|
@@ -23,28 +23,28 @@ JMAP は仕様の集まりです。
 | `urn:ietf:params:jmap:webpush-vapid` | [RFC 9749](https://www.rfc-editor.org/rfc/rfc9749) | ✅ |
 
 このうち2つは、それ自体が別仕様のオブジェクトを格納します。
-連絡先カードは [JSContact](https://www.rfc-editor.org/rfc/rfc9553) の Card であり、カレンダーの予定は [JSCalendar](https://www.rfc-editor.org/rfc/rfc8984) の JSEvent です。
-どちらも JMAP が使っている型名を使い、しかも互いの型名とも衝突します。
-3つの異なる `Link` 型が存在することになります。
+連絡先カードは[JSContact](https://www.rfc-editor.org/rfc/rfc9553)のCardであり、カレンダーの予定は[JSCalendar](https://www.rfc-editor.org/rfc/rfc8984)のJSEventです。
+どちらもJMAPが使っている型名を使い、しかも互いの型名とも衝突します。
+3つの異なる`Link`型が存在することになります。
 そこでこれらには接頭辞を付けています。
-`ContactEmailAddress` はカード上のアドレス、`EmailAddress` はヘッダフィールドのアドレス、`EventLink` は会議に添付されたリソースです。
+`ContactEmailAddress`はカード上のアドレス、`EmailAddress`はヘッダフィールドのアドレス、`EventLink`は会議に添付されたリソースです。
 各型のドキュメントには、その仕様が使っている名前を記載しています。
 
-JSCalendar は JMAP にない時刻の型も持ち込みます。
-予定の `start` はタイムゾーンを持たない `LocalDateTime` で、`duration` は ISO 8601 の `Duration` です。
-`Duration` が独自の型なのは、サマータイムの切り替えを跨ぐ `P1D` が常に 24 時間とは限らないからです。
-どちらもリクエストで検証されるので、末尾に `Z` の付いた `start` や、`90m` と書いた duration はビルドに失敗します。
+JSCalendarはJMAPにない時刻の型も持ち込みます。
+予定の`start`はタイムゾーンを持たない`LocalDateTime`で、`duration`はISO 8601の`Duration`です。
+`Duration`が独自の型なのは、サマータイムの切り替えを跨ぐ`P1D`が常に24時間とは限らないからです。
+どちらもリクエストで検証されるので、末尾に`Z`の付いた`start`や、`90m`と書いたdurationはビルドに失敗します。
 
 ケイパビリティのすべてが固有の型を持ち込むわけではありません。
-S/MIME の検証は `Email` に4つのプロパティを足すだけで、型もメソッドも増やしません。
+S/MIMEの検証は`Email`に4つのプロパティを足すだけで、型もメソッドも増やしません。
 つまりメソッド名からは、そのケイパビリティが必要だと分かりません。
-jmapc はリクエストが触れたプロパティがどのケイパビリティに属するかを判断し、`using` に加えます。
-`smimeStatus` を要求すれば、`urn:ietf:params:jmap:smimeverify` が自動で現れます。
+jmapcはリクエストが触れたプロパティがどのケイパビリティに属するかを判断し、`using`に加えます。
+`smimeStatus`を要求すれば、`urn:ietf:params:jmap:smimeverify`が自動で現れます。
 
 型もメソッドも持たず、クライアントに伝えることだけを持つケイパビリティもあります。
-VAPID がそれで、伝えるのは鍵です。
+VAPIDがそれで、伝えるのは鍵です。
 こうしたものはセッションから読みます。
-`Session.Capability` は、jmapc が知らないケイパビリティも含めて、どれでも読めます。
+`Session.Capability`は、jmapcが知らないケイパビリティも含めて、どれでも読めます。
 
 ```go
 vapid, err := session.WebPushVAPID()
@@ -56,11 +56,11 @@ err = session.Accounts[accountID].Capability(jmapc.CapabilitySieve, &limits)
 
 サポートしていないケイパビリティも、手が届かないわけではありません。
 [スキーマファイル](extensions.md)に型を記述すれば、それに対するリクエストも他と同じように検証されます。
-ベンダ拡張と同じ仕組みであり、記述するのは宣言だけで、Go を書く必要はありません。
+ベンダ拡張と同じ仕組みであり、記述するのは宣言だけで、Goを書く必要はありません。
 
 ## メソッド
 
-81 のメソッドがあり、すべて同じ方法で検証され生成されます。
+81のメソッドがあり、すべて同じ方法で検証され生成されます。
 
 | 型 | メソッド |
 |---|---|
@@ -91,5 +91,5 @@ err = session.Accounts[accountID].Capability(jmapc.CapabilitySieve, &limits)
 1つだけあり、それは意図的なものです。
 
 **開いた集合は意図的に検証しない**：仕様が値を固定しているプロパティは検証します。
-一方、集合が開いているもの、たとえばメールボックスの `role`、メールのキーワード、`Content-Disposition` は検証しません。
+一方、集合が開いているもの、たとえばメールボックスの`role`、メールのキーワード、`Content-Disposition`は検証しません。
 サーバが受け付けたはずの値を拒否するほうが、綴り間違いを通すより害が大きいからです。

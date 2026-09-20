@@ -50,8 +50,8 @@ const DICTIONARY = {
   },
   ja: {
     description:
-      'jmapc は JMAP のコンパイラです。リクエストを書くと、クライアントが書かれます。',
-    editPage: 'GitHub でこのページを編集',
+      'jmapcはJMAPのコンパイラです。リクエストを書くと、クライアントが書かれます。',
+    editPage: 'GitHubでこのページを編集',
     lastUpdated: '最終更新',
     backToTop: '先頭に戻る',
     light: 'ライト',
@@ -133,7 +133,7 @@ export default async function RootLayout({ children, params }) {
             </Footer>
           }
           docsRepositoryBase="https://github.com/linyows/jmapc/blob/main/docs"
-          sidebar={{ defaultMenuCollapseLevel: 1 }}
+          sidebar={{ defaultMenuCollapseLevel: 1, toggleButton: false }}
           toc={{ backToTop: dictionary.backToTop }}
           editLink={dictionary.editPage}
           themeSwitch={{

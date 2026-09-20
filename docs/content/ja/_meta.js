@@ -1,5 +1,5 @@
-// 読み手がしていることで分ける。jmapc を知る、リクエストを書く、
-// そこから生成されたコードを呼ぶ。
+//読み手がしていることで分ける。jmapcを知る、リクエストを書く、
+//そこから生成されたコードを呼ぶ。
 export default {
   index: {
     title: 'ホーム',
@@ -16,7 +16,7 @@ export default {
   },
   '-- overview': { type: 'separator', title: '概要' },
   introduction: 'はじめに',
-  why: 'なぜ jmapc か',
+  why: 'なぜjmapcか',
   'getting-started': 'はじめてのクライアント',
   '-- requests': { type: 'separator', title: 'リクエスト' },
   requests: 'リクエストの書き方',
@@ -31,10 +31,10 @@ export default {
   blobs: 'Blob',
   client: 'クライアントの設定',
   testing: 'テスト',
-  languages: 'Rust と TypeScript',
+  languages: 'RustとTypeScript',
   '-- reference': { type: 'separator', title: 'リファレンス' },
-  cli: 'jmapc コマンド',
+  cli: 'jmapcコマンド',
   extensions: 'ベンダ拡張',
   coverage: '対応範囲',
-  contributing: 'jmapc の開発'
+  contributing: 'jmapcの開発'
 }

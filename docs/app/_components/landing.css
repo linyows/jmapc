@@ -4,6 +4,11 @@
   --lp-muted: var(--jmapc-muted);
   --lp-rule: var(--jmapc-rule);
   --lp-accent: var(--jmapc-accent);
+  --lp-ochre: var(--jmapc-ochre);
+  /* The vermilion at the strength each ground allows: taken down on the cream
+     and up on the oxblood. It is the colour the site already sets its links
+     in, and the only one of the palette's reds that can carry small text. */
+  --lp-primary: var(--x-color-primary-600);
   max-width: 72rem;
   margin: 0 auto;
   /* The theme's full-width layout supplies the side gutter. */
@@ -13,20 +18,16 @@
 
 /* The hero */
 
+/* The picture of the compiler stands inside the hero, because the headline is
+   its caption: the request on the left is the one you write, the client on the
+   right is the one jmapc writes. Everything around it is set on the middle of
+   the page, the reading line left where it falls. */
 .lp-hero {
+  text-align: center;
+  /* Half the air the hero opened with is taken from above the mark and given
+     back under it, so the headline starts where it did and the mark sits
+     nearer the top of the page than to the words it introduces. */
   padding: clamp(3rem, 9vw, 6.5rem) 0 clamp(4.25rem, 8vw, 7rem);
-}
-
-.lp-mark {
-  /* "jmapc" is all lowercase, so much of the height of the drawing is the
-     space above the x-height and the descenders below it. The mark has to be
-     set well above the headline to weigh the same as it. */
-  height: clamp(3rem, 6.5vw, 5rem);
-  width: auto;
-  margin-bottom: clamp(2.25rem, 5vw, 3.75rem);
-  /* The mark is the one thing on the page allowed to be the vermilion itself:
-     a logotype is not text, and is not held to the contrast text is. */
-  color: var(--lp-accent);
 }
 
 /* Set in the monospace of the thing the page is about: what jmapc reads and
@@ -48,13 +49,21 @@
   display: block;
 }
 
+/* The Latin headline is set tight because its two lines are mostly x-height
+   with little above and below. Japanese fills the em, so at the same leading
+   the two lines close on each other. */
+:lang(ja) .lp .lp-title {
+  line-height: 1.3;
+}
+
 .lp .lp-title span + span {
   color: var(--lp-muted);
 }
 
 .lp .lp-lede {
-  margin: 2rem 0 0;
+  margin: 2rem auto 0;
   max-width: 34em;
+  text-align: left;
   font-size: 1.125rem;
   line-height: 1.7;
   color: var(--lp-muted);
@@ -63,6 +72,10 @@
 .lp .lp-lede > p {
   margin: 0;
   line-height: inherit;
+}
+
+.lp-hero .lp-actions {
+  justify-content: center;
 }
 
 .lp .lp-actions {
@@ -94,12 +107,28 @@
   color: var(--lp-paper);
 }
 
+/* The way further in. It is not the step the page is asking for, so it is not
+   filled; the ochre names it without raising its voice, and hovering washes
+   the same colour under it rather than swapping the border for another. */
+.lp .lp-action-more {
+  border-color: var(--lp-ochre);
+}
+
+.lp .lp-action-more:hover {
+  border-color: var(--lp-ochre);
+  background: color-mix(in srgb, var(--lp-ochre) 18%, transparent);
+}
+
 /* Input, seam, output */
 
 /* The request and what it compiles to are the same window, side by side: one
    row that both stretch to fill, and the languages on a row of their own so
    that they do not make the right-hand window taller than the left. */
 .lp-compile {
+  /* Set apart from the sentence above it, and held close to the one below,
+     which is its caption. */
+  margin-top: clamp(3rem, 5vw, 4.5rem);
+  text-align: left;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   grid-template-rows: auto auto;
@@ -252,13 +281,13 @@
   --lp-lang-text: #58a6e8;
 }
 
-/* The filename bar is drawn with a border and the code with an inset ring. */
-.lp-generated-panel .nextra-code > div:first-child {
-  border-color: var(--lp-lang);
-}
-
-.lp-generated-panel pre {
-  box-shadow: inset 0 0 0 1px var(--lp-lang);
+/* Both windows are drawn in the same line, because they are the same request
+   either side of the seam. What tells the right-hand one apart is its name:
+   the mark of the language and the filename it generated, in the colour the
+   language is known by. */
+.lp-generated-panel .nextra-code > div:first-child > svg,
+.lp-generated-panel .nextra-code > div:first-child > span {
+  color: var(--lp-lang-text);
 }
 
 .lp-generated-pick {
@@ -313,6 +342,21 @@
   margin-top: clamp(8rem, 14vw, 12rem);
 }
 
+/* The sections that say what you get are set to half the measure the hero and
+   the two windows need, so that they read as a column of text rather than as
+   lines run the width of the page. In a measure that narrow a trait has no
+   room for its term beside its description, so the row reads downwards as it
+   does on a phone. */
+.lp-section[data-half] {
+  max-width: 40rem;
+  margin-inline: auto;
+}
+
+.lp-section[data-half] .lp-trait {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.35rem;
+}
+
 /* One section is laid on the oxblood rather than on the cream. It is the same
    ground in either theme, because the vermilion its heading is set in only has
    the contrast to be read on the dark one. */
@@ -324,7 +368,19 @@
   background: #5d181f;
   color: #f8e9e0;
   border-radius: 14px;
-  padding: clamp(2.25rem, 4.5vw, 3.75rem);
+  /* The heading is set close to the top edge, where the ground changing is
+     itself the space above it, and the air the card needs is put under the
+     last row instead, where nothing else supplies it. */
+  padding: clamp(1.125rem, 2.25vw, 1.875rem) clamp(2.25rem, 4.5vw, 3.75rem)
+    clamp(3.375rem, 6.75vw, 5.625rem);
+}
+
+/* The card is the one section whose top edge is drawn, so what the heading
+   leaves above itself is measurable there. A Latin capital sits below the
+   line's ascent; a Japanese glyph fills the em and starts higher, which on
+   that edge reads as the card being tighter. The padding makes up for it. */
+:lang(ja) .lp-section[data-invert] {
+  padding-top: clamp(2.25rem, 4.5vw, 3.75rem);
 }
 
 :is(html.dark) .lp-section[data-invert] {
@@ -335,12 +391,33 @@
   color: var(--lp-accent);
 }
 
+/* What the section is about, above the claim it makes about it. It is the name
+   of the page the section sends the reader on to, so the two ends of the
+   section agree. Set in the monospace the heading under it is set in, and at
+   the size and colour the language picker's own small labels take. */
+.lp .lp-section-kind {
+  margin: 0 0 0.6rem;
+  font-family: var(--font-mono), var(--font-jp), ui-monospace, monospace;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: var(--lp-primary);
+}
+
+/* The gap between the two is opened twice over by Latin type: the label sits
+   above the depth its descenders reserve, and the heading's capitals sit below
+   the height its ascenders reserve. Japanese fills the em at both ends, so the
+   same margin leaves the two touching, and it is given more. */
+:lang(ja) .lp .lp-section-kind {
+  margin-bottom: 1rem;
+}
+
 .lp .lp-section-title {
   font-family: var(--font-mono), var(--font-jp), ui-monospace, monospace;
   font-size: clamp(1.8rem, 4vw, 2.75rem);
   font-weight: 700;
   letter-spacing: -0.035em;
-  line-height: 1.15;
+  line-height: 1.25;
   /* The longer of these no longer sets on one line; let it break evenly
      rather than leaving a word on its own. */
   text-wrap: balance;
@@ -352,6 +429,9 @@
    twice as wide and every heading would break. Let the window decide instead:
    the longest of them fits on one line on anything but a phone. */
 :lang(ja) .lp .lp-section-title {
+  /* Japanese fills the em, so two lines of it close on each other at the
+     leading the Latin heading is set on. */
+  line-height: 1.4;
   max-width: none;
   margin: 0;
   border: 0;
@@ -412,6 +492,22 @@
   flex: none;
 }
 
+/* The Go mark is a wide, short drawing, so at the height that suits the other
+   two marks it reads as the smallest of the three. The one beside the trait is
+   set a third larger to weigh the same as them. */
+.lp [data-lang='go'] .lp-lang-icon {
+  width: 1.3em;
+  height: 1.3em;
+}
+
+/* On the filename bar the three marks are set to one height, and the bar's own
+   cap on how wide a mark may be is lifted so that the widest of them, which
+   would otherwise be squeezed under it, keeps its proportions. */
+.lp-generated-panel .nextra-code > div:first-child > svg {
+  height: 1.3em;
+  max-width: none;
+}
+
 .lp .lp-trait dd {
   margin: 0;
   line-height: 1.65;
@@ -456,16 +552,4 @@
     grid-template-columns: minmax(0, 1fr);
     gap: 0.35rem;
   }
-}
-
-/* The landing page carries the wordmark itself, at the size it deserves, so
-   the navbar does not repeat it; and with nothing above the hero, the rule
-   under the navbar has nothing to separate. Both are scoped to the page by
-   the presence of its own root, so the documentation keeps them. */
-body:has(.lp) .nextra-navbar-blur {
-  border-bottom-color: transparent;
-}
-
-body:has(.lp) .nextra-navbar a[aria-label='Home page'] {
-  display: none;
 }

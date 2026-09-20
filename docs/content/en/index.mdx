@@ -19,16 +19,11 @@ import {
 <Landing>
 
 <Hero title={['You write the request.', 'jmapc writes the client.']}>
-  <Lede>
-    jmapc is a compiler for JMAP. The request is the JSON the specification
-    already defines; jmapc checks it against the specification and writes a
-    client that can only call it correctly.
-  </Lede>
-  <Actions>
-    <Action href="/introduction" primary>Read the documentation</Action>
-    <Action href="https://github.com/linyows/jmapc">Source on GitHub</Action>
-  </Actions>
-</Hero>
+
+<Lede>
+  JMAP is the IETF standard for mail, contacts and calendars: one JSON API over
+  HTTP in place of IMAP, CardDAV and CalDAV.
+</Lede>
 
 <Compile command="jmapc generate">
 
@@ -90,7 +85,22 @@ for (const email of res.list) {
 
 </Compile>
 
+<Lede>
+  jmapc is a compiler for it. The request is the JSON the specification already
+  defines; jmapc checks it against the specification and writes a client that
+  can only call it correctly.
+</Lede>
+
+<Actions>
+  <Action href="/introduction" primary>Read the documentation</Action>
+  <Action href="/why">Why not a library?</Action>
+</Actions>
+
+</Hero>
+
 <Section
+  half
+  kind="Verification"
   title="A request that is wrong never reaches a server"
   lede="Every request is read against the specification before a line of code is generated — as you type, when you build, and against a running server when you ask. A misspelling comes back with the name you meant."
 >
@@ -102,9 +112,15 @@ requests/BadQuery.jmap.json: methodCalls[1].arguments.#ids.name: the referenced 
 	call "c0" invokes Email/query
 ```
 
+<Actions>
+  <Action href="/verification" more>How a request is checked</Action>
+</Actions>
+
 </Section>
 
 <Section
+  half
+  kind="Languages"
   title="Three languages, and almost nothing to install"
   lede="The runtime is generated alongside the requests rather than shipped as a library, so what a project takes on is the generated directory and little else."
 >
@@ -124,6 +140,37 @@ requests/BadQuery.jmap.json: methodCalls[1].arguments.#ids.name: the referenced 
     `fetch`.
   </Trait>
 </Traits>
+
+<Actions>
+  <Action href="/languages" more>Rust and TypeScript</Action>
+</Actions>
+
+</Section>
+
+<Section
+  half
+  kind="Coverage"
+  title="Everything JMAP has standardised"
+  lede="Not a subset chosen to make a demo work: the protocol as the standards bodies have published it so far."
+>
+
+<Traits>
+  <Trait title="15 capabilities">
+    Every one IANA lists — mail, submission, contacts, calendars, principals,
+    sieve, quota, blob, push and the rest — is in the data model a request is
+    checked against. One that is not, a vendor's own among them, is described
+    in a schema file and checked like any other.
+  </Trait>
+  <Trait title="81 methods">
+    Across twenty-one types, all generated and checked the same way.
+    `Email/query`, `CalendarEvent/copy` and `SieveScript/validate` are the same
+    kind of thing to jmapc.
+  </Trait>
+</Traits>
+
+<Actions>
+  <Action href="/coverage" more>Every capability and method</Action>
+</Actions>
 
 </Section>
 
@@ -161,6 +208,7 @@ requests/BadQuery.jmap.json: methodCalls[1].arguments.#ids.name: the referenced 
 </Section>
 
 <Section
+  half
   title="Install"
   lede="The client is generated with go generate, so record the tool in the module that uses it. A Rust or TypeScript project has no Go toolchain to run go tool with, and takes a binary from the releases instead."
 >
@@ -171,7 +219,6 @@ go get -tool github.com/linyows/jmapc/cmd/jmapc
 
 <Actions>
   <Action href="/getting-started" primary>Write your first request</Action>
-  <Action href="/coverage">See what is covered</Action>
 </Actions>
 
 </Section>

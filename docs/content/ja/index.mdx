@@ -1,6 +1,6 @@
 ---
-title: JMAP のコンパイラ
-description: jmapc は JMAP のリクエストを Go、Rust、TypeScript の型安全なクライアントにコンパイルします。
+title: JMAPのコンパイラ
+description: jmapcはJMAPのリクエストをGo、Rust、TypeScriptの型安全なクライアントにコンパイルします。
 ---
 
 import {
@@ -19,16 +19,11 @@ import {
 <Landing>
 
 <Hero title={['リクエストを書く。', 'クライアントはjmapcが書く。']}>
-  <Lede>
-    jmapc は JMAP のコンパイラです。リクエストは仕様がすでに定めている
-    JSON そのもので、jmapc はそれを仕様に照らして検証し、正しくしか呼べない
-    クライアントを書きます。
-  </Lede>
-  <Actions>
-    <Action href="/ja/introduction" primary>ドキュメントを読む</Action>
-    <Action href="https://github.com/linyows/jmapc">GitHub で見る</Action>
-  </Actions>
-</Hero>
+
+<Lede>
+  JMAPは、メール・連絡先・カレンダーのためのIETFの標準です。IMAP、CardDAV、
+  CalDAVを、HTTPの上のひとつのJSON APIに置き換えます。
+</Lede>
 
 <Compile command="jmapc generate">
 
@@ -90,7 +85,22 @@ for (const email of res.list) {
 
 </Compile>
 
+<Lede>
+  jmapcはそのコンパイラです。リクエストは仕様がすでに定めているJSONそのもの
+  で、jmapcはそれを仕様に照らして検証し、正しくしか呼べないクライアントを書き
+  ます。
+</Lede>
+
+<Actions>
+  <Action href="/ja/introduction" primary>ドキュメントを読む</Action>
+  <Action href="/ja/why">なぜライブラリではないのか</Action>
+</Actions>
+
+</Hero>
+
 <Section
+  half
+  kind="検証"
   title="間違ったリクエストはサーバに届かない"
   lede="リクエストはコードが生成される前に仕様と突き合わされます。書いている最中のエディタで、ビルド時に、そして指定すれば実際のサーバに対しても。綴りを間違えれば、意図した名前が返ってきます。"
 >
@@ -102,9 +112,15 @@ requests/BadQuery.jmap.json: methodCalls[1].arguments.#ids.name: the referenced 
 	call "c0" invokes Email/query
 ```
 
+<Actions>
+  <Action href="/ja/verification" more>リクエストはどう検証されるか</Action>
+</Actions>
+
 </Section>
 
 <Section
+  half
+  kind="言語"
   title="3つの言語に対応し、依存は最低限"
   lede="ランタイムはライブラリとして配られるのではなく、リクエストと一緒に生成されます。プロジェクトが抱えるのは生成されたディレクトリだけで、そのほかはほとんどありません。"
 >
@@ -112,17 +128,48 @@ requests/BadQuery.jmap.json: methodCalls[1].arguments.#ids.name: the referenced 
 <Traits>
   <Trait title="Go" lang="go">
     生成されたパッケージは標準ライブラリしか使いません。通信はすでに手元にある
-    `http.Client` です。
+    `http.Client`です。
   </Trait>
   <Trait title="Rust" lang="rust">
-    `serde` と `serde_json` だけです。HTTP スタックも TLS バックエンドも async
+    `serde`と`serde_json`だけです。HTTPスタックもTLSバックエンドもasync
     ランタイムも付いてきません。通信は、プログラムがすでに使っているクライアント
-    の上に実装する `Transport` です。
+    の上に実装する`Transport`です。
   </Trait>
   <Trait title="TypeScript" lang="typescript">
-    依存はありません。プラットフォームに求めるのは `fetch` だけです。
+    依存はありません。プラットフォームに求めるのは`fetch`だけです。
   </Trait>
 </Traits>
+
+<Actions>
+  <Action href="/ja/languages" more>RustとTypeScript</Action>
+</Actions>
+
+</Section>
+
+<Section
+  half
+  kind="対応範囲"
+  title="JMAPが標準化したすべて"
+  lede="デモが動く範囲を選んだものではありません。標準がここまでに公開したプロトコルそのものです。"
+>
+
+<Traits>
+  <Trait title="15のケイパビリティ">
+    IANAが登録しているものすべて — メール、送信、連絡先、カレンダー、
+    principals、Sieve、クォータ、blob、プッシュ、そのほか — が、リクエストを
+    突き合わせるデータモデルに入っています。載っていないもの、たとえば
+    ベンダー独自のものは、スキーマファイルに書けば同じように検証されます。
+  </Trait>
+  <Trait title="81のメソッド">
+    21の型にまたがり、どれも同じように生成され、検証されます。`Email/query`
+    も`CalendarEvent/copy`も`SieveScript/validate`も、jmapcにとっては
+    同じ種類のものです。
+  </Trait>
+</Traits>
+
+<Actions>
+  <Action href="/ja/coverage" more>ケイパビリティとメソッドの一覧</Action>
+</Actions>
 
 </Section>
 
@@ -133,33 +180,34 @@ requests/BadQuery.jmap.json: methodCalls[1].arguments.#ids.name: the referenced 
 >
 
 <Traits>
-  <Trait title="独自の API がない">
-    リクエストファイルは JMAP そのものです。覚えるのは仕様であり、3つの言語で
+  <Trait title="独自のAPIがない">
+    リクエストファイルはJMAPそのものです。覚えるのは仕様であり、3つの言語で
     同じ知識が通用します。
   </Trait>
   <Trait title="訊いたとおりの形で返る">
     結果はリクエストが要求したプロパティだけを持ちます。ひとつ増やせば型が育ち、
     存在しないものを要求すればビルドが止まります。
   </Trait>
-  <Trait title="JMAP が報告するすべての層のエラー">
-    リクエスト全体の失敗、メソッド呼び出しの失敗、200 を返しながら拒否している
+  <Trait title="JMAPが報告するすべての層のエラー">
+    リクエスト全体の失敗、メソッド呼び出しの失敗、200を返しながら拒否している
     /set。生成されたコードがこれらを区別するので、呼び出し側は区別せずに済みます。
   </Trait>
   <Trait title="プッシュとページングはループとして">
-    watch を指定したリクエストは、サーバが報告する変更を追い続けます。paged を
+    watchを指定したリクエストは、サーバが報告する変更を追い続けます。pagedを
     指定したリクエストは、一部ずつ返る結果を最後まで読み通します。
   </Trait>
   <Trait title="まわりの道具">
-    実際のサーバにリクエストを送るコマンド、自分のコードをテストするための JMAP
-    サーバ、そして jmapc がまだ知らないケイパビリティを書くスキーマファイル。
+    実際のサーバにリクエストを送るコマンド、自分のコードをテストするためのJMAP
+    サーバ、そしてjmapcがまだ知らないケイパビリティを書くスキーマファイル。
   </Trait>
 </Traits>
 
 </Section>
 
 <Section
+  half
   title="インストール"
-  lede="クライアントは go generate で生成するので、それを使うモジュールにツールを記録します。go tool を動かす Go ツールチェインを持たない Rust や TypeScript のプロジェクトは、リリースのバイナリを取ります。"
+  lede="クライアントはgo generateで生成するので、それを使うモジュールにツールを記録します。go toolを動かすGoツールチェインを持たないRustやTypeScriptのプロジェクトは、リリースのバイナリを取ります。"
 >
 
 ```sh
@@ -168,7 +216,6 @@ go get -tool github.com/linyows/jmapc/cmd/jmapc
 
 <Actions>
   <Action href="/ja/getting-started" primary>最初のリクエストを書く</Action>
-  <Action href="/ja/coverage">対応範囲を見る</Action>
 </Actions>
 
 </Section>
