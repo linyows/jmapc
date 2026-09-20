@@ -4,13 +4,11 @@ import './landing.css'
 export { Generated } from './generated.jsx'
 
 import { LanguageIcon } from './language-icon.jsx'
-import { Wordmark } from './wordmark.jsx'
 
 export const Landing = ({ children }) => <div className="lp">{children}</div>
 
 export const Hero = ({ title, children }) => (
   <header className="lp-hero">
-    <Wordmark className="lp-mark" />
     <h1 className="lp-title">
       {title.map(line => (
         <span key={line}>{line}</span>
@@ -26,11 +24,17 @@ export const Lede = ({ children }) => <div className="lp-lede">{children}</div>
 
 export const Actions = ({ children }) => <p className="lp-actions">{children}</p>
 
-export const Action = ({ href, primary, children }) => (
-  <a className={primary ? 'lp-action lp-action-primary' : 'lp-action'} href={href}>
-    {children}
-  </a>
-)
+// `primary` is the thing to do on the page. `more` is the way on to the page
+// that says the rest of what the section says, which is not a step in the
+// sequence and is not drawn as one.
+export const Action = ({ href, primary, more, children }) => {
+  const variant = primary ? ' lp-action-primary' : more ? ' lp-action-more' : ''
+  return (
+    <a className={`lp-action${variant}`} href={href}>
+      {children}
+    </a>
+  )
+}
 
 // The input and the output of the compiler, with the command that turns one
 // into the other sitting on the seam between them.
@@ -47,8 +51,15 @@ export const Compile = ({ command, children }) => {
   )
 }
 
-export const Section = ({ title, lede, invert, children }) => (
-  <section className="lp-section" data-invert={invert ? '' : undefined}>
+// `half` marks a section set to half the page's measure rather than its whole
+// width, though it still stands in the one column the page is.
+export const Section = ({ kind, title, lede, invert, half, children }) => (
+  <section
+    className="lp-section"
+    data-invert={invert ? '' : undefined}
+    data-half={half ? '' : undefined}
+  >
+    {kind && <p className="lp-section-kind">{kind}</p>}
     <h2 className="lp-section-title">{title}</h2>
     <p className="lp-section-lede">{lede}</p>
     {children}

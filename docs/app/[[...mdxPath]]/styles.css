@@ -93,13 +93,13 @@ body {
   color: #5d181f;
 }
 
-/* The wordmark draws in currentColor, so in the navbar it takes the ink of
-   whichever ground it is on. Only the landing page sets it in the vermilion,
-   where it is the mark rather than a way back to the top. */
+/* The wordmark draws in currentColor, and it is the vermilion wherever it
+   appears: in the navbar as on the landing page, it is the mark rather than a
+   word of the text around it, so it is not held to the contrast text is. */
 .jmapc-logo {
-  height: 1.4rem;
+  height: 2.1rem;
   width: auto;
-  color: var(--jmapc-ink);
+  color: var(--jmapc-accent);
 }
 
 /* One voice across the site: Plex Sans for prose, Plex Mono for anything that
@@ -149,4 +149,60 @@ body:not(:has(.lp)) article {
 body:not(:has(.lp)) .nextra-sidebar,
 body:not(:has(.lp)) .nextra-toc > div {
   padding-top: var(--jmapc-below-navbar);
+}
+
+/* The footer already sits on a ground of its own, so the rule the theme draws
+   above it says a second time what the change of colour has said. */
+hr.nextra-border:has(+ footer) {
+  display: none;
+}
+
+/* A section heading is told apart by its size and by the air above it, so the
+   rule under it is dropped and that air widened a little to carry the break
+   on its own. */
+article h2 {
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-top: 3.5rem;
+}
+
+/* The navbar keeps nothing under it but the page, so the rule it draws there
+   is dropped too, and its row is let out to the full width of the window
+   rather than held to the width of the prose. */
+.nextra-navbar-blur {
+  border-bottom: none;
+}
+
+.nextra-navbar nav {
+  max-width: none;
+}
+
+/* The two rows of controls that close a column -- the theme and language
+   switches at the foot of the sidebar, and the previous and next links at the
+   foot of the page -- are set off by the space above them instead of by a
+   rule, in the same way as the headings. */
+.nextra-sidebar-footer {
+  border-top: none;
+  padding-top: 2rem;
+}
+
+article > div:last-child {
+  border-top: none;
+  padding-top: 3rem;
+}
+
+/* The copyright is the only thing in the footer, so it stands in the middle
+   at every width rather than dropping to the left edge on a wide screen. */
+footer {
+  justify-content: center;
+}
+
+/* The landing page has no sidebar, so the theme switch the sidebar usually
+   carries is moved into the block the footer sits in and takes its ground.
+   Everywhere else that switch stands on the page, so here the row is let out
+   to the full width and given the page's own colour, and the footer keeps the
+   ground to itself. */
+body:has(.lp) div:has(> footer) > div:first-child {
+  max-width: none;
+  background: var(--x-color-nextra-bg);
 }
