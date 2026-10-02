@@ -466,3 +466,46 @@ func TestGenerateCheckReportsWhatADeletedRequestLeftBehind(t *testing.T) {
 		t.Errorf("generate -check removed a file it did not write: %v", err)
 	}
 }
+
+// TestGenerateRemovesWhatADeletedRequestLeftBehind checks that generating again
+// is what puts right the file -check reports a deleted request left behind, as
+// the message from -check tells the user it is. A file jmapc did not write
+// stays where it is.
+func TestGenerateRemovesWhatADeletedRequestLeftBehind(t *testing.T) {
+	dir, args := generated(t, map[string]string{
+		"ListMailboxes.jmap.json": listMailboxes,
+		"AllMailboxes.jmap.json": `{
+		  "methodCalls": [["Mailbox/get", {"ids": null, "properties": ["id", "name"]}, "every"]],
+		  "_returns": "every"
+		}`,
+	})
+	if err := os.Remove(filepath.Join(dir, "requests", "AllMailboxes.jmap.json")); err != nil {
+		t.Fatalf("removing a request: %v", err)
+	}
+	byHand := filepath.Join(dir, "client", "helpers.go")
+	if err := os.WriteFile(byHand, []byte("package client\n"), 0o644); err != nil {
+		t.Fatalf("writing a file by hand: %v", err)
+	}
+
+	out, errOut, err := capture(t, args)
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	left := filepath.Join(dir, "client", "allmailboxes_gen.go")
+	if _, err := os.Stat(left); !os.IsNotExist(err) {
+		t.Errorf("generate kept the file of a request that is gone: %v", err)
+	}
+	if !strings.Contains(errOut, "removed "+left) {
+		t.Errorf("generate does not name the file it removed:\n%s", errOut)
+	}
+	if strings.Contains(out, "allmailboxes_gen.go") {
+		t.Errorf("generate lists the file it removed among those it wrote:\n%s", out)
+	}
+	if _, err := os.Stat(byHand); err != nil {
+		t.Errorf("generate removed a file it did not write: %v", err)
+	}
+
+	if _, errOut, err := capture(t, append(args, "-check")); err != nil {
+		t.Errorf("generate -check rejects what generate just wrote: %v\n%s", err, errOut)
+	}
+}
