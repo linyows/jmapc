@@ -292,7 +292,11 @@ func (l *stringList) Set(v string) error {
 	return nil
 }
 
-// write generates the client and puts it on disk.
+// write generates the client and puts it on disk, and removes the files jmapc
+// wrote earlier that no request generates any more. Deleting a request is how
+// a function is dropped from the client, and a file it left behind would go on
+// sending the request nobody asks for. A file jmapc did not write is left
+// alone, as verify leaves it unreported.
 func write(cfg *Config, catalogue *spec.Spec, requests []*request.Request, props *request.PropertySets) error {
 	noteUnwatched(cfg, requests)
 	files, err := generate(cfg, catalogue, requests, props)
@@ -313,6 +317,19 @@ func write(cfg *Config, catalogue *spec.Spec, requests []*request.Request, props
 			return err
 		}
 		fmt.Fprintln(stdout, path)
+	}
+	// The files are removed once the new ones are written, so a generation
+	// that fails part of the way through has taken nothing away.
+	left, err := leftBehind(cfg.Out, files)
+	if err != nil {
+		return err
+	}
+	for _, name := range left {
+		path := filepath.Join(cfg.Out, name)
+		if err := os.Remove(path); err != nil {
+			return err
+		}
+		fmt.Fprintf(stderr, "jmapc: removed %s, generated from a request that is no longer there\n", path)
 	}
 	return nil
 }

@@ -35,8 +35,12 @@ It reports three things:
 - a file jmapc wrote earlier that no request generates any more, which is what
   deleting a request file leaves behind.
 
+`jmapc generate` puts all three right: it writes the first two again, and
+removes the third.
+
 A file that does not start with the banner every generated file carries was
-written by hand, so it is neither reported nor touched.
+written by hand, so `-check` does not report it and generating again does not
+remove it.
 
 Give it the arguments the generation it checks was given. The path a request
 came from is written into the file generated from it, so a check run with a
