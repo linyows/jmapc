@@ -33,6 +33,43 @@ docker、Go、[probe](https://github.com/linyows/probe)がPATHにある必要が
 各シナリオは、jmapcを通して何かをしたあと、jmapcを通らない経路でそれを確かめます。
 jmapcが読んだsessionを直接取得したものと比べ、SMTPで配送したメールを生成クライアントが見つけられるかを確かめる、といった具合です。
 jmapc側を受け持つのは`e2e/driver`で、`e2e/requests`から生成したクライアントを呼び、結果をJSONで出力します。
+
+準備では、サーバの設定とドライバーのビルドを並行して行います。
+
+```mermaid
+flowchart LR
+    subgraph provision["Provision the server"]
+        provision_step0["Wait for bootstrap mode"]
+        provision_step1["Complete bootstrap"]
+        provision_step2["Restart out of bootstrap mode"]
+        provision_step3["Wait for the server"]
+        provision_step4["Find the domain bootstrap created"]
+        provision_step5["Create alice and bob"]
+    end
+    subgraph job_1["Build the driver"]
+        job_1_step0["go build"]
+    end
+```
+
+シナリオは互いに独立していて、並行して実行されます。
+
+```mermaid
+flowchart LR
+    subgraph job_0["The session as jmapc reads it"]
+        job_0_step0["Fetch the session directly"]
+        job_0_step1["Fetch it through jmapc"]
+    end
+    subgraph job_1["Mail delivered over SMTP, found through jmapc"]
+        job_1_step0["Deliver to alice on port 25"]
+        job_1_step1["Find it through the generated client"]
+        job_1_step2["Read alice's mail account"]
+        job_1_step3["Find the same email directly"]
+    end
+```
+
+2つ目の図は`probe dag --mermaid e2e/vars.yml,e2e/workflow.yml`で、1つ目は`e2e/setup.yml`について同じコマンドで出力したものです。
+ジョブやステップを足したら、出力し直してください。
+
 `E2E_KEEP=1`を指定しない限り、終わるとコンテナは削除されます。
 Stalwartのリリースは`e2e/run.sh`で固定しています。
 Stalwartはマイナーバージョンの間で設定の形を変えるので、新しいバージョンへの移行は、そこを意図して書き換える変更として行います。
