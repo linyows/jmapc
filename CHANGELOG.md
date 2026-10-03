@@ -4,6 +4,16 @@ What changed in each release, and what it means for the code that uses it. The r
 
 This starts at v0.12.0. What went into the releases before it is in the commit history.
 
+## v0.16.1 (2026-10-03)
+
+### Fixed
+
+- **An event stream stays open past the `Timeout` of the `http.Client` it was opened through.** An `http.Client` counts reading the body against its `Timeout`, and the body of an event stream does not end, so a client given a timeout through `WithHTTPClient` had the stream from `EventSource` cut each time the timeout ran out. `Watch` reconnected after each cut and ran a catch-up, which hid it: a watch on a client with a 10-second timeout opened a new connection every 10 seconds. The `Timeout` now bounds the wait for the response instead, so a server that never answers is still given up on, with an error `IsTemporary` reports as temporary, and a stream that has started stays open until the server closes it, `Close` is called or the context ends. Every other request keeps the `Timeout` as before, and the `http.Client` passed in is not modified. ([#103](https://github.com/linyows/jmapc/pull/103))
+
+### Documentation
+
+- **jmapc is now tested against a real JMAP server.** `e2e/run.sh` runs the generated client against Stalwart in a container, and CI runs it on every change: the session, mail delivered over SMTP, mail imported through jmapc and checked over IMAP, and blobs checked against a direct download. Each scenario checks what jmapc did over a path that does not go through jmapc. The contributing page describes how to run them. ([#104](https://github.com/linyows/jmapc/pull/104), [#105](https://github.com/linyows/jmapc/pull/105))
+
 ## v0.16.0 (2026-10-03)
 
 ### Breaking changes
