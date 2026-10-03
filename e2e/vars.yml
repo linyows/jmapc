@@ -1,0 +1,26 @@
+# The settings the workflows here share, read from the environment. run.sh
+# sets every one of them; set them yourself to run a workflow on its own, as
+# in `probe e2e/vars.yml,e2e/workflow.yml`.
+vars:
+  # Where the server's HTTP listener and its SMTP listener on port 25 are
+  # reached from here.
+  base: "{{E2E_BASE_URL}}"
+  smtp: "{{E2E_SMTP_ADDR}}"
+  # The container, which setup restarts once bootstrap is complete.
+  container: "{{E2E_CONTAINER}}"
+  # The repository root, and where setup builds the driver to.
+  root: "{{E2E_ROOT}}"
+  driver: "{{E2E_DRIVER}}"
+  # user:password of the administrator the container was started with.
+  recovery_admin: "{{E2E_RECOVERY_ADMIN}}"
+  domain: example.test
+  alice_password: "{{E2E_ALICE_PASSWORD}}"
+  bob_password: "{{E2E_BOB_PASSWORD}}"
+  # Marks what one run writes, so that runs against the same server do not
+  # read each other's mail.
+  run_id: "{{random_str(8)}}"
+
+secrets:
+  - E2E_RECOVERY_ADMIN
+  - E2E_ALICE_PASSWORD
+  - E2E_BOB_PASSWORD

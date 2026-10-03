@@ -5,7 +5,7 @@ the second regenerates everything the catalogue produces, and both are what CI
 runs first.
 
 ```
-go test ./...        # everything, including the end-to-end tests
+go test ./...        # everything that runs without a server
 go generate ./...    # regenerate the runtime types and every example client
 ```
 
@@ -25,6 +25,63 @@ runs one, over a schema written from the catalogue as it stands.
 
 The generator is run from source here, not through `go tool`, because this is
 the repository that defines it.
+
+The tests above run the generated code against stubs, which answer the way
+the tests expect a server to. `e2e/` runs it against a real one, Stalwart, in a
+container:
+
+```
+e2e/run.sh
+```
+
+It needs docker, Go and [probe](https://github.com/linyows/probe) on the PATH.
+It starts the container, takes Stalwart out of bootstrap mode, creates two
+accounts, and runs the scenarios in `e2e/workflow.yml`. Each scenario does
+something through jmapc and checks it over a path that does not go through
+jmapc: the session jmapc reads against the one fetched directly, a message
+delivered over SMTP against what the generated client finds. The jmapc side is
+`e2e/driver`, which calls the client generated from `e2e/requests` and prints
+what came back as JSON.
+
+Setup provisions the server and builds the driver at the same time:
+
+```mermaid
+flowchart LR
+    subgraph provision["Provision the server"]
+        provision_step0["Wait for bootstrap mode"]
+        provision_step1["Complete bootstrap"]
+        provision_step2["Restart out of bootstrap mode"]
+        provision_step3["Wait for the server"]
+        provision_step4["Find the domain bootstrap created"]
+        provision_step5["Create alice and bob"]
+    end
+    subgraph job_1["Build the driver"]
+        job_1_step0["go build"]
+    end
+```
+
+The scenarios are independent of one another and run in parallel:
+
+```mermaid
+flowchart LR
+    subgraph job_0["The session as jmapc reads it"]
+        job_0_step0["Fetch the session directly"]
+        job_0_step1["Fetch it through jmapc"]
+    end
+    subgraph job_1["Mail delivered over SMTP, found through jmapc"]
+        job_1_step0["Deliver to alice on port 25"]
+        job_1_step1["Find it through the generated client"]
+        job_1_step2["Read alice's mail account"]
+        job_1_step3["Find the same email directly"]
+    end
+```
+
+`probe dag --mermaid e2e/vars.yml,e2e/workflow.yml` prints the second of these,
+and the same for `e2e/setup.yml` the first; print them again after adding a job
+or a step. The container is removed afterwards unless
+`E2E_KEEP=1` is set. The Stalwart release is pinned in `e2e/run.sh`; a new
+minor version is a change made there on purpose, since Stalwart moves its
+settings between them.
 
 The runtime types and the example client are committed, and a test compares
 them against what the catalogue produces now, so a change to the data model

@@ -1,0 +1,18 @@
+{
+  "_doc": "FindEmailsBySubject returns the most recent emails whose subject contains a phrase, newest first.",
+
+  "methodCalls": [
+    ["Email/query", {
+      "filter": {"subject": "{{subject}}"},
+      "sort": [{"property": "receivedAt", "isAscending": false}],
+      "limit": 10
+    }, "search"],
+
+    ["Email/get", {
+      "#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"},
+      "properties": ["id", "subject", "from", "to", "receivedAt", "mailboxIds"]
+    }, "fetch"]
+  ],
+
+  "_returns": "fetch"
+}

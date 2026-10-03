@@ -1,0 +1,127 @@
+# Brings a fresh Stalwart container out of bootstrap mode, creates the domain
+# and the two accounts the scenarios log in as, and builds the driver. Stalwart
+# keeps its settings as JMAP objects under the urn:stalwart:jmap capability, so
+# every step here is a JMAP request.
+name: Set up Stalwart
+
+jobs:
+- name: Provision the server
+  id: provision
+  defaults:
+    http:
+      url: "{{vars.base}}"
+      headers:
+        content-type: application/json
+  steps:
+  - name: Wait for bootstrap mode
+    uses: http
+    with:
+      get: /.well-known/jmap
+    retry: {max_attempts: 60, interval: 1s}
+    test: res.code == 200
+
+  # Certificates and DKIM keys are left out: nothing outside the container
+  # reaches it by name, and no mail leaves it.
+  - name: Complete bootstrap
+    id: boot
+    uses: http
+    with:
+      post: /jmap/
+      headers:
+        authorization: "Basic {{encode_base64(vars.recovery_admin)}}"
+      body:
+        using: ["urn:ietf:params:jmap:core", "urn:stalwart:jmap"]
+        methodCalls:
+        - - x:Bootstrap/set
+          - update:
+              singleton:
+                serverHostname: "mail.{{vars.domain}}"
+                defaultDomain: "{{vars.domain}}"
+                requestTlsCertificate: false
+                generateDkimKeys: false
+          - boot
+    test: res.code == 200 && res.body.methodResponses[0][1].updated.singleton.secret != ""
+    outputs:
+      user: res.body.methodResponses[0][1].updated.singleton.username
+      secret: res.body.methodResponses[0][1].updated.singleton.secret
+
+  # Bootstrap writes the configuration and leaves the server as it was, in
+  # bootstrap mode, until it starts again.
+  - name: Restart out of bootstrap mode
+    uses: shell
+    with:
+      cmd: docker restart {{vars.container}}
+      timeout: 60s
+    test: res.code == 0
+
+  - name: Wait for the server
+    uses: http
+    with:
+      get: /.well-known/jmap
+      headers:
+        authorization: "Basic {{encode_base64(outputs.boot.user + ':' + outputs.boot.secret)}}"
+    retry: {max_attempts: 60, interval: 1s}
+    test: res.code == 200 && res.body.username == outputs.boot.user
+
+  - name: Find the domain bootstrap created
+    id: domain
+    uses: http
+    with:
+      post: /jmap/
+      headers:
+        authorization: "Basic {{encode_base64(outputs.boot.user + ':' + outputs.boot.secret)}}"
+      body:
+        using: ["urn:ietf:params:jmap:core", "urn:stalwart:jmap"]
+        methodCalls:
+        - [x:Domain/query, {filter: {name: "{{vars.domain}}"}}, find]
+    test: res.code == 200 && len(res.body.methodResponses[0][1].ids) == 1
+    outputs:
+      id: res.body.methodResponses[0][1].ids[0]
+
+  # Stalwart's lists are written as maps keyed by position, which is why the
+  # one credential is under "0".
+  - name: Create alice and bob
+    uses: http
+    with:
+      post: /jmap/
+      headers:
+        authorization: "Basic {{encode_base64(outputs.boot.user + ':' + outputs.boot.secret)}}"
+      body:
+        using: ["urn:ietf:params:jmap:core", "urn:stalwart:jmap"]
+        methodCalls:
+        - - x:Account/set
+          - create:
+              alice:
+                "@type": User
+                name: alice
+                domainId: "{{outputs.domain.id}}"
+                credentials: {"0": {"@type": Password, secret: "{{vars.alice_password}}"}}
+                roles: {"@type": User}
+                permissions: {"@type": Inherit}
+                quotas: {}
+                aliases: {}
+                memberGroupIds: {}
+                encryptionAtRest: {"@type": Disabled}
+              bob:
+                "@type": User
+                name: bob
+                domainId: "{{outputs.domain.id}}"
+                credentials: {"0": {"@type": Password, secret: "{{vars.bob_password}}"}}
+                roles: {"@type": User}
+                permissions: {"@type": Inherit}
+                quotas: {}
+                aliases: {}
+                memberGroupIds: {}
+                encryptionAtRest: {"@type": Disabled}
+          - accounts
+    test: res.code == 200 && len(res.body.methodResponses[0][1].created) == 2
+
+- name: Build the driver
+  steps:
+  - name: go build
+    uses: shell
+    with:
+      cmd: go build -o {{vars.driver}} ./e2e/driver
+      workdir: "{{vars.root}}"
+      timeout: 5m
+    test: res.code == 0

@@ -94,6 +94,32 @@ jobs:
           go mod tidy
           git diff --exit-code
 
+  # The tests above answer from stubs. This one runs the generated client
+  # against Stalwart, a server none of it was written against, and checks what
+  # jmapc did over paths that do not go through jmapc.
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing here writes back, so the job has no use for a credential
+          # in the git config.
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+          cache-dependency-path: go.mod
+
+      # Installed by version rather than from the module, so that the go.mod
+      # of jmapc stays free of dependencies.
+      - name: Install probe
+        run: go install github.com/linyows/probe/cmd/probe@v1.12.0
+
+      - name: Run the scenarios against Stalwart
+        run: e2e/run.sh --report github-summary
+
   # The TypeScript jmapc generates has to compile, which Go's tests cannot say.
   typescript:
     name: typescript
