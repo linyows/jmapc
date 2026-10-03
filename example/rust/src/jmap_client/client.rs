@@ -378,6 +378,9 @@ pub enum Error {
     Session(String),
     /// The transport could not deliver the request.
     Transport(TransportError),
+    /// The session shows that requests would be refused, as Client::verify
+    /// found them.
+    Verify(Vec<VerifyError>),
 }
 
 impl fmt::Display for Error {
@@ -408,6 +411,14 @@ impl fmt::Display for Error {
             }
             Error::Session(what) => write!(f, "{what}"),
             Error::Transport(e) => write!(f, "the request could not be sent: {e}"),
+            Error::Verify(problems) => {
+                let lines = problems
+                    .iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<_>>()
+                    .join("\njmapc: ");
+                write!(f, "{lines}")
+            }
         }
     }
 }
@@ -420,6 +431,144 @@ impl std::error::Error for Error {
             _ => None,
         }
     }
+}
+
+/// What one generated request needs of the server, as far as it can be known
+/// before the request is sent. The generated verify function holds one for
+/// every request.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RequestNeeds {
+    /// The request's name, which a problem is reported under.
+    pub name: &'static str,
+    /// The capabilities the request declares.
+    pub using: &'static [&'static str],
+    /// How many method calls the request makes.
+    pub calls: usize,
+    /// The capabilities whose primary account fills in the accountId of a call
+    /// that leaves it out.
+    pub primary_accounts: &'static [&'static str],
+}
+
+/// One problem Client::verify found with one request. The error is what sending
+/// the request would have failed with: an Error::Request for a capability or a
+/// limit, the Error::Session primary_account_id returns for a primary account
+/// the session does not name, and an Error::Method of type
+/// accountNotSupportedByMethod for an account that does not support what the
+/// request uses it for.
+#[derive(Debug)]
+pub struct VerifyError {
+    pub request: String,
+    pub error: Error,
+}
+
+impl fmt::Display for VerifyError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // The request was not sent, so the "request failed" or "failed" the
+        // error reads as would say something that did not happen.
+        let detail = match &self.error {
+            Error::Request(e) => e.detail.clone(),
+            Error::Method(e) => e.errors.first().and_then(|m| m.description.clone()),
+            _ => None,
+        };
+        match detail {
+            Some(detail) => write!(f, "{} would be refused: {detail}", self.request),
+            None => {
+                let error = self.error.to_string();
+                let error = error.strip_prefix("jmapc: ").unwrap_or(&error);
+                write!(f, "{}: {error}", self.request)
+            }
+        }
+    }
+}
+
+/// The Error::Request for a capability the session does not advertise.
+fn require_capability(session: &Session, uri: &str) -> Result<(), Error> {
+    if session.capabilities.contains_key(uri) {
+        return Ok(());
+    }
+    Err(Error::Request(RequestError {
+        status: 0,
+        r#type: "urn:ietf:params:jmap:error:unknownCapability".to_string(),
+        detail: Some(format!("server does not support {uri}")),
+        limit: None,
+    }))
+}
+
+/// The Error::Request for more method calls than the server takes in one
+/// request.
+fn require_calls(session: &Session, calls: usize) -> Result<(), Error> {
+    let max = session
+        .capabilities
+        .get("urn:ietf:params:jmap:core")
+        .and_then(|c| c.get("maxCallsInRequest"))
+        .and_then(|v| v.as_u64());
+    match max {
+        Some(max) if max > 0 && calls as u64 > max => Err(Error::Request(RequestError {
+            status: 0,
+            r#type: "urn:ietf:params:jmap:error:limit".to_string(),
+            detail: Some(format!(
+                "request has {calls} method calls, server allows {max}"
+            )),
+            limit: Some("maxCallsInRequest".to_string()),
+        })),
+        _ => Ok(()),
+    }
+}
+
+/// Every problem the session shows with one request, each as sending it would
+/// have reported it.
+fn check_needs(session: &Session, needs: &RequestNeeds) -> Vec<Error> {
+    let mut problems = Vec::new();
+    let mut missing = Vec::new();
+    for uri in needs.using {
+        if let Err(e) = require_capability(session, uri) {
+            missing.push(*uri);
+            problems.push(e);
+        }
+    }
+    for capability in needs.primary_accounts {
+        // Already reported, and an account for a capability the server lacks
+        // says nothing more.
+        if missing.contains(capability) {
+            continue;
+        }
+        // The generated function looks the account up the same way, and fails
+        // with this before sending anything.
+        let id = match session.primary_accounts.get(*capability) {
+            Some(id) if !id.is_empty() => id,
+            _ => {
+                problems.push(Error::Session(format!(
+                    "session has no primary account for {capability}"
+                )));
+                continue;
+            }
+        };
+        // The server is what refuses this one, answering the call with a method
+        // error. An account that lists no capabilities is not saying it
+        // supports none.
+        let offered = session
+            .accounts
+            .get(id)
+            .and_then(|a| a.account_capabilities.as_ref());
+        if let Some(offered) = offered {
+            if !offered.is_empty() && !offered.contains_key(*capability) {
+                let description =
+                    format!("the primary account {id:?} for {capability} does not support it");
+                let raw = serde_json::json!({
+                    "type": "accountNotSupportedByMethod",
+                    "description": description,
+                });
+                problems.push(Error::Method(MethodErrors::new(
+                    vec![MethodError::new("", "", raw)],
+                    Response::default(),
+                )));
+            }
+        }
+    }
+    if let Err(e) = require_calls(session, needs.calls) {
+        problems.push(e);
+    }
+    problems
 }
 
 /// A client for one JMAP server. It caches the session, so a request costs one
@@ -545,38 +694,40 @@ impl<T: Transport> Client<T> {
     }
 
     /// Reject a request the session already shows the server will not accept,
-    /// so that a missing capability surfaces without a round trip.
+    /// so that a missing capability surfaces without a round trip. verify runs
+    /// the same checks for every request at once.
     async fn preflight(&self, req: &Request) -> Result<(), Error> {
         let session = self.session().await?;
         for uri in &req.using {
-            if !session.capabilities.contains_key(uri) {
-                return Err(Error::Request(RequestError {
-                    status: 0,
-                    r#type: "urn:ietf:params:jmap:error:unknownCapability".to_string(),
-                    detail: Some(format!("server does not support {uri}")),
-                    limit: None,
-                }));
+            require_capability(&session, uri)?;
+        }
+        require_calls(&session, req.method_calls.len())
+    }
+
+    /// Check every request against the session, and fail with Error::Verify
+    /// holding everything that would stop one of them from being sent: a
+    /// capability the server does not advertise, a primary account the session
+    /// does not name, an account that does not support the capability it is
+    /// used for, or more calls than the server takes in one request. A program
+    /// calls it as it starts, through the generated verify, to learn that a
+    /// request on a path it rarely takes will fail then rather than when the
+    /// path is taken.
+    pub async fn verify(&self, needs: &[RequestNeeds]) -> Result<(), Error> {
+        let session = self.session().await?;
+        let mut problems = Vec::new();
+        for n in needs {
+            for error in check_needs(&session, n) {
+                problems.push(VerifyError {
+                    request: n.name.to_string(),
+                    error,
+                });
             }
         }
-        let max = session
-            .capabilities
-            .get("urn:ietf:params:jmap:core")
-            .and_then(|c| c.get("maxCallsInRequest"))
-            .and_then(|v| v.as_u64());
-        if let Some(max) = max {
-            if max > 0 && req.method_calls.len() as u64 > max {
-                return Err(Error::Request(RequestError {
-                    status: 0,
-                    r#type: "urn:ietf:params:jmap:error:limit".to_string(),
-                    detail: Some(format!(
-                        "request has {} method calls, server allows {max}",
-                        req.method_calls.len()
-                    )),
-                    limit: Some("maxCallsInRequest".to_string()),
-                }));
-            }
+        if problems.is_empty() {
+            Ok(())
+        } else {
+            Err(Error::Verify(problems))
         }
-        Ok(())
     }
 
     async fn send(&self, mut req: HttpRequest) -> Result<HttpResponse, Error> {

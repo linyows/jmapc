@@ -46,6 +46,13 @@ func TestGeneratedRustCompiles(t *testing.T) {
 		if name == "mod.rs" || name == "types.rs" || name == "client.rs" || name == PropertiesFileName {
 			continue
 		}
+		// verify.rs calls the runtime rather than building a request.
+		if name == VerifyModule+".rs" {
+			if !strings.Contains(text, "client.verify(&NEEDS).await") {
+				t.Errorf("%s does not hand the requests to Client::verify", name)
+			}
+			continue
+		}
 		if !strings.Contains(text, "pub async fn ") {
 			t.Errorf("%s holds no request function", name)
 		}

@@ -1,6 +1,7 @@
 package ts
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -62,12 +63,38 @@ func (g *RequestGenerator) Generate() (map[string][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := make(map[string][]byte, len(plans)+1)
-	for _, p := range plans {
-		out[FileName(p.q.Name)] = g.file(p)
+	out := make(map[string][]byte, len(plans)+2)
+	// from records what each module was generated from, so that two things
+	// generated into one are refused rather than one silently replacing the
+	// other. A module is named after the function's own name, so "Foo" and
+	// "foo" are two requests and one module, and the runtime's modules are
+	// taken before any request is.
+	from := make(map[string]string, len(plans)+4)
+	for _, name := range RuntimeFileNames {
+		from[name] = "the runtime"
+	}
+	add := func(file, what string, src []byte) error {
+		if earlier, taken := from[file]; taken {
+			return fmt.Errorf("gen: %s and %s would both be generated into %s; rename one of them", earlier, what, file)
+		}
+		from[file] = what
+		out[file] = src
+		return nil
 	}
 	if len(g.Properties.Names()) > 0 {
-		out[PropertiesFileName] = g.propertiesFile()
+		if err := add(PropertiesFileName, "the sets of properties", g.propertiesFile()); err != nil {
+			return nil, err
+		}
+	}
+	if len(plans) > 0 {
+		if err := add(VerifyFileName, "the function that verifies the requests", g.verifyFile(plans)); err != nil {
+			return nil, err
+		}
+	}
+	for _, p := range plans {
+		if err := add(FileName(p.q.Name), "the request "+p.q.Name, g.file(p)); err != nil {
+			return nil, err
+		}
 	}
 	return out, nil
 }

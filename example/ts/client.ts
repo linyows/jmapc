@@ -183,6 +183,57 @@ export function collectSetErrors(
 // How to authenticate. Given a token, the client sends it as a bearer token;
 // given a function, it calls it for each request, which covers the schemes a
 // token does not.
+// What one generated request needs of the server, as far as it can be known
+// before the request is sent. The generated verify function holds one for
+// every request.
+export interface RequestNeeds {
+  // The request's name, which a problem is reported under.
+  name: string
+  // The capabilities the request declares.
+  using: string[]
+  // How many method calls the request makes.
+  calls: number
+  // The capabilities whose primary account fills in the accountId of a call
+  // that leaves it out.
+  primaryAccounts: string[]
+}
+
+// One problem verify found with one request. error is what sending the request
+// would have failed with: a RequestError for a capability or a limit, the
+// error primaryAccountId throws for a primary account the session does not
+// name, and a MethodError of type accountNotSupportedByMethod for an account
+// that does not support what the request uses it for.
+export class VerifyError extends Error {
+  readonly request: string
+  readonly error: Error
+
+  constructor(request: string, error: Error) {
+    // The request was not sent, so the "request failed" or "failed" the error
+    // reads as would say something that did not happen.
+    const detail =
+      error instanceof RequestError ? error.detail : error instanceof MethodError ? error.description : undefined
+    super(
+      detail
+        ? "jmapc: " + request + " would be refused: " + detail
+        : "jmapc: " + request + ": " + error.message.replace(/^jmapc: /, ""),
+    )
+    this.name = "VerifyError"
+    this.request = request
+    this.error = error
+  }
+}
+
+// Every problem verify found, one VerifyError each.
+export class VerifyErrors extends Error {
+  readonly errors: VerifyError[]
+
+  constructor(errors: VerifyError[]) {
+    super(errors.map((e) => e.message).join("\n"))
+    this.name = "VerifyErrors"
+    this.errors = errors
+  }
+}
+
 export type Auth = string | ((headers: Headers) => void | Promise<void>)
 
 export interface ClientOptions {
@@ -265,28 +316,32 @@ export class Client {
   }
 
   // Reject a request the session already shows the server will not accept, so
-  // that a missing capability surfaces without a round trip.
+  // that a missing capability surfaces without a round trip. verify runs the
+  // same checks for every request at once.
   private async preflight(req: Request): Promise<void> {
     const session = await this.session()
     for (const uri of req.using) {
-      if (!(uri in session.capabilities)) {
-        throw new RequestError(0, {
-          type: "urn:ietf:params:jmap:error:unknownCapability",
-          detail: `server does not support ${uri}`,
-        })
-      }
+      const missing = requireCapability(session, uri)
+      if (missing) throw missing
     }
-    const core = session.capabilities["urn:ietf:params:jmap:core"] as
-      | { maxCallsInRequest?: number }
-      | undefined
-    const max = core?.maxCallsInRequest
-    if (max && req.methodCalls.length > max) {
-      throw new RequestError(0, {
-        type: "urn:ietf:params:jmap:error:limit",
-        limit: "maxCallsInRequest",
-        detail: `request has ${req.methodCalls.length} method calls, server allows ${max}`,
-      })
+    const tooMany = requireCalls(session, req.methodCalls.length)
+    if (tooMany) throw tooMany
+  }
+
+  // Check every request against the session, and throw VerifyErrors with
+  // everything that would stop one of them from being sent: a capability the
+  // server does not advertise, a primary account the session does not name,
+  // an account that does not support the capability it is used for, or more
+  // calls than the server takes in one request. A program calls it as it
+  // starts, through the generated verify, to learn that a request on a path it
+  // rarely takes will fail then rather than when the path is taken.
+  async verify(needs: RequestNeeds[]): Promise<void> {
+    const session = await this.session()
+    const problems: VerifyError[] = []
+    for (const n of needs) {
+      for (const error of checkNeeds(session, n)) problems.push(new VerifyError(n.name, error))
     }
+    if (problems.length > 0) throw new VerifyErrors(problems)
   }
 
   private async send(url: string, init: RequestInit): Promise<globalThis.Response> {
@@ -359,4 +414,68 @@ async function requestError(res: globalThis.Response): Promise<RequestError> {
     }
   }
   return new RequestError(res.status, { detail: (await res.text()).trim() })
+}
+
+// The RequestError for a capability the session does not advertise, or
+// undefined where it does.
+function requireCapability(session: Session, uri: string): RequestError | undefined {
+  if (uri in session.capabilities) return undefined
+  return new RequestError(0, {
+    type: "urn:ietf:params:jmap:error:unknownCapability",
+    detail: "server does not support " + uri,
+  })
+}
+
+// The RequestError for more method calls than the server takes in one
+// request, or undefined where they fit.
+function requireCalls(session: Session, calls: number): RequestError | undefined {
+  const core = session.capabilities["urn:ietf:params:jmap:core"] as { maxCallsInRequest?: number } | undefined
+  const max = core?.maxCallsInRequest
+  if (!max || calls <= max) return undefined
+  return new RequestError(0, {
+    type: "urn:ietf:params:jmap:error:limit",
+    limit: "maxCallsInRequest",
+    detail: "request has " + calls + " method calls, server allows " + max,
+  })
+}
+
+// Every problem the session shows with one request, each as sending it would
+// have reported it.
+function checkNeeds(session: Session, needs: RequestNeeds): Error[] {
+  const problems: Error[] = []
+  const missing = new Set<string>()
+  for (const uri of needs.using) {
+    const error = requireCapability(session, uri)
+    if (error) {
+      missing.add(uri)
+      problems.push(error)
+    }
+  }
+  for (const capability of needs.primaryAccounts) {
+    // Already reported, and an account for a capability the server lacks says
+    // nothing more.
+    if (missing.has(capability)) continue
+    // The generated function looks the account up the same way, and throws
+    // this before sending anything.
+    const id = session.primaryAccounts[capability]
+    if (!id) {
+      problems.push(new Error("jmapc: session has no primary account for " + capability))
+      continue
+    }
+    // The server is what refuses this one, answering the call with a method
+    // error. An account that lists no capabilities is not saying it supports
+    // none.
+    const offered = session.accounts[id]?.accountCapabilities
+    if (offered && Object.keys(offered).length > 0 && !(capability in offered)) {
+      problems.push(
+        new MethodError("", "", {
+          type: "accountNotSupportedByMethod",
+          description: "the primary account " + JSON.stringify(id) + " for " + capability + " does not support it",
+        }),
+      )
+    }
+  }
+  const tooMany = requireCalls(session, needs.calls)
+  if (tooMany) problems.push(tooMany)
+  return problems
 }
