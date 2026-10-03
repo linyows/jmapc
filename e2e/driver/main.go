@@ -12,6 +12,7 @@
 // Usage:
 //
 //	driver session
+//	driver verify
 //	driver find-emails -subject <phrase>
 //	driver import-email -subject <subject>
 //	driver blob -data <content> -from <offset> -length <octets>
@@ -57,6 +58,8 @@ func run(args []string) error {
 	switch args[0] {
 	case "session":
 		return session(ctx, c)
+	case "verify":
+		return verify(ctx, c)
 	case "find-emails":
 		fs := flag.NewFlagSet("find-emails", flag.ContinueOnError)
 		subject := fs.String("subject", "", "phrase the subject contains")
@@ -386,6 +389,21 @@ func watch(ctx context.Context, c *jmapc.Client, since, subject, ready string) e
 		return err
 	}
 	return emit(found)
+}
+
+// verify checks every request in e2e/requests against the session, through the
+// Verify function generated for them, and prints each problem it reports.
+func verify(ctx context.Context, c *jmapc.Client) error {
+	problems := []string{}
+	err := client.Verify(ctx, c)
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		for _, e := range joined.Unwrap() {
+			problems = append(problems, e.Error())
+		}
+	} else if err != nil {
+		return err
+	}
+	return emit(map[string]any{"problems": problems})
 }
 
 // emit writes v to stdout as one line of JSON.

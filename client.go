@@ -385,34 +385,49 @@ func (c *Client) resolveAPIURL(ctx context.Context, r *Request) (string, error) 
 
 // preflight rejects a request the session already shows the server will not
 // accept, so that a missing capability or an oversized batch surfaces as a
-// local error instead of a round trip.
+// local error instead of a round trip. Verify runs the same checks for every
+// request at once.
 func preflight(s *Session, r *Request) error {
 	for _, uri := range r.Using {
-		if !s.HasCapability(uri) {
-			detail := fmt.Sprintf("server does not support %s", uri)
-			if len(s.Capabilities) == 0 {
-				// An empty capabilities map is what a minimal server or a test
-				// stub produces, and it does not mean the same as a server
-				// that listed its capabilities and omitted this one.
-				detail = fmt.Sprintf("session lists no capabilities at all, so it cannot say whether it supports %s", uri)
-			}
-			return &RequestError{
-				Type:   ErrTypeUnknownCapability,
-				Detail: detail,
-			}
+		if err := s.requireCapability(uri); err != nil {
+			return err
 		}
 	}
+	return s.requireCalls(len(r.MethodCalls))
+}
+
+// requireCapability reports a capability the session does not advertise.
+func (s *Session) requireCapability(uri string) error {
+	if s.HasCapability(uri) {
+		return nil
+	}
+	detail := fmt.Sprintf("server does not support %s", uri)
+	if len(s.Capabilities) == 0 {
+		// An empty capabilities map is what a minimal server or a test stub
+		// produces, and it does not mean the same as a server that listed its
+		// capabilities and omitted this one.
+		detail = fmt.Sprintf("session lists no capabilities at all, so it cannot say whether it supports %s", uri)
+	}
+	return &RequestError{
+		Type:   ErrTypeUnknownCapability,
+		Detail: detail,
+	}
+}
+
+// requireCalls reports a request of more method calls than the server takes in
+// one.
+func (s *Session) requireCalls(calls int) error {
 	core, err := s.Core()
 	if err != nil {
 		// A server that does not describe its core limits is unusual but not
-		// fatal; the remaining checks simply cannot run.
+		// fatal; the check simply cannot run.
 		return nil
 	}
-	if max := core.MaxCallsInRequest; max > 0 && UnsignedInt(len(r.MethodCalls)) > max {
+	if max := core.MaxCallsInRequest; max > 0 && UnsignedInt(calls) > max {
 		return &RequestError{
 			Type:   ErrTypeLimit,
 			Limit:  "maxCallsInRequest",
-			Detail: fmt.Sprintf("request has %d method calls, server allows %d", len(r.MethodCalls), max),
+			Detail: fmt.Sprintf("request has %d method calls, server allows %d", calls, max),
 		}
 	}
 	return nil

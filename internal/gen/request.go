@@ -105,6 +105,13 @@ func (g *RequestGenerator) Generate() (map[string][]byte, error) {
 		}
 		out[PropertiesFileName] = src
 	}
+	if len(plans) > 0 {
+		src, err := g.verifyFile(plans)
+		if err != nil {
+			return nil, err
+		}
+		out[VerifyFileName] = src
+	}
 	return out, nil
 }
 
@@ -124,9 +131,16 @@ func (g *RequestGenerator) plan() ([]*plan, error) {
 	// chose for a type a caller names: a request has to give way to them
 	// rather than the other way about.
 	for _, name := range g.Properties.Names() {
+		if name == VerifyFunc {
+			return nil, fmt.Errorf("gen: the set of properties %s would be generated under the name of the function that verifies the requests; name it something else", name)
+		}
 		taken[name] = true
 	}
+	taken[VerifyFunc] = true
 	for _, q := range requests {
+		if q.Name == VerifyFunc {
+			return nil, fmt.Errorf("gen: the request %s would be generated under the name of the function that verifies the requests; name it something else", q.Name)
+		}
 		if taken[q.Name] {
 			if _, set := g.Properties.Find(q.Name); set {
 				return nil, fmt.Errorf("gen: the request %s and the set of properties of the same name would both be generated as %s", q.Name, q.Name)

@@ -45,9 +45,9 @@ func TestGeneratedExampleIsUpToDate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generating the example client: %v", err)
 	}
-	// One file per request, and one holding the types for the named sets of
-	// properties.
-	if len(files) != len(requests)+1 {
+	// One file per request, one holding the types for the named sets of
+	// properties, and one holding Verify.
+	if len(files) != len(requests)+2 {
 		t.Errorf("generated %d files for %d requests", len(files), len(requests))
 	}
 	for name, src := range files {
@@ -582,4 +582,65 @@ func shapeOf(t *testing.T, src, name string) string {
 		t.Fatalf("%s is not closed:\n%s", name, src)
 	}
 	return src[start : start+end]
+}
+
+// TestVerifyListsWhatEachRequestNeeds checks the table Verify is generated
+// with: the capabilities a request declares, its calls, and the capabilities
+// whose primary account fills in an account it leaves out, but not one it
+// names itself.
+func TestVerifyListsWhatEachRequestNeeds(t *testing.T) {
+	parser := request.NewParser(spec.Standard())
+	var requests []*request.Request
+	for name, src := range map[string]string{
+		"ListMailboxes": `{"methodCalls": [["Mailbox/get", {"ids": null}, "all"]]}`,
+		"SharedMailboxes": `{"methodCalls": [
+		  ["Mailbox/query", {"accountId": "shared"}, "search"],
+		  ["Mailbox/get", {"accountId": "shared", "#ids": {"resultOf": "search", "name": "Mailbox/query", "path": "/ids"}}, "fetch"]
+		]}`,
+	} {
+		q, err := parser.Parse(name+request.Extension, []byte(src))
+		if err != nil {
+			t.Fatalf("checking %s:\n%v", name, err)
+		}
+		requests = append(requests, q)
+	}
+	g := &RequestGenerator{Spec: spec.Standard(), Package: "client", Qualifier: "jmapc.", Requests: requests}
+	files, err := g.Generate()
+	if err != nil {
+		t.Fatalf("generating: %v", err)
+	}
+	src := string(files[VerifyFileName])
+	for _, want := range []string{
+		"func Verify(ctx context.Context, c *jmapc.Client) error {",
+		"return c.Verify(ctx, requestNeeds...)",
+		`Name:            "ListMailboxes",`,
+		"Using:           []string{jmapc.CapabilityCore, jmapc.CapabilityMail},",
+		"Calls:           1,",
+		"PrimaryAccounts: []string{jmapc.CapabilityMail},",
+		`Name:  "SharedMailboxes",`,
+		"Calls: 2,",
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("verify_gen.go has no %q:\n%s", want, src)
+		}
+	}
+	// SharedMailboxes names its account, so no primary account is needed.
+	shared := src[strings.Index(src, `"SharedMailboxes"`):]
+	if strings.Contains(shared, "PrimaryAccounts") {
+		t.Errorf("SharedMailboxes needs a primary account, though it names its own:\n%s", shared)
+	}
+}
+
+// TestNothingIsGeneratedUnderTheNameOfVerify checks that a request or a set of
+// properties named Verify is refused, rather than generated as a second
+// declaration of the function, and into the same file.
+func TestNothingIsGeneratedUnderTheNameOfVerify(t *testing.T) {
+	q, err := request.NewParser(spec.Standard()).Parse("Verify"+request.Extension, []byte(`{"methodCalls": [["Mailbox/get", {"ids": null}, "all"]]}`))
+	if err != nil {
+		t.Fatalf("checking Verify: %v", err)
+	}
+	g := &RequestGenerator{Spec: spec.Standard(), Package: "client", Qualifier: "jmapc.", Requests: []*request.Request{q}}
+	if _, err := g.Generate(); err == nil || !strings.Contains(err.Error(), "the function that verifies the requests") {
+		t.Errorf("generating a request named Verify: %v, want it refused", err)
+	}
 }
