@@ -5,12 +5,12 @@
 | Subcommand | |
 |---|---|
 | `jmapc generate` | Checks the requests and writes the generated client. |
-| `jmapc check` | Checks the requests and writes nothing; with `-session`, against a running server as well. See [Verification](verification.md). |
+| `jmapc validate` | Checks the requests and writes nothing; with `-session`, against a running server as well. See [Verification](verification.md). |
 | `jmapc run <request>` | Sends one request to a server and prints the response. See [Sending a request](run.md). |
 | `jmapc schema` | Writes a JSON Schema describing the request files, for an editor. See [Editor support](verification.md#editor-support). |
 | `jmapc version` | Prints the version. |
 
-`jmapc -h` lists the flags `generate` and `check` take, and `jmapc run -h` and
+`jmapc -h` lists the flags `generate` and `validate` take, and `jmapc run -h` and
 `jmapc schema -h` the flags of their own.
 
 ## Checking that the generated client is up to date

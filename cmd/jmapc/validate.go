@@ -10,14 +10,14 @@ import (
 	"github.com/linyows/jmapc/internal/spec"
 )
 
-// checkAgainstServer checks the requests against a running server as well as
+// validateAgainstServer checks the requests against a running server as well as
 // against the specifications.
 //
 // The two say different things. A specification says what JMAP is; a session
 // says what this server does, how much of it it will do at once, and which
 // accounts it holds. A request can be right about the first and wrong about the
 // second, and that is a failure at run time unless something asks.
-func checkAgainstServer(catalogue *spec.Spec, requests []*request.Request, session, token, user string, timeout time.Duration) error {
+func validateAgainstServer(catalogue *spec.Spec, requests []*request.Request, session, token, user string, timeout time.Duration) error {
 	client, err := newClient(session, token, user)
 	if err != nil {
 		return err
@@ -39,7 +39,7 @@ func checkAgainstServer(catalogue *spec.Spec, requests []*request.Request, sessi
 	if failures > 0 {
 		return fmt.Errorf("%s the server would not accept", plural(failures, "request", "requests"))
 	}
-	fmt.Fprintf(stdout, "checked %s against %s, as %s\n",
+	fmt.Fprintf(stdout, "validated %s against %s, as %s\n",
 		plural(len(requests), "request", "requests"), s.APIURL, s.Username)
 	return nil
 }

@@ -264,7 +264,7 @@ requests/BadQuery.jmap.json: methodCalls[0].arguments.filter.hasAttachmnt: Email
 	did you mean "hasAttachment"?
 ```
 
-`jmapc check` runs the checks without writing anything, and `-session` adds what
+`jmapc validate` runs the checks without writing anything, and `-session` adds what
 only a running server can answer — the capabilities it advertises, the accounts
 it holds, how much it accepts in one request. Most of the checks run in the
 editor too, from a JSON Schema jmapc writes. The whole list is in

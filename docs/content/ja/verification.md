@@ -36,7 +36,7 @@ jmapc: ListArchiveEmails, ListInboxEmails are the same query under different nam
 両方とも生成はされます。1つのリクエストに2つの名前を付けたいこともあるからです。
 知らせるのは、名前の数だけ生成される型が増えるためです。
 
-`jmapc check`は、何も書き出さずに検証だけを実行します。
+`jmapc validate`は、何も書き出さずに検証だけを実行します。
 
 ## サーバ側にしかない情報
 
@@ -46,8 +46,8 @@ JMAPについては正しく、実行対象のサーバについては間違っ�
 `-session`は実行中のサーバに対して検査します。
 
 ```
-jmapc check -session jmap.example.com -token $JMAP_TOKEN
-checked 25 queries against https://jmap.example.com/api/, as someone@example.com
+jmapc validate -session jmap.example.com -token $JMAP_TOKEN
+validated 25 requests against https://jmap.example.com/api/, as someone@example.com
 ```
 
 報告するのは次のものです。
