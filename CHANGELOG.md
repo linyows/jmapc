@@ -4,6 +4,21 @@ What changed in each release, and what it means for the code that uses it. The r
 
 This starts at v0.12.0. What went into the releases before it is in the commit history.
 
+## v0.16.0 (2026-10-03)
+
+### Breaking changes
+
+- **`jmapc check` is now `jmapc validate`.** The command validates the requests, and `jmapc generate -check` compares the generated client with what is on disk; with both called "check", which one was meant depended on where the word stood. The command takes the name of what it does, and its output reads `validated 25 requests`. `jmapc check` now fails with `unknown command "check"`, and no alias is kept. `generate -check` is unchanged, so a workflow that runs it needs no edit. ([#101](https://github.com/linyows/jmapc/pull/101))
+
+### Fixed
+
+- **`jmapc generate` removes the files of deleted requests.** `generate -check` reports a file a deleted request left behind and says to run `jmapc generate`, but generating only wrote files, so the file stayed and the check went on failing until it was deleted by hand. Generating now removes each file in the output directory that carries the generated banner and that no request generates any more, and names it on stderr. The removal comes after the new files are written, so a generation that fails part of the way through removes nothing, and a file without the banner is left alone. ([#100](https://github.com/linyows/jmapc/pull/100))
+
+### Documentation
+
+- **The documentation is published as a site at https://jmapc.linyo.ws**, in English and Japanese, built from the same files in `docs/` that read on GitHub. ([#88](https://github.com/linyows/jmapc/pull/88))
+- **The documentation is grouped under Overview, Requests, Generated code and Reference, with the pages a new reader needs first.** Introduction describes JMAP itself, Why jmapc carries the motivation and the comparison with JMAP client libraries, and Getting started goes from an empty module to a working call and `generate -check` in CI. The runtime page is split into Configuring the client, Errors and Blobs, and the command page becomes a reference with a table of every setting. Pages such as `/runtime` went away without redirects. ([#90](https://github.com/linyows/jmapc/pull/90))
+
 ## v0.15.0 (2026-09-08)
 
 ### Added
