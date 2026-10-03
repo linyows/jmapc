@@ -41,8 +41,10 @@ something through jmapc and checks it over a path that does not go through
 jmapc: the session jmapc reads against the one fetched directly, a message
 delivered over SMTP against what the generated client finds, a message imported
 through jmapc against its flags over IMAP and a flag set over IMAP against what
-jmapc reads, and a blob uploaded through jmapc against the same blob downloaded
-directly. The jmapc side is
+jmapc reads, a blob uploaded through jmapc against the same blob downloaded
+directly, changes followed through jmapc a few at a time against the server's
+own paging of them, and a message delivered over SMTP against what jmapc's
+`Watch` is pushed. The jmapc side is
 `e2e/driver`, which calls the client generated from `e2e/requests` and prints
 what came back as JSON.
 
@@ -87,6 +89,20 @@ flowchart LR
         job_3_step0["Upload and download it through jmapc"]
         job_3_step1["Download the whole of it directly"]
         job_3_step2["Ask for the same range directly"]
+    end
+    subgraph job_4["Changes followed through jmapc, a few at a time"]
+        job_4_step0["Read the state through jmapc"]
+        job_4_step1["Deliver three messages to alice"]
+        job_4_step2["Follow the changes through the generated client"]
+        job_4_step3["Read alice's mail account for the direct request"]
+        job_4_step4["See the server page the same changes directly"]
+    end
+    subgraph job_5["A push followed through jmapc's Watch"]
+        job_5_step0["Read the state through jmapc"]
+        job_5_step1["Start watching through the generated client"]
+        job_5_step2["Wait until the watch follows pushes"]
+        job_5_step3["Deliver to alice on port 25"]
+        job_5_step4["See the watch report it"]
     end
 ```
 

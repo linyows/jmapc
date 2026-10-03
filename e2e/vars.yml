@@ -10,9 +10,11 @@ vars:
   imap_port: "{{E2E_IMAP_PORT}}"
   # The container, which setup restarts once bootstrap is complete.
   container: "{{E2E_CONTAINER}}"
-  # The repository root, and where setup builds the driver to.
+  # The repository root, where setup builds the driver to, and a directory
+  # for the files a scenario hands between its steps.
   root: "{{E2E_ROOT}}"
   driver: "{{E2E_DRIVER}}"
+  work: "{{E2E_WORK}}"
   # user:password of the administrator the container was started with.
   recovery_admin: "{{E2E_RECOVERY_ADMIN}}"
   domain: example.test

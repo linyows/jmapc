@@ -34,6 +34,8 @@ docker、Go、[probe](https://github.com/linyows/probe)がPATHにある必要が
 jmapcが読んだsessionを直接取得したものと比べ、SMTPで配送したメールを生成クライアントが見つけられるかを確かめます。
 jmapcで取り込んだメールのフラグをIMAPで読み、IMAPで付けたフラグをjmapcで読みます。
 jmapcでアップロードしたblobを、直接ダウンロードしたものと比べます。
+jmapcで少しずつ追った変更を、サーバ自身の変更の分割と比べます。
+SMTPで配送したメールが、pushでjmapcの`Watch`に届くかを確かめます。
 jmapc側を受け持つのは`e2e/driver`で、`e2e/requests`から生成したクライアントを呼び、結果をJSONで出力します。
 
 準備では、サーバの設定とドライバーのビルドを並行して行います。
@@ -77,6 +79,20 @@ flowchart LR
         job_3_step0["Upload and download it through jmapc"]
         job_3_step1["Download the whole of it directly"]
         job_3_step2["Ask for the same range directly"]
+    end
+    subgraph job_4["Changes followed through jmapc, a few at a time"]
+        job_4_step0["Read the state through jmapc"]
+        job_4_step1["Deliver three messages to alice"]
+        job_4_step2["Follow the changes through the generated client"]
+        job_4_step3["Read alice's mail account for the direct request"]
+        job_4_step4["See the server page the same changes directly"]
+    end
+    subgraph job_5["A push followed through jmapc's Watch"]
+        job_5_step0["Read the state through jmapc"]
+        job_5_step1["Start watching through the generated client"]
+        job_5_step2["Wait until the watch follows pushes"]
+        job_5_step3["Deliver to alice on port 25"]
+        job_5_step4["See the watch report it"]
     end
 ```
 

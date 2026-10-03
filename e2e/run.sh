@@ -30,6 +30,7 @@ export E2E_IMAP_HOST=localhost
 export E2E_IMAP_PORT=$imap_port
 export E2E_ROOT=$PWD
 export E2E_DRIVER=$work/driver
+export E2E_WORK=$work
 # Generated for the run unless given, which is what lets a run kept with
 # E2E_KEEP=1 be logged into afterwards.
 export E2E_RECOVERY_ADMIN=${E2E_RECOVERY_ADMIN:-admin:$(secret)}

@@ -1,0 +1,17 @@
+{
+  "_doc": "SyncEmails returns the emails created since a state, at most a given number of changes at a time, and is watched so that a push runs it again.",
+
+  "_watches": "changes",
+
+  "methodCalls": [
+    ["Email/changes", {
+      "sinceState": "{{sinceState}}",
+      "maxChanges": "{{maxChanges}}"
+    }, "changes"],
+
+    ["Email/get", {
+      "#ids": {"resultOf": "changes", "name": "Email/changes", "path": "/created"},
+      "properties": ["id", "subject", "keywords"]
+    }, "created"]
+  ]
+}
