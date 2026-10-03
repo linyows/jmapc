@@ -3,6 +3,7 @@ package jmapc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -63,7 +64,8 @@ type DownloadOptions struct {
 	// From and Length are sent as an HTTP Range header. JMAP does not define
 	// one for the download endpoint, so a server is free to ignore it and
 	// return the whole blob; where that happens the download fails rather than
-	// returning content the caller would write at the wrong offset.
+	// returning content the caller would write at the wrong offset, with an
+	// error IsRangeIgnored reports.
 	From int64
 	// Length is how many octets to fetch, and zero fetches to the end of the
 	// blob.
@@ -186,6 +188,27 @@ func (c *Client) checkUploadSize(ctx context.Context, size int64) error {
 	return nil
 }
 
+// rangeIgnoredError is the failure of a download whose range the server
+// ignored, answering with the whole blob.
+type rangeIgnoredError struct {
+	// wanted is the Range header that was sent.
+	wanted string
+}
+
+func (e *rangeIgnoredError) Error() string {
+	return fmt.Sprintf("jmapc: the server ignored the range %q and answered with the whole blob", e.wanted)
+}
+
+// IsRangeIgnored reports whether err is a download that asked for part of a
+// blob from a server that answered with the whole of it. JMAP does not define
+// ranges on the download endpoint, so a server that does not offer them is not
+// at fault, and asking again will not change its answer: a caller resuming a
+// download downloads the whole blob instead.
+func IsRangeIgnored(err error) bool {
+	var ignored *rangeIgnoredError
+	return errors.As(err, &ignored)
+}
+
 // Download fetches a blob's content. The caller must close the returned blob.
 //
 // A blob has no type of its own: the server serves it as whatever type the
@@ -251,7 +274,7 @@ func (c *Client) Download(ctx context.Context, accountID, blobID ID, opts *Downl
 		// leave the caller to write the start of the blob at the offset it
 		// asked to continue from.
 		resp.Body.Close()
-		return nil, fmt.Errorf("jmapc: the server ignored the range %q and answered with the whole blob", wanted)
+		return nil, &rangeIgnoredError{wanted: wanted}
 	}
 	blob := &Blob{
 		ReadCloser: resp.Body,

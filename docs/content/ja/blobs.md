@@ -33,6 +33,17 @@ blob.Range // 返ってきた範囲。8192 バイト中の 4096-8191
 JMAPはダウンロードエンドポイントにRangeを定義していないので、サーバがこれを無視してblob全体を返すことがあります。
 その場合はダウンロードを失敗させます。
 呼び出し側が誤ったオフセットに書き込む内容を返すよりよいからです。
+この失敗は`IsRangeIgnored`で判別できます。
+何度要求してもサーバの答えは変わらないので、再開できないダウンロードは最初からやり直します。
+
+```go
+blob, err := c.Download(ctx, accountID, blobID, &jmapc.DownloadOptions{From: written})
+if jmapc.IsRangeIgnored(err) {
+	// サーバがRangeに対応していない。blob全体をダウンロードし直す。
+	written = 0
+	blob, err = c.Download(ctx, accountID, blobID, nil)
+}
+```
 
 `urn:ietf:params:jmap:blob`を提供するサーバでは、API経由でblobを作成し読み取ることもできます。
 エンドポイントにはできないことです。

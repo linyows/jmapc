@@ -241,8 +241,9 @@ func importEmail(ctx context.Context, c *jmapc.Client, subject string) error {
 //
 // JMAP does not define ranges on the download endpoint, and a server that
 // ignores one answers with the whole blob, which jmapc refuses to return. The
-// refusal is printed as rangeError rather than failing the command, so that
-// the workflow can check it against what the server does with the same range.
+// refusal is printed as rangeIgnored, as IsRangeIgnored reports it, rather than
+// failing the command, so that the workflow can check it against what the
+// server does with the same range.
 func blob(ctx context.Context, c *jmapc.Client, data string, from, length int64) error {
 	if data == "" || length <= 0 {
 		return errors.New("blob needs -data and a -length above zero")
@@ -271,8 +272,10 @@ func blob(ctx context.Context, c *jmapc.Client, data string, from, length int64)
 	}
 	part, err := download(ctx, c, account, uploaded.BlobID, &jmapc.DownloadOptions{From: from, Length: length})
 	switch {
+	case jmapc.IsRangeIgnored(err):
+		out["rangeIgnored"] = true
 	case err != nil:
-		out["rangeError"] = err.Error()
+		return err
 	case part.Range == nil:
 		return errors.New("the ranged download reported no range")
 	default:
