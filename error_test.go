@@ -228,3 +228,46 @@ func TestAnErrorCarriesTheDelayItWasRefusedFor(t *testing.T) {
 		t.Error("a 429 was not reported as the server asking for fewer requests")
 	}
 }
+
+// asOnly exposes a request error through an As method and nothing else, as a
+// wrapper from another package may.
+type asOnly struct{ inner *RequestError }
+
+func (e asOnly) Error() string { return "wrapped: " + e.inner.Error() }
+
+func (e asOnly) As(target any) bool {
+	if p, ok := target.(**RequestError); ok {
+		*p = e.inner
+		return true
+	}
+	return false
+}
+
+// TestAnAsMethodIsHonoured checks that a request error a wrapper exposes only
+// through As is found, as errors.As finds it, inside a joined error too.
+func TestAnAsMethodIsHonoured(t *testing.T) {
+	err := errors.Join(errors.New("unrelated"), asOnly{&RequestError{Status: http.StatusBadRequest, Type: ErrTypeLimit}})
+	if !HasErrorType(err, ErrTypeLimit) {
+		t.Errorf("HasErrorType does not find the type behind As in %v", err)
+	}
+	if IsTemporary(err) {
+		t.Errorf("IsTemporary(%v) = true, want false for the 400 behind As", err)
+	}
+}
+
+// TestJoinedRequestErrorsAreReadInFull checks that HasErrorType and IsTemporary
+// read every request error in a tree, not only the first errors.As finds: a
+// joined error, as Verify returns, holds one per problem.
+func TestJoinedRequestErrorsAreReadInFull(t *testing.T) {
+	err := errors.Join(
+		&RequestError{Status: http.StatusTooManyRequests, Type: ErrTypeLimit, Limit: "maxConcurrentRequests"},
+		fmt.Errorf("sending: %w", &RequestError{Status: http.StatusBadRequest, Type: ErrTypeUnknownCapability}),
+	)
+	if !HasErrorType(err, ErrTypeLimit) || !HasErrorType(err, ErrTypeUnknownCapability) {
+		t.Errorf("HasErrorType does not find both types in %v", err)
+	}
+	// One reason that will not pass with time makes the whole permanent.
+	if IsTemporary(err) {
+		t.Errorf("IsTemporary(%v) = true, want false for the 400 among them", err)
+	}
+}

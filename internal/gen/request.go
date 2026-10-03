@@ -90,20 +90,46 @@ func (g *RequestGenerator) Generate() (map[string][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := make(map[string][]byte, len(plans)+1)
-	for _, p := range plans {
-		src, err := g.file(p)
-		if err != nil {
-			return nil, err
+	out := make(map[string][]byte, len(plans)+2)
+	// from records what each file was generated from, so that two things
+	// generated into one file are refused rather than one silently replacing
+	// the other. File names are lower case, so "Foo" and "foo" are two
+	// requests and one file.
+	from := make(map[string]string, len(plans)+2)
+	add := func(file, what string, src []byte) error {
+		if earlier, taken := from[file]; taken {
+			return fmt.Errorf("gen: %s and %s would both be generated into %s; rename one of them", earlier, what, file)
 		}
-		out[fileName(p.q.Name)] = src
+		from[file] = what
+		out[file] = src
+		return nil
 	}
 	if len(g.Properties.Names()) > 0 {
 		src, err := g.propertiesFile()
 		if err != nil {
 			return nil, err
 		}
-		out[PropertiesFileName] = src
+		if err := add(PropertiesFileName, "the sets of properties", src); err != nil {
+			return nil, err
+		}
+	}
+	if len(plans) > 0 {
+		src, err := g.verifyFile(plans)
+		if err != nil {
+			return nil, err
+		}
+		if err := add(VerifyFileName, "the function that verifies the requests", src); err != nil {
+			return nil, err
+		}
+	}
+	for _, p := range plans {
+		src, err := g.file(p)
+		if err != nil {
+			return nil, err
+		}
+		if err := add(fileName(p.q.Name), "the request "+p.q.Name, src); err != nil {
+			return nil, err
+		}
 	}
 	return out, nil
 }
@@ -124,9 +150,16 @@ func (g *RequestGenerator) plan() ([]*plan, error) {
 	// chose for a type a caller names: a request has to give way to them
 	// rather than the other way about.
 	for _, name := range g.Properties.Names() {
+		if name == VerifyFunc {
+			return nil, fmt.Errorf("gen: the set of properties %s would be generated under the name of the function that verifies the requests; name it something else", name)
+		}
 		taken[name] = true
 	}
+	taken[VerifyFunc] = true
 	for _, q := range requests {
+		if q.Name == VerifyFunc {
+			return nil, fmt.Errorf("gen: the request %s would be generated under the name of the function that verifies the requests; name it something else", q.Name)
+		}
 		if taken[q.Name] {
 			if _, set := g.Properties.Find(q.Name); set {
 				return nil, fmt.Errorf("gen: the request %s and the set of properties of the same name would both be generated as %s", q.Name, q.Name)

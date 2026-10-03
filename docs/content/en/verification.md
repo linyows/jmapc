@@ -94,6 +94,40 @@ The session URL is the one value not read from the environment — `-token` and
 reaches the network should be requested on the command line rather than
 triggered by whatever the environment happens to hold.
 
+## At startup
+
+`-session` checks against whichever server it is pointed at when it runs. The
+server a program meets in production may not be that one, and a request on a
+path the program rarely takes is checked only when the path is taken. The Go
+client is generated with a `Verify` function, which checks every request in
+its package against the session the client holds:
+
+```go
+if err := client.Verify(ctx, c); err != nil {
+	log.Fatal(err)
+}
+```
+
+It reports a capability a request declares and the server does not advertise,
+a primary account the session does not name for a request that leaves the
+account to it, a primary account that does not support the capability it is
+used for, and more calls than `maxCallsInRequest`: what a request is refused
+for before it is sent, for every request at once. Every problem is reported,
+joined, each as a `*jmapc.VerifyError` naming its request:
+
+```
+jmapc: SendReadReceipt would be refused: server does not support urn:ietf:params:jmap:mdn
+jmapc: VerifiedSignatures would be refused: server does not support urn:ietf:params:jmap:smimeverify
+```
+
+It checks what a request file says, not what a caller passes for its
+parameters, so it reports less than `-session` does: the number of records a
+call names and the size of a request are known only once it is sent. A request
+or a set of properties cannot be named `Verify`, since the function is
+generated under that name, and a request is refused where its file would be
+one another file is generated into, such as `verify_gen.go` for a request
+named `verify`.
+
 ## Editor support
 
 The checks above run when jmapc does. Most of them can run while the request is

@@ -62,6 +62,7 @@ flowchart LR
     subgraph job_0["The session as jmapc reads it"]
         job_0_step0["Fetch the session directly"]
         job_0_step1["Fetch it through jmapc"]
+        job_0_step2["Verify every request through jmapc"]
     end
     subgraph job_1["Mail delivered over SMTP, found through jmapc"]
         job_1_step0["Deliver to alice on port 25"]

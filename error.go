@@ -326,8 +326,7 @@ func IsTemporary(err error) bool {
 	}
 	classified, temporary := false, true
 
-	var reqErr *RequestError
-	if errors.As(err, &reqErr) {
+	for _, reqErr := range requestErrors(err) {
 		classified = true
 		if !(reqErr.Status >= 500 || reqErr.Status == http.StatusTooManyRequests) {
 			temporary = false
@@ -397,9 +396,10 @@ func HasErrorType(err error, typ string) bool {
 	if err == nil || typ == "" {
 		return false
 	}
-	var reqErr *RequestError
-	if errors.As(err, &reqErr) && reqErr.Type == typ {
-		return true
+	for _, reqErr := range requestErrors(err) {
+		if reqErr.Type == typ {
+			return true
+		}
 	}
 	for _, kind := range errorTypes(err) {
 		if kind == typ {
@@ -431,6 +431,38 @@ func RetryAfter(err error) (time.Duration, bool) {
 // failure err carries. A request whose calls failed for different reasons is
 // classified by all of them, since the server answers a caller that sends it
 // again with every one of those reasons.
+// requestErrors returns every *RequestError in err's tree. errors.As finds only
+// the first, and a tree holds more than one where errors were joined, as
+// Verify joins one per problem it finds. Each node is matched as errors.As
+// matches it, by its type or by an As method of its own.
+func requestErrors(err error) []*RequestError {
+	var found []*RequestError
+	var walk func(error)
+	walk = func(e error) {
+		if e == nil {
+			return
+		}
+		if reqErr, ok := e.(*RequestError); ok {
+			found = append(found, reqErr)
+		} else if as, ok := e.(interface{ As(any) bool }); ok {
+			var reqErr *RequestError
+			if as.As(&reqErr) {
+				found = append(found, reqErr)
+			}
+		}
+		switch e := e.(type) {
+		case interface{ Unwrap() []error }:
+			for _, inner := range e.Unwrap() {
+				walk(inner)
+			}
+		case interface{ Unwrap() error }:
+			walk(e.Unwrap())
+		}
+	}
+	walk(err)
+	return found
+}
+
 func errorTypes(err error) []string {
 	var types []string
 	var methods MethodErrors

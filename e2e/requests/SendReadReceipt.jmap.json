@@ -1,0 +1,21 @@
+{
+  "_doc": "SendReadReceipt tells the sender of a message that it was displayed. It is here for Verify, not to be sent: it uses MDN, and Verify has to report it where the session does not advertise MDN, as Stalwart 0.16 does not.",
+
+  "methodCalls": [
+    ["MDN/send", {
+      "identityId": "{{identityId}}",
+      "send": {
+        "receipt": {
+          "forEmailId": "{{emailId}}",
+          "disposition": {
+            "actionMode": "manual-action",
+            "sendingMode": "mdn-sent-manually",
+            "type": "displayed"
+          }
+        }
+      }
+    }, "send"]
+  ],
+
+  "_returns": "send"
+}
