@@ -110,6 +110,10 @@ for {
 }
 ```
 
+`WithHTTPClient`に渡した`http.Client`の`Timeout`は、ストリームの応答を待つ時間だけを制限し、ストリームを開いておける時間は制限しません。
+`http.Client`は本文の読み取りも`Timeout`に含めますが、イベントストリームの本文には終わりがないので、ストリームは`Timeout`なしで開きます。
+ストリームを閉じるのは、サーバ、`Close`、またはコンテキストです。
+
 これはイベントソース形式のプッシュで、接続を保持できるクライアントに向いています。
 もう1つの形式は、サーバが送る先のURLを登録するもので、スマートフォンのアプリにはこちらが必要です。
 [`example/requests`](https://github.com/linyows/jmapc/tree/main/example/requests)の`RegisterPush`と`ConfirmPush`を参照してください。

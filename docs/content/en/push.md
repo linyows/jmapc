@@ -122,6 +122,12 @@ for {
 }
 ```
 
+The `Timeout` of an `http.Client` passed to `WithHTTPClient` bounds the wait
+for the stream to be answered, not how long it stays open. An `http.Client`
+counts reading the body against its `Timeout`, and the body of an event stream
+does not end, so the stream is opened without it and is closed by the server,
+by `Close`, or by the context.
+
 This is the event source form of push, which suits a client that can hold a
 connection open. The other form registers a URL for the server to post to, which
 is what an app on a phone needs: see `RegisterPush` and `ConfirmPush` in

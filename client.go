@@ -61,6 +61,10 @@ type Option func(*Client)
 
 // WithHTTPClient makes the client issue its requests through hc, which is where
 // timeouts, proxies, and transport-level instrumentation belong.
+//
+// The Timeout of hc applies to every request but the connection EventSource
+// opens, for which it bounds only the wait for the response. The stream that
+// follows stays open for as long as the server keeps it open.
 func WithHTTPClient(hc *http.Client) Option {
 	return func(c *Client) { c.httpClient = hc }
 }
@@ -450,7 +454,7 @@ func (c *Client) send(req *http.Request, kind RequestKind, attempt int) (*http.R
 		return nil, err
 	}
 	req, came := c.observeAttempt(req, kind, attempt)
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.do(req, kind)
 	came(resp, err)
 	if err != nil {
 		// Redacted, because a URL may carry credentials in its userinfo, and
@@ -458,6 +462,55 @@ func (c *Client) send(req *http.Request, kind RequestKind, attempt int) (*http.R
 		return nil, fmt.Errorf("jmapc: %s %s: %w", req.Method, req.URL.Redacted(), err)
 	}
 	return resp, nil
+}
+
+// do sends req through the http.Client the client was given.
+//
+// A connection to the event source is sent without the http.Client's Timeout.
+// The http.Client counts reading the body against it, and the body of an event
+// stream does not end, so the stream would be cut each time the timeout ran
+// out. The timeout bounds the wait for the response instead: a server that
+// does not answer is still given up on, and a stream that has started is left
+// open.
+func (c *Client) do(req *http.Request, kind RequestKind) (*http.Response, error) {
+	timeout := c.httpClient.Timeout
+	if kind != KindEvents || timeout <= 0 {
+		return c.httpClient.Do(req)
+	}
+	hc := *c.httpClient
+	hc.Timeout = 0
+
+	ctx, cancel := context.WithCancel(req.Context())
+	timer := time.AfterFunc(timeout, cancel)
+	resp, err := hc.Do(req.WithContext(ctx))
+	if !timer.Stop() {
+		// The timer ran out, whether before the response arrived or just
+		// after, and the context the body is read under is cancelled either
+		// way.
+		if resp != nil {
+			resp.Body.Close()
+		}
+		return nil, fmt.Errorf("no response within the timeout of %s: %w", timeout, context.DeadlineExceeded)
+	}
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	resp.Body = &cancelOnClose{ReadCloser: resp.Body, cancel: cancel}
+	return resp, nil
+}
+
+// cancelOnClose releases the context a response was read under when its body
+// is closed.
+type cancelOnClose struct {
+	io.ReadCloser
+	cancel func()
+}
+
+func (b *cancelOnClose) Close() error {
+	err := b.ReadCloser.Close()
+	b.cancel()
+	return err
 }
 
 // requestError turns a non-200 response into a *RequestError, decoding the RFC

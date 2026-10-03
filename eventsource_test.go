@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -228,6 +229,101 @@ func TestEventSourceUnavailable(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "eventSourceUrl") {
 		t.Errorf("error = %v, want it to mention eventSourceUrl", err)
+	}
+}
+
+// slowEventServer serves a session advertising a push endpoint, and hands the
+// push endpoint to events, so that a test controls when each part of the
+// stream is written.
+func slowEventServer(t *testing.T, events http.HandlerFunc) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	mux.HandleFunc("/session", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{
+		  "capabilities": {"urn:ietf:params:jmap:core": {}},
+		  "accounts": {"a1": {"name": "someone", "isPersonal": true}},
+		  "primaryAccounts": {},
+		  "username": "someone",
+		  "apiUrl": %q,
+		  "eventSourceUrl": %q,
+		  "state": "sess1"
+		}`, srv.URL+"/api", srv.URL+"/events")
+	})
+	mux.HandleFunc("/events", events)
+	return srv
+}
+
+// TestEventSourceOutlivesTheClientTimeout checks that a stream stays open past
+// the Timeout of the http.Client it was opened through. The http.Client counts
+// reading the body against its Timeout, and an event stream's body does not
+// end, so a client given a timeout, as WithHTTPClient suggests, had its stream
+// cut each time the timeout ran out.
+func TestEventSourceOutlivesTheClientTimeout(t *testing.T) {
+	const timeout = 100 * time.Millisecond
+	release := make(chan struct{})
+	srv := slowEventServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "event: state\ndata: {\"@type\":\"StateChange\",\"changed\":{\"a1\":{\"Email\":\"e1\"}}}\n\n")
+		w.(http.Flusher).Flush()
+		select {
+		case <-release:
+		case <-r.Context().Done():
+			return
+		}
+		fmt.Fprint(w, "event: state\ndata: {\"@type\":\"StateChange\",\"changed\":{\"a1\":{\"Email\":\"e2\"}}}\n\n")
+		w.(http.Flusher).Flush()
+	})
+	hc := &http.Client{Timeout: timeout}
+	c := New(srv.URL+"/session", WithHTTPClient(hc))
+
+	stream, err := c.EventSource(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("EventSource: %v", err)
+	}
+	defer stream.Close()
+	if _, err := stream.Next(); err != nil {
+		t.Fatalf("first event: %v", err)
+	}
+	time.Sleep(3 * timeout)
+	close(release)
+	change, err := stream.Next()
+	if err != nil {
+		t.Fatalf("the stream was cut after the client's timeout: %v", err)
+	}
+	if state, _ := change.StateOf("a1", "Email"); state != "e2" {
+		t.Errorf("second event state = %q, want e2", state)
+	}
+	if hc.Timeout != timeout {
+		t.Errorf("the http.Client passed in has its Timeout changed to %v", hc.Timeout)
+	}
+}
+
+// TestEventSourceGivesUpOnASilentServer checks that the Timeout still bounds the
+// wait for the response, so that a server that accepts the connection and never
+// answers is given up on, and the failure reads as one worth reconnecting
+// after.
+func TestEventSourceGivesUpOnASilentServer(t *testing.T) {
+	const timeout = 100 * time.Millisecond
+	srv := slowEventServer(t, func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	})
+	c := New(srv.URL+"/session", WithHTTPClient(&http.Client{Timeout: timeout}))
+
+	start := time.Now()
+	_, err := c.EventSource(context.Background(), nil)
+	if err == nil {
+		t.Fatal("EventSource waited on a server that never answered and returned no error")
+	}
+	if elapsed := time.Since(start); elapsed > 20*timeout {
+		t.Errorf("EventSource gave up after %v, want about %v", elapsed, timeout)
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("error = %v, want it to wrap context.DeadlineExceeded", err)
+	}
+	if !IsTemporary(err) {
+		t.Errorf("IsTemporary(%v) = false, want true so that a watch reconnects", err)
 	}
 }
 
