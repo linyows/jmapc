@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // RequestNeeds is what one generated request needs of the server, as far as it
@@ -54,19 +55,28 @@ func (c *Client) Verify(ctx context.Context, requests ...RequestNeeds) error {
 type VerifyError struct {
 	// Request is the name of the request the problem is with.
 	Request string
-	// Err is the problem, a *RequestError of the kind sending the request
-	// would have failed with where the server would refuse it.
+	// Err is the problem, as sending the request would have reported it: a
+	// *RequestError for a capability or a limit the request would be refused
+	// for, the error PrimaryAccountID returns for a primary account the
+	// session does not name, and a *MethodError of type
+	// accountNotSupportedByMethod for an account that does not support what
+	// the request uses it for.
 	Err error
 }
 
 func (e *VerifyError) Error() string {
 	// The request was not sent, so "request failed", which is how a
-	// RequestError reads, would say something that did not happen.
+	// RequestError reads, or "method failed", which is how a MethodError
+	// does, would say something that did not happen.
 	var refused *RequestError
 	if errors.As(e.Err, &refused) && refused.Detail != "" {
 		return fmt.Sprintf("jmapc: %s would be refused: %s", e.Request, refused.Detail)
 	}
-	return fmt.Sprintf("jmapc: %s: %v", e.Request, e.Err)
+	var method *MethodError
+	if errors.As(e.Err, &method) && method.Description != "" {
+		return fmt.Sprintf("jmapc: %s would be refused: %s", e.Request, method.Description)
+	}
+	return fmt.Sprintf("jmapc: %s: %s", e.Request, strings.TrimPrefix(e.Err.Error(), "jmapc: "))
 }
 
 func (e *VerifyError) Unwrap() error { return e.Err }
@@ -87,18 +97,19 @@ func (n RequestNeeds) check(s *Session) []error {
 			// lacks says nothing more.
 			continue
 		}
+		// The generated function looks the account up the same way, and
+		// fails with this error before sending anything.
 		id, err := s.PrimaryAccountID(capability)
 		if err != nil {
-			problems = append(problems, &RequestError{
-				Type:   ErrTypeUnknownCapability,
-				Detail: fmt.Sprintf("the request leaves the account to the session, which names no primary account for %s", capability),
-			})
+			problems = append(problems, err)
 			continue
 		}
+		// The server is what refuses this one, answering the call with a
+		// method error.
 		if !s.accountSupports(id, capability) {
-			problems = append(problems, &RequestError{
-				Type:   ErrTypeUnknownCapability,
-				Detail: fmt.Sprintf("the primary account %q for %s does not support it", id, capability),
+			problems = append(problems, &MethodError{
+				Type:        ErrAccountNotSupport,
+				Description: fmt.Sprintf("the primary account %q for %s does not support it", id, capability),
 			})
 		}
 	}

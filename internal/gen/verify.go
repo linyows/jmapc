@@ -66,10 +66,24 @@ func (g *RequestGenerator) capabilityList(uris []string) string {
 }
 
 // requestsDir names the directory the requests were read from, for the Source
-// line. The requests of one package come from one directory.
+// line: the deepest one that holds them all, since the requests of one package
+// may sit in several directories under the one generation was pointed at.
 func requestsDir(plans []*plan) string {
-	if len(plans) == 0 {
-		return ""
+	var common []string
+	for i, p := range plans {
+		dir := strings.Split(path.Dir(strings.ReplaceAll(p.q.Path, `\`, "/")), "/")
+		if i == 0 {
+			common = dir
+			continue
+		}
+		n := 0
+		for n < len(common) && n < len(dir) && common[n] == dir[n] {
+			n++
+		}
+		common = common[:n]
 	}
-	return path.Dir(strings.ReplaceAll(plans[0].q.Path, `\`, "/"))
+	if len(common) == 0 {
+		return "."
+	}
+	return strings.Join(common, "/")
 }

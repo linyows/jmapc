@@ -123,6 +123,33 @@ func TestVerifyReadsWhatEachAccountSupports(t *testing.T) {
 	if len(problems) != 1 || problems[0].Request != "SendEmail" || !strings.Contains(problems[0].Err.Error(), "does not support") {
 		t.Errorf("Verify reported %v, want SendEmail's account alone", err)
 	}
+	// Sending it, the server would answer the call with this method error, and
+	// the capability itself is there.
+	if !HasErrorType(err, ErrAccountNotSupport) || HasErrorType(err, ErrTypeUnknownCapability) {
+		t.Errorf("Verify reported %v, want accountNotSupportedByMethod and no unknownCapability", err)
+	}
+}
+
+// TestVerifyReportsAMissingPrimaryAccountAsSendingWould checks that a primary
+// account the session does not name is reported with the error the generated
+// function fails with, not as a capability the server lacks: the server has
+// the capability.
+func TestVerifyReportsAMissingPrimaryAccountAsSendingWould(t *testing.T) {
+	ts := newTestServer(t)
+	c := ts.client()
+	err := c.Verify(context.Background(), RequestNeeds{Name: "ReadCore", Using: []string{CapabilityCore}, Calls: 1, PrimaryAccounts: []string{CapabilityCore}})
+	problems := verifyProblems(t, err)
+	if len(problems) != 1 {
+		t.Fatalf("Verify reported %v, want one problem", err)
+	}
+	s, _ := c.Session(context.Background())
+	_, want := s.PrimaryAccountID(CapabilityCore)
+	if want == nil || problems[0].Err.Error() != want.Error() {
+		t.Errorf("Verify reported %v, want the error PrimaryAccountID returns: %v", problems[0].Err, want)
+	}
+	if HasErrorType(err, ErrTypeUnknownCapability) {
+		t.Errorf("Verify reported %v as an unknown capability, which the server has", err)
+	}
 }
 
 func TestVerifyReportsASessionItCannotFetch(t *testing.T) {

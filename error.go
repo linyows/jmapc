@@ -433,16 +433,24 @@ func RetryAfter(err error) (time.Duration, bool) {
 // again with every one of those reasons.
 // requestErrors returns every *RequestError in err's tree. errors.As finds only
 // the first, and a tree holds more than one where errors were joined, as
-// Verify joins one per problem it finds.
+// Verify joins one per problem it finds. Each node is matched as errors.As
+// matches it, by its type or by an As method of its own.
 func requestErrors(err error) []*RequestError {
 	var found []*RequestError
 	var walk func(error)
 	walk = func(e error) {
-		switch e := e.(type) {
-		case nil:
+		if e == nil {
 			return
-		case *RequestError:
-			found = append(found, e)
+		}
+		if reqErr, ok := e.(*RequestError); ok {
+			found = append(found, reqErr)
+		} else if as, ok := e.(interface{ As(any) bool }); ok {
+			var reqErr *RequestError
+			if as.As(&reqErr) {
+				found = append(found, reqErr)
+			}
+		}
+		switch e := e.(type) {
 		case interface{ Unwrap() []error }:
 			for _, inner := range e.Unwrap() {
 				walk(inner)

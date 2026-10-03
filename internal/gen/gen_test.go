@@ -684,3 +684,30 @@ func TestARequestMayTakeAnyNameVerifyDoesNotDeclare(t *testing.T) {
 		t.Fatalf("the request was not generated:\n%s", src)
 	}
 }
+
+// TestVerifyNamesTheDirectoryHoldingEveryRequest checks the Source line of
+// verify_gen.go where the requests sit in several directories under one, as
+// they may: the requests are found by walking the directory given.
+func TestVerifyNamesTheDirectoryHoldingEveryRequest(t *testing.T) {
+	plans := func(paths ...string) []*plan {
+		var ps []*plan
+		for _, p := range paths {
+			ps = append(ps, &plan{q: &request.Request{Path: p}})
+		}
+		return ps
+	}
+	for _, tt := range []struct {
+		paths []string
+		want  string
+	}{
+		{[]string{"requests/A.jmap.json"}, "requests"},
+		{[]string{"requests/mail/A.jmap.json", "requests/contacts/B.jmap.json"}, "requests"},
+		{[]string{"requests/mail/A.jmap.json", "requests/mail/B.jmap.json"}, "requests/mail"},
+		{[]string{`requests\mail\A.jmap.json`, "requests/B.jmap.json"}, "requests"},
+		{[]string{"a/A.jmap.json", "b/B.jmap.json"}, "."},
+	} {
+		if got := requestsDir(plans(tt.paths...)); got != tt.want {
+			t.Errorf("requestsDir(%q) = %q, want %q", tt.paths, got, tt.want)
+		}
+	}
+}
