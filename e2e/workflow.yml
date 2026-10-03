@@ -334,18 +334,22 @@ jobs:
     outputs:
       since: parse_json(res.stdout).state
 
-  # The watch runs in the background, writing what it found to a file, and
-  # creates the ready file once its event stream is open. Watch does not
-  # poll, so an email it reports reached it by push.
+  # The watch runs in the background, and creates the ready file once its
+  # event stream is open. Watch does not poll, so an email it reports reached
+  # it by push. probe gives back the process and the file its output goes to.
   - name: Start watching through the generated client
+    id: watching
     uses: shell
     with:
-      cmd: "{{vars.driver}} watch -since '{{outputs.before_push.since}}' -subject 'pushed {{vars.run_id}}' -ready '{{vars.work}}/watch.ready' >'{{vars.work}}/watch.out' 2>&1 &"
+      cmd: "{{vars.driver}} watch -since '{{outputs.before_push.since}}' -subject 'pushed {{vars.run_id}}' -ready '{{vars.work}}/watch.ready'"
+      background: true
       env:
         JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
         JMAPC_E2E_USER: "alice@{{vars.domain}}"
         JMAPC_E2E_PASSWORD: "{{vars.alice_password}}"
-    test: res.code == 0
+    test: res.pid > 0 && res.log != ""
+    outputs:
+      log: res.log
 
   - name: Wait until the watch follows pushes
     uses: shell
@@ -369,7 +373,7 @@ jobs:
   - name: See the watch report it
     uses: shell
     with:
-      cmd: "cat '{{vars.work}}/watch.out'"
+      cmd: "cat '{{outputs.watching.log}}'"
     retry: {max_attempts: 20, interval: 1s}
     test: |
       res.code == 0 &&
