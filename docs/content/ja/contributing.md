@@ -35,7 +35,7 @@ jmapcが読んだsessionを直接取得したものと比べ、SMTPで配送し�
 jmapcで取り込んだメールのフラグをIMAPで読み、IMAPで付けたフラグをjmapcで読みます。
 jmapcでアップロードしたblobを、直接ダウンロードしたものと比べます。
 jmapcで少しずつ追った変更を、サーバ自身の変更の分割と比べます。
-SMTPで配送したメールが、pushでjmapcの`Watch`に届くかを確かめます。
+SMTPで配送したメールが、pushでjmapcの`Watch`に届くかを、ほかに変更の起きないアカウントで確かめます。
 jmapc側を受け持つのは`e2e/driver`で、`e2e/requests`から生成したクライアントを呼び、結果をJSONで出力します。
 
 準備では、サーバの設定とドライバーのビルドを並行して行います。
@@ -91,7 +91,7 @@ flowchart LR
         job_5_step0["Read the state through jmapc"]
         job_5_step1["Start watching through the generated client"]
         job_5_step2["Wait until the watch follows pushes"]
-        job_5_step3["Deliver to alice on port 25"]
+        job_5_step3["Deliver to bob on port 25"]
         job_5_step4["See the watch report it"]
     end
 ```

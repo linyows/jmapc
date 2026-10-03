@@ -43,8 +43,8 @@ delivered over SMTP against what the generated client finds, a message imported
 through jmapc against its flags over IMAP and a flag set over IMAP against what
 jmapc reads, a blob uploaded through jmapc against the same blob downloaded
 directly, changes followed through jmapc a few at a time against the server's
-own paging of them, and a message delivered over SMTP against what jmapc's
-`Watch` is pushed. The jmapc side is
+own paging of them, and a message delivered over SMTP against what reaches
+jmapc's `Watch` by push, in an account where nothing else changes. The jmapc side is
 `e2e/driver`, which calls the client generated from `e2e/requests` and prints
 what came back as JSON.
 
@@ -101,7 +101,7 @@ flowchart LR
         job_5_step0["Read the state through jmapc"]
         job_5_step1["Start watching through the generated client"]
         job_5_step2["Wait until the watch follows pushes"]
-        job_5_step3["Deliver to alice on port 25"]
+        job_5_step3["Deliver to bob on port 25"]
         job_5_step4["See the watch report it"]
     end
 ```

@@ -319,6 +319,11 @@ jobs:
         len(res.body.methodResponses[0][1].updated) +
         len(res.body.methodResponses[0][1].destroyed) == 1
 
+# Every other scenario works in alice's account, at the same time as this
+# one, and a push for any of their changes would run the watch again and find
+# the message whether or not its own push arrived. Bob's account has nothing
+# else happening in it, so the delivery below is the only change a push can
+# report there.
 - name: A push followed through jmapc's Watch
   steps:
   - name: Read the state through jmapc
@@ -328,8 +333,8 @@ jobs:
       cmd: "{{vars.driver}} state"
       env:
         JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
-        JMAPC_E2E_USER: "alice@{{vars.domain}}"
-        JMAPC_E2E_PASSWORD: "{{vars.alice_password}}"
+        JMAPC_E2E_USER: "bob@{{vars.domain}}"
+        JMAPC_E2E_PASSWORD: "{{vars.bob_password}}"
     test: res.code == 0 && parse_json(res.stdout).state != ""
     outputs:
       since: parse_json(res.stdout).state
@@ -345,8 +350,8 @@ jobs:
       background: true
       env:
         JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
-        JMAPC_E2E_USER: "alice@{{vars.domain}}"
-        JMAPC_E2E_PASSWORD: "{{vars.alice_password}}"
+        JMAPC_E2E_USER: "bob@{{vars.domain}}"
+        JMAPC_E2E_PASSWORD: "{{vars.bob_password}}"
     test: res.pid > 0 && res.log != ""
     outputs:
       log: res.log
@@ -358,13 +363,13 @@ jobs:
     retry: {max_attempts: 20, interval: 500ms}
     test: res.code == 0
 
-  - name: Deliver to alice on port 25
+  - name: Deliver to bob on port 25
     uses: smtp
     with:
       addr: "{{vars.smtp}}"
       myhostname: mail.remote.test
       from: someone@remote.test
-      to: "alice@{{vars.domain}}"
+      to: "bob@{{vars.domain}}"
       subject: "pushed {{vars.run_id}}"
     test: res.code == 0 && res.sent == 1
 
