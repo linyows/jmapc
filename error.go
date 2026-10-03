@@ -318,8 +318,10 @@ var concurrencyLimits = map[string]bool{
 //
 // A failure jmapc cannot classify is temporary, since nothing about it says the
 // next attempt will fail as well. A nil error is not a failure and is false.
+// Neither is a range the server ignored, which IsRangeIgnored reports: the
+// server answers the same range the same way however often it is asked.
 func IsTemporary(err error) bool {
-	if err == nil {
+	if err == nil || IsRangeIgnored(err) {
 		return false
 	}
 	classified, temporary := false, true

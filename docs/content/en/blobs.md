@@ -33,7 +33,17 @@ blob.Range // the part that came back: 4096-8191 of 8192
 They are sent as an HTTP `Range` header. JMAP defines none for the download
 endpoint, so a server is free to ignore it and answer with the whole blob;
 where that happens the download fails rather than returning content the caller
-would write at the wrong offset.
+would write at the wrong offset. `IsRangeIgnored` reports that failure, which
+asking again does not change, so a download that cannot be resumed starts over:
+
+```go
+blob, err := c.Download(ctx, accountID, blobID, &jmapc.DownloadOptions{From: written})
+if jmapc.IsRangeIgnored(err) {
+	// The server does not do ranges. Download the whole blob instead.
+	written = 0
+	blob, err = c.Download(ctx, accountID, blobID, nil)
+}
+```
 
 A server offering `urn:ietf:params:jmap:blob` can also create and read blobs
 through the API, which the endpoints cannot: `Blob/upload` puts a blob in the

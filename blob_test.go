@@ -416,6 +416,35 @@ func TestADownloadWhoseRangeWasIgnoredFails(t *testing.T) {
 	if !strings.Contains(err.Error(), "ignored the range") {
 		t.Errorf("error = %v, want it to report the range was ignored", err)
 	}
+	if !IsRangeIgnored(err) {
+		t.Errorf("IsRangeIgnored(%v) = false, want true", err)
+	}
+	// Asking again gets the same answer, so a watch or a retry loop that
+	// consults IsTemporary must not keep asking.
+	if IsTemporary(err) {
+		t.Errorf("IsTemporary(%v) = true, want false", err)
+	}
+}
+
+// TestIsRangeIgnoredOnlyForAnIgnoredRange checks that IsRangeIgnored picks out
+// the one failure, through wrapping, and not the others a download can have.
+func TestIsRangeIgnoredOnlyForAnIgnoredRange(t *testing.T) {
+	ignored := &rangeIgnoredError{wanted: "bytes=5-8"}
+	for _, tt := range []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil", nil, false},
+		{"the ignored range", ignored, true},
+		{"the ignored range, wrapped", fmt.Errorf("resuming report.pdf: %w", ignored), true},
+		{"a refused download", &RequestError{Status: http.StatusNotFound}, false},
+		{"anything else", errors.New("connection reset"), false},
+	} {
+		if got := IsRangeIgnored(tt.err); got != tt.want {
+			t.Errorf("IsRangeIgnored(%s) = %v, want %v", tt.name, got, tt.want)
+		}
+	}
 }
 
 func TestADownloadWithoutARangeSendsNone(t *testing.T) {

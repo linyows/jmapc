@@ -121,7 +121,9 @@ that is not a 429, and a method or record error such as `invalidArguments` or
 `invalidProperties` — and true for what it reported about itself: a 5xx, a 429,
 `serverUnavailable`, `serverFail`, `rateLimit`. A failure that cannot be
 classified, such as a request that never reached the server, is temporary, since
-nothing about it says the next attempt will fail as well. Where a request failed
+nothing about it says the next attempt will fail as well, except a download
+whose range the server ignored, which `IsRangeIgnored` reports and which the
+server answers the same way every time. Where a request failed
 for several reasons at once, one reason that will not pass with time makes the
 whole of it permanent.
 

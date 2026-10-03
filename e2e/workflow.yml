@@ -217,7 +217,7 @@ jobs:
       accountId: parse_json(res.stdout).accountId
       blobId: parse_json(res.stdout).blobId
       part: parse_json(res.stdout).part ?? ''
-      rangeError: parse_json(res.stdout).rangeError ?? ''
+      rangeIgnored: parse_json(res.stdout).rangeIgnored ?? false
 
   - name: Download the whole of it directly
     uses: http
@@ -236,9 +236,9 @@ jobs:
       headers:
         range: bytes=5-12
     test: |
-      res.code == 206 && outputs.blob.rangeError == '' && res.body == outputs.blob.part &&
+      res.code == 206 && outputs.blob.rangeIgnored == false && res.body == outputs.blob.part &&
         outputs.blob.part == ('blob ' + vars.run_id + ' 0123456789')[5:13] ||
-      res.code == 200 && outputs.blob.part == '' && outputs.blob.rangeError contains 'ignored the range'
+      res.code == 200 && outputs.blob.part == '' && outputs.blob.rangeIgnored == true
 
 - name: Changes followed through jmapc, a few at a time
   steps:
