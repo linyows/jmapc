@@ -111,11 +111,11 @@ if err := client.Verify(ctx, c); err != nil {
 ```ts
 import { verify } from "./client/verify.js"
 
-await verify(client) // throws VerifyErrors
+await verify(client) // throws VerifyErrors, with a VerifyError per problem in errors
 ```
 
 ```rust
-jmap_client::verify(&client).await?; // Error::Verify
+jmap_client::verify(&client).await?; // Error::Verify(Vec<VerifyError>)
 ```
 
 It reports a capability a request declares and the server does not advertise,
@@ -123,9 +123,10 @@ a primary account the session does not name for a request that leaves the
 account to it, a primary account that does not support the capability it is
 used for, and more calls than `maxCallsInRequest`: what a request is refused
 for before it is sent, for every request at once. Every problem is reported,
-joined, each as a `*jmapc.VerifyError` naming its request and holding the
-error sending the request would have failed with — `VerifyErrors` in
-TypeScript, `Error::Verify` in Rust:
+each as a `VerifyError` naming its request and holding the error sending the
+request would have failed with. Go returns them joined, each a
+`*jmapc.VerifyError`; TypeScript throws a `VerifyErrors` whose `errors` hold
+them; Rust returns `Error::Verify` holding them:
 
 ```
 jmapc: SendReadReceipt would be refused: server does not support urn:ietf:params:jmap:mdn

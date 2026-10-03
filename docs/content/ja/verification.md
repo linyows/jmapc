@@ -88,18 +88,20 @@ if err := client.Verify(ctx, c); err != nil {
 ```ts
 import { verify } from "./client/verify.js"
 
-await verify(client) // VerifyErrorsを投げる
+await verify(client) // VerifyErrorsを投げる。errorsに問題ごとのVerifyErrorが入る
 ```
 
 ```rust
-jmap_client::verify(&client).await?; // Error::Verify
+jmap_client::verify(&client).await?; // Error::Verify(Vec<VerifyError>)
 ```
 
 報告するのは、リクエストが宣言しているのにサーバが広告していないケイパビリティ、アカウントをセッションに委ねたリクエストのためのプライマリアカウントをセッションが示していないこと、プライマリアカウントがそのケイパビリティに対応していないこと、`maxCallsInRequest`を超える呼び出しです。
 送る前に拒否される理由を、すべてのリクエストについて一度に確かめます。
-見つかった問題はすべてまとめて返します。
-それぞれがリクエストの名前と、そのリクエストを送ったときに起きるはずのエラーを持つ`*jmapc.VerifyError`です。
-TypeScriptでは`VerifyErrors`、Rustでは`Error::Verify`になります。
+見つかった問題はすべて報告します。
+1件ごとに、リクエストの名前と、そのリクエストを送ったときに起きるはずのエラーを持つ`VerifyError`になります。
+Goはこれらをまとめて返し、それぞれが`*jmapc.VerifyError`です。
+TypeScriptは`VerifyErrors`を投げ、その`errors`にこれらが入ります。
+Rustは`Error::Verify`を返し、その中にこれらが入ります。
 
 ```
 jmapc: SendReadReceipt would be refused: server does not support urn:ietf:params:jmap:mdn
