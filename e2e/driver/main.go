@@ -392,13 +392,18 @@ func watch(ctx context.Context, c *jmapc.Client, since, subject, ready string) e
 }
 
 // verify checks every request in e2e/requests against the session, through the
-// Verify function generated for them, and prints each problem it reports.
+// Verify function generated for them, and prints each problem it reports with
+// the request it is about.
 func verify(ctx context.Context, c *jmapc.Client) error {
-	problems := []string{}
+	problems := []map[string]string{}
 	err := client.Verify(ctx, c)
 	if joined, ok := err.(interface{ Unwrap() []error }); ok {
 		for _, e := range joined.Unwrap() {
-			problems = append(problems, e.Error())
+			var v *jmapc.VerifyError
+			if !errors.As(e, &v) {
+				return fmt.Errorf("Verify reported %T: %w", e, e)
+			}
+			problems = append(problems, map[string]string{"request": v.Request, "error": v.Error()})
 		}
 	} else if err != nil {
 		return err

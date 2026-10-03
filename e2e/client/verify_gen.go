@@ -14,39 +14,42 @@ import (
 // the program starts, to learn then rather than when a request is first sent.
 // See jmapc.Client.Verify for what it checks.
 func Verify(ctx context.Context, c *jmapc.Client) error {
-	return c.Verify(ctx, requestNeeds...)
-}
-
-// requestNeeds is what each request in this package needs of the server.
-var requestNeeds = []jmapc.RequestNeeds{
-	{
-		Name:            "CurrentEmailState",
-		Using:           []string{jmapc.CapabilityCore, jmapc.CapabilityMail},
-		Calls:           1,
-		PrimaryAccounts: []string{jmapc.CapabilityMail},
-	},
-	{
-		Name:            "FindEmailsBySubject",
-		Using:           []string{jmapc.CapabilityCore, jmapc.CapabilityMail},
-		Calls:           2,
-		PrimaryAccounts: []string{jmapc.CapabilityMail},
-	},
-	{
-		Name:            "FindMailboxByRole",
-		Using:           []string{jmapc.CapabilityCore, jmapc.CapabilityMail},
-		Calls:           2,
-		PrimaryAccounts: []string{jmapc.CapabilityMail},
-	},
-	{
-		Name:            "ImportEmail",
-		Using:           []string{jmapc.CapabilityCore, jmapc.CapabilityMail},
-		Calls:           1,
-		PrimaryAccounts: []string{jmapc.CapabilityMail},
-	},
-	{
-		Name:            "SyncEmails",
-		Using:           []string{jmapc.CapabilityCore, jmapc.CapabilityMail},
-		Calls:           2,
-		PrimaryAccounts: []string{jmapc.CapabilityMail},
-	},
+	return c.Verify(ctx, []jmapc.RequestNeeds{
+		{
+			Name:            "CurrentEmailState",
+			Using:           []string{jmapc.CapabilityCore, jmapc.CapabilityMail},
+			Calls:           1,
+			PrimaryAccounts: []string{jmapc.CapabilityMail},
+		},
+		{
+			Name:            "FindEmailsBySubject",
+			Using:           []string{jmapc.CapabilityCore, jmapc.CapabilityMail},
+			Calls:           2,
+			PrimaryAccounts: []string{jmapc.CapabilityMail},
+		},
+		{
+			Name:            "FindMailboxByRole",
+			Using:           []string{jmapc.CapabilityCore, jmapc.CapabilityMail},
+			Calls:           2,
+			PrimaryAccounts: []string{jmapc.CapabilityMail},
+		},
+		{
+			Name:            "ImportEmail",
+			Using:           []string{jmapc.CapabilityCore, jmapc.CapabilityMail},
+			Calls:           1,
+			PrimaryAccounts: []string{jmapc.CapabilityMail},
+		},
+		{
+			Name:            "SendReadReceipt",
+			Using:           []string{jmapc.CapabilityCore, jmapc.CapabilityMDN},
+			Calls:           1,
+			PrimaryAccounts: []string{jmapc.CapabilityMDN},
+		},
+		{
+			Name:            "SyncEmails",
+			Using:           []string{jmapc.CapabilityCore, jmapc.CapabilityMail},
+			Calls:           2,
+			PrimaryAccounts: []string{jmapc.CapabilityMail},
+		},
+	}...)
 }

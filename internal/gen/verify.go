@@ -35,20 +35,19 @@ func (g *RequestGenerator) verifyFile(plans []*plan) ([]byte, error) {
 	buf.WriteString("// the program starts, to learn then rather than when a request is first sent.\n")
 	buf.WriteString("// See jmapc.Client.Verify for what it checks.\n")
 	fmt.Fprintf(&buf, "func %s(ctx context.Context, c *%sClient) error {\n", VerifyFunc, g.Qualifier)
-	buf.WriteString("\treturn c.Verify(ctx, requestNeeds...)\n}\n\n")
-
-	buf.WriteString("// requestNeeds is what each request in this package needs of the server.\n")
-	fmt.Fprintf(&buf, "var requestNeeds = []%sRequestNeeds{\n", g.Qualifier)
+	// The table is declared inside the function, so that no name of its own
+	// can meet a function generated for a request.
+	fmt.Fprintf(&buf, "\treturn c.Verify(ctx, []%sRequestNeeds{\n", g.Qualifier)
 	for _, p := range plans {
-		fmt.Fprintf(&buf, "\t{\n\t\tName: %s,\n", strconv.Quote(p.q.Name))
-		fmt.Fprintf(&buf, "\t\tUsing: []string{%s},\n", g.capabilityList(p.q.Using))
-		fmt.Fprintf(&buf, "\t\tCalls: %d,\n", len(p.q.Calls))
+		fmt.Fprintf(&buf, "\t\t{\n\t\t\tName: %s,\n", strconv.Quote(p.q.Name))
+		fmt.Fprintf(&buf, "\t\t\tUsing: []string{%s},\n", g.capabilityList(p.q.Using))
+		fmt.Fprintf(&buf, "\t\t\tCalls: %d,\n", len(p.q.Calls))
 		if len(p.sessionCapabilities) > 0 {
-			fmt.Fprintf(&buf, "\t\tPrimaryAccounts: []string{%s},\n", g.capabilityList(p.sessionCapabilities))
+			fmt.Fprintf(&buf, "\t\t\tPrimaryAccounts: []string{%s},\n", g.capabilityList(p.sessionCapabilities))
 		}
-		buf.WriteString("\t},\n")
+		buf.WriteString("\t\t},\n")
 	}
-	buf.WriteString("}\n")
+	buf.WriteString("\t}...)\n}\n")
 
 	src, err := format.Source(buf.Bytes())
 	if err != nil {

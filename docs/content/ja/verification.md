@@ -98,6 +98,8 @@ jmapc: VerifiedSignatures would be refused: server does not support urn:ietf:par
 そのため`-session`より報告することは少なくなります。
 呼び出しが指すレコードの数やリクエストのサイズは、送るときまで分からないからです。
 関数がその名前で生成されるので、リクエストやプロパティの集合に`Verify`という名前は付けられません。
+また、生成先のファイルがほかのファイルと重なるリクエストも拒否します。
+たとえば`verify`という名前のリクエストは`verify_gen.go`に生成されることになるので、拒否されます。
 
 ## エディタ対応
 

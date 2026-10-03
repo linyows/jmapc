@@ -124,7 +124,9 @@ It checks what a request file says, not what a caller passes for its
 parameters, so it reports less than `-session` does: the number of records a
 call names and the size of a request are known only once it is sent. A request
 or a set of properties cannot be named `Verify`, since the function is
-generated under that name.
+generated under that name, and a request is refused where its file would be
+one another file is generated into, such as `verify_gen.go` for a request
+named `verify`.
 
 ## Editor support
 

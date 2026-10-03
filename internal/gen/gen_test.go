@@ -612,7 +612,7 @@ func TestVerifyListsWhatEachRequestNeeds(t *testing.T) {
 	src := string(files[VerifyFileName])
 	for _, want := range []string{
 		"func Verify(ctx context.Context, c *jmapc.Client) error {",
-		"return c.Verify(ctx, requestNeeds...)",
+		"return c.Verify(ctx, []jmapc.RequestNeeds{",
 		`Name:            "ListMailboxes",`,
 		"Using:           []string{jmapc.CapabilityCore, jmapc.CapabilityMail},",
 		"Calls:           1,",
@@ -642,5 +642,45 @@ func TestNothingIsGeneratedUnderTheNameOfVerify(t *testing.T) {
 	g := &RequestGenerator{Spec: spec.Standard(), Package: "client", Qualifier: "jmapc.", Requests: []*request.Request{q}}
 	if _, err := g.Generate(); err == nil || !strings.Contains(err.Error(), "the function that verifies the requests") {
 		t.Errorf("generating a request named Verify: %v, want it refused", err)
+	}
+}
+
+// TestTwoThingsAreNotGeneratedIntoOneFile checks that a request whose file
+// name another file already has is refused rather than overwritten: file names
+// are lower case, so a request named verify would be written to the file Verify
+// is generated into, and two requests differing only in case to one file.
+func TestTwoThingsAreNotGeneratedIntoOneFile(t *testing.T) {
+	const get = `{"methodCalls": [["Mailbox/get", {"ids": null}, "all"]]}`
+	for _, tt := range []struct {
+		name     string
+		requests []string
+		want     string
+	}{
+		{"a request named verify", []string{"verify"}, "verify_gen.go"},
+		{"two requests differing in case", []string{"ListAll", "listAll"}, "listall_gen.go"},
+	} {
+		var requests []*request.Request
+		for _, name := range tt.requests {
+			q, err := request.NewParser(spec.Standard()).Parse(name+request.Extension, []byte(get))
+			if err != nil {
+				t.Fatalf("checking %s: %v", name, err)
+			}
+			requests = append(requests, q)
+		}
+		g := &RequestGenerator{Spec: spec.Standard(), Package: "client", Qualifier: "jmapc.", Requests: requests}
+		_, err := g.Generate()
+		if err == nil || !strings.Contains(err.Error(), tt.want) {
+			t.Errorf("%s: %v, want it refused for %s", tt.name, err, tt.want)
+		}
+	}
+}
+
+// TestARequestMayTakeAnyNameVerifyDoesNotDeclare checks that the table Verify
+// is generated with declares nothing at package level, so a request may be
+// named as the table would otherwise have been.
+func TestARequestMayTakeAnyNameVerifyDoesNotDeclare(t *testing.T) {
+	src := generateOne(t, "requestNeeds", `{"methodCalls": [["Mailbox/get", {"ids": null}, "all"]]}`)
+	if !strings.Contains(src, "func requestNeeds(") {
+		t.Fatalf("the request was not generated:\n%s", src)
 	}
 }

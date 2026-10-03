@@ -54,8 +54,10 @@ jobs:
       parse_json(res.stdout).maxObjectsInGet == outputs.raw.maxObjectsInGet
 
 
-  # Every request the e2e client is generated from is one this server serves,
-  # so the generated Verify has nothing to report.
+  # SendReadReceipt uses MDN, and the rest only what this server serves. What
+  # Verify has to report follows from the session fetched directly: nothing
+  # where it advertises MDN, and SendReadReceipt alone where it does not, as
+  # Stalwart 0.16 does not.
   - name: Verify every request through jmapc
     uses: shell
     with:
@@ -64,7 +66,15 @@ jobs:
         JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
         JMAPC_E2E_USER: "alice@{{vars.domain}}"
         JMAPC_E2E_PASSWORD: "{{vars.alice_password}}"
-    test: res.code == 0 && len(parse_json(res.stdout).problems) == 0
+    test: |
+      res.code == 0 &&
+      outputs.raw.capabilities contains '"urn:ietf:params:jmap:mdn"' &&
+        len(parse_json(res.stdout).problems) == 0 ||
+      res.code == 0 &&
+      !(outputs.raw.capabilities contains '"urn:ietf:params:jmap:mdn"') &&
+        len(parse_json(res.stdout).problems) == 1 &&
+        parse_json(res.stdout).problems[0].request == 'SendReadReceipt' &&
+        parse_json(res.stdout).problems[0].error contains 'urn:ietf:params:jmap:mdn'
 - name: Mail delivered over SMTP, found through jmapc
   steps:
   # The subject carries the run id, and probe appends a tracking id of its
