@@ -125,34 +125,34 @@ func TestGenerateNamedPropertySetsInEveryLanguage(t *testing.T) {
 	}
 }
 
-func TestCheckReportsTheSetsItRead(t *testing.T) {
+func TestValidateReportsTheSetsItRead(t *testing.T) {
 	dir := workspace(t, map[string]string{
 		"requests/properties.json":      emailSets,
 		"requests/ListEmails.jmap.json": listEmails,
 	})
-	out, _, err := capture(t, []string{"check", "-requests", filepath.Join(dir, "requests")})
+	out, _, err := capture(t, []string{"validate", "-requests", filepath.Join(dir, "requests")})
 	if err != nil {
 		t.Fatalf("check: %v", err)
 	}
-	if !strings.Contains(out, "checked 1 request and 2 sets of properties") {
+	if !strings.Contains(out, "validated 1 request and 2 sets of properties") {
 		t.Errorf("check said %q, want it to count the sets as well", out)
 	}
 }
 
-func TestCheckReportsAProblemInTheSets(t *testing.T) {
+func TestValidateReportsAProblemInTheSets(t *testing.T) {
 	dir := workspace(t, map[string]string{
 		"requests/properties.json":      `{"EmailSummary": {"type": "Email", "properties": ["id", "subjcet"]}}`,
 		"requests/ListEmails.jmap.json": listEmails,
 	})
-	_, errOut, err := capture(t, []string{"check", "-requests", filepath.Join(dir, "requests")})
+	_, errOut, err := capture(t, []string{"validate", "-requests", filepath.Join(dir, "requests")})
 	if err == nil {
-		t.Fatal("expected the check to fail, it did not")
+		t.Fatal("expected validate to fail, it did not")
 	}
 	if !strings.Contains(errOut, `Email has no property "subjcet"`) {
-		t.Errorf("the check said %q, want it to point at the property", errOut)
+		t.Errorf("validate said %q, want it to point at the property", errOut)
 	}
 	if !strings.Contains(errOut, "properties.json") {
-		t.Errorf("the check said %q, want it to name the file", errOut)
+		t.Errorf("validate said %q, want it to name the file", errOut)
 	}
 }
 

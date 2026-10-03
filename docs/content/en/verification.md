@@ -51,7 +51,7 @@ Both are generated all the same, since a project may want two names for one
 request. It is worth knowing about because each name produces a set of
 generated types of its own.
 
-`jmapc check` runs the checks without writing anything.
+`jmapc validate` runs the checks without writing anything.
 
 ## What only the server can report
 
@@ -62,8 +62,8 @@ about the server it runs against fails at run time. `-session` checks against a
 running server:
 
 ```
-jmapc check -session jmap.example.com -token $JMAP_TOKEN
-checked 25 requests against https://jmap.example.com/api/, as someone@example.com
+jmapc validate -session jmap.example.com -token $JMAP_TOKEN
+validated 25 requests against https://jmap.example.com/api/, as someone@example.com
 ```
 
 What it reports:

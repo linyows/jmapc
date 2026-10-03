@@ -239,7 +239,7 @@ requests/BadQuery.jmap.json: methodCalls[0].arguments.filter.hasAttachmnt: Email
 	did you mean "hasAttachment"?
 ```
 
-`jmapc check` は何も書き出さずに検証だけを行います。
+`jmapc validate` は何も書き出さずに検証だけを行います。
 `-session` を付けると、稼働中のサーバにしか分からないこと、つまりサーバが広告するケイパビリティ、保持するアカウント、一度のリクエストに受け付ける量も検証されます。
 検証の多くは、jmapc が書き出す JSON Schema を使ってエディタでも動きます。
 検証の一覧は[検証](docs/content/ja/verification.md)にあります。

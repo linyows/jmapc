@@ -74,7 +74,7 @@ const usage = `jmapc generates a typed client from JMAP requests, in Go, Rust or
 
 Usage:
 	jmapc generate [flags]   check the requests and write the generated client
-	jmapc check [flags]      check the requests without writing anything
+	jmapc validate [flags]   check the requests without writing anything
 	jmapc run <request>      send one request to a server and print the response
 	jmapc schema [flags]     write a JSON Schema describing the request files
 	jmapc version            print the version
@@ -92,8 +92,8 @@ generated files that differ from what generating them now would produce. A
 build step runs it to stop where a request was changed and the client was not
 generated again.
 
-The check command also takes -session, to check the requests against a server
-rather than against the specifications alone, with -token or -user to
+The validate command also takes -session, to check the requests against a
+server rather than against the specifications alone, with -token or -user to
 authenticate and -timeout to bound the wait.
 
 The run and schema commands take flags of their own, which "jmapc run -h"
@@ -111,7 +111,7 @@ func run(args []string) error {
 	}
 	command := args[0]
 	switch command {
-	case "generate", "check":
+	case "generate", "validate":
 	case "run":
 		return runRequest(args[1:])
 	case "schema":
@@ -147,10 +147,10 @@ func run(args []string) error {
 	// for, and the flags for it are offered only where they mean something.
 	var session, token, user *string
 	var timeout *time.Duration
-	if command == "check" {
+	if command == "validate" {
 		// The session URL is not read from the environment, unlike the
-		// credentials: a check that reaches the network should say so on the
-		// command line rather than because of what is set around it.
+		// credentials: a validation that reaches the network should say so on
+		// the command line rather than because of what is set around it.
 		session = fs.String("session", "", "session URL to check the requests against, or the host to find it under")
 		token = fs.String("token", os.Getenv("JMAP_TOKEN"), "bearer token to authenticate with")
 		user = fs.String("user", os.Getenv("JMAP_USER"), "user:password to authenticate with instead")
@@ -222,11 +222,11 @@ func run(args []string) error {
 	}
 	noteSameRequests(parsed)
 
-	if command == "check" {
+	if command == "validate" {
 		if *session != "" {
-			return checkAgainstServer(catalogue, parsed, *session, *token, *user, *timeout)
+			return validateAgainstServer(catalogue, parsed, *session, *token, *user, *timeout)
 		}
-		fmt.Fprintf(stdout, "checked %s\n", checked(parsed, props))
+		fmt.Fprintf(stdout, "validated %s\n", validated(parsed, props))
 		return nil
 	}
 	if *compare {
@@ -272,9 +272,9 @@ func loadProperties(dir string, catalogue *spec.Spec) (*request.PropertySets, er
 	return request.LoadPropertySets(filepath.Join(dir, request.PropertiesName), catalogue)
 }
 
-// checked reports what a check looked at, counting the sets of properties
-// alongside the requests where the project names any.
-func checked(requests []*request.Request, props *request.PropertySets) string {
+// validated reports what a validation looked at, counting the sets of
+// properties alongside the requests where the project names any.
+func validated(requests []*request.Request, props *request.PropertySets) string {
 	out := plural(len(requests), "request", "requests")
 	if n := len(props.Names()); n > 0 {
 		out += " and " + plural(n, "set of properties", "sets of properties")

@@ -95,11 +95,11 @@ func TestUnknownLanguage(t *testing.T) {
 	}
 }
 
-func TestCheck(t *testing.T) {
+func TestValidate(t *testing.T) {
 	dir := workspace(t, map[string]string{
 		"requests/ListMailboxes.jmap.json": listMailboxes,
 	})
-	if err := run([]string{"check", "-requests", filepath.Join(dir, "requests")}); err != nil {
+	if err := run([]string{"validate", "-requests", filepath.Join(dir, "requests")}); err != nil {
 		t.Fatalf("check: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "client")); !os.IsNotExist(err) {
@@ -107,13 +107,13 @@ func TestCheck(t *testing.T) {
 	}
 }
 
-// TestCheckReportsBadQueries checks that a request that does not hold up stops the
-// run rather than producing a client that cannot work.
-func TestCheckReportsBadQueries(t *testing.T) {
+// TestValidateReportsBadQueries checks that a request that does not hold up
+// stops the run rather than producing a client that cannot work.
+func TestValidateReportsBadQueries(t *testing.T) {
 	dir := workspace(t, map[string]string{
 		"requests/Broken.jmap.json": `{"methodCalls": [["Mailbox/git", {}, "c0"]]}`,
 	})
-	err := run([]string{"check", "-requests", filepath.Join(dir, "requests")})
+	err := run([]string{"validate", "-requests", filepath.Join(dir, "requests")})
 	if err == nil {
 		t.Fatal("expected an error")
 	}
@@ -234,7 +234,7 @@ func TestSchemaIsChecked(t *testing.T) {
 		  "methodCalls": [["Note/get", {"properties": ["id", "titel"]}, "c0"]]
 		}`,
 	})
-	err := run([]string{"check",
+	err := run([]string{"validate",
 		"-schema", filepath.Join(dir, "schema", "notes.json"),
 		"-requests", filepath.Join(dir, "requests"),
 	})
@@ -253,7 +253,7 @@ func TestSchemaErrorsAreReported(t *testing.T) {
 		"schema/broken.json":        `{"capability": "urn:x:y", "types": [{"name": "Email", "properties": []}]}`,
 		"q/ListMailboxes.jmap.json": listMailboxes,
 	})
-	err := run([]string{"check",
+	err := run([]string{"validate",
 		"-schema", filepath.Join(dir, "schema", "broken.json"),
 		"-requests", filepath.Join(dir, "q"),
 	})
@@ -267,7 +267,7 @@ func TestSchemaErrorsAreReported(t *testing.T) {
 
 func TestNoQueries(t *testing.T) {
 	dir := workspace(t, map[string]string{"requests/README.md": "nothing here"})
-	err := run([]string{"check", "-requests", filepath.Join(dir, "requests")})
+	err := run([]string{"validate", "-requests", filepath.Join(dir, "requests")})
 	if err == nil || !strings.Contains(err.Error(), "no .jmap.json files") {
 		t.Errorf("error = %v, want it to say there are no requests", err)
 	}
@@ -309,7 +309,7 @@ func TestSameRequestUnderTwoNames(t *testing.T) {
 		}`,
 	})
 
-	_, errOut, err := capture(t, []string{"check", "-requests", filepath.Join(dir, "requests")})
+	_, errOut, err := capture(t, []string{"validate", "-requests", filepath.Join(dir, "requests")})
 	if err != nil {
 		t.Fatalf("check: %v", err)
 	}

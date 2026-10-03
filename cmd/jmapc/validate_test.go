@@ -41,25 +41,25 @@ func mailServer(t *testing.T, core string) (*httptest.Server, *atomic.Int64) {
 		`{"urn:ietf:params:jmap:mail": "a1"}`)
 }
 
-// TestCheckAgainstAServer covers the checks a build cannot make: what this
+// TestValidateAgainstAServer covers the checks a build cannot make: what this
 // server supports, and how much of it it does at once.
-func TestCheckAgainstAServer(t *testing.T) {
+func TestValidateAgainstAServer(t *testing.T) {
 	dir := workspace(t, map[string]string{"requests/ListMailboxes.jmap.json": listMailboxes})
 	requests := filepath.Join(dir, "requests")
 
 	srv, _ := mailServer(t, `{"maxCallsInRequest": 16}`)
-	out, _, err := capture(t, []string{"check", "-requests", requests, "-session", srv.URL + "/.well-known/jmap"})
+	out, _, err := capture(t, []string{"validate", "-requests", requests, "-session", srv.URL + "/.well-known/jmap"})
 	if err != nil {
 		t.Fatalf("check: %v", err)
 	}
-	if !strings.Contains(out, "checked 1 request against") || !strings.Contains(out, "as someone") {
+	if !strings.Contains(out, "validated 1 request against") || !strings.Contains(out, "as someone") {
 		t.Errorf("check said %q, want it to name the server and the user", out)
 	}
 }
 
-// TestCheckReportsWhatTheServerWouldRefuse checks a request that is right about
-// JMAP and wrong about the server in front of it.
-func TestCheckReportsWhatTheServerWouldRefuse(t *testing.T) {
+// TestValidateReportsWhatTheServerWouldRefuse checks a request that is right
+// about JMAP and wrong about the server in front of it.
+func TestValidateReportsWhatTheServerWouldRefuse(t *testing.T) {
 	dir := workspace(t, map[string]string{"requests/ListMailboxes.jmap.json": listMailboxes})
 	requests := filepath.Join(dir, "requests")
 
@@ -67,9 +67,9 @@ func TestCheckReportsWhatTheServerWouldRefuse(t *testing.T) {
 		`{"urn:ietf:params:jmap:core": {}}`,
 		`{"a1": {"name": "someone"}}`,
 		`{}`)
-	_, problems, err := capture(t, []string{"check", "-requests", requests, "-session", srv.URL + "/.well-known/jmap"})
+	_, problems, err := capture(t, []string{"validate", "-requests", requests, "-session", srv.URL + "/.well-known/jmap"})
 	if err == nil {
-		t.Fatal("expected the check to fail")
+		t.Fatal("expected validate to fail")
 	}
 	if !strings.Contains(err.Error(), "the server would not accept") {
 		t.Errorf("err = %v", err)
@@ -79,24 +79,24 @@ func TestCheckReportsWhatTheServerWouldRefuse(t *testing.T) {
 	}
 }
 
-// TestCheckReachesNothingWithoutBeingAsked checks that a check stays a local
-// check unless the command line says otherwise. The credentials are read from
+// TestValidateReachesNothingWithoutBeingAsked checks that validating stays local
+// unless the command line says otherwise. The credentials are read from
 // the environment, but the server is not: a build that reaches the network
 // because of what is set around it is a build that fails somewhere it has
 // never been told about.
-func TestCheckReachesNothingWithoutBeingAsked(t *testing.T) {
+func TestValidateReachesNothingWithoutBeingAsked(t *testing.T) {
 	dir := workspace(t, map[string]string{"requests/ListMailboxes.jmap.json": listMailboxes})
 	srv, hits := mailServer(t, `{}`)
 	t.Setenv("JMAP_SESSION_URL", srv.URL+"/.well-known/jmap")
 
-	out, _, err := capture(t, []string{"check", "-requests", filepath.Join(dir, "requests")})
+	out, _, err := capture(t, []string{"validate", "-requests", filepath.Join(dir, "requests")})
 	if err != nil {
 		t.Fatalf("check: %v", err)
 	}
-	if !strings.Contains(out, "checked 1 request\n") {
+	if !strings.Contains(out, "validated 1 request\n") {
 		t.Errorf("check said %q", out)
 	}
 	if n := hits.Load(); n != 0 {
-		t.Errorf("the check asked the server %d times without being told to", n)
+		t.Errorf("validate asked the server %d times without being told to", n)
 	}
 }
