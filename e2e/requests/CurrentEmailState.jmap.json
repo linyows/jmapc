@@ -1,0 +1,10 @@
+{
+  "_doc": "CurrentEmailState returns the state of the emails in the account, without fetching any of them, for a later Email/changes to start from.",
+
+  "methodCalls": [
+    ["Email/get", {
+      "ids": [],
+      "properties": ["id"]
+    }, "state"]
+  ]
+}

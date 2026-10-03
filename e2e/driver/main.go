@@ -15,6 +15,9 @@
 //	driver find-emails -subject <phrase>
 //	driver import-email -subject <subject>
 //	driver blob -data <content> -from <offset> -length <octets>
+//	driver state
+//	driver changes -since <state> -max <changes>
+//	driver watch -since <state> -subject <phrase> -ready <file>
 package main
 
 import (
@@ -77,6 +80,25 @@ func run(args []string) error {
 			return err
 		}
 		return blob(ctx, c, *data, *from, *length)
+	case "state":
+		return state(ctx, c)
+	case "changes":
+		fs := flag.NewFlagSet("changes", flag.ContinueOnError)
+		since := fs.String("since", "", "state to read the changes since")
+		max := fs.Uint("max", 0, "most changes to ask for in one request")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		return changes(ctx, c, *since, *max)
+	case "watch":
+		fs := flag.NewFlagSet("watch", flag.ContinueOnError)
+		since := fs.String("since", "", "state to watch from")
+		subject := fs.String("subject", "", "phrase the subject of the email to wait for contains")
+		ready := fs.String("ready", "", "file to create once the watch is following pushes")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		return watch(ctx, c, *since, *subject, *ready)
 	default:
 		return fmt.Errorf("unknown subcommand %q", args[0])
 	}
@@ -279,6 +301,88 @@ func download(ctx context.Context, c *jmapc.Client, account, id jmapc.ID, opts *
 		return nil, err
 	}
 	return &downloaded{content: string(content), Range: b.Range}, nil
+}
+
+// state prints the current state of the emails in the account, through the
+// client generated from requests/CurrentEmailState.jmap.json.
+func state(ctx context.Context, c *jmapc.Client) error {
+	resp, err := client.CurrentEmailState(ctx, c)
+	if err != nil {
+		return err
+	}
+	return emit(map[string]any{"state": resp.State.State})
+}
+
+// changes follows Email/changes from since until the server reports no more,
+// asking for at most max changes each time, through the client generated from
+// requests/SyncEmails.jmap.json. It prints the subjects of the emails created
+// and how many requests it took, which is more than one where the server had
+// more changes than max.
+func changes(ctx context.Context, c *jmapc.Client, since string, max uint) error {
+	if since == "" || max == 0 {
+		return errors.New("changes needs -since and a -max above zero")
+	}
+	var subjects []string
+	requests := 0
+	for {
+		resp, err := client.SyncEmails(ctx, c, client.SyncEmailsParams{SinceState: since, MaxChanges: jmapc.UnsignedInt(max)})
+		if err != nil {
+			return err
+		}
+		requests++
+		for _, e := range resp.Created.List {
+			if e.Subject != nil {
+				subjects = append(subjects, *e.Subject)
+			}
+		}
+		since = resp.Changes.NewState
+		if !resp.Changes.HasMoreChanges {
+			break
+		}
+	}
+	slices.Sort(subjects)
+	return emit(map[string]any{"requests": requests, "created": subjects, "newState": since})
+}
+
+// errFound stops the watch once the email it waits for has arrived.
+var errFound = errors.New("found")
+
+// watch follows pushes from since, through the Watch function generated from
+// requests/SyncEmails.jmap.json, until an email whose subject contains the
+// phrase is created, and prints it. Watch runs the request once as soon as the
+// event stream is open, to catch up, and ready is created then, so that
+// whatever creates the email can wait until the push would reach this side.
+//
+// The command is bounded by the context: if no push brings the email, it
+// fails rather than waiting for ever.
+func watch(ctx context.Context, c *jmapc.Client, since, subject, ready string) error {
+	if since == "" || subject == "" || ready == "" {
+		return errors.New("watch needs -since, -subject and -ready")
+	}
+	runs := 0
+	var found map[string]any
+	err := client.SyncEmailsWatch(ctx, c, client.SyncEmailsParams{SinceState: since, MaxChanges: 50}, func(ctx context.Context, r *client.SyncEmailsResult) error {
+		runs++
+		if runs == 1 {
+			if err := os.WriteFile(ready, nil, 0o644); err != nil {
+				return err
+			}
+		}
+		for _, e := range r.Created.List {
+			if e.Subject != nil && strings.Contains(*e.Subject, subject) {
+				found = map[string]any{"id": e.ID, "subject": *e.Subject, "runs": runs}
+				return errFound
+			}
+		}
+		return nil
+	})
+	if !errors.Is(err, errFound) {
+		if err == nil {
+			err = errors.New("the watch ended without the email")
+		}
+		return err
+	}
+	return emit(found)
 }
 
 // emit writes v to stdout as one line of JSON.

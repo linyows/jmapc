@@ -239,3 +239,149 @@ jobs:
       res.code == 206 && outputs.blob.rangeError == '' && res.body == outputs.blob.part &&
         outputs.blob.part == ('blob ' + vars.run_id + ' 0123456789')[5:13] ||
       res.code == 200 && outputs.blob.part == '' && outputs.blob.rangeError contains 'ignored the range'
+
+- name: Changes followed through jmapc, a few at a time
+  steps:
+  - name: Read the state through jmapc
+    id: before_changes
+    uses: shell
+    with:
+      cmd: "{{vars.driver}} state"
+      env:
+        JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
+        JMAPC_E2E_USER: "alice@{{vars.domain}}"
+        JMAPC_E2E_PASSWORD: "{{vars.alice_password}}"
+    test: res.code == 0 && parse_json(res.stdout).state != ""
+    outputs:
+      since: parse_json(res.stdout).state
+
+  - name: Deliver three messages to alice
+    uses: smtp
+    with:
+      addr: "{{vars.smtp}}"
+      myhostname: mail.remote.test
+      from: someone@remote.test
+      to: "alice@{{vars.domain}}"
+      subject: "changed {{vars.run_id}}"
+      session: 1
+      message: 3
+    test: res.code == 0 && res.sent == 3
+
+  # Asking for one change at a time makes the server report more, and jmapc
+  # has to follow hasMoreChanges to find all three. Other scenarios deliver
+  # to the same inbox at the same time, so only the subjects of this one are
+  # counted.
+  - name: Follow the changes through the generated client
+    uses: shell
+    with:
+      cmd: "{{vars.driver}} changes -since '{{outputs.before_changes.since}}' -max 1"
+      env:
+        JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
+        JMAPC_E2E_USER: "alice@{{vars.domain}}"
+        JMAPC_E2E_PASSWORD: "{{vars.alice_password}}"
+    retry: {max_attempts: 20, interval: 1s}
+    test: |
+      res.code == 0 &&
+      count(parse_json(res.stdout).created ?? [], {# startsWith 'changed ' + vars.run_id}) == 3 &&
+      parse_json(res.stdout).requests >= 3
+
+  - name: Read alice's mail account for the direct request
+    id: changes_account
+    uses: http
+    with:
+      url: "{{vars.base}}"
+      get: /.well-known/jmap
+      headers:
+        authorization: "Basic {{encode_base64('alice@' + vars.domain + ':' + vars.alice_password)}}"
+    test: res.code == 200
+    outputs:
+      accountId: res.body.primaryAccounts['urn:ietf:params:jmap:mail']
+
+  - name: See the server page the same changes directly
+    uses: http
+    with:
+      url: "{{vars.base}}"
+      post: /jmap/
+      headers:
+        authorization: "Basic {{encode_base64('alice@' + vars.domain + ':' + vars.alice_password)}}"
+        content-type: application/json
+      body:
+        using: ["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail"]
+        methodCalls:
+        - [Email/changes, {accountId: "{{outputs.changes_account.accountId}}", sinceState: "{{outputs.before_changes.since}}", maxChanges: 1}, changes]
+    # One change at most, which may be an update rather than a creation: the
+    # IMAP scenario marks a message read in the same inbox at the same time.
+    test: |
+      res.code == 200 &&
+      res.body.methodResponses[0][0] == 'Email/changes' &&
+      res.body.methodResponses[0][1].hasMoreChanges == true &&
+      len(res.body.methodResponses[0][1].created) +
+        len(res.body.methodResponses[0][1].updated) +
+        len(res.body.methodResponses[0][1].destroyed) == 1
+
+# Every other scenario works in alice's account, at the same time as this
+# one, and a push for any of their changes would run the watch again and find
+# the message whether or not its own push arrived. Bob's account has nothing
+# else happening in it, so the delivery below is the only change a push can
+# report there.
+- name: A push followed through jmapc's Watch
+  steps:
+  - name: Read the state through jmapc
+    id: before_push
+    uses: shell
+    with:
+      cmd: "{{vars.driver}} state"
+      env:
+        JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
+        JMAPC_E2E_USER: "bob@{{vars.domain}}"
+        JMAPC_E2E_PASSWORD: "{{vars.bob_password}}"
+    test: res.code == 0 && parse_json(res.stdout).state != ""
+    outputs:
+      since: parse_json(res.stdout).state
+
+  # The watch runs in the background, and creates the ready file once its
+  # event stream is open. Watch does not poll, so an email it reports reached
+  # it by push. probe gives back the process and the file its output goes to.
+  - name: Start watching through the generated client
+    id: watching
+    uses: shell
+    with:
+      cmd: "{{vars.driver}} watch -since '{{outputs.before_push.since}}' -subject 'pushed {{vars.run_id}}' -ready '{{vars.work}}/watch.ready'"
+      background: true
+      env:
+        JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
+        JMAPC_E2E_USER: "bob@{{vars.domain}}"
+        JMAPC_E2E_PASSWORD: "{{vars.bob_password}}"
+    test: res.pid > 0 && res.log != ""
+    outputs:
+      log: res.log
+
+  - name: Wait until the watch follows pushes
+    uses: shell
+    with:
+      cmd: "test -f '{{vars.work}}/watch.ready'"
+    retry: {max_attempts: 20, interval: 500ms}
+    test: res.code == 0
+
+  - name: Deliver to bob on port 25
+    uses: smtp
+    with:
+      addr: "{{vars.smtp}}"
+      myhostname: mail.remote.test
+      from: someone@remote.test
+      to: "bob@{{vars.domain}}"
+      subject: "pushed {{vars.run_id}}"
+    test: res.code == 0 && res.sent == 1
+
+  # The first run of the request is the catch-up when the stream opens, so the
+  # email has to arrive in a later one, which only a push starts.
+  - name: See the watch report it
+    uses: shell
+    with:
+      cmd: "cat '{{outputs.watching.log}}'"
+    retry: {max_attempts: 20, interval: 1s}
+    test: |
+      res.code == 0 &&
+      res.stdout contains '"subject"' &&
+      parse_json(res.stdout).subject startsWith 'pushed ' + vars.run_id &&
+      parse_json(res.stdout).runs >= 2
