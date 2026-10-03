@@ -278,7 +278,7 @@ func (c *Client) Do(ctx context.Context, r *Request) (*Response, error) {
 
 	apiURL, err := c.resolveAPIURL(ctx, r)
 	if err != nil {
-		answered(err, nil)
+		answered(nil, err, nil)
 		return nil, err
 	}
 
@@ -287,7 +287,7 @@ func (c *Client) Do(ctx context.Context, r *Request) (*Response, error) {
 	first, parts := c.planSplit(r)
 	resp, err := c.post(ctx, apiURL, first)
 	if err != nil {
-		answered(err, nil)
+		answered(nil, err, nil)
 		return nil, err
 	}
 	resp.req = r
@@ -296,7 +296,7 @@ func (c *Client) Do(ctx context.Context, r *Request) (*Response, error) {
 	for _, part := range parts {
 		answer, err := c.post(ctx, apiURL, part.request)
 		if err != nil {
-			answered(err, nil)
+			answered(nil, err, nil)
 			return nil, err
 		}
 		if err := joinSplit(resp, answer, part.chunks); err != nil {
@@ -306,10 +306,10 @@ func (c *Client) Do(ctx context.Context, r *Request) (*Response, error) {
 
 	errs := resp.Errors()
 	if len(errs) > 0 {
-		answered(nil, errs)
+		answered(resp, nil, errs)
 		return resp, errors.Join(append(split, errs)...)
 	}
-	answered(nil, nil)
+	answered(resp, nil, nil)
 	if len(split) > 0 {
 		return resp, errors.Join(split...)
 	}

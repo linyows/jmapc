@@ -188,5 +188,38 @@ obs := &jmapc.Observer{
 }
 ```
 
+### Bodies
+
+The hooks report which methods were called, not what they said. A JMAP body
+holds the subjects, addresses and text of the messages a request reads and
+writes, so it is reported only where `Redact` is set, and only after passing
+through it:
+
+```go
+obs := jmapc.SlogObserver(logger)
+obs.Redact = jmapc.RedactContent()
+```
+
+`RequestInfo.Body` is then the request as the caller made it, and
+`ResponseInfo.Body` the response as the caller received it, with a `/get` sent
+in several parts joined into one. `SlogObserver` writes them as `request_body`
+and `response_body`.
+
+`RedactContent` keeps the shape of the exchange and withholds the content. It
+keeps method names, call ids, `using`, numbers and booleans, ids and states,
+the property names a call selects, back references, and every key of every
+object; it replaces every other string with `[redacted]`. The body is written
+again from what was read, so the keys of each object come out sorted:
+
+```
+{"methodResponses":[["Email/get",{"accountId":"a1","list":[
+  {"from":[{"email":"[redacted]","name":"[redacted]"}],"id":"e1",
+   "mailboxIds":{"mb1":true},"subject":"[redacted]","threadId":"t1"}
+],"state":"s9"},"fetch"]],"sessionState":"sess1"}
+```
+
+`RedactContent("subject")` keeps the subjects as well, and `KeepBodies` keeps
+everything, which is for development rather than for a log a service writes.
+
 `Observer` exists only in the Go client. In Rust and TypeScript, the
 equivalent belongs in the transport.

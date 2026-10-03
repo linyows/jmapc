@@ -173,5 +173,35 @@ obs := &jmapc.Observer{
 }
 ```
 
+### 本文
+
+フックが報告するのは、どのメソッドを呼んだかであって、何を送り何を受け取ったかではありません。
+JMAPの本文には、リクエストが読み書きするメールの件名、アドレス、本文が入っています。
+そのため本文は、`Redact`を設定したときだけ、それを通してから報告します。
+
+```go
+obs := jmapc.SlogObserver(logger)
+obs.Redact = jmapc.RedactContent()
+```
+
+設定すると、`RequestInfo.Body`には呼び出し側が作ったリクエストが、`ResponseInfo.Body`には呼び出し側が受け取った応答が入ります。
+複数回に分けて送った`/get`は、1つの応答にまとめた形で入ります。
+`SlogObserver`は、これらを`request_body`と`response_body`として出力します。
+
+`RedactContent`は、やりとりの形を残し、中身を伏せます。
+残すのは、メソッド名、call id、`using`、数値と真偽値、idと状態、呼び出しが選ぶプロパティ名、バックリファレンス、そしてあらゆるオブジェクトのキーです。
+それ以外の文字列はすべて`[redacted]`に置き換えます。
+読み取った内容から書き直すので、各オブジェクトのキーは並べ替わります。
+
+```
+{"methodResponses":[["Email/get",{"accountId":"a1","list":[
+  {"from":[{"email":"[redacted]","name":"[redacted]"}],"id":"e1",
+   "mailboxIds":{"mb1":true},"subject":"[redacted]","threadId":"t1"}
+],"state":"s9"},"fetch"]],"sessionState":"sess1"}
+```
+
+`RedactContent("subject")`とすれば件名も残します。
+`KeepBodies`はすべてを残しますが、これは開発中に使うもので、サービスが書き出すログに使うものではありません。
+
 `Observer`はGoのクライアントにのみあります。
 RustとTypeScriptでは、同じ処理をトランスポートの実装に書きます。
