@@ -5,7 +5,7 @@ the second regenerates everything the catalogue produces, and both are what CI
 runs first.
 
 ```
-go test ./...        # everything, including the end-to-end tests
+go test ./...        # everything that runs without a server
 go generate ./...    # regenerate the runtime types and every example client
 ```
 
@@ -25,6 +25,26 @@ runs one, over a schema written from the catalogue as it stands.
 
 The generator is run from source here, not through `go tool`, because this is
 the repository that defines it.
+
+The tests above run the generated code against stubs, which answer the way
+the tests expect a server to. `e2e/` runs it against a real one, Stalwart, in a
+container:
+
+```
+e2e/run.sh
+```
+
+It needs docker, Go and [probe](https://github.com/linyows/probe) on the PATH.
+It starts the container, takes Stalwart out of bootstrap mode, creates two
+accounts, and runs the scenarios in `e2e/workflow.yml`. Each scenario does
+something through jmapc and checks it over a path that does not go through
+jmapc: the session jmapc reads against the one fetched directly, a message
+delivered over SMTP against what the generated client finds. The jmapc side is
+`e2e/driver`, which calls the client generated from `e2e/requests` and prints
+what came back as JSON. The container is removed afterwards unless
+`E2E_KEEP=1` is set. The Stalwart release is pinned in `e2e/run.sh`; a new
+minor version is a change made there on purpose, since Stalwart moves its
+settings between them.
 
 The runtime types and the example client are committed, and a test compares
 them against what the catalogue produces now, so a change to the data model

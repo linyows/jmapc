@@ -1,0 +1,105 @@
+# The scenarios. Each one does something through jmapc and checks it over a
+# path that does not go through jmapc, or the other way round, so that a
+# mistake in what jmapc sends cannot be hidden by the same mistake in what it
+# reads back.
+name: jmapc against Stalwart
+
+jobs:
+- name: The session as jmapc reads it
+  defaults:
+    http:
+      url: "{{vars.base}}"
+      headers:
+        authorization: "Basic {{encode_base64('alice@' + vars.domain + ':' + vars.alice_password)}}"
+  steps:
+  - name: Fetch the session directly
+    id: raw
+    uses: http
+    with:
+      get: /.well-known/jmap
+    test: res.code == 200
+    outputs:
+      username: res.body.username
+      apiUrl: res.body.apiUrl
+      eventSourceUrl: res.body.eventSourceUrl
+      mailAccountId: res.body.primaryAccounts['urn:ietf:params:jmap:mail']
+      capabilities: toJSON(sort(keys(res.body.capabilities)))
+      maxCallsInRequest: res.body.capabilities['urn:ietf:params:jmap:core'].maxCallsInRequest
+
+  - name: Fetch it through jmapc
+    uses: shell
+    with:
+      cmd: "{{vars.driver}} session"
+      env:
+        JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
+        JMAPC_E2E_USER: "alice@{{vars.domain}}"
+        JMAPC_E2E_PASSWORD: "{{vars.alice_password}}"
+    test: |
+      res.code == 0 &&
+      parse_json(res.stdout).username == outputs.raw.username &&
+      parse_json(res.stdout).apiUrl == outputs.raw.apiUrl &&
+      parse_json(res.stdout).eventSourceUrl == outputs.raw.eventSourceUrl &&
+      parse_json(res.stdout).mailAccountId == outputs.raw.mailAccountId &&
+      toJSON(parse_json(res.stdout).capabilities) == outputs.raw.capabilities &&
+      parse_json(res.stdout).maxCallsInRequest == outputs.raw.maxCallsInRequest
+
+- name: Mail delivered over SMTP, found through jmapc
+  steps:
+  # The subject carries the run id, and probe appends a tracking id of its
+  # own, so the search below matches this delivery and no other.
+  - name: Deliver to alice on port 25
+    uses: smtp
+    with:
+      addr: "{{vars.smtp}}"
+      myhostname: mail.remote.test
+      from: someone@remote.test
+      to: "alice@{{vars.domain}}"
+      subject: "inbound {{vars.run_id}}"
+    test: res.code == 0 && res.sent == 1
+
+  - name: Find it through the generated client
+    id: found
+    uses: shell
+    with:
+      cmd: "{{vars.driver}} find-emails -subject 'inbound {{vars.run_id}}'"
+      env:
+        JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
+        JMAPC_E2E_USER: "alice@{{vars.domain}}"
+        JMAPC_E2E_PASSWORD: "{{vars.alice_password}}"
+    retry: {max_attempts: 20, interval: 1s}
+    test: |
+      res.code == 0 &&
+      parse_json(res.stdout).count == 1 &&
+      parse_json(res.stdout).emails[0].from[0] == 'someone@remote.test' &&
+      parse_json(res.stdout).emails[0].to[0] == 'alice@' + vars.domain &&
+      parse_json(res.stdout).emails[0].mailboxes == 1
+    outputs:
+      id: parse_json(res.stdout).emails[0].id
+
+  # A request written by hand names the account, which jmapc fills in from the
+  # session where a request leaves it out.
+  - name: Read alice's mail account
+    id: account
+    uses: http
+    with:
+      url: "{{vars.base}}"
+      get: /.well-known/jmap
+      headers:
+        authorization: "Basic {{encode_base64('alice@' + vars.domain + ':' + vars.alice_password)}}"
+    test: res.code == 200
+    outputs:
+      id: res.body.primaryAccounts['urn:ietf:params:jmap:mail']
+
+  - name: Find the same email directly
+    uses: http
+    with:
+      url: "{{vars.base}}"
+      post: /jmap/
+      headers:
+        authorization: "Basic {{encode_base64('alice@' + vars.domain + ':' + vars.alice_password)}}"
+        content-type: application/json
+      body:
+        using: ["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail"]
+        methodCalls:
+        - [Email/query, {accountId: "{{outputs.account.id}}", filter: {subject: "inbound {{vars.run_id}}"}}, search]
+    test: res.code == 200 && res.body.methodResponses[0][1].ids == [outputs.found.id]
