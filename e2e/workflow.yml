@@ -21,10 +21,13 @@ jobs:
     outputs:
       username: res.body.username
       apiUrl: res.body.apiUrl
+      downloadUrl: res.body.downloadUrl
+      uploadUrl: res.body.uploadUrl
       eventSourceUrl: res.body.eventSourceUrl
       mailAccountId: res.body.primaryAccounts['urn:ietf:params:jmap:mail']
       capabilities: toJSON(sort(keys(res.body.capabilities)))
       maxCallsInRequest: res.body.capabilities['urn:ietf:params:jmap:core'].maxCallsInRequest
+      maxObjectsInGet: res.body.capabilities['urn:ietf:params:jmap:core'].maxObjectsInGet
 
   - name: Fetch it through jmapc
     uses: shell
@@ -38,10 +41,13 @@ jobs:
       res.code == 0 &&
       parse_json(res.stdout).username == outputs.raw.username &&
       parse_json(res.stdout).apiUrl == outputs.raw.apiUrl &&
+      parse_json(res.stdout).downloadUrl == outputs.raw.downloadUrl &&
+      parse_json(res.stdout).uploadUrl == outputs.raw.uploadUrl &&
       parse_json(res.stdout).eventSourceUrl == outputs.raw.eventSourceUrl &&
       parse_json(res.stdout).mailAccountId == outputs.raw.mailAccountId &&
       toJSON(parse_json(res.stdout).capabilities) == outputs.raw.capabilities &&
-      parse_json(res.stdout).maxCallsInRequest == outputs.raw.maxCallsInRequest
+      parse_json(res.stdout).maxCallsInRequest == outputs.raw.maxCallsInRequest &&
+      parse_json(res.stdout).maxObjectsInGet == outputs.raw.maxObjectsInGet
 
 - name: Mail delivered over SMTP, found through jmapc
   steps:
