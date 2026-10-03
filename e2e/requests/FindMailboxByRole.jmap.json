@@ -1,0 +1,16 @@
+{
+  "_doc": "FindMailboxByRole returns the mailbox that has a role, such as the inbox.",
+
+  "methodCalls": [
+    ["Mailbox/query", {
+      "filter": {"role": "{{role}}"}
+    }, "search"],
+
+    ["Mailbox/get", {
+      "#ids": {"resultOf": "search", "name": "Mailbox/query", "path": "/ids"},
+      "properties": ["id", "name", "role"]
+    }, "fetch"]
+  ],
+
+  "_returns": "fetch"
+}

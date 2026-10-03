@@ -31,7 +31,9 @@ e2e/run.sh
 docker、Go、[probe](https://github.com/linyows/probe)がPATHにある必要があります。
 コンテナを起動し、Stalwartをbootstrap modeから抜けさせ、アカウントを2つ作ってから、`e2e/workflow.yml`のシナリオを実行します。
 各シナリオは、jmapcを通して何かをしたあと、jmapcを通らない経路でそれを確かめます。
-jmapcが読んだsessionを直接取得したものと比べ、SMTPで配送したメールを生成クライアントが見つけられるかを確かめる、といった具合です。
+jmapcが読んだsessionを直接取得したものと比べ、SMTPで配送したメールを生成クライアントが見つけられるかを確かめます。
+jmapcで取り込んだメールのフラグをIMAPで読み、IMAPで付けたフラグをjmapcで読みます。
+jmapcでアップロードしたblobを、直接ダウンロードしたものと比べます。
 jmapc側を受け持つのは`e2e/driver`で、`e2e/requests`から生成したクライアントを呼び、結果をJSONで出力します。
 
 準備では、サーバの設定とドライバーのビルドを並行して行います。
@@ -64,6 +66,17 @@ flowchart LR
         job_1_step1["Find it through the generated client"]
         job_1_step2["Read alice's mail account"]
         job_1_step3["Find the same email directly"]
+    end
+    subgraph job_2["Mail imported through jmapc, read over IMAP"]
+        job_2_step0["Import a flagged message through the generated client"]
+        job_2_step1["Find it in the inbox over IMAP, flagged and unread"]
+        job_2_step2["Mark it read over IMAP"]
+        job_2_step3["See it read through the generated client"]
+    end
+    subgraph job_3["A blob uploaded through jmapc, downloaded directly"]
+        job_3_step0["Upload and download it through jmapc"]
+        job_3_step1["Download the whole of it directly"]
+        job_3_step2["Ask for the same range directly"]
     end
 ```
 
