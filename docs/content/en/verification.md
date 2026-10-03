@@ -98,9 +98,9 @@ triggered by whatever the environment happens to hold.
 
 `-session` checks against whichever server it is pointed at when it runs. The
 server a program meets in production may not be that one, and a request on a
-path the program rarely takes is checked only when the path is taken. The Go
-client is generated with a `Verify` function, which checks every request in
-its package against the session the client holds:
+path the program rarely takes is checked only when the path is taken. The
+client is generated with a function that checks every request in its package
+against the session the client holds, in each of the three languages:
 
 ```go
 if err := client.Verify(ctx, c); err != nil {
@@ -108,12 +108,24 @@ if err := client.Verify(ctx, c); err != nil {
 }
 ```
 
+```ts
+import { verify } from "./client/verify.js"
+
+await verify(client) // throws VerifyErrors
+```
+
+```rust
+jmap_client::verify(&client).await?; // Error::Verify
+```
+
 It reports a capability a request declares and the server does not advertise,
 a primary account the session does not name for a request that leaves the
 account to it, a primary account that does not support the capability it is
 used for, and more calls than `maxCallsInRequest`: what a request is refused
 for before it is sent, for every request at once. Every problem is reported,
-joined, each as a `*jmapc.VerifyError` naming its request:
+joined, each as a `*jmapc.VerifyError` naming its request and holding the
+error sending the request would have failed with — `VerifyErrors` in
+TypeScript, `Error::Verify` in Rust:
 
 ```
 jmapc: SendReadReceipt would be refused: server does not support urn:ietf:params:jmap:mdn
@@ -125,8 +137,8 @@ parameters, so it reports less than `-session` does: the number of records a
 call names and the size of a request are known only once it is sent. A request
 or a set of properties cannot be named `Verify`, since the function is
 generated under that name, and a request is refused where its file would be
-one another file is generated into, such as `verify_gen.go` for a request
-named `verify`.
+one another file is generated into: `verify_gen.go` for a request named
+`verify`, `client.ts` for one named `Client`, `mod.rs` for one named `Mod`.
 
 ## Editor support
 

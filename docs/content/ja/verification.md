@@ -76,8 +76,8 @@ idのリストを表すパラメータは何個にでもなり得るので、そ
 `-session`が検証するのは、実行したときに指定したサーバです。
 プログラムが本番で相手にするサーバは、それと同じとは限りません。
 また、まれにしか通らない経路のリクエストは、その経路を通るまで検証されません。
-Goのクライアントには`Verify`関数が生成されます。
-パッケージ内のすべてのリクエストを、クライアントが持つセッションに対して検証する関数です。
+クライアントには、パッケージ内のすべてのリクエストを、クライアントが持つセッションに対して検証する関数が生成されます。
+3つの言語とも同じです。
 
 ```go
 if err := client.Verify(ctx, c); err != nil {
@@ -85,9 +85,21 @@ if err := client.Verify(ctx, c); err != nil {
 }
 ```
 
+```ts
+import { verify } from "./client/verify.js"
+
+await verify(client) // VerifyErrorsを投げる
+```
+
+```rust
+jmap_client::verify(&client).await?; // Error::Verify
+```
+
 報告するのは、リクエストが宣言しているのにサーバが広告していないケイパビリティ、アカウントをセッションに委ねたリクエストのためのプライマリアカウントをセッションが示していないこと、プライマリアカウントがそのケイパビリティに対応していないこと、`maxCallsInRequest`を超える呼び出しです。
 送る前に拒否される理由を、すべてのリクエストについて一度に確かめます。
-見つかった問題はすべてまとめて返し、それぞれがリクエストの名前を持つ`*jmapc.VerifyError`です。
+見つかった問題はすべてまとめて返します。
+それぞれがリクエストの名前と、そのリクエストを送ったときに起きるはずのエラーを持つ`*jmapc.VerifyError`です。
+TypeScriptでは`VerifyErrors`、Rustでは`Error::Verify`になります。
 
 ```
 jmapc: SendReadReceipt would be refused: server does not support urn:ietf:params:jmap:mdn
@@ -99,7 +111,7 @@ jmapc: VerifiedSignatures would be refused: server does not support urn:ietf:par
 呼び出しが指すレコードの数やリクエストのサイズは、送るときまで分からないからです。
 関数がその名前で生成されるので、リクエストやプロパティの集合に`Verify`という名前は付けられません。
 また、生成先のファイルがほかのファイルと重なるリクエストも拒否します。
-たとえば`verify`という名前のリクエストは`verify_gen.go`に生成されることになるので、拒否されます。
+`verify`という名前のリクエストは`verify_gen.go`に、`Client`は`client.ts`に、`Mod`は`mod.rs`に生成されることになるので、拒否されます。
 
 ## エディタ対応
 

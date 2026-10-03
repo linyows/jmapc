@@ -13,8 +13,10 @@ use jmapc_example::jmap_client::file_into_new_mailbox::{
     file_into_new_mailbox, FileIntoNewMailboxParams, FileIntoNewMailboxResult,
 };
 use jmapc_example::jmap_client::search_emails::{search_emails_pages, SearchEmailsParams};
+use jmapc_example::jmap_client::verify::verify;
 use jmapc_example::jmap_client::{
-    Auth, Client, ClientOptions, Error, HttpRequest, HttpResponse, Transport, TransportError,
+    Auth, Client, ClientOptions, Error, HttpRequest, HttpResponse, RequestNeeds, Transport,
+    TransportError,
 };
 
 /// A transport that records what it was given and answers from a queue, so a
@@ -369,4 +371,111 @@ fn the_calls_that_ran_are_on_the_error() {
         Default::default(),
         "the call the server would not run should be left at its default"
     );
+}
+
+/// A session offering mail and submission, with an account that supports only
+/// mail, and two calls to a request.
+fn narrow_session() -> serde_json::Value {
+    json!({
+        "apiUrl": "https://example.com/jmap/api",
+        "accounts": {"acct1": {"name": "someone", "accountCapabilities": {"urn:ietf:params:jmap:mail": {}}}},
+        "primaryAccounts": {"urn:ietf:params:jmap:mail": "acct1", "urn:ietf:params:jmap:submission": "acct1"},
+        "capabilities": {
+            "urn:ietf:params:jmap:core": {"maxCallsInRequest": 2},
+            "urn:ietf:params:jmap:mail": {},
+            "urn:ietf:params:jmap:submission": {},
+        },
+        "username": "someone@example.com",
+        "state": "s1",
+    })
+}
+
+const CORE: &str = "urn:ietf:params:jmap:core";
+const MAIL: &str = "urn:ietf:params:jmap:mail";
+const CONTACTS: &str = "urn:ietf:params:jmap:contacts";
+const SUBMISSION: &str = "urn:ietf:params:jmap:submission";
+
+/// verify reports every request the session shows would be refused, and does
+/// not stop at the first, each with the error sending it would have failed
+/// with.
+#[test]
+fn verify_reports_every_request_the_session_refuses() {
+    let stub = Stub::new(vec![narrow_session()]);
+    let client = Client::new("https://example.com/.well-known/jmap", &stub);
+    let needs = [
+        RequestNeeds {
+            name: "Fine",
+            using: &[CORE, MAIL],
+            calls: 2,
+            primary_accounts: &[MAIL],
+        },
+        RequestNeeds {
+            name: "Contacts",
+            using: &[CORE, CONTACTS],
+            calls: 1,
+            primary_accounts: &[CONTACTS],
+        },
+        RequestNeeds {
+            name: "TooMany",
+            using: &[CORE, MAIL],
+            calls: 3,
+            primary_accounts: &[],
+        },
+        RequestNeeds {
+            name: "NoPrimary",
+            using: &[CORE],
+            calls: 1,
+            primary_accounts: &[CORE],
+        },
+        RequestNeeds {
+            name: "Submit",
+            using: &[CORE, SUBMISSION],
+            calls: 1,
+            primary_accounts: &[SUBMISSION],
+        },
+    ];
+    let problems = match block_on(client.verify(&needs)) {
+        Err(Error::Verify(problems)) => problems,
+        other => panic!("verify returned {other:?}, want Error::Verify"),
+    };
+    let named: Vec<&str> = problems.iter().map(|p| p.request.as_str()).collect();
+    assert_eq!(named, ["Contacts", "TooMany", "NoPrimary", "Submit"]);
+    match &problems[0].error {
+        Error::Request(e) => {
+            assert_eq!(e.r#type, "urn:ietf:params:jmap:error:unknownCapability")
+        }
+        other => panic!("Contacts: {other:?}, want an unknown capability"),
+    }
+    match &problems[1].error {
+        Error::Request(e) => assert_eq!(e.limit.as_deref(), Some("maxCallsInRequest")),
+        other => panic!("TooMany: {other:?}, want the call limit"),
+    }
+    match &problems[2].error {
+        Error::Session(what) => assert!(what.contains("no primary account"), "{what}"),
+        other => panic!("NoPrimary: {other:?}, want the error primary_account_id returns"),
+    }
+    match &problems[3].error {
+        Error::Method(e) => assert_eq!(e.errors[0].r#type, "accountNotSupportedByMethod"),
+        other => panic!("Submit: {other:?}, want accountNotSupportedByMethod"),
+    }
+    let message = Error::Verify(problems).to_string();
+    assert!(
+        message.contains("jmapc: Contacts would be refused: server does not support")
+            && message.contains("jmapc: NoPrimary: session has no primary account"),
+        "{message}"
+    );
+}
+
+/// The generated verify checks every request in the directory, and the
+/// session here offers mail and nothing for calendars.
+#[test]
+fn generated_verify_checks_every_request() {
+    let stub = Stub::new(vec![narrow_session()]);
+    let client = Client::new("https://example.com/.well-known/jmap", &stub);
+    let problems = match block_on(verify(&client)) {
+        Err(Error::Verify(problems)) => problems,
+        other => panic!("verify returned {other:?}, want Error::Verify"),
+    };
+    assert!(problems.iter().any(|p| p.request == "Agenda"));
+    assert!(!problems.iter().any(|p| p.request == "ListInboxEmails"));
 }

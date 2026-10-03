@@ -29,6 +29,7 @@ pub mod send_read_receipt;
 pub mod sync_emails;
 pub mod update_contact_email;
 pub mod verified_signatures;
+pub mod verify;
 pub mod what_uses_blob;
 
 /// The runtime, brought up to the top so that a caller names the client
@@ -37,8 +38,8 @@ pub mod what_uses_blob;
 /// want a few of them by name.
 pub use client::{
     decode, Auth, Client, ClientOptions, Error, HttpRequest, HttpResponse, Invocation, MethodError,
-    MethodErrors, Request, RequestError, Response, ResultReference, Session, SetErrors, SetFailure,
-    Transport, TransportError,
+    MethodErrors, Request, RequestError, RequestNeeds, Response, ResultReference, Session,
+    SetErrors, SetFailure, Transport, TransportError, VerifyError,
 };
 
 pub use agenda::*;
@@ -66,4 +67,5 @@ pub use send_read_receipt::*;
 pub use sync_emails::*;
 pub use update_contact_email::*;
 pub use verified_signatures::*;
+pub use verify::*;
 pub use what_uses_blob::*;

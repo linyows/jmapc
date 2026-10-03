@@ -1,6 +1,7 @@
 package rust
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -65,16 +66,44 @@ func (g *RequestGenerator) Generate() (map[string][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := make(map[string][]byte, len(plans)+2)
-	modules := make([]string, 0, len(plans))
+	out := make(map[string][]byte, len(plans)+3)
+	// from records what each module was generated from, so that two things
+	// generated into one are refused rather than one silently replacing the
+	// other. A module is the request's name in snake_case, so "FooBar" and
+	// "fooBar" are two requests and one module, and the runtime's modules are
+	// taken before any request is.
+	from := make(map[string]string, len(plans)+5)
+	for _, m := range RuntimeModules {
+		from[m] = "the runtime"
+	}
+	add := func(module, what string, src []byte) error {
+		if earlier, taken := from[module]; taken {
+			return fmt.Errorf("gen: %s and %s would both be generated into %s.rs; rename one of them", earlier, what, module)
+		}
+		from[module] = what
+		out[module+".rs"] = src
+		return nil
+	}
+	modules := make([]string, 0, len(plans)+1)
 	properties := len(g.Properties.Names()) > 0
 	if properties {
-		out[PropertiesFileName] = g.propertiesFile()
+		if err := add(PropertiesModule, "the sets of properties", g.propertiesFile()); err != nil {
+			return nil, err
+		}
+	}
+	if len(plans) > 0 {
+		if err := add(VerifyModule, "the function that verifies the requests", g.verifyFile(plans)); err != nil {
+			return nil, err
+		}
+		modules = append(modules, VerifyModule)
 	}
 	for _, p := range plans {
-		out[p.module+".rs"] = g.file(p)
+		if err := add(p.module, "the request "+p.q.Name, g.file(p)); err != nil {
+			return nil, err
+		}
 		modules = append(modules, p.module)
 	}
+	sort.Strings(modules)
 	out["mod.rs"] = writeMod(modules, properties)
 	return out, nil
 }

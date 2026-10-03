@@ -1,10 +1,11 @@
 // Hand-written, unlike the rest of this directory: what the generated runtime
 // does at run time, which tsc cannot say. It throws on a failure, and Node
 // exits non-zero, so it needs no test framework and no type packages.
-import { Client, MethodErrors, SetErrors } from "./client.js"
+import { Client, MethodError, MethodErrors, RequestError, SetErrors, VerifyErrors } from "./client.js"
 import { fileIntoNewMailbox, type FileIntoNewMailboxResult } from "./fileIntoNewMailbox.js"
 import { searchEmailsPages } from "./searchEmails.js"
 import { sendEmail } from "./sendEmail.js"
+import { verify } from "./verify.js"
 
 function assert(ok: boolean, what: string): void {
   if (!ok) throw new Error(what)
@@ -244,6 +245,65 @@ const session = {
     "the call that succeeded is not on the error")
   assert(partial?.file === undefined,
     "the call the server would not run was made up rather than left out")
+}
+
+// verify reports every request the session shows would be refused, and does
+// not stop at the first, each with the error sending it would have failed with.
+{
+  const narrow = {
+    apiUrl: "https://example.com/jmap/api",
+    accounts: { acct1: { name: "someone", accountCapabilities: { "urn:ietf:params:jmap:mail": {} } } },
+    primaryAccounts: { "urn:ietf:params:jmap:mail": "acct1", "urn:ietf:params:jmap:submission": "acct1" },
+    capabilities: {
+      "urn:ietf:params:jmap:core": { maxCallsInRequest: 2 },
+      "urn:ietf:params:jmap:mail": {},
+      "urn:ietf:params:jmap:submission": {},
+    },
+    username: "someone@example.com",
+    state: "s1",
+  }
+  const core = "urn:ietf:params:jmap:core"
+  const mail = "urn:ietf:params:jmap:mail"
+  const [fetch] = stub(narrow)
+  const c = new Client("https://example.com/.well-known/jmap", { fetch })
+  let thrown: unknown
+  try {
+    await c.verify([
+      { name: "Fine", using: [core, mail], calls: 2, primaryAccounts: [mail] },
+      { name: "Contacts", using: [core, "urn:ietf:params:jmap:contacts"], calls: 1, primaryAccounts: ["urn:ietf:params:jmap:contacts"] },
+      { name: "TooMany", using: [core, mail], calls: 3, primaryAccounts: [] },
+      { name: "NoPrimary", using: [core], calls: 1, primaryAccounts: [core] },
+      { name: "Submit", using: [core, "urn:ietf:params:jmap:submission"], calls: 1, primaryAccounts: ["urn:ietf:params:jmap:submission"] },
+    ])
+  } catch (e) {
+    thrown = e
+  }
+  assert(thrown instanceof VerifyErrors, "verify threw " + thrown + ", want VerifyErrors")
+  const problems = (thrown as VerifyErrors).errors
+  assert(problems.map((p) => p.request).join(",") === "Contacts,TooMany,NoPrimary,Submit",
+    "verify reported " + problems.map((p) => p.request).join(","))
+  const [contacts, tooMany, noPrimary, submit] = problems.map((p) => p.error)
+  assert(contacts instanceof RequestError && contacts.type === "urn:ietf:params:jmap:error:unknownCapability",
+    "Contacts: " + contacts.message)
+  assert(tooMany instanceof RequestError && tooMany.limit === "maxCallsInRequest", "TooMany: " + tooMany.message)
+  assert(!(noPrimary instanceof RequestError) && noPrimary.message.includes("no primary account"),
+    "NoPrimary: " + noPrimary.message)
+  assert(submit instanceof MethodError && submit.type === "accountNotSupportedByMethod", "Submit: " + submit.message)
+  assert(problems[0].message.startsWith("jmapc: Contacts would be refused: server does not support"),
+    "the message reads " + problems[0].message)
+
+  // The generated verify checks every request in the directory, and the
+  // session here offers mail and nothing for calendars.
+  let generated: unknown
+  try {
+    await verify(c)
+  } catch (e) {
+    generated = e
+  }
+  assert(generated instanceof VerifyErrors, "the generated verify threw " + generated)
+  const named = (generated as VerifyErrors).errors.map((p) => p.request)
+  assert(named.includes("Agenda") && !named.includes("ListInboxEmails"),
+    "the generated verify reported " + named.join(","))
 }
 
 console.log("ok")

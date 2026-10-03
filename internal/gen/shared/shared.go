@@ -6,6 +6,7 @@ package shared
 
 import (
 	"io"
+	"path"
 	"strconv"
 	"strings"
 
@@ -172,4 +173,28 @@ func Creations(taken map[string]bool, prefix string, ids []string, name func(str
 		out = append(out, Creation{Name: Unique(taken, prefix+name(id)), ID: id})
 	}
 	return out
+}
+
+// RequestsDir names the directory the requests at paths were read from, for
+// the Source line of a file generated from all of them: the deepest one that
+// holds them all, since the requests of one package may sit in several
+// directories under the one generation was pointed at.
+func RequestsDir(paths []string) string {
+	var common []string
+	for i, p := range paths {
+		dir := strings.Split(path.Dir(strings.ReplaceAll(p, `\`, "/")), "/")
+		if i == 0 {
+			common = dir
+			continue
+		}
+		n := 0
+		for n < len(common) && n < len(dir) && common[n] == dir[n] {
+			n++
+		}
+		common = common[:n]
+	}
+	if len(common) == 0 {
+		return "."
+	}
+	return strings.Join(common, "/")
 }

@@ -499,8 +499,9 @@ func writeMod(modules []string, properties bool) []byte {
 	var reexport bytes.Buffer
 	reexported := []string{
 		"Auth", "Client", "ClientOptions", "Error", "HttpRequest", "HttpResponse", "Invocation",
-		"MethodError", "MethodErrors", "Request", "RequestError", "Response", "ResultReference",
-		"Session", "SetErrors", "SetFailure", "Transport", "TransportError", "decode",
+		"MethodError", "MethodErrors", "Request", "RequestError", "RequestNeeds", "Response",
+		"ResultReference", "Session", "SetErrors", "SetFailure", "Transport", "TransportError",
+		"VerifyError", "decode",
 	}
 	sortUse(reexported)
 	writeUse(&reexport, "client", reexported)

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"go/format"
-	"path"
 	"strconv"
 	"strings"
 
@@ -65,25 +64,11 @@ func (g *RequestGenerator) capabilityList(uris []string) string {
 	return strings.Join(exprs, ", ")
 }
 
-// requestsDir names the directory the requests were read from, for the Source
-// line: the deepest one that holds them all, since the requests of one package
-// may sit in several directories under the one generation was pointed at.
+// requestsDir names the directory the requests were read from.
 func requestsDir(plans []*plan) string {
-	var common []string
+	paths := make([]string, len(plans))
 	for i, p := range plans {
-		dir := strings.Split(path.Dir(strings.ReplaceAll(p.q.Path, `\`, "/")), "/")
-		if i == 0 {
-			common = dir
-			continue
-		}
-		n := 0
-		for n < len(common) && n < len(dir) && common[n] == dir[n] {
-			n++
-		}
-		common = common[:n]
+		paths[i] = p.q.Path
 	}
-	if len(common) == 0 {
-		return "."
-	}
-	return strings.Join(common, "/")
+	return shared.RequestsDir(paths)
 }
