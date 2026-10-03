@@ -105,7 +105,7 @@ jobs:
           # in the git config.
           persist-credentials: false
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           # Named rather than left to lts/*, so that a run tomorrow is the run
           # today was: what the LTS is changes under a workflow that does not
@@ -142,7 +142,7 @@ jobs:
           go-version: stable
           cache-dependency-path: go.mod
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           # The Node the TypeScript job names, for the reason it names one.
           node-version: "24"
