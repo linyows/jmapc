@@ -37,6 +37,10 @@ type FindEmailsBySubjectFetchEmail struct {
 
 	// The mailboxes the email is in, as a set of ids mapped to true.
 	MailboxIDs map[jmapc.ID]bool `json:"mailboxIds"`
+
+	// The keywords set on the email, such as "$seen" or "$flagged", mapped to
+	// true.
+	Keywords map[string]bool `json:"keywords"`
 }
 
 // FindEmailsBySubjectFetchResponse holds the response to the Email/get call
@@ -90,7 +94,7 @@ func FindEmailsBySubject(ctx context.Context, c *jmapc.Client, p FindEmailsBySub
 			{Name: "Email/get", CallID: "fetch", Args: map[string]any{
 				"accountId":  mailAccountID,
 				"#ids":       jmapc.ResultReference{ResultOf: "search", Name: "Email/query", Path: "/ids"},
-				"properties": json.RawMessage(`["id","subject","from","to","receivedAt","mailboxIds"]`),
+				"properties": json.RawMessage(`["id","subject","from","to","receivedAt","mailboxIds","keywords"]`),
 			}},
 		},
 	}

@@ -1,0 +1,15 @@
+{
+  "_doc": "ImportEmail adds a message, uploaded beforehand as a blob, to a mailbox, flagged and not yet read.",
+
+  "methodCalls": [
+    ["Email/import", {
+      "emails": {
+        "imported": {
+          "blobId": "{{blobId}}",
+          "mailboxIds": {"{{mailboxId}}": true},
+          "keywords": {"$flagged": true}
+        }
+      }
+    }, "import"]
+  ]
+}

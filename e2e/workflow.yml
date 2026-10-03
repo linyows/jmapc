@@ -2,6 +2,10 @@
 # path that does not go through jmapc, or the other way round, so that a
 # mistake in what jmapc sends cannot be hidden by the same mistake in what it
 # reads back.
+#
+# Outputs are kept for the whole run and can be read by name alone, so an
+# output is not named after the id of any step: outputs.account.id would
+# otherwise find the output named account rather than the step.
 name: jmapc against Stalwart
 
 jobs:
@@ -109,3 +113,129 @@ jobs:
         methodCalls:
         - [Email/query, {accountId: "{{outputs.account.id}}", filter: {subject: "inbound {{vars.run_id}}"}}, search]
     test: res.code == 200 && res.body.methodResponses[0][1].ids == [outputs.found.id]
+
+- name: Mail imported through jmapc, read over IMAP
+  defaults:
+    imap:
+      host: "{{vars.imap_host}}"
+      port: "{{vars.imap_port}}"
+      username: "alice@{{vars.domain}}"
+      password: "{{vars.alice_password}}"
+      # The certificate is the one Stalwart makes for itself, for a name
+      # nothing here resolves.
+      insecure_skip_tls: true
+  steps:
+  - name: Import a flagged message through the generated client
+    id: imported
+    uses: shell
+    with:
+      cmd: "{{vars.driver}} import-email -subject 'imported {{vars.run_id}}'"
+      env:
+        JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
+        JMAPC_E2E_USER: "alice@{{vars.domain}}"
+        JMAPC_E2E_PASSWORD: "{{vars.alice_password}}"
+    test: res.code == 0 && parse_json(res.stdout).id != ""
+    outputs:
+      id: parse_json(res.stdout).id
+
+  # The keywords set through JMAP are the flags IMAP shows: $flagged is
+  # \Flagged, and a message not yet read has no \Seen. The fetch acts on what
+  # the search found.
+  - name: Find it in the inbox over IMAP, flagged and unread
+    uses: imap
+    with:
+      commands:
+      - name: select
+        mailbox: INBOX
+      - name: uid search
+        criteria:
+          headers:
+            Subject: "imported {{vars.run_id}}"
+      - name: uid fetch
+        dataitem: ALL
+    test: |
+      status == 0 &&
+      res.data.search.count == 1 &&
+      len(res.data.fetch.messages) == 1 &&
+      res.data.fetch.messages[0].subject == 'imported ' + vars.run_id &&
+      '\\Flagged' in res.data.fetch.messages[0].flags &&
+      !('\\Seen' in res.data.fetch.messages[0].flags)
+
+  # A change made over IMAP, for jmapc to see.
+  - name: Mark it read over IMAP
+    uses: imap
+    with:
+      commands:
+      - name: select
+        mailbox: INBOX
+      - name: uid search
+        criteria:
+          headers:
+            Subject: "imported {{vars.run_id}}"
+      - name: uid store
+        dataitem: +FLAGS
+        value: '\Seen'
+    test: status == 0 && res.data.store.count == 1
+
+  - name: See it read through the generated client
+    uses: shell
+    with:
+      cmd: "{{vars.driver}} find-emails -subject 'imported {{vars.run_id}}'"
+      env:
+        JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
+        JMAPC_E2E_USER: "alice@{{vars.domain}}"
+        JMAPC_E2E_PASSWORD: "{{vars.alice_password}}"
+    test: |
+      res.code == 0 &&
+      parse_json(res.stdout).count == 1 &&
+      parse_json(res.stdout).emails[0].id == outputs.imported.id &&
+      parse_json(res.stdout).emails[0].keywords == ['$flagged', '$seen']
+
+- name: A blob uploaded through jmapc, downloaded directly
+  defaults:
+    http:
+      url: "{{vars.base}}"
+      headers:
+        authorization: "Basic {{encode_base64('alice@' + vars.domain + ':' + vars.alice_password)}}"
+  steps:
+  # jmapc uploads the content and reads back the whole of it, and asks for
+  # octets 5 to 12 of it.
+  - name: Upload and download it through jmapc
+    id: blob
+    uses: shell
+    with:
+      cmd: "{{vars.driver}} blob -data 'blob {{vars.run_id}} 0123456789' -from 5 -length 8"
+      env:
+        JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
+        JMAPC_E2E_USER: "alice@{{vars.domain}}"
+        JMAPC_E2E_PASSWORD: "{{vars.alice_password}}"
+    test: |
+      res.code == 0 &&
+      parse_json(res.stdout).whole == 'blob ' + vars.run_id + ' 0123456789' &&
+      parse_json(res.stdout).size == len('blob ' + vars.run_id + ' 0123456789')
+    outputs:
+      accountId: parse_json(res.stdout).accountId
+      blobId: parse_json(res.stdout).blobId
+      part: parse_json(res.stdout).part ?? ''
+      rangeError: parse_json(res.stdout).rangeError ?? ''
+
+  - name: Download the whole of it directly
+    uses: http
+    with:
+      get: "/jmap/download/{{outputs.blob.accountId}}/{{outputs.blob.blobId}}/blob.txt?accept=text/plain"
+    test: res.code == 200 && res.body == 'blob ' + vars.run_id + ' 0123456789'
+
+  # JMAP leaves ranges to the server. One that honours the range answers 206,
+  # and jmapc must have returned the same octets; one that ignores it, as
+  # Stalwart 0.16 does, answers 200 with the whole blob, and jmapc must have
+  # refused it rather than return the start of the blob as the part.
+  - name: Ask for the same range directly
+    uses: http
+    with:
+      get: "/jmap/download/{{outputs.blob.accountId}}/{{outputs.blob.blobId}}/blob.txt?accept=text/plain"
+      headers:
+        range: bytes=5-12
+    test: |
+      res.code == 206 && outputs.blob.rangeError == '' && res.body == outputs.blob.part &&
+        outputs.blob.part == ('blob ' + vars.run_id + ' 0123456789')[5:13] ||
+      res.code == 200 && outputs.blob.part == '' && outputs.blob.rangeError contains 'ignored the range'

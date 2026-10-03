@@ -10,7 +10,7 @@
 
     ["Email/get", {
       "#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids"},
-      "properties": ["id", "subject", "from", "to", "receivedAt", "mailboxIds"]
+      "properties": ["id", "subject", "from", "to", "receivedAt", "mailboxIds", "keywords"]
     }, "fetch"]
   ],
 

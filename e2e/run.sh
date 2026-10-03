@@ -3,9 +3,9 @@
 # runs the scenarios against it. Arguments are passed to the probe run of the
 # scenarios, as in `e2e/run.sh --report github-summary`.
 #
-# It needs docker, go and probe on the PATH. E2E_HTTP_PORT and E2E_SMTP_PORT
-# choose the ports on this side (18080 and 10025), and E2E_KEEP=1 leaves the
-# container running afterwards.
+# It needs docker, go and probe on the PATH. E2E_HTTP_PORT, E2E_SMTP_PORT and
+# E2E_IMAP_PORT choose the ports on this side (18080, 10025 and 10993), and
+# E2E_KEEP=1 leaves the container running afterwards.
 set -eu
 
 # The release the tests are written against. Stalwart moves its settings
@@ -20,16 +20,21 @@ secret() {
 
 http_port=${E2E_HTTP_PORT:-18080}
 smtp_port=${E2E_SMTP_PORT:-10025}
+imap_port=${E2E_IMAP_PORT:-10993}
 work=$(mktemp -d)
 
 export E2E_CONTAINER=${E2E_CONTAINER:-jmapc-e2e}
 export E2E_BASE_URL=http://localhost:$http_port
 export E2E_SMTP_ADDR=localhost:$smtp_port
+export E2E_IMAP_HOST=localhost
+export E2E_IMAP_PORT=$imap_port
 export E2E_ROOT=$PWD
 export E2E_DRIVER=$work/driver
-export E2E_RECOVERY_ADMIN=admin:$(secret)
-export E2E_ALICE_PASSWORD=$(secret)
-export E2E_BOB_PASSWORD=$(secret)
+# Generated for the run unless given, which is what lets a run kept with
+# E2E_KEEP=1 be logged into afterwards.
+export E2E_RECOVERY_ADMIN=${E2E_RECOVERY_ADMIN:-admin:$(secret)}
+export E2E_ALICE_PASSWORD=${E2E_ALICE_PASSWORD:-$(secret)}
+export E2E_BOB_PASSWORD=${E2E_BOB_PASSWORD:-$(secret)}
 
 cleanup() {
 	if [ "${E2E_KEEP:-}" != 1 ]; then
@@ -44,7 +49,7 @@ docker rm -f "$E2E_CONTAINER" >/dev/null 2>&1 || true
 # they name the server's hostname, which nothing outside the container
 # resolves.
 docker run -d --name "$E2E_CONTAINER" \
-	-p "$http_port:8080" -p "$smtp_port:25" \
+	-p "$http_port:8080" -p "$smtp_port:25" -p "$imap_port:993" \
 	-e STALWART_RECOVERY_ADMIN="$E2E_RECOVERY_ADMIN" \
 	-e STALWART_PUBLIC_URL="$E2E_BASE_URL" \
 	"$image" >/dev/null

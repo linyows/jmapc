@@ -2,10 +2,12 @@
 # sets every one of them; set them yourself to run a workflow on its own, as
 # in `probe e2e/vars.yml,e2e/workflow.yml`.
 vars:
-  # Where the server's HTTP listener and its SMTP listener on port 25 are
-  # reached from here.
+  # Where the server's HTTP listener, its SMTP listener on port 25 and its
+  # IMAP listener on port 993 are reached from here.
   base: "{{E2E_BASE_URL}}"
   smtp: "{{E2E_SMTP_ADDR}}"
+  imap_host: "{{E2E_IMAP_HOST}}"
+  imap_port: "{{E2E_IMAP_PORT}}"
   # The container, which setup restarts once bootstrap is complete.
   container: "{{E2E_CONTAINER}}"
   # The repository root, and where setup builds the driver to.

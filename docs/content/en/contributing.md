@@ -39,7 +39,10 @@ It starts the container, takes Stalwart out of bootstrap mode, creates two
 accounts, and runs the scenarios in `e2e/workflow.yml`. Each scenario does
 something through jmapc and checks it over a path that does not go through
 jmapc: the session jmapc reads against the one fetched directly, a message
-delivered over SMTP against what the generated client finds. The jmapc side is
+delivered over SMTP against what the generated client finds, a message imported
+through jmapc against its flags over IMAP and a flag set over IMAP against what
+jmapc reads, and a blob uploaded through jmapc against the same blob downloaded
+directly. The jmapc side is
 `e2e/driver`, which calls the client generated from `e2e/requests` and prints
 what came back as JSON.
 
@@ -73,6 +76,17 @@ flowchart LR
         job_1_step1["Find it through the generated client"]
         job_1_step2["Read alice's mail account"]
         job_1_step3["Find the same email directly"]
+    end
+    subgraph job_2["Mail imported through jmapc, read over IMAP"]
+        job_2_step0["Import a flagged message through the generated client"]
+        job_2_step1["Find it in the inbox over IMAP, flagged and unread"]
+        job_2_step2["Mark it read over IMAP"]
+        job_2_step3["See it read through the generated client"]
+    end
+    subgraph job_3["A blob uploaded through jmapc, downloaded directly"]
+        job_3_step0["Upload and download it through jmapc"]
+        job_3_step1["Download the whole of it directly"]
+        job_3_step2["Ask for the same range directly"]
     end
 ```
 
