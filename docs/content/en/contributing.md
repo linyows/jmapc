@@ -28,15 +28,16 @@ the repository that defines it.
 
 The tests above run the generated code against stubs, which answer the way
 the tests expect a server to. `e2e/` runs it against a real one, Stalwart, in a
-container:
+container. It is one [probe](https://github.com/linyows/probe) workflow, run
+from the repository root:
 
 ```
-e2e/run.sh
+probe e2e/workflow.yml
 ```
 
-It needs docker, Go and [probe](https://github.com/linyows/probe) on the PATH.
-It starts the container, takes Stalwart out of bootstrap mode, creates two
-accounts, and runs the scenarios in `e2e/workflow.yml`. Each scenario does
+It needs docker, Go and probe 1.14.0 or later on the PATH. It starts the
+container, takes Stalwart out of bootstrap mode, creates two accounts, builds
+the driver, and runs the scenarios. Each scenario does
 something through jmapc and checks it over a path that does not go through
 jmapc: the session jmapc reads against the one fetched directly, a message
 delivered over SMTP against what the generated client finds, a message imported
@@ -48,71 +49,85 @@ jmapc's `Watch` by push, in an account where nothing else changes. The jmapc sid
 `e2e/driver`, which calls the client generated from `e2e/requests` and prints
 what came back as JSON.
 
-Setup provisions the server and builds the driver at the same time:
+The server is started and set up while the driver is built, and the scenarios,
+which are independent of one another, then run in parallel:
 
 ```mermaid
 flowchart LR
-    subgraph provision["Provision the server"]
-        provision_step0["Wait for bootstrap mode"]
-        provision_step1["Complete bootstrap"]
-        provision_step2["Restart out of bootstrap mode"]
-        provision_step3["Wait for the server"]
-        provision_step4["Find the domain bootstrap created"]
-        provision_step5["Create alice and bob"]
+    subgraph server["Start and provision the server"]
+        server_step0["Remove the container and the work directory when the workflow ends"]
+        server_step1["Start Stalwart"]
+        server_step2["Wait for bootstrap mode"]
+        server_step3["Complete bootstrap"]
+        server_step4["Restart out of bootstrap mode"]
+        server_step5["Wait for the server"]
+        server_step6["Find the domain bootstrap created"]
+        server_step7["Create alice and bob"]
     end
-    subgraph job_1["Build the driver"]
-        job_1_step0["go build"]
+    subgraph driver["Build the driver"]
+        driver_step0["go build"]
     end
+    subgraph job_2["The session as jmapc reads it"]
+        job_2_step0["Fetch the session directly"]
+        job_2_step1["Fetch it through jmapc"]
+        job_2_step2["Verify every request through jmapc"]
+    end
+    subgraph job_3["Mail delivered over SMTP, found through jmapc"]
+        job_3_step0["Deliver to alice on port 25"]
+        job_3_step1["Find it through the generated client"]
+        job_3_step2["Read alice's mail account"]
+        job_3_step3["Find the same email directly"]
+    end
+    subgraph job_4["Mail imported through jmapc, read over IMAP"]
+        job_4_step0["Import a flagged message through the generated client"]
+        job_4_step1["Find it in the inbox over IMAP, flagged and unread"]
+        job_4_step2["Mark it read over IMAP"]
+        job_4_step3["See it read through the generated client"]
+    end
+    subgraph job_5["A blob uploaded through jmapc, downloaded directly"]
+        job_5_step0["Upload and download it through jmapc"]
+        job_5_step1["Download the whole of it directly"]
+        job_5_step2["Ask for the same range directly"]
+    end
+    subgraph job_6["Changes followed through jmapc, a few at a time"]
+        job_6_step0["Read the state through jmapc"]
+        job_6_step1["Deliver three messages to alice"]
+        job_6_step2["Follow the changes through the generated client"]
+        job_6_step3["Read alice's mail account for the direct request"]
+        job_6_step4["See the server page the same changes directly"]
+    end
+    subgraph job_7["A push followed through jmapc's Watch"]
+        job_7_step0["Read the state through jmapc"]
+        job_7_step1["Start watching through the generated client"]
+        job_7_step2["Wait until the watch follows pushes"]
+        job_7_step3["Deliver to bob on port 25"]
+        job_7_step4["See the watch report it"]
+    end
+    server --> job_2
+    driver --> job_2
+    server --> job_3
+    driver --> job_3
+    server --> job_4
+    driver --> job_4
+    server --> job_5
+    driver --> job_5
+    server --> job_6
+    driver --> job_6
+    server --> job_7
+    driver --> job_7
 ```
 
-The scenarios are independent of one another and run in parallel:
+`probe dag --mermaid e2e/workflow.yml` prints this graph; print it again after
+adding a job or a step.
 
-```mermaid
-flowchart LR
-    subgraph job_0["The session as jmapc reads it"]
-        job_0_step0["Fetch the session directly"]
-        job_0_step1["Fetch it through jmapc"]
-        job_0_step2["Verify every request through jmapc"]
-    end
-    subgraph job_1["Mail delivered over SMTP, found through jmapc"]
-        job_1_step0["Deliver to alice on port 25"]
-        job_1_step1["Find it through the generated client"]
-        job_1_step2["Read alice's mail account"]
-        job_1_step3["Find the same email directly"]
-    end
-    subgraph job_2["Mail imported through jmapc, read over IMAP"]
-        job_2_step0["Import a flagged message through the generated client"]
-        job_2_step1["Find it in the inbox over IMAP, flagged and unread"]
-        job_2_step2["Mark it read over IMAP"]
-        job_2_step3["See it read through the generated client"]
-    end
-    subgraph job_3["A blob uploaded through jmapc, downloaded directly"]
-        job_3_step0["Upload and download it through jmapc"]
-        job_3_step1["Download the whole of it directly"]
-        job_3_step2["Ask for the same range directly"]
-    end
-    subgraph job_4["Changes followed through jmapc, a few at a time"]
-        job_4_step0["Read the state through jmapc"]
-        job_4_step1["Deliver three messages to alice"]
-        job_4_step2["Follow the changes through the generated client"]
-        job_4_step3["Read alice's mail account for the direct request"]
-        job_4_step4["See the server page the same changes directly"]
-    end
-    subgraph job_5["A push followed through jmapc's Watch"]
-        job_5_step0["Read the state through jmapc"]
-        job_5_step1["Start watching through the generated client"]
-        job_5_step2["Wait until the watch follows pushes"]
-        job_5_step3["Deliver to bob on port 25"]
-        job_5_step4["See the watch report it"]
-    end
-```
-
-`probe dag --mermaid e2e/vars.yml,e2e/workflow.yml` prints the second of these,
-and the same for `e2e/setup.yml` the first; print them again after adding a job
-or a step. The container is removed afterwards unless
-`E2E_KEEP=1` is set. The Stalwart release is pinned in `e2e/run.sh`; a new
-minor version is a change made there on purpose, since Stalwart moves its
-settings between them.
+The first step starts a command in the background that removes the container
+and the directory the driver is built in when it is stopped, and probe stops it
+when the workflow ends, whether the scenarios passed, failed or were
+interrupted. `E2E_KEEP=1` leaves both, and the passwords, generated for each run
+otherwise, can be given as `E2E_ALICE_PASSWORD` and the like to log in
+afterwards; the head of `e2e/workflow.yml` lists every setting. The Stalwart
+release is pinned there too; a new minor version is a change made there on
+purpose, since Stalwart moves its settings between them.
 
 The runtime types and the example client are committed, and a test compares
 them against what the catalogue produces now, so a change to the data model
