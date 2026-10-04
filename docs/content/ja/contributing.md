@@ -29,7 +29,7 @@ go generate ./...    # ランタイムの型と、全言語のサンプルクラ
 probe e2e/workflow.yml
 ```
 
-docker、Go、probeがPATHにある必要があります。
+docker、Go、probe 1.14.0以降がPATHにある必要があります。
 コンテナを起動し、Stalwartをbootstrap modeから抜けさせ、アカウントを2つ作り、ドライバーをビルドしてから、シナリオを実行します。
 各シナリオは、jmapcを通して何かをしたあと、jmapcを通らない経路でそれを確かめます。
 jmapcが読んだsessionを直接取得したものと比べ、SMTPで配送したメールを生成クライアントが見つけられるかを確かめます。

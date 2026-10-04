@@ -35,9 +35,9 @@ from the repository root:
 probe e2e/workflow.yml
 ```
 
-It needs docker, Go and probe on the PATH. It starts the container, takes
-Stalwart out of bootstrap mode, creates two accounts, builds the driver, and
-runs the scenarios. Each scenario does
+It needs docker, Go and probe 1.14.0 or later on the PATH. It starts the
+container, takes Stalwart out of bootstrap mode, creates two accounts, builds
+the driver, and runs the scenarios. Each scenario does
 something through jmapc and checks it over a path that does not go through
 jmapc: the session jmapc reads against the one fetched directly, a message
 delivered over SMTP against what the generated client finds, a message imported
