@@ -129,9 +129,46 @@ does not end, so the stream is opened without it and is closed by the server,
 by `Close`, or by the context.
 
 This is the event source form of push, which suits a client that can hold a
-connection open. The other form registers a URL for the server to post to, which
-is what an app on a phone needs: see `RegisterPush` and `ConfirmPush` in
-[`example/requests`](https://github.com/linyows/jmapc/tree/main/example/requests). A subscription is not active when it is
-created — the server pushes a code to the URL, and the client sends it back with
-a `PushSubscription/set` before anything else is sent. `jmapc.PushVerification`
-decodes what arrives.
+connection open.
+
+## Push to a URL
+
+The other form registers a URL for the server to post to, which suits a
+service that cannot keep a connection open to every account it follows. A
+`PushReceiver` keeps such a subscription for as long as it runs, and is the
+`http.Handler` the URL reaches:
+
+```go
+r := jmapc.NewPushReceiver(c, jmapc.PushReceiverOptions{
+	URL:            "https://app.example.com/jmap-push/" + secret,
+	DeviceClientID: "app-1",
+	Types:          []string{"Email"},
+	Lifetime:       24 * time.Hour,
+	OnStateChange: func(ctx context.Context, change *jmapc.StateChange) {
+		queue <- change
+	},
+})
+http.Handle("/jmap-push/"+secret, r)
+err := r.Run(ctx)
+```
+
+`Run` creates the subscription and waits for the server to post its
+verification code to the URL, since a subscription is not active until the
+code is sent back with a `PushSubscription/set`. It then extends the
+subscription before it expires, keeping to the expiry the server grants where
+that is less than `Lifetime`, makes it again and verifies it again where the
+server no longer has it, and removes it when `ctx` ends. `OnEvent` is told of
+each of those steps. `OnStateChange` is called while the server's post waits
+for an answer, so it hands the change on rather than acting on it.
+
+JMAP gives a push no signature, so anyone who learns the URL can post to it.
+Put something in it no one can guess, as `secret` is above, and serve only that
+path. The subscription is made without keys, so what the server posts is not
+encrypted; a server may also require the URL to be https and to resolve to a
+public address, as Stalwart does.
+
+`RegisterPush` and `ConfirmPush` in
+[`example/requests`](https://github.com/linyows/jmapc/tree/main/example/requests)
+are the same two steps written as requests, for a client that keeps the
+subscription itself, and `jmapc.PushVerification` decodes the code that
+arrives.
