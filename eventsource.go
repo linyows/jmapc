@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -56,10 +58,12 @@ type EventSourceOptions struct {
 	// Types are the object types to be notified about, such as "Email". Leave
 	// it empty to receive events for every type.
 	Types []string
-	// Ping requests a comment from the server at that interval, so that a
+	// Ping requests a ping from the server at that interval, so that a
 	// connection dropped by an intermediary is detected rather than left
-	// hanging. Servers clamp it to a range of their own. Zero requests no
-	// pings.
+	// hanging: a stream that carries nothing for twice the interval is taken
+	// as lost, and Next fails. Servers clamp the interval to a range of their
+	// own and say which they use in each ping, which the stream keeps to.
+	// Zero requests no pings, and nothing is detected.
 	Ping time.Duration
 	// CloseAfterState asks the server to close the connection after the first
 	// event, which suits a client that only needs to know that the state it
@@ -79,6 +83,15 @@ type EventStream struct {
 	// lastEventID is the id of the most recent event, which a reconnection
 	// resumes from.
 	lastEventID string
+
+	// The watch for a stream that stops carrying anything. It runs only
+	// where pings were asked for: interval is the one the server pings at,
+	// silence is closed when twice that passes without a line, and lapsed
+	// says that is why the body was closed.
+	mu       sync.Mutex
+	interval time.Duration
+	silence  *time.Timer
+	lapsed   atomic.Bool
 }
 
 // EventSource opens a connection to the server's push endpoint, as described in
@@ -109,10 +122,16 @@ func (c *Client) EventSource(ctx context.Context, opts *EventSourceOptions) (*Ev
 	if opts.CloseAfterState {
 		closeAfter = "state"
 	}
+	// The interval is asked for in whole seconds, so a part of one is
+	// rounded up rather than down to zero, which would ask for no pings.
+	ping := opts.Ping
+	if ping > 0 {
+		ping = (ping + time.Second - 1) / time.Second * time.Second
+	}
 	url, err := expandURITemplate(s.EventSourceURL, map[string]string{
 		"types":      types,
 		"closeafter": closeAfter,
-		"ping":       strconv.Itoa(int(opts.Ping / time.Second)),
+		"ping":       strconv.Itoa(int(ping / time.Second)),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("jmapc: expanding eventSourceUrl: %w", err)
@@ -138,11 +157,51 @@ func (c *Client) EventSource(ctx context.Context, opts *EventSourceOptions) (*Ev
 	}
 	scan := bufio.NewScanner(resp.Body)
 	scan.Buffer(make([]byte, 0, 64<<10), maxEventBytes)
-	return &EventStream{
+	stream := &EventStream{
 		body:        resp.Body,
 		scan:        scan,
 		lastEventID: opts.LastEventID,
-	}, nil
+	}
+	if ping > 0 {
+		stream.interval = ping
+		stream.silence = time.AfterFunc(2*ping, stream.lapse)
+	}
+	return stream, nil
+}
+
+// lapse ends a stream that has carried nothing for twice the ping interval,
+// which unblocks the read Next is waiting in.
+func (s *EventStream) lapse() {
+	s.lapsed.Store(true)
+	s.body.Close()
+}
+
+// heard notes that the stream carried something, which puts the end off.
+func (s *EventStream) heard() {
+	if s.silence == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.silence.Reset(2 * s.interval)
+}
+
+// pinged keeps to the interval a ping reports, which is the one the server
+// uses where it clamped the one asked for.
+func (s *EventStream) pinged(payload string) {
+	if s.silence == nil {
+		return
+	}
+	var ping struct {
+		Interval float64 `json:"interval"`
+	}
+	if err := json.Unmarshal([]byte(payload), &ping); err != nil || ping.Interval <= 0 {
+		return
+	}
+	s.mu.Lock()
+	s.interval = time.Duration(ping.Interval * float64(time.Second))
+	s.mu.Unlock()
+	s.heard()
 }
 
 // maxEventBytes caps how long a single line of an event may be, so that a
@@ -154,17 +213,27 @@ const maxEventBytes = 1 << 20
 //
 // It returns io.EOF when the server closes the stream, which it does after the
 // first event when CloseAfterState was set, and may do at any time otherwise.
+// Where pings were asked for, it fails once the stream has carried nothing for
+// twice the interval the server pings at, which is how a connection dropped
+// somewhere between the two is noticed: nothing arrives, and nothing says so.
 func (s *EventStream) Next() (*StateChange, error) {
 	var event, data strings.Builder
 	flushable := false
 
 	for {
 		if !s.scan.Scan() {
+			if s.lapsed.Load() {
+				s.mu.Lock()
+				interval := s.interval
+				s.mu.Unlock()
+				return nil, fmt.Errorf("jmapc: the event stream carried nothing for %s, twice the %s the server pings at, and is taken as lost", 2*interval, interval)
+			}
 			if err := s.scan.Err(); err != nil {
 				return nil, fmt.Errorf("jmapc: reading the event stream: %w", err)
 			}
 			return nil, io.EOF
 		}
+		s.heard()
 		line := strings.TrimSuffix(s.scan.Text(), "\r")
 
 		// A blank line ends an event. An event carrying no data is a comment
@@ -181,8 +250,12 @@ func (s *EventStream) Next() (*StateChange, error) {
 			event.Reset()
 			data.Reset()
 			flushable = false
+			if name == "ping" {
+				s.pinged(payload)
+				continue
+			}
 			if name != "" && name != "state" {
-				// Something the specification does not define, such as a ping.
+				// Something the specification does not define.
 				continue
 			}
 			var change StateChange
@@ -224,4 +297,9 @@ func (s *EventStream) Next() (*StateChange, error) {
 func (s *EventStream) LastEventID() string { return s.lastEventID }
 
 // Close ends the connection.
-func (s *EventStream) Close() error { return s.body.Close() }
+func (s *EventStream) Close() error {
+	if s.silence != nil {
+		s.silence.Stop()
+	}
+	return s.body.Close()
+}

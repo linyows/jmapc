@@ -46,9 +46,12 @@ func WithResync(f Resync) WatchOption {
 	return func(c *watchConfig) { c.resync = f }
 }
 
-// WithPing requests a comment from the server at that interval, so that a
-// connection dropped by an intermediary is detected rather than left hanging.
-// Servers clamp it to a range of their own.
+// WithPing requests a ping from the server at that interval, so that a
+// connection dropped by an intermediary is detected rather than left hanging:
+// a stream that carries nothing for twice the interval the server pings at is
+// taken as lost, and the watch connects again. Servers clamp the interval to a
+// range of their own, and say in each ping which they use. Thirty seconds
+// unless set.
 func WithPing(d time.Duration) WatchOption {
 	return func(c *watchConfig) { c.ping = d }
 }
