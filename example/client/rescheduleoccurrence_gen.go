@@ -13,12 +13,11 @@ import (
 // RescheduleOccurrenceParams holds the values RescheduleOccurrence leaves
 // open.
 type RescheduleOccurrenceParams struct {
-	// The id of the record this entry applies to.
-	//
-	// A map of record id to the patch to apply to it.
+	// An id that is a key of update: a map of record id to the patch to apply to
+	// it.
 	EventID jmapc.ID
 
-	// The key this entry is stored under.
+	// A key of recurrenceOverrides.
 	Occurrence jmapc.LocalDateTime
 
 	// When the event starts, in the event's own time zone.

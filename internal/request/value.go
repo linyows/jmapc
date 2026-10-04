@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/linyows/jmapc"
 	"github.com/linyows/jmapc/internal/spec"
@@ -450,19 +451,65 @@ func (c *checker) primitive(t *spec.Type, raw json.RawMessage, where string) Nod
 	return &Literal{JSON: raw}
 }
 
-// keyDoc describes what a parameter standing in for a map key selects. The
-// context is the documentation of the property holding the map, which says
-// which map this is a key into; on its own, "the id of the record" could be a
-// key into anything.
-func keyDoc(keyType *spec.Type, context string) string {
-	lead := "The key this entry is stored under."
-	if keyType.Name == spec.IdType {
-		lead = "The id of the record this entry applies to."
+// keyDoc describes what a parameter standing in for a map key selects. It
+// names the property holding the map, where that is known, and continues with
+// that property's documentation, which says what the keys are of; on its own,
+// "the id of the record" could be a key into anything, and the property's
+// documentation read on its own describes the map rather than the key.
+func keyDoc(keyType *spec.Type, property, context string) string {
+	isID := keyType.Name == spec.IdType
+	if property == "" {
+		if isID {
+			return "The id of the record this entry applies to."
+		}
+		return "The key this entry is stored under."
+	}
+	lead := "A key of " + property
+	if isID {
+		lead = "An id that is a key of " + property
 	}
 	if context == "" {
-		return lead
+		return lead + "."
 	}
-	return lead + "\n\n" + context
+	return lead + ": " + lowerFirst(context)
+}
+
+// lowerFirst lowers the first letter of a sentence to continue another with
+// it, where the first word is an ordinary one: a capital and lower-case
+// letters after it, as The or Patches are, or the article A. A word with
+// anything else in it is an acronym or a name, as JMAP, Email/get and
+// PushSubscription are, and is left as it is.
+func lowerFirst(s string) string {
+	word, _, _ := strings.Cut(s, " ")
+	r := []rune(word)
+	if len(r) == 0 || !unicode.IsUpper(r[0]) {
+		return s
+	}
+	for _, c := range r[1:] {
+		if !unicode.IsLower(c) {
+			return s
+		}
+	}
+	if len(r) == 1 && word != "A" {
+		return s
+	}
+	first := []rune(s)
+	first[0] = unicode.ToLower(first[0])
+	return string(first)
+}
+
+// propertyOf returns the property a path ends at, such as mailboxIds for
+// methodCalls[0].arguments.emails.k.mailboxIds, or "" where the path ends in
+// none.
+func propertyOf(where string) string {
+	last := where[strings.LastIndex(where, ".")+1:]
+	if i := strings.Index(last, "["); i >= 0 {
+		last = last[:i]
+	}
+	if last == "arguments" {
+		return ""
+	}
+	return last
 }
 
 // elemDoc describes a value inside a list the way keyDoc describes the key of
@@ -497,7 +544,7 @@ func (c *checker) keySegments(key string, keyType *spec.Type, where, doc string)
 		keyType = &spec.Type{Name: spec.String}
 		doc = "The name of the property this patch applies to."
 	} else {
-		doc = keyDoc(keyType, doc)
+		doc = keyDoc(keyType, propertyOf(where), doc)
 	}
 	var segments []KeySegment
 	last := 0
@@ -721,7 +768,13 @@ func (c *checker) patchKeySegments(segments []string, keyTypes []*spec.Type, whe
 		}
 		segDoc := "The name of the property this patch applies to."
 		if !weak {
-			segDoc = keyDoc(segType, "")
+			// The segment before is the property whose key this is, as
+			// mailboxIds is in mailboxIds/{id}.
+			property := ""
+			if i > 0 && !embeddedParamPattern.MatchString(segments[i-1]) {
+				property = segments[i-1]
+			}
+			segDoc = keyDoc(segType, property, "")
 		}
 		last := 0
 		for _, m := range matches {

@@ -13,12 +13,11 @@ use super::types::{CalendarEventSetResponse, Id, LocalDateTime};
 /// open.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct RescheduleOccurrenceParams {
-    /// The id of the record this entry applies to.
-    ///
-    /// A map of record id to the patch to apply to it.
+    /// An id that is a key of update: a map of record id to the patch to
+    /// apply to it.
     pub event_id: Id,
 
-    /// The key this entry is stored under.
+    /// A key of recurrenceOverrides.
     pub occurrence: LocalDateTime,
 
     /// When the event starts, in the event's own time zone.

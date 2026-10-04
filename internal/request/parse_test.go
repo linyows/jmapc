@@ -1930,3 +1930,59 @@ func TestACallIDThatIsNotAnIdentifierFallsBack(t *testing.T) {
 		t.Errorf("field = %q, want %q", got, want)
 	}
 }
+
+// TestAParameterUsedAsAKeyNamesTheMapItIsAKeyOf checks the documentation of a
+// parameter standing in for a map key: it names the property holding the map,
+// and goes on with what the property is, rather than reading as though the
+// property's documentation were about the key.
+func TestAParameterUsedAsAKeyNamesTheMapItIsAKeyOf(t *testing.T) {
+	q := parse(t, "FileIt.jmap.json", `{
+	  "methodCalls": [
+	    ["Email/import", {"emails": {"new": {"blobId": "{{blobId}}", "mailboxIds": {"{{mailboxId}}": true}}}}, "import"],
+	    ["Email/set", {"update": {"{{emailId}}": {"mailboxIds/{{fromMailboxId}}": null}}}, "set"]
+	  ]
+	}`)
+	docs := map[string]string{}
+	for _, p := range q.Params {
+		docs[p.Name] = p.Doc
+	}
+	for name, want := range map[string]string{
+		"mailboxId":     "An id that is a key of mailboxIds: the mailboxes",
+		"emailId":       "An id that is a key of update: a map of record id",
+		"fromMailboxId": "An id that is a key of mailboxIds.",
+	} {
+		if !strings.HasPrefix(docs[name], want) {
+			t.Errorf("%s is documented as %q, want it to start %q", name, docs[name], want)
+		}
+	}
+}
+
+func TestLowerFirstLeavesAcronymsAndNamesAlone(t *testing.T) {
+	for in, want := range map[string]string{
+		"The mailboxes the email is in.": "the mailboxes the email is in.",
+		"A map of record id to a patch.": "a map of record id to a patch.",
+		"JMAP defines no range.":         "JMAP defines no range.",
+		"Email/get returns them.":        "Email/get returns them.",
+		"PushSubscription objects.":      "PushSubscription objects.",
+		"Patches to apply.":              "patches to apply.",
+		"I":                              "I",
+		"":                               "",
+	} {
+		if got := lowerFirst(in); got != want {
+			t.Errorf("lowerFirst(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestPropertyOf(t *testing.T) {
+	for in, want := range map[string]string{
+		"methodCalls[0].arguments.emails.new.mailboxIds": "mailboxIds",
+		"methodCalls[1].arguments.update":                "update",
+		"methodCalls[0].arguments":                       "",
+		"methodCalls[0].arguments.list[2]":               "list",
+	} {
+		if got := propertyOf(in); got != want {
+			t.Errorf("propertyOf(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

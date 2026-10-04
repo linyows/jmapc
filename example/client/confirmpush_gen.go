@@ -12,12 +12,10 @@ import (
 
 // ConfirmPushParams holds the values ConfirmPush leaves open.
 type ConfirmPushParams struct {
-	// The id of the record this entry applies to.
-	//
-	// Patches to apply, keyed by subscription id. This is how the verification
-	// code is written back and how the expiry is extended; the url and keys
-	// cannot be changed, only replaced by destroying the subscription and
-	// creating another.
+	// An id that is a key of update: patches to apply, keyed by subscription id.
+	// This is how the verification code is written back and how the expiry is
+	// extended; the url and keys cannot be changed, only replaced by destroying
+	// the subscription and creating another.
 	SubscriptionID jmapc.ID
 
 	// The code proving the client controls the URL. It must be null when the

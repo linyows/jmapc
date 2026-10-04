@@ -16,9 +16,8 @@ type ImportEmailParams struct {
 	// The id of the blob holding the raw RFC 5322 message.
 	BlobID jmapc.ID
 
-	// The id of the record this entry applies to.
-	//
-	// The mailboxes to file the imported email in.
+	// An id that is a key of mailboxIds: the mailboxes to file the imported
+	// email in.
 	MailboxID jmapc.ID
 }
 

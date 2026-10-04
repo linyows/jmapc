@@ -12,12 +12,11 @@ use super::types::{ContactCardSetResponse, Id};
 /// UpdateContactEmailParams holds the values UpdateContactEmail leaves open.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct UpdateContactEmailParams {
-    /// The id of the record this entry applies to.
-    ///
-    /// A map of record id to the patch to apply to it.
+    /// An id that is a key of update: a map of record id to the patch to
+    /// apply to it.
     pub card_id: Id,
 
-    /// The id of the record this entry applies to.
+    /// An id that is a key of emails.
     pub email_key: Id,
 
     /// The address itself, as an addr-spec.

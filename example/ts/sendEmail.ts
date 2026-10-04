@@ -6,9 +6,8 @@ import type { EmailSetResponse, EmailSubmissionSetResponse, Id } from "./types.j
 
 // SendEmailParams holds the values SendEmail leaves open.
 export interface SendEmailParams {
-  // The id of the record this entry applies to.
-  //
-  // The mailboxes the email is in, as a set of ids mapped to true.
+  // An id that is a key of mailboxIds: the mailboxes the email is in, as a
+  // set of ids mapped to true.
   draftsMailboxId: Id
 
   // The addr-spec of the address.
@@ -26,7 +25,7 @@ export interface SendEmailParams {
   // The id of the identity to send from.
   identityId: Id
 
-  // The id of the record this entry applies to.
+  // An id that is a key of mailboxIds.
   sentMailboxId: Id
 }
 

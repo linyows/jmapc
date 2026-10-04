@@ -12,9 +12,8 @@ use super::types::{EmailSetResponse, Id};
 /// MarkEmailReadParams holds the values MarkEmailRead leaves open.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct MarkEmailReadParams {
-    /// The id of the record this entry applies to.
-    ///
-    /// A map of record id to the patch to apply to it.
+    /// An id that is a key of update: a map of record id to the patch to
+    /// apply to it.
     pub email_id: Id,
 }
 
