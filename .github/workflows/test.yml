@@ -112,13 +112,14 @@ jobs:
           go-version: stable
           cache-dependency-path: go.mod
 
-      # The action downloads a released probe rather than building one, and
-      # keeps it in the cache. The workflow needs a probe that stops a
-      # background command when it ends, which is how it removes the
-      # container, and 1.14.0 is the first that does, so the version is named
-      # rather than left to the latest.
+      # The action downloads a released probe rather than building one,
+      # checks the archive against the release's checksums.txt, and keeps it
+      # in the cache. The workflow needs a probe that stops a background
+      # command when it ends, which is how it removes the container, and
+      # 1.14.0 is the first that does, so the version is named rather than
+      # left to the latest.
       - name: Run the scenarios against Stalwart
-        uses: linyows/probe-action@108e07e02847aa75eb6d97d8806bc1e684428d37 # v1.1.1
+        uses: linyows/probe-action@fe78fd70fd87859460f1d91c0956e677159c4f6e # v1.2.0
         with:
           version: v1.14.0
           path: e2e/workflow.yml
