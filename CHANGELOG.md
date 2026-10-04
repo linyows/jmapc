@@ -4,6 +4,13 @@ What changed in each release, and what it means for the code that uses it. The r
 
 This starts at v0.12.0. What went into the releases before it is in the commit history.
 
+## v0.17.1 (2026-10-05)
+
+### Fixed
+
+- **A watch notices a connection that went quiet, and connects again.** A watch asks the server to ping every 30 seconds, and RFC 8620 has the server send a ping whenever that long passes without another event, but nothing read the pings: a connection dropped somewhere between client and server with neither end told, as by a NAT or a proxy that forgot it, left `Next` waiting on a read that would never return and `Watch` waiting with it, for as long as TCP took to give up. A stream asked for pings now fails `Next` once it has carried nothing for twice the interval while `Next` waited, keeping to the interval each ping reports, and `Watch` connects again from the last event id. Time spent between calls does not count, and a stream asked for no pings waits as before. A `Ping` below a second asked for no pings at all, the interval being rounded down to whole seconds; it is now rounded up. ([#118](https://github.com/linyows/jmapc/pull/118))
+- **A parameter used as a map key is documented as a key of the map it is in.** The generated documentation led with "The id of the record this entry applies to." and went on with the documentation of the property holding the map, which read as though it described the key, and said nothing of which map it was a key of. It now names the property — "An id that is a key of mailboxIds: the mailboxes to file the imported email in." — in all three languages, including a parameter in a patch path such as `mailboxIds/{{id}}`. Regenerating changes these comments and nothing else. ([#117](https://github.com/linyows/jmapc/pull/117))
+
 ## v0.17.0 (2026-10-04)
 
 ### Breaking changes
