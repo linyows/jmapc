@@ -5,13 +5,12 @@
 #   probe e2e/workflow.yml
 #
 # Every setting has a default and can be given in the environment instead:
-# E2E_HTTP_PORT, E2E_SMTP_PORT and E2E_IMAP_PORT for the ports on this side,
-# E2E_CONTAINER for the container's name, the passwords as
-# E2E_RECOVERY_PASSWORD,
-# E2E_ALICE_PASSWORD, E2E_BOB_PASSWORD and E2E_CAROL_PASSWORD, which are
-# generated for the run
-# otherwise, and E2E_KEEP=1 to leave the container running afterwards, to log
-# into with the passwords given.
+# E2E_HTTP_PORT, E2E_SMTP_PORT, E2E_IMAP_PORT and E2E_PUSH_PORT for the ports
+# on this side, E2E_CONTAINER for the container's name, the passwords as
+# E2E_RECOVERY_PASSWORD, E2E_ALICE_PASSWORD, E2E_BOB_PASSWORD and
+# E2E_CAROL_PASSWORD, which are generated for the run otherwise, and
+# E2E_KEEP=1 to leave the container running afterwards, to log into with the
+# passwords given.
 #
 # Each scenario does something through jmapc and checks it over a path that
 # does not go through jmapc, or the other way round, so that a mistake in what

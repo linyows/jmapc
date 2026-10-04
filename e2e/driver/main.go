@@ -29,6 +29,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"slices"
@@ -468,11 +469,22 @@ func receive(ctx context.Context, c *jmapc.Client, url, listen, cert, key, ready
 			}
 		},
 	})
-	srv := &http.Server{Addr: listen, Handler: r, ReadHeaderTimeout: 10 * time.Second}
+	// Listening starts before Run, so that the verification the server posts
+	// as soon as the subscription exists finds something to answer it.
+	ln, err := net.Listen("tcp", listen)
+	if err != nil {
+		return err
+	}
+	srv := &http.Server{Handler: r, ReadHeaderTimeout: 10 * time.Second}
 	served := make(chan error, 1)
-	go func() { served <- srv.ListenAndServeTLS(cert, key) }()
-	err := r.Run(ctx)
-	_ = srv.Close()
+	go func() { served <- srv.ServeTLS(ln, cert, key) }()
+	err = r.Run(ctx)
+	// Run ends from within OnStateChange, while the push that ended it is
+	// still being answered, so the server is shut down gracefully, letting
+	// that answer go out, rather than closed.
+	stop, cancelStop := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelStop()
+	_ = srv.Shutdown(stop)
 	if serveErr := <-served; !errors.Is(serveErr, http.ErrServerClosed) {
 		return serveErr
 	}
