@@ -237,6 +237,11 @@ func (c *checker) mapValue(t *spec.Type, raw json.RawMessage, where, doc string)
 	// travel down.
 	creationIDs := c.creationIDs
 	c.creationIDs = false
+	// The map's keys are keys of the property holding it; its values belong
+	// to no property, so a map inside one has keys of nothing named.
+	property := c.property
+	c.property = ""
+	defer func() { c.property = property }()
 
 	out := &Object{Raw: raw}
 	for _, key := range keys {
@@ -247,7 +252,7 @@ func (c *checker) mapValue(t *spec.Type, raw json.RawMessage, where, doc string)
 		if creationIDs && !embeddedParamPattern.MatchString(key) {
 			c.creations = append(c.creations, key)
 		}
-		field := ObjectField{Key: key, KeySegments: c.keySegments(key, keyType, where, doc)}
+		field := ObjectField{Key: key, KeySegments: c.keySegments(key, keyType, property, where, doc)}
 		if field.KeySegments == nil && keyType.Name == spec.IdType &&
 			!isCreationID(key) && !jmapc.ID(key).Valid() {
 			c.errorf(where+"."+key, "", "%q is not a valid id", key)
@@ -314,7 +319,10 @@ func (c *checker) object(t *spec.Type, raw json.RawMessage, where string) Node {
 		}
 		c.enum = field.Enum
 		c.useCapability(field)
+		savedProperty := c.property
+		c.property = key
 		value := c.value(elemType, members[key], where+"."+key, field.Doc)
+		c.property = savedProperty
 		c.patchTarget, c.sortTarget, c.enum = savedPatch, savedSort, savedEnum
 		out.Fields = append(out.Fields, ObjectField{Key: key, Value: value})
 	}
@@ -498,20 +506,6 @@ func lowerFirst(s string) string {
 	return string(first)
 }
 
-// propertyOf returns the property a path ends at, such as mailboxIds for
-// methodCalls[0].arguments.emails.k.mailboxIds, or "" where the path ends in
-// none.
-func propertyOf(where string) string {
-	last := where[strings.LastIndex(where, ".")+1:]
-	if i := strings.Index(last, "["); i >= 0 {
-		last = last[:i]
-	}
-	if last == "arguments" {
-		return ""
-	}
-	return last
-}
-
 // elemDoc describes a value inside a list the way keyDoc describes the key of
 // a map. The documentation of the argument holding the list is about all of
 // them and reads as a plural, which a parameter standing for one of them is
@@ -534,7 +528,7 @@ func elemDoc(elemType *spec.Type, context string) string {
 // A keyType of nil means the name itself says nothing about what the parameter
 // is, so it is recorded weakly: another use of the same parameter, somewhere
 // that does say, settles its type.
-func (c *checker) keySegments(key string, keyType *spec.Type, where, doc string) []KeySegment {
+func (c *checker) keySegments(key string, keyType *spec.Type, property, where, doc string) []KeySegment {
 	matches := embeddedParamPattern.FindAllStringSubmatchIndex(key, -1)
 	if len(matches) == 0 {
 		return nil
@@ -544,7 +538,7 @@ func (c *checker) keySegments(key string, keyType *spec.Type, where, doc string)
 		keyType = &spec.Type{Name: spec.String}
 		doc = "The name of the property this patch applies to."
 	} else {
-		doc = keyDoc(keyType, propertyOf(where), doc)
+		doc = keyDoc(keyType, property, doc)
 	}
 	var segments []KeySegment
 	last := 0
@@ -715,17 +709,18 @@ func (c *checker) patchObject(members map[string]json.RawMessage, keys []string,
 
 		valueType := &spec.Type{Name: spec.Any}
 		var keyTypes []*spec.Type
+		var properties []bool
 		var target *spec.Field
 		if c.patchTarget != "" {
-			resolved, value, resolvedField, err := c.spec.ResolvePatch(c.patchTarget, segments, unknown)
+			resolved, named, value, resolvedField, err := c.spec.ResolvePatch(c.patchTarget, segments, unknown)
 			if err != nil {
 				c.errorf(where+"."+key, propertyHint(err), "%v", err)
 				continue
 			}
-			keyTypes, valueType, target = resolved, value, resolvedField
+			keyTypes, properties, valueType, target = resolved, named, value, resolvedField
 		}
 
-		field.KeySegments = c.patchKeySegments(segments, keyTypes, where+"."+key)
+		field.KeySegments = c.patchKeySegments(segments, keyTypes, properties, where+"."+key)
 		// null in a patch means "remove this", so it is allowed wherever a value
 		// is, whether or not the property itself may hold null.
 		removable := *valueType
@@ -737,8 +732,16 @@ func (c *checker) patchObject(members map[string]json.RawMessage, keys []string,
 		if target != nil {
 			valueDoc, c.enum = target.Doc, target.Enum
 		}
+		// A value replacing a property whole has keys of that property, as
+		// mailboxIds does in {"mailboxIds": {"m1": true}}; one at a key has
+		// keys of nothing named.
+		savedProperty := c.property
+		c.property = ""
+		if last := len(segments) - 1; !unknown[last] && last < len(properties) && properties[last] {
+			c.property = segments[last]
+		}
 		field.Value = c.value(&removable, members[key], where+"."+key, valueDoc)
-		c.enum = savedEnum
+		c.enum, c.property = savedEnum, savedProperty
 		out.Fields = append(out.Fields, field)
 	}
 	return out
@@ -749,7 +752,7 @@ func (c *checker) patchObject(members map[string]json.RawMessage, keys []string,
 // left open. A segment's type comes from what the pointer selects by at that
 // depth, so a parameter naming a mailbox in "mailboxIds/{{id}}" is an Id, the
 // same as it would be anywhere else.
-func (c *checker) patchKeySegments(segments []string, keyTypes []*spec.Type, where string) []KeySegment {
+func (c *checker) patchKeySegments(segments []string, keyTypes []*spec.Type, properties []bool, where string) []KeySegment {
 	var out []KeySegment
 	var found bool
 	for i, seg := range segments {
@@ -769,9 +772,10 @@ func (c *checker) patchKeySegments(segments []string, keyTypes []*spec.Type, whe
 		segDoc := "The name of the property this patch applies to."
 		if !weak {
 			// The segment before is the property whose key this is, as
-			// mailboxIds is in mailboxIds/{id}.
+			// mailboxIds is in mailboxIds/{id}, where it names a property
+			// rather than being a key itself.
 			property := ""
-			if i > 0 && !embeddedParamPattern.MatchString(segments[i-1]) {
+			if i > 0 && i-1 < len(properties) && properties[i-1] {
 				property = segments[i-1]
 			}
 			segDoc = keyDoc(segType, property, "")
@@ -845,10 +849,11 @@ func (c *checker) comparator(members map[string]json.RawMessage, keys []string, 
 				continue
 			}
 		}
-		out.Fields = append(out.Fields, ObjectField{
-			Key:   key,
-			Value: c.value(field.ParsedType(), members[key], where+"."+key, field.Doc),
-		})
+		savedProperty := c.property
+		c.property = key
+		value := c.value(field.ParsedType(), members[key], where+"."+key, field.Doc)
+		c.property = savedProperty
+		out.Fields = append(out.Fields, ObjectField{Key: key, Value: value})
 	}
 
 	if sortProperty != nil {

@@ -435,13 +435,16 @@ func unescapePointer(token string) string {
 // against the data type being patched, and reports the type each segment of the
 // pointer selects by, along with the type of the value at the end and the
 // property it belongs to, which carries its documentation and the values it is
-// allowed to take.
+// allowed to take. properties marks the segments that name a property of an
+// object, as against a key of a map or an index of a list, which keyTypes
+// alone cannot tell apart from a map keyed by strings.
 //
 // unknown marks the segments a parameter stands in for. A parameter in place of
 // a property name leaves everything past it unknowable, so resolution stops
 // there and the rest is Any.
-func (s *Spec) ResolvePatch(dataType string, segments []string, unknown []bool) (keyTypes []*Type, value *Type, target *Field, err error) {
+func (s *Spec) ResolvePatch(dataType string, segments []string, unknown []bool) (keyTypes []*Type, properties []bool, value *Type, target *Field, err error) {
 	keyTypes = make([]*Type, len(segments))
+	properties = make([]bool, len(segments))
 	cur := &Type{Name: dataType}
 	anyType := &Type{Name: Any}
 
@@ -476,9 +479,10 @@ func (s *Spec) ResolvePatch(dataType string, segments []string, unknown []bool) 
 		case cur.IsObject():
 			o, ok := s.Object(cur.Name)
 			if !ok {
-				return nil, nil, nil, fmt.Errorf("unknown type %q", cur.Name)
+				return nil, nil, nil, nil, fmt.Errorf("unknown type %q", cur.Name)
 			}
 			keyTypes[i] = &Type{Name: String}
+			properties[i] = true
 			if unknown[i] {
 				// A parameter stands where a property name belongs, so which
 				// property this is cannot be known here.
@@ -488,7 +492,7 @@ func (s *Spec) ResolvePatch(dataType string, segments []string, unknown []bool) 
 			}
 			f, known := o.Field(seg)
 			if !known {
-				return nil, nil, nil, &UnknownPropertyError{
+				return nil, nil, nil, nil, &UnknownPropertyError{
 					TypeName: o.Name, Property: seg, Known: o.PropertyNames(),
 				}
 			}
@@ -497,10 +501,10 @@ func (s *Spec) ResolvePatch(dataType string, segments []string, unknown []bool) 
 			nested = f.PatchTarget
 
 		default:
-			return nil, nil, nil, fmt.Errorf("cannot look inside %s to reach %q", cur, seg)
+			return nil, nil, nil, nil, fmt.Errorf("cannot look inside %s to reach %q", cur, seg)
 		}
 	}
-	return keyTypes, cur, target, nil
+	return keyTypes, properties, cur, target, nil
 }
 
 // SetErrorTypeName is the type a /set response uses to report why it could not
