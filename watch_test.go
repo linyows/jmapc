@@ -25,6 +25,9 @@ type watchServer struct {
 	// status is served instead of a stream, so that a refusal can be
 	// exercised.
 	status int
+	// holdAll holds every stream open, not only the last, as a connection
+	// dropped on the way looks: nothing more arrives, and it does not end.
+	holdAll bool
 }
 
 func newWatchServer(t *testing.T, bodies ...string) *watchServer {
@@ -54,7 +57,7 @@ func newWatchServer(t *testing.T, bodies ...string) *watchServer {
 			body = ws.bodies[attempt]
 		}
 		status := ws.status
-		last := attempt >= len(ws.bodies)-1
+		last := attempt >= len(ws.bodies)-1 || ws.holdAll
 		ws.mu.Unlock()
 
 		if status != http.StatusOK {
@@ -374,5 +377,24 @@ func TestWatchDoesNotResyncOnOtherErrors(t *testing.T) {
 	}
 	if resyncs != 0 {
 		t.Errorf("the records were read again %d times for an error that does not call for it", resyncs)
+	}
+}
+
+// TestWatchReconnectsWhenTheStreamGoesQuiet checks a connection that stays
+// open and carries nothing, which is what one dropped on the way looks like:
+// with pings asked for, the watch notices once twice their interval passes,
+// and connects again, where it used to wait on it for ever.
+func TestWatchReconnectsWhenTheStreamGoesQuiet(t *testing.T) {
+	ws := newWatchServer(t, "event: ping\ndata: {\"interval\": 1}\n\n", "")
+	ws.holdAll = true
+	seen, err := watchWith(t, ws, "e1", []WatchOption{WithPing(time.Second)},
+		step{newState: "e1"}, // on connecting
+		step{newState: "e1"}, // on connecting again, once the first went quiet
+	)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Watch: %v", err)
+	}
+	if len(seen) != 2 || len(ws.connections()) != 2 {
+		t.Errorf("caught up %d times over %d connections, want a second connection after the silence", len(seen), len(ws.connections()))
 	}
 }

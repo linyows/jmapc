@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -349,5 +350,167 @@ func TestPushVerificationDecodes(t *testing.T) {
 	}
 	if v.VerificationCode != "b7cb4a4c8d1e" {
 		t.Errorf("verificationCode = %q", v.VerificationCode)
+	}
+}
+
+// pingingServer serves a stream that writes what script says, a step at a
+// time, and then holds the connection open without writing anything, as a
+// connection dropped somewhere between the two looks from here.
+func pingingServer(t *testing.T, script func(w http.ResponseWriter, flush func())) *httptest.Server {
+	t.Helper()
+	return slowEventServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher := w.(http.Flusher)
+		flusher.Flush()
+		script(w, flusher.Flush)
+		<-r.Context().Done()
+	})
+}
+
+// TestEventSourceNoticesAStreamThatStopsPinging checks that a stream that
+// carries nothing for twice the ping interval fails Next, where it used to
+// wait for ever on a connection nothing would arrive on.
+func TestEventSourceNoticesAStreamThatStopsPinging(t *testing.T) {
+	srv := pingingServer(t, func(w http.ResponseWriter, flush func()) {
+		fmt.Fprint(w, "event: ping\ndata: {\"interval\": 1}\n\n")
+		flush()
+	})
+	c := New(srv.URL + "/session")
+	stream, err := c.EventSource(context.Background(), &EventSourceOptions{Ping: time.Second})
+	if err != nil {
+		t.Fatalf("EventSource: %v", err)
+	}
+	defer stream.Close()
+
+	start := time.Now()
+	_, err = stream.Next()
+	if err == nil || !strings.Contains(err.Error(), "taken as lost") {
+		t.Fatalf("Next returned %v, want the silence reported", err)
+	}
+	if took := time.Since(start); took < 1500*time.Millisecond || took > 5*time.Second {
+		t.Errorf("the silence was noticed after %v, want about twice the second", took)
+	}
+	if !IsTemporary(err) {
+		t.Errorf("IsTemporary(%v) = false, want true so that a watch reconnects", err)
+	}
+}
+
+// TestEventSourceKeepsToTheIntervalTheServerPingsAt checks a server that pings
+// less often than it was asked to, as one that clamps the interval does: the
+// interval its pings report is the one the stream waits by.
+func TestEventSourceKeepsToTheIntervalTheServerPingsAt(t *testing.T) {
+	srv := pingingServer(t, func(w http.ResponseWriter, flush func()) {
+		// Asked for a second, the server pings every two; two seconds and a
+		// half between pings would be taken as lost at the second asked for.
+		for range 2 {
+			fmt.Fprint(w, "event: ping\ndata: {\"interval\": 2}\n\n")
+			flush()
+			time.Sleep(2500 * time.Millisecond)
+		}
+		fmt.Fprint(w, "event: state\ndata: {\"@type\":\"StateChange\",\"changed\":{\"a1\":{\"Email\":\"s2\"}}}\n\n")
+		flush()
+	})
+	c := New(srv.URL + "/session")
+	stream, err := c.EventSource(context.Background(), &EventSourceOptions{Ping: time.Second})
+	if err != nil {
+		t.Fatalf("EventSource: %v", err)
+	}
+	defer stream.Close()
+	change, err := stream.Next()
+	if err != nil {
+		t.Fatalf("Next: %v", err)
+	}
+	if state, _ := change.StateOf("a1", "Email"); state != "s2" {
+		t.Errorf("state = %q, want s2", state)
+	}
+}
+
+// TestEventSourceWithoutPingsWaits checks that a stream asked for no pings is
+// not taken as lost for being quiet: nothing was promised to arrive.
+func TestEventSourceWithoutPingsWaits(t *testing.T) {
+	srv := pingingServer(t, func(w http.ResponseWriter, flush func()) {
+		time.Sleep(2500 * time.Millisecond)
+		fmt.Fprint(w, "event: state\ndata: {\"@type\":\"StateChange\",\"changed\":{\"a1\":{\"Email\":\"s2\"}}}\n\n")
+		flush()
+	})
+	c := New(srv.URL + "/session")
+	stream, err := c.EventSource(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("EventSource: %v", err)
+	}
+	defer stream.Close()
+	if _, err := stream.Next(); err != nil {
+		t.Fatalf("Next: %v", err)
+	}
+}
+
+// TestEventSourceAsksForWholeSeconds checks that a ping interval of less than
+// a second is asked for as a second rather than as zero, which asks for none.
+func TestEventSourceAsksForWholeSeconds(t *testing.T) {
+	es := newEventServer(t)
+	es.stream = "event: state\ndata: {\"@type\":\"StateChange\",\"changed\":{}}\n\n"
+	stream, err := es.client().EventSource(context.Background(), &EventSourceOptions{Ping: 300 * time.Millisecond})
+	if err != nil {
+		t.Fatalf("EventSource: %v", err)
+	}
+	stream.Close()
+	if !strings.Contains(es.requestURI, "ping=1") {
+		t.Errorf("the stream was asked for with %s, want ping=1", es.requestURI)
+	}
+}
+
+// TestEventSourceIsNotLostWhileTheCallerIsBusy checks a caller that takes
+// longer than twice the ping interval over what Next returned, as a watch
+// catching up may, while the server goes on pinging: the pings wait in the
+// stream for the next call, and the stream is not taken as lost for them not
+// being read.
+func TestEventSourceIsNotLostWhileTheCallerIsBusy(t *testing.T) {
+	srv := pingingServer(t, func(w http.ResponseWriter, flush func()) {
+		fmt.Fprint(w, "event: state\ndata: {\"@type\":\"StateChange\",\"changed\":{\"a1\":{\"Email\":\"s1\"}}}\n\n")
+		flush()
+		for range 7 {
+			time.Sleep(500 * time.Millisecond)
+			fmt.Fprint(w, "event: ping\ndata: {\"interval\": 1}\n\n")
+			flush()
+		}
+		fmt.Fprint(w, "event: state\ndata: {\"@type\":\"StateChange\",\"changed\":{\"a1\":{\"Email\":\"s2\"}}}\n\n")
+		flush()
+	})
+	c := New(srv.URL + "/session")
+	stream, err := c.EventSource(context.Background(), &EventSourceOptions{Ping: time.Second})
+	if err != nil {
+		t.Fatalf("EventSource: %v", err)
+	}
+	defer stream.Close()
+	if _, err := stream.Next(); err != nil {
+		t.Fatalf("the first Next: %v", err)
+	}
+	// Busy for longer than twice the interval, reading nothing.
+	time.Sleep(3 * time.Second)
+	change, err := stream.Next()
+	if err != nil {
+		t.Fatalf("the stream was taken as lost while the caller was busy: %v", err)
+	}
+	if state, _ := change.StateOf("a1", "Email"); state != "s2" {
+		t.Errorf("state = %q, want s2", state)
+	}
+}
+
+func TestPingInterval(t *testing.T) {
+	for _, tt := range []struct {
+		in, want time.Duration
+	}{
+		{0, 0},
+		{-time.Second, 0},
+		{300 * time.Millisecond, time.Second},
+		{time.Second, time.Second},
+		{1500 * time.Millisecond, 2 * time.Second},
+		{30 * time.Second, 30 * time.Second},
+		// Rounding up by adding would overflow, and come out negative.
+		{time.Duration(math.MaxInt64), maxPing},
+	} {
+		if got := pingInterval(tt.in); got != tt.want {
+			t.Errorf("pingInterval(%v) = %v, want %v", tt.in, got, tt.want)
+		}
 	}
 }
