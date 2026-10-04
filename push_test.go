@@ -33,6 +33,10 @@ type pushServer struct {
 	// lose, where set, makes the server forget every subscription before
 	// answering the next update or get, once.
 	lose bool
+	// refuseDestroy makes the server refuse to destroy a subscription.
+	refuseDestroy bool
+	// asked holds each expiry an update asked for.
+	asked []string
 }
 
 type pushSub struct {
@@ -130,6 +134,7 @@ func (ps *pushServer) set(raw json.RawMessage) any {
 			s.verified = true
 		}
 		if when, ok := patch["expires"].(string); ok {
+			ps.asked = append(ps.asked, when)
 			var asked UTCDate
 			_ = json.Unmarshal([]byte(fmt.Sprintf("%q", when)), &asked)
 			s.expires = ps.grant(&asked)
@@ -139,7 +144,12 @@ func (ps *pushServer) set(raw json.RawMessage) any {
 		}
 		updated[id] = changed
 	}
+	notDestroyed := map[ID]any{}
 	for _, id := range args.Destroy {
+		if ps.refuseDestroy {
+			notDestroyed[id] = map[string]string{"type": "forbidden"}
+			continue
+		}
 		if _, ok := ps.subs[id]; ok {
 			delete(ps.subs, id)
 			destroyed = append(destroyed, id)
@@ -149,7 +159,7 @@ func (ps *pushServer) set(raw json.RawMessage) any {
 	return map[string]any{
 		"created": created, "notCreated": notCreated,
 		"updated": updated, "notUpdated": notUpdated,
-		"destroyed": destroyed,
+		"destroyed": destroyed, "notDestroyed": notDestroyed,
 	}
 }
 
@@ -488,5 +498,71 @@ func TestPushReceiverKeepsFewCodes(t *testing.T) {
 	}
 	if len(r.codes) > maxPendingCodes {
 		t.Errorf("the receiver keeps %d codes, want at most %d", len(r.codes), maxPendingCodes)
+	}
+}
+
+// TestPushReceiverReturnsTheContextsErrorWhileVerifying checks that ending
+// Run while it waits for a code returns the context's error, as Run says,
+// rather than reporting that no code came.
+func TestPushReceiverReturnsTheContextsErrorWhileVerifying(t *testing.T) {
+	ps := newPushServer(t)
+	ps.postCodes = false
+	r := NewPushReceiver(ps.client(), PushReceiverOptions{URL: "https://push.example/secret", DeviceClientID: "app-1", VerifyTimeout: time.Hour})
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- r.Run(ctx) }()
+	for len(ps.subscriptions()) == 0 {
+		time.Sleep(time.Millisecond)
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("Run returned %v, want the context's error", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not return after its context ended")
+	}
+}
+
+// TestPushReceiverExtendsAnExpiryTheServerSet checks a subscription made
+// without asking for an expiry, which the server gave one all the same: it is
+// extended by as long as the server granted at first, never to a date that
+// has passed.
+func TestPushReceiverExtendsAnExpiryTheServerSet(t *testing.T) {
+	ps := newPushServer(t)
+	ps.maxLifetime = time.Hour
+	_, ev, stop := startReceiver(t, ps, PushReceiverOptions{DeviceClientID: "app-1"},
+		func(r *PushReceiver) { r.wait = blockAfter(1, new([]time.Duration), new(sync.Mutex)) })
+	renewed := ev.waitFor(t, PushRenewed)
+	_ = stop()
+	if d := time.Until(renewed.Expires); d < 50*time.Minute {
+		t.Errorf("the extension leaves %v, want about the hour the server granted", d)
+	}
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	if len(ps.asked) != 1 {
+		t.Fatalf("the receiver asked for %v, want one extension", ps.asked)
+	}
+	var asked UTCDate
+	_ = json.Unmarshal([]byte(fmt.Sprintf("%q", ps.asked[0])), &asked)
+	if !asked.After(time.Now()) {
+		t.Errorf("the extension asked for %s, which has passed", ps.asked[0])
+	}
+}
+
+// TestPushReceiverReportsOnlyWhatWasDestroyed checks that a subscription the
+// server refuses to destroy is not reported as destroyed.
+func TestPushReceiverReportsOnlyWhatWasDestroyed(t *testing.T) {
+	ps := newPushServer(t)
+	ps.refuseDestroy = true
+	_, ev, stop := startReceiver(t, ps, PushReceiverOptions{DeviceClientID: "app-1"},
+		func(r *PushReceiver) { r.wait = blockAfter(0, new([]time.Duration), new(sync.Mutex)) })
+	ev.waitFor(t, PushVerified)
+	_ = stop()
+	for _, kind := range ev.kinds() {
+		if kind == PushDestroyed {
+			t.Errorf("a subscription the server kept was reported destroyed: %v", ev.kinds())
+		}
 	}
 }

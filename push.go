@@ -109,7 +109,10 @@ const maxPushBody = 1 << 20
 // about, so that posts to the URL cannot grow them without end.
 const maxPendingCodes = 16
 
-// NewPushReceiver returns a receiver for c's account, configured by opts.
+// NewPushReceiver returns a receiver for the user c authenticates as,
+// configured by opts. A push subscription belongs to the user rather than to
+// an account, and a state change it brings may name every account the user
+// has.
 func NewPushReceiver(c *Client, opts PushReceiverOptions) *PushReceiver {
 	if opts.VerifyTimeout <= 0 {
 		opts.VerifyTimeout = time.Minute
@@ -188,9 +191,11 @@ func (r *PushReceiver) keepCode(id ID, code string) {
 	}
 }
 
-// awaitCode returns the verification code for id once it has arrived.
+// awaitCode returns the verification code for id once it has arrived. It
+// returns ctx's error where ctx ended first, and says that no code came where
+// VerifyTimeout ran out.
 func (r *PushReceiver) awaitCode(ctx context.Context, id ID) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, r.opts.VerifyTimeout)
+	limit, cancel := context.WithTimeout(ctx, r.opts.VerifyTimeout)
 	defer cancel()
 	for {
 		r.mu.Lock()
@@ -205,7 +210,10 @@ func (r *PushReceiver) awaitCode(ctx context.Context, id ID) (string, error) {
 		}
 		select {
 		case <-r.arrived:
-		case <-ctx.Done():
+		case <-limit.Done():
+			if err := ctx.Err(); err != nil {
+				return "", err
+			}
 			return "", fmt.Errorf("jmapc: no verification code reached %s for push subscription %s within %s", r.opts.URL, id, r.opts.VerifyTimeout)
 		}
 	}
@@ -223,7 +231,14 @@ func (r *PushReceiver) Run(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		err = r.keep(ctx, id, expires)
+		// What to ask for at each extension: Lifetime, or where that leaves
+		// the expiry to the server and the server set one, as long as the
+		// server granted at first.
+		lifetime := r.opts.Lifetime
+		if lifetime <= 0 && !expires.IsZero() {
+			lifetime = expires.Sub(r.now())
+		}
+		err = r.keep(ctx, id, expires, lifetime)
 		if errors.Is(err, errSubscriptionLost) {
 			r.event(PushLost, id, time.Time{})
 			continue
@@ -280,7 +295,7 @@ func (r *PushReceiver) subscribe(ctx context.Context) (ID, time.Time, error) {
 
 // keep extends the subscription before it expires, or checks that it still
 // exists where it does not expire, until ctx ends or the subscription is gone.
-func (r *PushReceiver) keep(ctx context.Context, id ID, expires time.Time) error {
+func (r *PushReceiver) keep(ctx context.Context, id ID, expires time.Time, lifetime time.Duration) error {
 	for {
 		next := r.opts.CheckInterval
 		if !expires.IsZero() {
@@ -292,7 +307,7 @@ func (r *PushReceiver) keep(ctx context.Context, id ID, expires time.Time) error
 		if err := r.wait(ctx, next); err != nil {
 			return err
 		}
-		renewed, err := r.renew(ctx, id, expires)
+		renewed, err := r.renew(ctx, id, expires, lifetime)
 		switch {
 		case err == nil:
 			expires = renewed
@@ -308,7 +323,7 @@ func (r *PushReceiver) keep(ctx context.Context, id ID, expires time.Time) error
 
 // renew extends a subscription that expires, and checks one that does not,
 // returning its expiry.
-func (r *PushReceiver) renew(ctx context.Context, id ID, expires time.Time) (time.Time, error) {
+func (r *PushReceiver) renew(ctx context.Context, id ID, expires time.Time, lifetime time.Duration) (time.Time, error) {
 	if expires.IsZero() {
 		resp, err := r.call(ctx, "PushSubscription/get", map[string]any{"ids": []ID{id}, "properties": []string{"id", "expires"}})
 		if err != nil {
@@ -323,7 +338,7 @@ func (r *PushReceiver) renew(ctx context.Context, id ID, expires time.Time) (tim
 		}
 		return granted(got.List[0].Expires, time.Time{}), nil
 	}
-	asked := r.expiry()
+	asked := r.now().Add(lifetime)
 	resp, err := r.set(ctx, map[string]any{"update": map[ID]any{id: map[string]any{"expires": NewUTCDate(asked)}}})
 	if err != nil {
 		return time.Time{}, err
@@ -347,8 +362,17 @@ func (r *PushReceiver) renew(ctx context.Context, id ID, expires time.Time) (tim
 func (r *PushReceiver) destroy(id ID) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if _, err := r.set(ctx, map[string]any{"destroy": []ID{id}}); err == nil {
-		r.event(PushDestroyed, id, time.Time{})
+	resp, err := r.set(ctx, map[string]any{"destroy": []ID{id}})
+	if err != nil {
+		return
+	}
+	// The call can succeed and the record still be refused, which is said in
+	// notDestroyed; only what was destroyed is reported as destroyed.
+	for _, gone := range resp.Destroyed {
+		if gone == id {
+			r.event(PushDestroyed, id, time.Time{})
+			return
+		}
 	}
 }
 
