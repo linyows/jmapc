@@ -23,13 +23,14 @@ go generate ./...    # ランタイムの型と、全言語のサンプルクラ
 ここまでのテストは、生成コードをスタブに対して動かします。
 スタブは、テストが期待するとおりにサーバとして応答するものです。
 `e2e/`は、実際のサーバであるStalwartをコンテナで動かし、それに対して実行します。
+全体が1つの[probe](https://github.com/linyows/probe)のワークフローで、リポジトリのルートで実行します。
 
 ```
-e2e/run.sh
+probe e2e/workflow.yml
 ```
 
-docker、Go、[probe](https://github.com/linyows/probe)がPATHにある必要があります。
-コンテナを起動し、Stalwartをbootstrap modeから抜けさせ、アカウントを2つ作ってから、`e2e/workflow.yml`のシナリオを実行します。
+docker、Go、probeがPATHにある必要があります。
+コンテナを起動し、Stalwartをbootstrap modeから抜けさせ、アカウントを2つ作り、ドライバーをビルドしてから、シナリオを実行します。
 各シナリオは、jmapcを通して何かをしたあと、jmapcを通らない経路でそれを確かめます。
 jmapcが読んだsessionを直接取得したものと比べ、SMTPで配送したメールを生成クライアントが見つけられるかを確かめます。
 jmapcで取り込んだメールのフラグをIMAPで読み、IMAPで付けたフラグをjmapcで読みます。
@@ -38,70 +39,83 @@ jmapcで少しずつ追った変更を、サーバ自身の変更の分割と比
 SMTPで配送したメールが、pushでjmapcの`Watch`に届くかを、ほかに変更の起きないアカウントで確かめます。
 jmapc側を受け持つのは`e2e/driver`で、`e2e/requests`から生成したクライアントを呼び、結果をJSONで出力します。
 
-準備では、サーバの設定とドライバーのビルドを並行して行います。
+サーバの起動と設定は、ドライバーのビルドと並行して行います。
+その後、互いに独立したシナリオを並行して実行します。
 
 ```mermaid
 flowchart LR
-    subgraph provision["Provision the server"]
-        provision_step0["Wait for bootstrap mode"]
-        provision_step1["Complete bootstrap"]
-        provision_step2["Restart out of bootstrap mode"]
-        provision_step3["Wait for the server"]
-        provision_step4["Find the domain bootstrap created"]
-        provision_step5["Create alice and bob"]
+    subgraph server["Start and provision the server"]
+        server_step0["Remove the container and the work directory when the workflow ends"]
+        server_step1["Start Stalwart"]
+        server_step2["Wait for bootstrap mode"]
+        server_step3["Complete bootstrap"]
+        server_step4["Restart out of bootstrap mode"]
+        server_step5["Wait for the server"]
+        server_step6["Find the domain bootstrap created"]
+        server_step7["Create alice and bob"]
     end
-    subgraph job_1["Build the driver"]
-        job_1_step0["go build"]
+    subgraph driver["Build the driver"]
+        driver_step0["go build"]
     end
+    subgraph job_2["The session as jmapc reads it"]
+        job_2_step0["Fetch the session directly"]
+        job_2_step1["Fetch it through jmapc"]
+        job_2_step2["Verify every request through jmapc"]
+    end
+    subgraph job_3["Mail delivered over SMTP, found through jmapc"]
+        job_3_step0["Deliver to alice on port 25"]
+        job_3_step1["Find it through the generated client"]
+        job_3_step2["Read alice's mail account"]
+        job_3_step3["Find the same email directly"]
+    end
+    subgraph job_4["Mail imported through jmapc, read over IMAP"]
+        job_4_step0["Import a flagged message through the generated client"]
+        job_4_step1["Find it in the inbox over IMAP, flagged and unread"]
+        job_4_step2["Mark it read over IMAP"]
+        job_4_step3["See it read through the generated client"]
+    end
+    subgraph job_5["A blob uploaded through jmapc, downloaded directly"]
+        job_5_step0["Upload and download it through jmapc"]
+        job_5_step1["Download the whole of it directly"]
+        job_5_step2["Ask for the same range directly"]
+    end
+    subgraph job_6["Changes followed through jmapc, a few at a time"]
+        job_6_step0["Read the state through jmapc"]
+        job_6_step1["Deliver three messages to alice"]
+        job_6_step2["Follow the changes through the generated client"]
+        job_6_step3["Read alice's mail account for the direct request"]
+        job_6_step4["See the server page the same changes directly"]
+    end
+    subgraph job_7["A push followed through jmapc's Watch"]
+        job_7_step0["Read the state through jmapc"]
+        job_7_step1["Start watching through the generated client"]
+        job_7_step2["Wait until the watch follows pushes"]
+        job_7_step3["Deliver to bob on port 25"]
+        job_7_step4["See the watch report it"]
+    end
+    server --> job_2
+    driver --> job_2
+    server --> job_3
+    driver --> job_3
+    server --> job_4
+    driver --> job_4
+    server --> job_5
+    driver --> job_5
+    server --> job_6
+    driver --> job_6
+    server --> job_7
+    driver --> job_7
 ```
 
-シナリオは互いに独立していて、並行して実行されます。
-
-```mermaid
-flowchart LR
-    subgraph job_0["The session as jmapc reads it"]
-        job_0_step0["Fetch the session directly"]
-        job_0_step1["Fetch it through jmapc"]
-        job_0_step2["Verify every request through jmapc"]
-    end
-    subgraph job_1["Mail delivered over SMTP, found through jmapc"]
-        job_1_step0["Deliver to alice on port 25"]
-        job_1_step1["Find it through the generated client"]
-        job_1_step2["Read alice's mail account"]
-        job_1_step3["Find the same email directly"]
-    end
-    subgraph job_2["Mail imported through jmapc, read over IMAP"]
-        job_2_step0["Import a flagged message through the generated client"]
-        job_2_step1["Find it in the inbox over IMAP, flagged and unread"]
-        job_2_step2["Mark it read over IMAP"]
-        job_2_step3["See it read through the generated client"]
-    end
-    subgraph job_3["A blob uploaded through jmapc, downloaded directly"]
-        job_3_step0["Upload and download it through jmapc"]
-        job_3_step1["Download the whole of it directly"]
-        job_3_step2["Ask for the same range directly"]
-    end
-    subgraph job_4["Changes followed through jmapc, a few at a time"]
-        job_4_step0["Read the state through jmapc"]
-        job_4_step1["Deliver three messages to alice"]
-        job_4_step2["Follow the changes through the generated client"]
-        job_4_step3["Read alice's mail account for the direct request"]
-        job_4_step4["See the server page the same changes directly"]
-    end
-    subgraph job_5["A push followed through jmapc's Watch"]
-        job_5_step0["Read the state through jmapc"]
-        job_5_step1["Start watching through the generated client"]
-        job_5_step2["Wait until the watch follows pushes"]
-        job_5_step3["Deliver to bob on port 25"]
-        job_5_step4["See the watch report it"]
-    end
-```
-
-2つ目の図は`probe dag --mermaid e2e/vars.yml,e2e/workflow.yml`で、1つ目は`e2e/setup.yml`について同じコマンドで出力したものです。
+この図は`probe dag --mermaid e2e/workflow.yml`で出力したものです。
 ジョブやステップを足したら、出力し直してください。
 
-`E2E_KEEP=1`を指定しない限り、終わるとコンテナは削除されます。
-Stalwartのリリースは`e2e/run.sh`で固定しています。
+最初のステップは、止められるとコンテナとドライバーのビルド先のディレクトリを消すコマンドを、バックグラウンドで起動します。
+probeはワークフローの終わりにこれを止めるので、シナリオが成功しても、失敗しても、中断されても片付けが走ります。
+`E2E_KEEP=1`を指定すると、どちらも残します。
+パスワードは実行ごとに生成しますが、`E2E_ALICE_PASSWORD`などで指定すれば、あとからログインできます。
+設定の一覧は`e2e/workflow.yml`の冒頭にあります。
+Stalwartのリリースもそこで固定しています。
 Stalwartはマイナーバージョンの間で設定の形を変えるので、新しいバージョンへの移行は、そこを意図して書き換える変更として行います。
 
 ランタイムの型とサンプルのクライアントはコミットされていて、それらをカタログが今生成する結果と比較するテストがあります。

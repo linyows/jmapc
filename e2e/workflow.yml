@@ -1,15 +1,207 @@
-# The scenarios. Each one does something through jmapc and checks it over a
-# path that does not go through jmapc, or the other way round, so that a
-# mistake in what jmapc sends cannot be hidden by the same mistake in what it
-# reads back.
+# The end-to-end tests: Stalwart started in a container, set up, and the
+# scenarios run against it, all in this one workflow. Run it from the
+# repository root:
+#
+#   probe e2e/workflow.yml
+#
+# Every setting has a default and can be given in the environment instead:
+# E2E_HTTP_PORT, E2E_SMTP_PORT and E2E_IMAP_PORT for the ports on this side,
+# E2E_CONTAINER for the container's name, the passwords as
+# E2E_RECOVERY_PASSWORD,
+# E2E_ALICE_PASSWORD and E2E_BOB_PASSWORD, which are generated for the run
+# otherwise, and E2E_KEEP=1 to leave the container running afterwards, to log
+# into with the passwords given.
+#
+# Each scenario does something through jmapc and checks it over a path that
+# does not go through jmapc, or the other way round, so that a mistake in what
+# jmapc sends cannot be hidden by the same mistake in what it reads back.
 #
 # Outputs are kept for the whole run and can be read by name alone, so an
 # output is not named after the id of any step: outputs.account.id would
 # otherwise find the output named account rather than the step.
 name: jmapc against Stalwart
 
+vars:
+  # The release the tests are written against. Stalwart moves its settings
+  # between minor versions, so a new one is a change to make here on purpose.
+  image: stalwartlabs/stalwart:v0.16@sha256:ec011be228596e37e65f41aab17deed573859614430472f7eeb42178c50d87b7
+  container: "{{E2E_CONTAINER ?? 'jmapc-e2e'}}"
+  http_port: "{{E2E_HTTP_PORT ?? '18080'}}"
+  smtp_port: "{{E2E_SMTP_PORT ?? '10025'}}"
+  imap_port: "{{E2E_IMAP_PORT ?? '10993'}}"
+  base: "http://localhost:{{E2E_HTTP_PORT ?? '18080'}}"
+  smtp: "localhost:{{E2E_SMTP_PORT ?? '10025'}}"
+  imap_host: localhost
+  # Where the driver is built, removed when the workflow ends. It is always
+  # made for the run, never given, since it is removed whole.
+  work: "{{'/tmp/jmapc-e2e-' + random_str(12)}}"
+  keep: "{{E2E_KEEP ?? ''}}"
+  # user:password of the administrator the container is started with.
+  recovery_admin: "admin:{{E2E_RECOVERY_PASSWORD ?? random_str(24)}}"
+  domain: example.test
+  alice_password: "{{E2E_ALICE_PASSWORD ?? random_str(24)}}"
+  bob_password: "{{E2E_BOB_PASSWORD ?? random_str(24)}}"
+  # Marks what one run writes, so that runs against the same server do not
+  # read each other's mail.
+  run_id: "{{random_str(8)}}"
+
+secrets:
+  - E2E_RECOVERY_PASSWORD
+  - E2E_ALICE_PASSWORD
+  - E2E_BOB_PASSWORD
+
 jobs:
+- name: Start and provision the server
+  id: server
+  defaults:
+    http:
+      url: "{{vars.base}}"
+      headers:
+        content-type: application/json
+  steps:
+  # Before anything is started, so that whatever happens next, the container
+  # and the work directory go when the workflow ends: Probe stops a background
+  # command then, as it does when it is interrupted. E2E_KEEP=1 leaves both.
+  - name: Remove the container and the work directory when the workflow ends
+    uses: shell
+    skipif: vars.keep == "1"
+    with:
+      cmd: "trap 'docker rm -f {{vars.container}} >/dev/null 2>&1; rm -rf {{vars.work}}; exit 0' TERM INT; while :; do sleep 1; done"
+      background: true
+    test: res.pid > 0
+
+  # STALWART_PUBLIC_URL is what the session's URLs are built from. Without it
+  # they name the server's hostname, which nothing outside the container
+  # resolves.
+  - name: Start Stalwart
+    uses: shell
+    with:
+      cmd: >-
+        mkdir -p {{vars.work}} &&
+        docker rm -f {{vars.container}} >/dev/null 2>&1;
+        docker run -d --name {{vars.container}}
+        -p {{vars.http_port}}:8080 -p {{vars.smtp_port}}:25 -p {{vars.imap_port}}:993
+        -e STALWART_RECOVERY_ADMIN={{vars.recovery_admin}}
+        -e STALWART_PUBLIC_URL={{vars.base}}
+        {{vars.image}}
+      timeout: 5m
+    test: res.code == 0
+
+  - name: Wait for bootstrap mode
+    uses: http
+    with:
+      get: /.well-known/jmap
+    retry: {max_attempts: 60, interval: 1s}
+    test: res.code == 200
+
+  # Certificates and DKIM keys are left out: nothing outside the container
+  # reaches it by name, and no mail leaves it.
+  - name: Complete bootstrap
+    id: boot
+    uses: http
+    with:
+      post: /jmap/
+      headers:
+        authorization: "Basic {{encode_base64(vars.recovery_admin)}}"
+      body:
+        using: ["urn:ietf:params:jmap:core", "urn:stalwart:jmap"]
+        methodCalls:
+        - - x:Bootstrap/set
+          - update:
+              singleton:
+                serverHostname: "mail.{{vars.domain}}"
+                defaultDomain: "{{vars.domain}}"
+                requestTlsCertificate: false
+                generateDkimKeys: false
+          - boot
+    test: res.code == 200 && res.body.methodResponses[0][1].updated.singleton.secret != ""
+    outputs:
+      user: res.body.methodResponses[0][1].updated.singleton.username
+      secret: res.body.methodResponses[0][1].updated.singleton.secret
+
+  # Bootstrap writes the configuration and leaves the server as it was, in
+  # bootstrap mode, until it starts again.
+  - name: Restart out of bootstrap mode
+    uses: shell
+    with:
+      cmd: docker restart {{vars.container}}
+      timeout: 60s
+    test: res.code == 0
+
+  - name: Wait for the server
+    uses: http
+    with:
+      get: /.well-known/jmap
+      headers:
+        authorization: "Basic {{encode_base64(outputs.boot.user + ':' + outputs.boot.secret)}}"
+    retry: {max_attempts: 60, interval: 1s}
+    test: res.code == 200 && res.body.username == outputs.boot.user
+
+  - name: Find the domain bootstrap created
+    id: domain
+    uses: http
+    with:
+      post: /jmap/
+      headers:
+        authorization: "Basic {{encode_base64(outputs.boot.user + ':' + outputs.boot.secret)}}"
+      body:
+        using: ["urn:ietf:params:jmap:core", "urn:stalwart:jmap"]
+        methodCalls:
+        - [x:Domain/query, {filter: {name: "{{vars.domain}}"}}, find]
+    test: res.code == 200 && len(res.body.methodResponses[0][1].ids) == 1
+    outputs:
+      id: res.body.methodResponses[0][1].ids[0]
+
+  # Stalwart's lists are written as maps keyed by position, which is why the
+  # one credential is under "0".
+  - name: Create alice and bob
+    uses: http
+    with:
+      post: /jmap/
+      headers:
+        authorization: "Basic {{encode_base64(outputs.boot.user + ':' + outputs.boot.secret)}}"
+      body:
+        using: ["urn:ietf:params:jmap:core", "urn:stalwart:jmap"]
+        methodCalls:
+        - - x:Account/set
+          - create:
+              alice:
+                "@type": User
+                name: alice
+                domainId: "{{outputs.domain.id}}"
+                credentials: {"0": {"@type": Password, secret: "{{vars.alice_password}}"}}
+                roles: {"@type": User}
+                permissions: {"@type": Inherit}
+                quotas: {}
+                aliases: {}
+                memberGroupIds: {}
+                encryptionAtRest: {"@type": Disabled}
+              bob:
+                "@type": User
+                name: bob
+                domainId: "{{outputs.domain.id}}"
+                credentials: {"0": {"@type": Password, secret: "{{vars.bob_password}}"}}
+                roles: {"@type": User}
+                permissions: {"@type": Inherit}
+                quotas: {}
+                aliases: {}
+                memberGroupIds: {}
+                encryptionAtRest: {"@type": Disabled}
+          - accounts
+    test: res.code == 200 && len(res.body.methodResponses[0][1].created) == 2
+
+- name: Build the driver
+  id: driver
+  steps:
+  - name: go build
+    uses: shell
+    with:
+      cmd: mkdir -p {{vars.work}} && go build -o {{vars.work}}/driver ./e2e/driver
+      timeout: 5m
+    test: res.code == 0
+
 - name: The session as jmapc reads it
+  needs: [server, driver]
   defaults:
     http:
       url: "{{vars.base}}"
@@ -36,7 +228,7 @@ jobs:
   - name: Fetch it through jmapc
     uses: shell
     with:
-      cmd: "{{vars.driver}} session"
+      cmd: "{{vars.work}}/driver session"
       env:
         JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
         JMAPC_E2E_USER: "alice@{{vars.domain}}"
@@ -61,7 +253,7 @@ jobs:
   - name: Verify every request through jmapc
     uses: shell
     with:
-      cmd: "{{vars.driver}} verify"
+      cmd: "{{vars.work}}/driver verify"
       env:
         JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
         JMAPC_E2E_USER: "alice@{{vars.domain}}"
@@ -76,6 +268,7 @@ jobs:
         parse_json(res.stdout).problems[0].request == 'SendReadReceipt' &&
         parse_json(res.stdout).problems[0].error contains 'urn:ietf:params:jmap:mdn'
 - name: Mail delivered over SMTP, found through jmapc
+  needs: [server, driver]
   steps:
   # The subject carries the run id, and probe appends a tracking id of its
   # own, so the search below matches this delivery and no other.
@@ -93,7 +286,7 @@ jobs:
     id: found
     uses: shell
     with:
-      cmd: "{{vars.driver}} find-emails -subject 'inbound {{vars.run_id}}'"
+      cmd: "{{vars.work}}/driver find-emails -subject 'inbound {{vars.run_id}}'"
       env:
         JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
         JMAPC_E2E_USER: "alice@{{vars.domain}}"
@@ -137,6 +330,7 @@ jobs:
     test: res.code == 200 && res.body.methodResponses[0][1].ids == [outputs.found.id]
 
 - name: Mail imported through jmapc, read over IMAP
+  needs: [server, driver]
   defaults:
     imap:
       host: "{{vars.imap_host}}"
@@ -151,7 +345,7 @@ jobs:
     id: imported
     uses: shell
     with:
-      cmd: "{{vars.driver}} import-email -subject 'imported {{vars.run_id}}'"
+      cmd: "{{vars.work}}/driver import-email -subject 'imported {{vars.run_id}}'"
       env:
         JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
         JMAPC_E2E_USER: "alice@{{vars.domain}}"
@@ -202,7 +396,7 @@ jobs:
   - name: See it read through the generated client
     uses: shell
     with:
-      cmd: "{{vars.driver}} find-emails -subject 'imported {{vars.run_id}}'"
+      cmd: "{{vars.work}}/driver find-emails -subject 'imported {{vars.run_id}}'"
       env:
         JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
         JMAPC_E2E_USER: "alice@{{vars.domain}}"
@@ -214,6 +408,7 @@ jobs:
       parse_json(res.stdout).emails[0].keywords == ['$flagged', '$seen']
 
 - name: A blob uploaded through jmapc, downloaded directly
+  needs: [server, driver]
   defaults:
     http:
       url: "{{vars.base}}"
@@ -226,7 +421,7 @@ jobs:
     id: blob
     uses: shell
     with:
-      cmd: "{{vars.driver}} blob -data 'blob {{vars.run_id}} 0123456789' -from 5 -length 8"
+      cmd: "{{vars.work}}/driver blob -data 'blob {{vars.run_id}} 0123456789' -from 5 -length 8"
       env:
         JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
         JMAPC_E2E_USER: "alice@{{vars.domain}}"
@@ -263,12 +458,13 @@ jobs:
       res.code == 200 && outputs.blob.part == '' && outputs.blob.rangeIgnored == true
 
 - name: Changes followed through jmapc, a few at a time
+  needs: [server, driver]
   steps:
   - name: Read the state through jmapc
     id: before_changes
     uses: shell
     with:
-      cmd: "{{vars.driver}} state"
+      cmd: "{{vars.work}}/driver state"
       env:
         JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
         JMAPC_E2E_USER: "alice@{{vars.domain}}"
@@ -296,7 +492,7 @@ jobs:
   - name: Follow the changes through the generated client
     uses: shell
     with:
-      cmd: "{{vars.driver}} changes -since '{{outputs.before_changes.since}}' -max 1"
+      cmd: "{{vars.work}}/driver changes -since '{{outputs.before_changes.since}}' -max 1"
       env:
         JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
         JMAPC_E2E_USER: "alice@{{vars.domain}}"
@@ -347,12 +543,13 @@ jobs:
 # else happening in it, so the delivery below is the only change a push can
 # report there.
 - name: A push followed through jmapc's Watch
+  needs: [server, driver]
   steps:
   - name: Read the state through jmapc
     id: before_push
     uses: shell
     with:
-      cmd: "{{vars.driver}} state"
+      cmd: "{{vars.work}}/driver state"
       env:
         JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
         JMAPC_E2E_USER: "bob@{{vars.domain}}"
@@ -368,7 +565,7 @@ jobs:
     id: watching
     uses: shell
     with:
-      cmd: "{{vars.driver}} watch -since '{{outputs.before_push.since}}' -subject 'pushed {{vars.run_id}}' -ready '{{vars.work}}/watch.ready'"
+      cmd: "{{vars.work}}/driver watch -since '{{outputs.before_push.since}}' -subject 'pushed {{vars.run_id}}' -ready '{{vars.work}}/watch.ready'"
       background: true
       env:
         JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"

@@ -3,8 +3,8 @@
 // other, and the client in client/ is generated from them, so the tests
 // exercise what jmapc generates as well as the runtime it generates against.
 //
-// The scenarios are probe workflows; e2e/run.sh starts the server and runs
-// them. See docs/content/en/contributing.md.
+// The scenarios are one probe workflow, e2e/workflow.yml, which starts the
+// server, sets it up and runs them. See docs/content/en/contributing.md.
 package e2e
 
 //go:generate go run ../cmd/jmapc generate -requests requests -out client

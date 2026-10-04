@@ -113,12 +113,14 @@ jobs:
           cache-dependency-path: go.mod
 
       # Installed by version rather than from the module, so that the go.mod
-      # of jmapc stays free of dependencies.
+      # of jmapc stays free of dependencies. The workflow needs a probe that
+      # stops a background command when it ends, which is how it removes the
+      # container; no release has that yet, so this is the commit that does.
       - name: Install probe
-        run: go install github.com/linyows/probe/cmd/probe@v1.13.0
+        run: go install github.com/linyows/probe/cmd/probe@v1.13.1-0.20261004053217-4514e8185506
 
       - name: Run the scenarios against Stalwart
-        run: e2e/run.sh --report github-summary
+        run: probe --report github-summary e2e/workflow.yml
 
   # The TypeScript jmapc generates has to compile, which Go's tests cannot say.
   typescript:
