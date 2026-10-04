@@ -19,6 +19,7 @@
 //	driver state
 //	driver changes -since <state> -max <changes>
 //	driver watch -since <state> -subject <phrase> -ready <file>
+//	driver receive -url <url> -listen <addr> -cert <file> -key <file> -ready <file>
 package main
 
 import (
@@ -28,9 +29,12 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
 	"os"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/linyows/jmapc"
@@ -102,6 +106,17 @@ func run(args []string) error {
 			return err
 		}
 		return watch(ctx, c, *since, *subject, *ready)
+	case "receive":
+		fs := flag.NewFlagSet("receive", flag.ContinueOnError)
+		url := fs.String("url", "", "URL the server is to post to")
+		listen := fs.String("listen", "", "address to serve https on")
+		cert := fs.String("cert", "", "certificate to serve")
+		key := fs.String("key", "", "key of the certificate")
+		ready := fs.String("ready", "", "file to create once the subscription is verified")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		return receive(ctx, c, *url, *listen, *cert, *key, *ready)
 	default:
 		return fmt.Errorf("unknown subcommand %q", args[0])
 	}
@@ -409,6 +424,79 @@ func verify(ctx context.Context, c *jmapc.Client) error {
 		return err
 	}
 	return emit(map[string]any{"problems": problems})
+}
+
+// receive serves a PushReceiver over https at listen, keeps a subscription to
+// url, and ends once a change to the account's email is pushed, which removes
+// the subscription. It writes a line of JSON for each step of the
+// subscription and each state change, and creates ready once the server has
+// verified the subscription, so that whatever changes the email can wait until
+// the change would be pushed.
+func receive(ctx context.Context, c *jmapc.Client, url, listen, cert, key, ready string) error {
+	if url == "" || listen == "" || cert == "" || key == "" || ready == "" {
+		return errors.New("receive needs -url, -listen, -cert, -key and -ready")
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var mu sync.Mutex
+	line := func(v any) {
+		mu.Lock()
+		defer mu.Unlock()
+		_ = emit(v)
+	}
+	pushed := false
+	r := jmapc.NewPushReceiver(c, jmapc.PushReceiverOptions{
+		URL:            url,
+		DeviceClientID: "jmapc-e2e",
+		Types:          []string{"Email"},
+		Lifetime:       time.Hour,
+		VerifyTimeout:  20 * time.Second,
+		OnEvent: func(e jmapc.PushEvent) {
+			line(map[string]any{"event": e.Kind, "id": e.SubscriptionID})
+			if e.Kind == jmapc.PushVerified {
+				_ = os.WriteFile(ready, nil, 0o644)
+			}
+		},
+		OnStateChange: func(_ context.Context, change *jmapc.StateChange) {
+			line(map[string]any{"stateChange": change.Changed})
+			for _, types := range change.Changed {
+				if _, ok := types["Email"]; ok {
+					mu.Lock()
+					pushed = true
+					mu.Unlock()
+					cancel()
+				}
+			}
+		},
+	})
+	// Listening starts before Run, so that the verification the server posts
+	// as soon as the subscription exists finds something to answer it.
+	ln, err := net.Listen("tcp", listen)
+	if err != nil {
+		return err
+	}
+	srv := &http.Server{Handler: r, ReadHeaderTimeout: 10 * time.Second}
+	served := make(chan error, 1)
+	go func() { served <- srv.ServeTLS(ln, cert, key) }()
+	err = r.Run(ctx)
+	// Run ends from within OnStateChange, while the push that ended it is
+	// still being answered, so the server is shut down gracefully, letting
+	// that answer go out, rather than closed.
+	stop, cancelStop := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelStop()
+	_ = srv.Shutdown(stop)
+	if serveErr := <-served; !errors.Is(serveErr, http.ErrServerClosed) {
+		return serveErr
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if pushed && errors.Is(err, context.Canceled) {
+		return nil
+	}
+	if err == nil || errors.Is(err, context.Canceled) {
+		err = errors.New("the receiver stopped before a change to the email was pushed")
+	}
+	return err
 }
 
 // emit writes v to stdout as one line of JSON.

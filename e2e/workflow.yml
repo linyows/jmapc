@@ -5,12 +5,12 @@
 #   probe e2e/workflow.yml
 #
 # Every setting has a default and can be given in the environment instead:
-# E2E_HTTP_PORT, E2E_SMTP_PORT and E2E_IMAP_PORT for the ports on this side,
-# E2E_CONTAINER for the container's name, the passwords as
-# E2E_RECOVERY_PASSWORD,
-# E2E_ALICE_PASSWORD and E2E_BOB_PASSWORD, which are generated for the run
-# otherwise, and E2E_KEEP=1 to leave the container running afterwards, to log
-# into with the passwords given.
+# E2E_HTTP_PORT, E2E_SMTP_PORT, E2E_IMAP_PORT and E2E_PUSH_PORT for the ports
+# on this side, E2E_CONTAINER for the container's name, the passwords as
+# E2E_RECOVERY_PASSWORD, E2E_ALICE_PASSWORD, E2E_BOB_PASSWORD and
+# E2E_CAROL_PASSWORD, which are generated for the run otherwise, and
+# E2E_KEEP=1 to leave the container running afterwards, to log into with the
+# passwords given.
 #
 # Each scenario does something through jmapc and checks it over a path that
 # does not go through jmapc, or the other way round, so that a mistake in what
@@ -41,6 +41,12 @@ vars:
   domain: example.test
   alice_password: "{{E2E_ALICE_PASSWORD ?? random_str(24)}}"
   bob_password: "{{E2E_BOB_PASSWORD ?? random_str(24)}}"
+  carol_password: "{{E2E_CAROL_PASSWORD ?? random_str(24)}}"
+  # Where the driver receives pushes. Stalwart posts only to https, and only
+  # to a name rather than a private address, so the container resolves this
+  # name to the host and trusts a CA made for the run.
+  push_host: push.jmapc.test
+  push_port: "{{E2E_PUSH_PORT ?? '18443'}}"
   # Marks what one run writes, so that runs against the same server do not
   # read each other's mail.
   run_id: "{{random_str(8)}}"
@@ -49,6 +55,7 @@ secrets:
   - E2E_RECOVERY_PASSWORD
   - E2E_ALICE_PASSWORD
   - E2E_BOB_PASSWORD
+  - E2E_CAROL_PASSWORD
 
 jobs:
 - name: Start and provision the server
@@ -73,16 +80,37 @@ jobs:
   # STALWART_PUBLIC_URL is what the session's URLs are built from. Without it
   # they name the server's hostname, which nothing outside the container
   # resolves.
+  # A CA made for the run, and a certificate for the name pushes are posted
+  # to, which the driver serves and the container is told to trust.
+  - name: Make a CA and a certificate for the push receiver
+    uses: shell
+    with:
+      cmd: >-
+        mkdir -p {{vars.work}} && cd {{vars.work}} &&
+        openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 1
+        -subj "/CN=jmapc e2e CA" -keyout ca.key -out ca.pem
+        -addext basicConstraints=critical,CA:TRUE -addext keyUsage=critical,keyCertSign &&
+        openssl req -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes
+        -subj /CN={{vars.push_host}} -keyout push.key -out push.csr &&
+        printf 'subjectAltName=DNS:{{vars.push_host}}\nextendedKeyUsage=serverAuth\n' > push.ext &&
+        openssl x509 -req -in push.csr -CA ca.pem -CAkey ca.key -CAcreateserial -days 1
+        -out push.pem -extfile push.ext
+    test: res.code == 0
+
+  # SSL_CERT_FILE is the store Stalwart checks a push receiver's certificate
+  # against, and host-gateway is the host from inside the container.
   - name: Start Stalwart
     uses: shell
     with:
       cmd: >-
-        mkdir -p {{vars.work}} &&
         docker rm -f {{vars.container}} >/dev/null 2>&1;
         docker run -d --name {{vars.container}}
         -p {{vars.http_port}}:8080 -p {{vars.smtp_port}}:25 -p {{vars.imap_port}}:993
         -e STALWART_RECOVERY_ADMIN={{vars.recovery_admin}}
         -e STALWART_PUBLIC_URL={{vars.base}}
+        --add-host {{vars.push_host}}:host-gateway
+        -v {{vars.work}}/ca.pem:/etc/jmapc-e2e-ca.pem:ro
+        -e SSL_CERT_FILE=/etc/jmapc-e2e-ca.pem
         {{vars.image}}
       timeout: 5m
     test: res.code == 0
@@ -154,7 +182,7 @@ jobs:
 
   # Stalwart's lists are written as maps keyed by position, which is why the
   # one credential is under "0".
-  - name: Create alice and bob
+  - name: Create alice, bob and carol
     uses: http
     with:
       post: /jmap/
@@ -187,8 +215,19 @@ jobs:
                 aliases: {}
                 memberGroupIds: {}
                 encryptionAtRest: {"@type": Disabled}
+              carol:
+                "@type": User
+                name: carol
+                domainId: "{{outputs.domain.id}}"
+                credentials: {"0": {"@type": Password, secret: "{{vars.carol_password}}"}}
+                roles: {"@type": User}
+                permissions: {"@type": Inherit}
+                quotas: {}
+                aliases: {}
+                memberGroupIds: {}
+                encryptionAtRest: {"@type": Disabled}
           - accounts
-    test: res.code == 200 && len(res.body.methodResponses[0][1].created) == 2
+    test: res.code == 200 && len(res.body.methodResponses[0][1].created) == 3
 
 - name: Build the driver
   id: driver
@@ -604,3 +643,91 @@ jobs:
       res.stdout contains '"subject"' &&
       parse_json(res.stdout).subject startsWith 'pushed ' + vars.run_id &&
       parse_json(res.stdout).runs >= 2
+
+# Carol's account is this scenario's alone, as bob's is the Watch's: a push
+# for any other change there would satisfy it whether or not the delivery
+# below was pushed.
+- name: A push to a URL, received by PushReceiver
+  needs: [server, driver]
+  defaults:
+    http:
+      url: "{{vars.base}}"
+      headers:
+        authorization: "Basic {{encode_base64('carol@' + vars.domain + ':' + vars.carol_password)}}"
+        content-type: application/json
+  steps:
+  # The driver serves PushReceiver over https on the host, subscribes carol
+  # to it, and ends once a change to her email is pushed, removing the
+  # subscription as it does. It creates the ready file once the server has
+  # verified the subscription.
+  - name: Receive pushes through PushReceiver
+    id: receiving
+    uses: shell
+    with:
+      cmd: >-
+        {{vars.work}}/driver receive
+        -url https://{{vars.push_host}}:{{vars.push_port}}/push/{{vars.run_id}}
+        -listen :{{vars.push_port}}
+        -cert {{vars.work}}/push.pem -key {{vars.work}}/push.key
+        -ready {{vars.work}}/push.ready
+      background: true
+      env:
+        JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
+        JMAPC_E2E_USER: "carol@{{vars.domain}}"
+        JMAPC_E2E_PASSWORD: "{{vars.carol_password}}"
+    test: res.pid > 0
+    outputs:
+      log: res.log
+
+  - name: Wait until the subscription is verified
+    uses: shell
+    with:
+      cmd: "test -f '{{vars.work}}/push.ready'"
+    retry: {max_attempts: 40, interval: 500ms}
+    test: res.code == 0
+
+  - name: Find the subscription directly
+    uses: http
+    with:
+      post: /jmap/
+      body:
+        using: ["urn:ietf:params:jmap:core"]
+        methodCalls:
+        - [PushSubscription/get, {ids: null}, subs]
+    test: |
+      res.code == 200 &&
+      len(res.body.methodResponses[0][1].list) == 1 &&
+      res.body.methodResponses[0][1].list[0].deviceClientId == 'jmapc-e2e'
+
+  - name: Deliver to carol on port 25
+    uses: smtp
+    with:
+      addr: "{{vars.smtp}}"
+      myhostname: mail.remote.test
+      from: someone@remote.test
+      to: "carol@{{vars.domain}}"
+      subject: "pushed to a URL {{vars.run_id}}"
+    test: res.code == 0 && res.sent == 1
+
+  # The driver writes one line of JSON for each thing it is told: each step
+  # of the subscription, and each state change.
+  - name: See the push received and the subscription removed
+    uses: shell
+    with:
+      cmd: "cat '{{outputs.receiving.log}}'"
+    retry: {max_attempts: 20, interval: 1s}
+    test: |
+      res.code == 0 &&
+      res.stdout contains '"event":"verified"' &&
+      res.stdout contains '"Email"' &&
+      res.stdout contains '"event":"destroyed"'
+
+  - name: Find no subscription directly
+    uses: http
+    with:
+      post: /jmap/
+      body:
+        using: ["urn:ietf:params:jmap:core"]
+        methodCalls:
+        - [PushSubscription/get, {ids: null}, subs]
+    test: res.code == 200 && len(res.body.methodResponses[0][1].list) == 0

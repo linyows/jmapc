@@ -29,14 +29,17 @@ go generate ./...    # ランタイムの型と、全言語のサンプルクラ
 probe e2e/workflow.yml
 ```
 
-docker、Go、probe 1.14.0以降がPATHにある必要があります。
-コンテナを起動し、Stalwartをbootstrap modeから抜けさせ、アカウントを2つ作り、ドライバーをビルドしてから、シナリオを実行します。
+docker、Go、openssl、probe 1.14.0以降がPATHにある必要があります。
+コンテナを起動し、Stalwartをbootstrap modeから抜けさせ、アカウントを3つ作り、ドライバーをビルドしてから、シナリオを実行します。
 各シナリオは、jmapcを通して何かをしたあと、jmapcを通らない経路でそれを確かめます。
 jmapcが読んだsessionを直接取得したものと比べ、SMTPで配送したメールを生成クライアントが見つけられるかを確かめます。
 jmapcで取り込んだメールのフラグをIMAPで読み、IMAPで付けたフラグをjmapcで読みます。
 jmapcでアップロードしたblobを、直接ダウンロードしたものと比べます。
 jmapcで少しずつ追った変更を、サーバ自身の変更の分割と比べます。
 SMTPで配送したメールが、pushでjmapcの`Watch`に届くかを、ほかに変更の起きないアカウントで確かめます。
+StalwartがURLへ送るpushを`PushReceiver`が受け取るかも確かめ、購読があることと、終わったあとに消えていることを直接問い合わせて確かめます。
+Stalwartはhttpsで、しかも名前で指定した宛先にしかpushを送らないので、このシナリオのためにワークフローは実行ごとにCAを作り、ドライバーがhttpsで使う証明書を発行します。
+その名前は、コンテナの中からはホストに解決されます。
 jmapc側を受け持つのは`e2e/driver`で、`e2e/requests`から生成したクライアントを呼び、結果をJSONで出力します。
 
 サーバの起動と設定は、ドライバーのビルドと並行して行います。
@@ -46,13 +49,14 @@ jmapc側を受け持つのは`e2e/driver`で、`e2e/requests`から生成した�
 flowchart LR
     subgraph server["Start and provision the server"]
         server_step0["Remove the container and the work directory when the workflow ends"]
-        server_step1["Start Stalwart"]
-        server_step2["Wait for bootstrap mode"]
-        server_step3["Complete bootstrap"]
-        server_step4["Restart out of bootstrap mode"]
-        server_step5["Wait for the server"]
-        server_step6["Find the domain bootstrap created"]
-        server_step7["Create alice and bob"]
+        server_step1["Make a CA and a certificate for the push receiver"]
+        server_step2["Start Stalwart"]
+        server_step3["Wait for bootstrap mode"]
+        server_step4["Complete bootstrap"]
+        server_step5["Restart out of bootstrap mode"]
+        server_step6["Wait for the server"]
+        server_step7["Find the domain bootstrap created"]
+        server_step8["Create alice, bob and carol"]
     end
     subgraph driver["Build the driver"]
         driver_step0["go build"]
@@ -93,6 +97,14 @@ flowchart LR
         job_7_step3["Deliver to bob on port 25"]
         job_7_step4["See the watch report it"]
     end
+    subgraph job_8["A push to a URL, received by PushReceiver"]
+        job_8_step0["Receive pushes through PushReceiver"]
+        job_8_step1["Wait until the subscription is verified"]
+        job_8_step2["Find the subscription directly"]
+        job_8_step3["Deliver to carol on port 25"]
+        job_8_step4["See the push received and the subscription removed"]
+        job_8_step5["Find no subscription directly"]
+    end
     server --> job_2
     driver --> job_2
     server --> job_3
@@ -105,6 +117,8 @@ flowchart LR
     driver --> job_6
     server --> job_7
     driver --> job_7
+    server --> job_8
+    driver --> job_8
 ```
 
 この図は`probe dag --mermaid e2e/workflow.yml`で出力したものです。

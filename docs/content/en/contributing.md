@@ -35,9 +35,9 @@ from the repository root:
 probe e2e/workflow.yml
 ```
 
-It needs docker, Go and probe 1.14.0 or later on the PATH. It starts the
-container, takes Stalwart out of bootstrap mode, creates two accounts, builds
-the driver, and runs the scenarios. Each scenario does
+It needs docker, Go, openssl and probe 1.14.0 or later on the PATH. It starts
+the container, takes Stalwart out of bootstrap mode, creates three accounts,
+builds the driver, and runs the scenarios. Each scenario does
 something through jmapc and checks it over a path that does not go through
 jmapc: the session jmapc reads against the one fetched directly, a message
 delivered over SMTP against what the generated client finds, a message imported
@@ -45,7 +45,12 @@ through jmapc against its flags over IMAP and a flag set over IMAP against what
 jmapc reads, a blob uploaded through jmapc against the same blob downloaded
 directly, changes followed through jmapc a few at a time against the server's
 own paging of them, and a message delivered over SMTP against what reaches
-jmapc's `Watch` by push, in an account where nothing else changes. The jmapc side is
+jmapc's `Watch` by push, in an account where nothing else changes, and a state
+change Stalwart posts to a URL against what `PushReceiver` receives, with the
+subscription looked up directly while it lasts and once it is removed. For that
+one the workflow makes a CA for the run and a certificate the driver serves
+https with, since Stalwart posts only to https and only to a name, which the
+container resolves to the host. The jmapc side is
 `e2e/driver`, which calls the client generated from `e2e/requests` and prints
 what came back as JSON.
 
@@ -56,13 +61,14 @@ which are independent of one another, then run in parallel:
 flowchart LR
     subgraph server["Start and provision the server"]
         server_step0["Remove the container and the work directory when the workflow ends"]
-        server_step1["Start Stalwart"]
-        server_step2["Wait for bootstrap mode"]
-        server_step3["Complete bootstrap"]
-        server_step4["Restart out of bootstrap mode"]
-        server_step5["Wait for the server"]
-        server_step6["Find the domain bootstrap created"]
-        server_step7["Create alice and bob"]
+        server_step1["Make a CA and a certificate for the push receiver"]
+        server_step2["Start Stalwart"]
+        server_step3["Wait for bootstrap mode"]
+        server_step4["Complete bootstrap"]
+        server_step5["Restart out of bootstrap mode"]
+        server_step6["Wait for the server"]
+        server_step7["Find the domain bootstrap created"]
+        server_step8["Create alice, bob and carol"]
     end
     subgraph driver["Build the driver"]
         driver_step0["go build"]
@@ -103,6 +109,14 @@ flowchart LR
         job_7_step3["Deliver to bob on port 25"]
         job_7_step4["See the watch report it"]
     end
+    subgraph job_8["A push to a URL, received by PushReceiver"]
+        job_8_step0["Receive pushes through PushReceiver"]
+        job_8_step1["Wait until the subscription is verified"]
+        job_8_step2["Find the subscription directly"]
+        job_8_step3["Deliver to carol on port 25"]
+        job_8_step4["See the push received and the subscription removed"]
+        job_8_step5["Find no subscription directly"]
+    end
     server --> job_2
     driver --> job_2
     server --> job_3
@@ -115,6 +129,8 @@ flowchart LR
     driver --> job_6
     server --> job_7
     driver --> job_7
+    server --> job_8
+    driver --> job_8
 ```
 
 `probe dag --mermaid e2e/workflow.yml` prints this graph; print it again after
