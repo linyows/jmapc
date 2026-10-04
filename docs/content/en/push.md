@@ -58,9 +58,10 @@ A connection can also be dropped somewhere between the client and the server
 without either end being told, and then nothing arrives and nothing says so. A
 watch asks the server to ping every 30 seconds, or at `WithPing`, and the server
 says in each ping the interval it actually uses; a stream that carries nothing
-for twice that interval is taken as lost, and the watch connects again. The
-same holds for `EventSource` where `Ping` is set: `Next` fails once the stream
-has been quiet that long.
+for twice that interval while the watch waits on it is taken as lost, and the
+watch connects again. Time spent catching up does not count, since the pings
+sent meanwhile wait in the stream. The same holds for `EventSource` where `Ping`
+is set: `Next` fails once the stream has been quiet that long while it waited.
 
 There is one error a watch resumed after a long enough pause cannot go on from.
 A `/changes` call answers `cannotCalculateChanges` where the state it is given
