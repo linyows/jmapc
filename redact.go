@@ -24,7 +24,7 @@ func KeepBodies(body json.RawMessage) json.RawMessage { return body }
 //     using, and the ids in createdIds
 //   - numbers, booleans and nulls, which say how many and whether
 //   - ids: the values of id, accountId, blobId and every other key ending in
-//     Id, Ids or ids, the lists of ids a /changes or /set answers with, and
+//     Id or Ids, the ids a /get is for and a /query or /changes answers with, and
 //     the filter conditions that name a container by id, such as inMailbox
 //   - states: state, sessionState, and every other key ending in State
 //   - the property names a /get selects, the property a sort is on, and the
@@ -71,15 +71,22 @@ type redactor struct {
 	keep map[string]bool
 }
 
-// argumentLists are the arguments of a method call whose value is a list of
-// names or of ids, though the key does not say so: the properties a /get
-// selects, and what a /changes, /query or /set answers with. They are kept only
-// as the arguments of a call, where JMAP puts them, and not under the same
-// name anywhere else.
-var argumentLists = map[string]bool{
-	"properties": true, "bodyProperties": true,
-	"created": true, "updated": true, "destroyed": true,
-	"notFound": true, "removed": true, "ids": true,
+// argumentLists are, by the kind of method a call makes, the arguments whose
+// value is a list of names or of ids though the key does not say so: the
+// properties a /get selects, and what a /changes, /query or /set answers with.
+// The kind is what follows the slash in the method name, which JMAP gives the
+// same meaning for every type. They are kept only as the arguments of a call
+// of that kind, and not under the same name anywhere else: Core/echo takes
+// anything as its arguments.
+var argumentLists = map[string]map[string]bool{
+	"get":          {"properties": true, "bodyProperties": true, "ids": true, "notFound": true},
+	"parse":        {"properties": true, "bodyProperties": true, "notFound": true},
+	"query":        {"ids": true},
+	"changes":      {"created": true, "updated": true, "destroyed": true},
+	"set":          {"created": true, "updated": true, "destroyed": true},
+	"copy":         {"created": true},
+	"import":       {"created": true},
+	"queryChanges": {"removed": true},
 }
 
 // keptKeys are the keys whose string value names something rather than
@@ -93,7 +100,7 @@ var keptKeys = map[string]bool{
 // keepsString reports whether a string under key is kept, wherever key is.
 func (r redactor) keepsString(key string) bool {
 	return r.keep[key] || keptKeys[key] || key == "id" ||
-		strings.HasSuffix(key, "Id") || strings.HasSuffix(key, "Ids") || strings.HasSuffix(key, "ids") ||
+		strings.HasSuffix(key, "Id") || strings.HasSuffix(key, "Ids") ||
 		key == "state" || strings.HasSuffix(key, "State")
 }
 
@@ -134,24 +141,29 @@ func (r redactor) invocations(v any) any {
 			out[i] = r.walk(e, "")
 			continue
 		}
-		out[i] = []any{inv[0], r.arguments(inv[1]), inv[2]}
+		name, _ := inv[0].(string)
+		out[i] = []any{inv[0], r.arguments(name, inv[1]), inv[2]}
 	}
 	return out
 }
 
-// arguments walks the arguments of one invocation, keeping the lists JMAP
-// puts there.
-func (r redactor) arguments(v any) any {
+// arguments walks the arguments of one invocation of method, keeping the lists
+// JMAP puts there for a method of its kind.
+func (r redactor) arguments(method string, v any) any {
 	args, ok := v.(map[string]any)
 	if !ok {
 		return r.walk(v, "")
+	}
+	var lists map[string]bool
+	if i := strings.LastIndex(method, "/"); i >= 0 {
+		lists = argumentLists[method[i+1:]]
 	}
 	out := make(map[string]any, len(args))
 	for k, e := range args {
 		switch {
 		case strings.HasPrefix(k, "#"):
 			out[k] = r.backReference(e)
-		case argumentLists[k]:
+		case lists[k]:
 			out[k] = r.strings(e, k)
 		default:
 			out[k] = r.walk(e, k)

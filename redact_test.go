@@ -227,7 +227,7 @@ func TestRedactContentKeepsListsOnlyWhereJMAPPutsThem(t *testing.T) {
 	got := string(RedactContent()(json.RawMessage(`{
 	  "using": ["urn:ietf:params:jmap:core"],
 	  "methodCalls": [
-	    ["Core/echo", {"using": ["private using"], "note": {"properties": ["private property"], "created": ["private created"]}}, "echo"],
+	    ["Core/echo", {"using": ["private using"], "properties": ["private echo"], "ids": ["private ids"], "note": {"properties": ["private property"], "created": ["private created"]}}, "echo"],
 	    ["Email/get", {"ids": ["e1"], "properties": ["subject"]}, "get"]
 	  ]
 	}`)))
@@ -236,7 +236,7 @@ func TestRedactContentKeepsListsOnlyWhereJMAPPutsThem(t *testing.T) {
 			t.Errorf("the redacted body has no %s:\n%s", want, got)
 		}
 	}
-	for _, secret := range []string{"private using", "private property", "private created"} {
+	for _, secret := range []string{"private using", "private echo", "private ids", "private property", "private created"} {
 		if strings.Contains(got, secret) {
 			t.Errorf("%q was kept for its key's name, away from where JMAP puts that key:\n%s", secret, got)
 		}
@@ -278,5 +278,31 @@ func TestObservingTheBodyEncodesEachArgumentOnce(t *testing.T) {
 	}
 	if n != 1 {
 		t.Errorf("the arguments were encoded %d times, want once", n)
+	}
+}
+
+// TestObservingTheBodySendsNilArgumentsAsAnEmptyObject checks that encoding
+// the arguments once for the observer sends a call without arguments as {},
+// as Invocation.MarshalJSON does, and not as null.
+func TestObservingTheBodySendsNilArgumentsAsAnEmptyObject(t *testing.T) {
+	ts := newTestServer(t)
+	var sent string
+	ts.apiHandler = func(w http.ResponseWriter, r *http.Request) {
+		var body bytes.Buffer
+		_, _ = body.ReadFrom(r.Body)
+		sent = body.String()
+		fmt.Fprint(w, `{"sessionState":"sess1","methodResponses":[["Core/echo",{},"e"]]}`)
+	}
+	o := (&recorder{}).observer()
+	o.Redact = KeepBodies
+	c := ts.client(WithObserver(o))
+	if _, err := c.Do(context.Background(), &Request{
+		Using:       []string{CapabilityCore},
+		MethodCalls: []Invocation{{Name: "Core/echo", CallID: "e"}},
+	}); err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	if !strings.Contains(sent, `["Core/echo",{},"e"]`) {
+		t.Errorf("the call without arguments was sent as %s, want {} as its arguments", sent)
 	}
 }

@@ -272,7 +272,12 @@ func encodedOnce(r *Request) (*Request, error) {
 	copied := *r
 	copied.MethodCalls = make([]Invocation, len(r.MethodCalls))
 	for i, call := range r.MethodCalls {
-		raw, err := json.Marshal(call.Args)
+		args := call.Args
+		if args == nil {
+			// As Invocation.MarshalJSON sends it.
+			args = struct{}{}
+		}
+		raw, err := json.Marshal(args)
 		if err != nil {
 			return nil, fmt.Errorf("jmapc: encoding request: %w", err)
 		}
