@@ -2,6 +2,8 @@ package jmapc
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -43,6 +45,15 @@ type Observer struct {
 	// or for the delay that follows a 429 or a 503. The function it returns is
 	// called when the delay has elapsed.
 	Wait func(ctx context.Context, info WaitInfo) func()
+
+	// Redact, when set, makes the client put the body of each JMAP request
+	// and response on RequestInfo and ResponseInfo, after passing it through
+	// Redact. A body holds the subjects, addresses and text of the messages
+	// a request reads and writes, which is why it is not reported unless
+	// asked for, and why Redact is where it goes first: RedactContent keeps
+	// the shape of the exchange and withholds the content, and KeepBodies
+	// keeps everything.
+	Redact func(json.RawMessage) json.RawMessage
 }
 
 // WithObserver makes the client report what it does to o.
@@ -73,6 +84,9 @@ type RequestInfo struct {
 	Calls []CallInfo
 	// Using holds the capability URIs the request declares.
 	Using []string
+	// Body is the request as JSON, after Observer.Redact, and nil where
+	// Redact is not set.
+	Body json.RawMessage
 }
 
 // CallInfo identifies one method call of a request: the method invoked, and
@@ -93,6 +107,11 @@ type ResponseInfo struct {
 	// Errors holds the method-level errors of an answered request. The other
 	// calls of the request may still have succeeded.
 	Errors MethodErrors
+	// Body is the response as JSON, after Observer.Redact, and nil where
+	// Redact is not set or no response came. A request sent in several parts,
+	// as WithSplitGets sends a /get, has its parts joined into one response
+	// here, as the caller receives it.
+	Body json.RawMessage
 }
 
 // AttemptInfo describes one HTTP request the client sends.
@@ -161,6 +180,12 @@ func SlogObserver(l *slog.Logger) *Observer {
 				if done.Err != nil {
 					attrs = append(attrs, slog.String("failed", done.Err.Error()))
 				}
+				if info.Body != nil {
+					attrs = append(attrs, slog.String("request_body", string(info.Body)))
+				}
+				if done.Body != nil {
+					attrs = append(attrs, slog.String("response_body", string(done.Body)))
+				}
 				l.DebugContext(ctx, "jmap request", attrs...)
 			}
 		},
@@ -205,11 +230,14 @@ func callNames(calls []CallInfo) []string {
 
 // observeRequest reports a JMAP request to the observer, and returns the
 // function that reports its outcome.
-func (c *Client) observeRequest(ctx context.Context, r *Request) (context.Context, func(error, MethodErrors)) {
+func (c *Client) observeRequest(ctx context.Context, r *Request, withBody bool) (context.Context, func(*Response, error, MethodErrors)) {
 	if c.observer == nil || c.observer.Request == nil {
-		return ctx, func(error, MethodErrors) {}
+		return ctx, func(*Response, error, MethodErrors) {}
 	}
 	info := RequestInfo{Using: r.Using}
+	if withBody {
+		info.Body = c.observedBody(r)
+	}
 	for _, call := range r.MethodCalls {
 		info.Calls = append(info.Calls, CallInfo{Name: call.Name, CallID: call.CallID})
 	}
@@ -219,11 +247,57 @@ func (c *Client) observeRequest(ctx context.Context, r *Request) (context.Contex
 		ctx = under
 	}
 	if done == nil {
-		return ctx, func(error, MethodErrors) {}
+		return ctx, func(*Response, error, MethodErrors) {}
 	}
-	return ctx, func(err error, errs MethodErrors) {
-		done(ResponseInfo{Duration: time.Since(started), Err: err, Errors: errs})
+	return ctx, func(resp *Response, err error, errs MethodErrors) {
+		answer := ResponseInfo{Duration: time.Since(started), Err: err, Errors: errs}
+		if resp != nil {
+			answer.Body = c.observedBody(resp)
+		}
+		done(answer)
 	}
+}
+
+// bodiesObserved reports whether the observer is given the bodies of
+// requests.
+func (c *Client) bodiesObserved() bool {
+	return c.observer != nil && c.observer.Request != nil && c.observer.Redact != nil
+}
+
+// encodedOnce returns a copy of r whose arguments are each JSON already. A
+// request may be encoded more than once — to observe it, to split it, to send
+// it — and an argument with a MarshalJSON of its own would otherwise be called
+// each time, which an observer must not cause.
+func encodedOnce(r *Request) (*Request, error) {
+	copied := *r
+	copied.MethodCalls = make([]Invocation, len(r.MethodCalls))
+	for i, call := range r.MethodCalls {
+		args := call.Args
+		if args == nil {
+			// As Invocation.MarshalJSON sends it.
+			args = struct{}{}
+		}
+		raw, err := json.Marshal(args)
+		if err != nil {
+			return nil, fmt.Errorf("jmapc: encoding request: %w", err)
+		}
+		call.Args = json.RawMessage(raw)
+		copied.MethodCalls[i] = call
+	}
+	return &copied, nil
+}
+
+// observedBody returns v as JSON through the observer's Redact, or nil where
+// there is no Redact to pass it through.
+func (c *Client) observedBody(v any) json.RawMessage {
+	if c.observer.Redact == nil {
+		return nil
+	}
+	body, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	return c.observer.Redact(body)
 }
 
 // observeAttempt reports an HTTP request to the observer, and returns the
