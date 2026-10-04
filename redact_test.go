@@ -93,9 +93,34 @@ func TestRedactContentKeepsTheKeysItIsGiven(t *testing.T) {
 }
 
 func TestRedactContentWithholdsWhatIsNotJSON(t *testing.T) {
-	got := string(RedactContent()(json.RawMessage(`subject: Invoice for March`)))
-	if got != `"`+Redacted+`"` {
-		t.Errorf("a body that is not JSON came out as %s", got)
+	for _, body := range []string{
+		`subject: Invoice for March`,
+		// One JSON value and something after it is not JSON either, and the
+		// value before it is not handed on.
+		`{"id":"e1"} {"subject":"Invoice for March"}`,
+		`{"id":"e1"} trailing`,
+	} {
+		if got := string(RedactContent()(json.RawMessage(body))); got != `"`+Redacted+`"` {
+			t.Errorf("%s came out as %s, want it withheld whole", body, got)
+		}
+	}
+	if got := string(RedactContent()(json.RawMessage("{\"id\":\"e1\"}\n  "))); got != `{"id":"e1"}` {
+		t.Errorf("a body with trailing white space came out as %s", got)
+	}
+}
+
+// TestRedactContentKeepsOnlyWhatABackReferenceIs checks that a "#" key keeps
+// the call id, method name and path of a back reference, and withholds
+// anything else written under it, as it would anywhere.
+func TestRedactContentKeepsOnlyWhatABackReferenceIs(t *testing.T) {
+	got := string(RedactContent()(json.RawMessage(`{"#ids": {"resultOf": "search", "name": "Email/query", "path": "/ids", "note": "quarterly invoice"}}`)))
+	for _, want := range []string{`"resultOf":"search"`, `"name":"Email/query"`, `"path":"/ids"`, `"note":"` + Redacted + `"`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the back reference has no %s:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "quarterly invoice") {
+		t.Errorf("a member a back reference does not define was kept:\n%s", got)
 	}
 }
 
@@ -162,5 +187,34 @@ func TestSlogObserverWritesTheBodies(t *testing.T) {
 	}
 	if strings.Contains(log, "private") {
 		t.Errorf("the log holds what Redact withholds:\n%s", log)
+	}
+}
+
+// TestObserverSeesASplitGetAsTheCallerDoes checks the bodies of a /get sent in
+// several parts: the request as the caller made it, with every id, and the
+// response as the caller received it, with the records of every part.
+func TestObserverSeesASplitGetAsTheCallerDoes(t *testing.T) {
+	ts := newSplitServer(t, 2, 16)
+	rec := &recorder{}
+	o := rec.observer()
+	o.Redact = KeepBodies
+	c := ts.client(WithSplitGets(), WithObserver(o))
+	if _, err := c.Do(context.Background(), get("m1", "m2", "m3", "m4", "m5")); err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	if len(ts.sent()) != 3 {
+		t.Fatalf("the server was asked %d times, want the /get split in three", len(ts.sent()))
+	}
+	if len(rec.requests) != 1 || len(rec.responses) != 1 {
+		t.Fatalf("the observer saw %d requests and %d responses, want one of each", len(rec.requests), len(rec.responses))
+	}
+	sent, answered := string(rec.requests[0].Body), string(rec.responses[0].Body)
+	if !strings.Contains(sent, `"ids":["m1","m2","m3","m4","m5"]`) {
+		t.Errorf("the request body is not the request the caller made:\n%s", sent)
+	}
+	for _, id := range []string{"m1", "m3", "m5"} {
+		if !strings.Contains(answered, `{"id":"`+id+`"}`) {
+			t.Errorf("the response body has no record %s from its part:\n%s", id, answered)
+		}
 	}
 }

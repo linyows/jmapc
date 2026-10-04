@@ -3,6 +3,8 @@ package jmapc
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
 	"strings"
 )
 
@@ -45,6 +47,12 @@ func RedactContent(keep ...string) func(json.RawMessage) json.RawMessage {
 		dec.UseNumber()
 		var v any
 		if err := dec.Decode(&v); err != nil {
+			return json.RawMessage(`"` + Redacted + `"`)
+		}
+		// Decode stops after one value, and what follows it is not JSON a
+		// body would carry: the whole body is withheld rather than the
+		// value before it handed on.
+		if _, err := dec.Token(); !errors.Is(err, io.EOF) {
 			return json.RawMessage(`"` + Redacted + `"`)
 		}
 		r := redactor{keep: kept}
@@ -116,8 +124,7 @@ func (r redactor) walk(v any, key string) any {
 		out := make(map[string]any, len(v))
 		for k, e := range v {
 			if strings.HasPrefix(k, "#") {
-				// A back reference: a call id, a method name and a path.
-				out[k] = e
+				out[k] = r.backReference(e)
 				continue
 			}
 			out[k] = r.walk(e, k)
@@ -127,6 +134,28 @@ func (r redactor) walk(v any, key string) any {
 		// json.Number, bool and nil.
 		return v
 	}
+}
+
+// backReferenceMembers are the members of a ResultReference, RFC 8620,
+// Section 3.7: a call id, a method name and a path, none of them data.
+var backReferenceMembers = map[string]bool{"resultOf": true, "name": true, "path": true}
+
+// backReference keeps the three members of a back reference, and withholds
+// anything else written under a "#" key as any other value would be.
+func (r redactor) backReference(v any) any {
+	ref, ok := v.(map[string]any)
+	if !ok {
+		return r.walk(v, "")
+	}
+	out := make(map[string]any, len(ref))
+	for k, e := range ref {
+		if s, isString := e.(string); isString && backReferenceMembers[k] {
+			out[k] = s
+			continue
+		}
+		out[k] = r.walk(e, k)
+	}
+	return out
 }
 
 // invocations keeps the method name and call id of each invocation, and walks
