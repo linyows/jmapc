@@ -218,3 +218,65 @@ func TestObserverSeesASplitGetAsTheCallerDoes(t *testing.T) {
 		}
 	}
 }
+
+// TestRedactContentKeepsListsOnlyWhereJMAPPutsThem checks that the lists kept
+// by name — using, properties, the lists of ids — are kept at their place in a
+// request, and redacted under the same name anywhere else, as in the arguments
+// of Core/echo, which may be anything.
+func TestRedactContentKeepsListsOnlyWhereJMAPPutsThem(t *testing.T) {
+	got := string(RedactContent()(json.RawMessage(`{
+	  "using": ["urn:ietf:params:jmap:core"],
+	  "methodCalls": [
+	    ["Core/echo", {"using": ["private using"], "note": {"properties": ["private property"], "created": ["private created"]}}, "echo"],
+	    ["Email/get", {"ids": ["e1"], "properties": ["subject"]}, "get"]
+	  ]
+	}`)))
+	for _, want := range []string{`"using":["urn:ietf:params:jmap:core"]`, `"ids":["e1"]`, `"properties":["subject"]`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the redacted body has no %s:\n%s", want, got)
+		}
+	}
+	for _, secret := range []string{"private using", "private property", "private created"} {
+		if strings.Contains(got, secret) {
+			t.Errorf("%q was kept for its key's name, away from where JMAP puts that key:\n%s", secret, got)
+		}
+	}
+}
+
+// TestRedactContentKeepsTheIDsInCreatedIDs checks the map of creation ids to
+// ids a request carries in and a response answers with: its values are ids.
+func TestRedactContentKeepsTheIDsInCreatedIDs(t *testing.T) {
+	got := string(RedactContent()(json.RawMessage(`{"methodResponses": [], "createdIds": {"box": "mbx9"}, "sessionState": "s1"}`)))
+	if !strings.Contains(got, `"createdIds":{"box":"mbx9"}`) {
+		t.Errorf("the ids in createdIds were withheld:\n%s", got)
+	}
+}
+
+// countedArgs counts how often it is encoded, as arguments with a MarshalJSON
+// of their own may do something each time.
+type countedArgs struct{ n *int }
+
+func (a countedArgs) MarshalJSON() ([]byte, error) {
+	*a.n++
+	return []byte(`{"note":"private"}`), nil
+}
+
+// TestObservingTheBodyEncodesEachArgumentOnce checks that giving the observer
+// the body does not encode the request a second time: an observer must not
+// change what is sent, and an argument whose MarshalJSON keeps state would.
+func TestObservingTheBodyEncodesEachArgumentOnce(t *testing.T) {
+	ts := newTestServer(t)
+	o := (&recorder{}).observer()
+	o.Redact = KeepBodies
+	c := ts.client(WithObserver(o))
+	var n int
+	if _, err := c.Do(context.Background(), &Request{
+		Using:       []string{CapabilityCore},
+		MethodCalls: []Invocation{{Name: "Core/echo", CallID: "e", Args: countedArgs{&n}}},
+	}); err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("the arguments were encoded %d times, want once", n)
+	}
+}

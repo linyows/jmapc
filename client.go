@@ -272,9 +272,26 @@ func (c *Client) getSession(ctx context.Context) (*Session, error) {
 // MethodErrors describing the calls the server could not execute, because the
 // remaining calls may still have produced usable results.
 func (c *Client) Do(ctx context.Context, r *Request) (*Response, error) {
+	// Where the observer is given the body, every argument is encoded once
+	// here and the bytes used from then on, by the observer, the split and the
+	// request sent, so that an argument with a MarshalJSON of its own is not
+	// called once for each.
+	var encodeErr error
+	if c.bodiesObserved() {
+		if encoded, err := encodedOnce(r); err != nil {
+			encodeErr = err
+		} else {
+			r = encoded
+		}
+	}
+
 	// The report starts before anything is sent, so that the session fetch a
 	// first request triggers is included in the request's duration.
-	ctx, answered := c.observeRequest(ctx, r)
+	ctx, answered := c.observeRequest(ctx, r, encodeErr == nil)
+	if encodeErr != nil {
+		answered(nil, encodeErr, nil)
+		return nil, encodeErr
+	}
 
 	apiURL, err := c.resolveAPIURL(ctx, r)
 	if err != nil {

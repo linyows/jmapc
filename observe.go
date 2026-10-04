@@ -3,6 +3,7 @@ package jmapc
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -229,11 +230,14 @@ func callNames(calls []CallInfo) []string {
 
 // observeRequest reports a JMAP request to the observer, and returns the
 // function that reports its outcome.
-func (c *Client) observeRequest(ctx context.Context, r *Request) (context.Context, func(*Response, error, MethodErrors)) {
+func (c *Client) observeRequest(ctx context.Context, r *Request, withBody bool) (context.Context, func(*Response, error, MethodErrors)) {
 	if c.observer == nil || c.observer.Request == nil {
 		return ctx, func(*Response, error, MethodErrors) {}
 	}
-	info := RequestInfo{Using: r.Using, Body: c.observedBody(r)}
+	info := RequestInfo{Using: r.Using}
+	if withBody {
+		info.Body = c.observedBody(r)
+	}
 	for _, call := range r.MethodCalls {
 		info.Calls = append(info.Calls, CallInfo{Name: call.Name, CallID: call.CallID})
 	}
@@ -252,6 +256,30 @@ func (c *Client) observeRequest(ctx context.Context, r *Request) (context.Contex
 		}
 		done(answer)
 	}
+}
+
+// bodiesObserved reports whether the observer is given the bodies of
+// requests.
+func (c *Client) bodiesObserved() bool {
+	return c.observer != nil && c.observer.Request != nil && c.observer.Redact != nil
+}
+
+// encodedOnce returns a copy of r whose arguments are each JSON already. A
+// request may be encoded more than once — to observe it, to split it, to send
+// it — and an argument with a MarshalJSON of its own would otherwise be called
+// each time, which an observer must not cause.
+func encodedOnce(r *Request) (*Request, error) {
+	copied := *r
+	copied.MethodCalls = make([]Invocation, len(r.MethodCalls))
+	for i, call := range r.MethodCalls {
+		raw, err := json.Marshal(call.Args)
+		if err != nil {
+			return nil, fmt.Errorf("jmapc: encoding request: %w", err)
+		}
+		call.Args = json.RawMessage(raw)
+		copied.MethodCalls[i] = call
+	}
+	return &copied, nil
 }
 
 // observedBody returns v as JSON through the observer's Redact, or nil where
