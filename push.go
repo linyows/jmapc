@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -14,9 +15,10 @@ import (
 // PushReceiverOptions configures a PushReceiver.
 type PushReceiverOptions struct {
 	// URL is where the server is to post, which must reach the receiver's
-	// ServeHTTP. JMAP gives a push no signature, so anyone who knows the URL
-	// can post to it; put something in it no one can guess, such as a random
-	// path segment, and serve only that path.
+	// ServeHTTP. Put something in it no one can guess, such as a random path
+	// segment, and serve only that path: with PlainText, a push carries
+	// nothing that says it came from the server, and anyone who knows the URL
+	// can post to it.
 	URL string
 	// DeviceClientID identifies this receiver to the server, and stays the
 	// same when a subscription is made again: RFC 8620 asks for one that
@@ -41,6 +43,13 @@ type PushReceiverOptions struct {
 	OnStateChange func(ctx context.Context, change *StateChange)
 	// OnEvent, when set, is told of each step of the subscription's life.
 	OnEvent func(PushEvent)
+	// PlainText makes the subscription without keys, so that the server
+	// posts its pushes as they are. Without it, Run makes a key pair and an
+	// auth secret, the server encrypts every push for them as RFC 8291
+	// describes, and ServeHTTP refuses a push that is not encrypted or does
+	// not decrypt, which no one without the keys can write. Set it only for
+	// a server that does not encrypt.
+	PlainText bool
 }
 
 // PushEventKind names a step in the life of a push subscription.
@@ -80,9 +89,9 @@ type PushEvent struct {
 // server no longer has it, and removes it when Run returns. ServeHTTP hands
 // each state change to OnStateChange.
 //
-// The body of a push is not encrypted: the subscription is made without keys.
-// A receiver that needs the content of a push hidden from what carries it is
-// one to put behind a push service that decrypts it.
+// Pushes are encrypted unless PlainText is set: the subscription is made with
+// keys, the server encrypts each push for them, and ServeHTTP decrypts it. Only
+// the server holds the keys, so a push that decrypts came from it.
 type PushReceiver struct {
 	c    *Client
 	opts PushReceiverOptions
@@ -94,6 +103,10 @@ type PushReceiver struct {
 	codes map[ID]string
 	// arrived is signalled when a code arrives.
 	arrived chan struct{}
+
+	// keys are what pushes are encrypted for, made as Run starts and kept
+	// for every subscription it makes; nil with PlainText.
+	keys *pushKeys
 
 	// wait sleeps for d or until ctx ends. Tests replace it.
 	wait func(ctx context.Context, d time.Duration) error
@@ -144,6 +157,24 @@ func (r *PushReceiver) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if err != nil || len(body) > maxPushBody {
 		http.Error(w, "the push could not be read", http.StatusBadRequest)
 		return
+	}
+	if !r.opts.PlainText {
+		r.mu.Lock()
+		keys := r.keys
+		r.mu.Unlock()
+		if keys == nil {
+			http.Error(w, "no subscription is waiting for pushes yet", http.StatusBadRequest)
+			return
+		}
+		if !strings.EqualFold(strings.TrimSpace(req.Header.Get("Content-Encoding")), "aes128gcm") {
+			http.Error(w, "the push is not encrypted", http.StatusBadRequest)
+			return
+		}
+		body, err = keys.decrypt(body)
+		if err != nil {
+			http.Error(w, "the push does not decrypt: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 	var kind struct {
 		Type string `json:"@type"`
@@ -226,6 +257,18 @@ var errSubscriptionLost = errors.New("jmapc: the push subscription is gone")
 // ctx's error. It returns earlier with an error where a subscription cannot be
 // made or verified, or a failure that waiting will not resolve.
 func (r *PushReceiver) Run(ctx context.Context) error {
+	if !r.opts.PlainText {
+		r.mu.Lock()
+		if r.keys == nil {
+			keys, err := newPushKeys()
+			if err != nil {
+				r.mu.Unlock()
+				return err
+			}
+			r.keys = keys
+		}
+		r.mu.Unlock()
+	}
 	for {
 		id, expires, err := r.subscribe(ctx)
 		if err != nil {
@@ -256,6 +299,9 @@ func (r *PushReceiver) subscribe(ctx context.Context) (ID, time.Time, error) {
 	}
 	if r.opts.Types != nil {
 		sub["types"] = r.opts.Types
+	}
+	if r.keys != nil {
+		sub["keys"] = r.keys.subscription()
 	}
 	asked := r.expiry()
 	if !asked.IsZero() {
