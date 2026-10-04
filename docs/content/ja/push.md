@@ -115,8 +115,39 @@ for {
 ストリームを閉じるのは、サーバ、`Close`、またはコンテキストです。
 
 これはイベントソース形式のプッシュで、接続を保持できるクライアントに向いています。
-もう1つの形式は、サーバが送る先のURLを登録するもので、スマートフォンのアプリにはこちらが必要です。
-[`example/requests`](https://github.com/linyows/jmapc/tree/main/example/requests)の`RegisterPush`と`ConfirmPush`を参照してください。
-購読は作成した時点ではまだ有効ではありません。
-サーバがURLにコードを送り、クライアントが`PushSubscription/set`でそれを書き戻すまで、他には何も送られません。
-届いたものは`jmapc.PushVerification`でデコードします。
+
+## URLへのプッシュ
+
+もう1つの形式は、サーバが送る先のURLを登録するものです。
+追いかけるアカウントのすべてに接続を張っておけないサービスに向いています。
+`PushReceiver`は、動いている間この購読を保ち、URLが届く先の`http.Handler`になります。
+
+```go
+r := jmapc.NewPushReceiver(c, jmapc.PushReceiverOptions{
+	URL:            "https://app.example.com/jmap-push/" + secret,
+	DeviceClientID: "app-1",
+	Types:          []string{"Email"},
+	Lifetime:       24 * time.Hour,
+	OnStateChange: func(ctx context.Context, change *jmapc.StateChange) {
+		queue <- change
+	},
+})
+http.Handle("/jmap-push/"+secret, r)
+err := r.Run(ctx)
+```
+
+`Run`は購読を作成し、サーバが検証コードをURLに送ってくるのを待ちます。
+購読は、そのコードを`PushSubscription/set`で書き戻すまで有効にならないからです。
+その後は、期限が切れる前に延長します。
+サーバが`Lifetime`より短い期限しか認めない場合は、その期限に従います。
+サーバが購読を失っていれば作り直して検証し直し、`ctx`が終わると削除します。
+これらの各段階は`OnEvent`に知らされます。
+`OnStateChange`はサーバのPOSTが応答を待っている間に呼ばれるので、そこで処理せず、変更を引き渡すだけにしてください。
+
+JMAPのプッシュには署名がないので、URLを知った人なら誰でもPOSTできます。
+上の`secret`のように推測できないものをURLに含め、その経路だけを受け付けてください。
+購読は鍵なしで作るので、サーバが送る内容は暗号化されません。
+また、Stalwartのように、URLがhttpsであることや、公開されたアドレスに解決されることを求めるサーバもあります。
+
+[`example/requests`](https://github.com/linyows/jmapc/tree/main/example/requests)の`RegisterPush`と`ConfirmPush`は、同じ2つの段階をリクエストとして書いたものです。
+購読を自分で管理するクライアント向けで、届いたコードは`jmapc.PushVerification`でデコードします。
