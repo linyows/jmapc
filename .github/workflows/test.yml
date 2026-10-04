@@ -115,9 +115,9 @@ jobs:
       # Installed by version rather than from the module, so that the go.mod
       # of jmapc stays free of dependencies. The workflow needs a probe that
       # stops a background command when it ends, which is how it removes the
-      # container; no release has that yet, so this is the commit that does.
+      # container, and 1.14.0 is the first that does.
       - name: Install probe
-        run: go install github.com/linyows/probe/cmd/probe@v1.13.1-0.20261004053217-4514e8185506
+        run: go install github.com/linyows/probe/cmd/probe@v1.14.0
 
       - name: Run the scenarios against Stalwart
         run: probe --report github-summary e2e/workflow.yml
