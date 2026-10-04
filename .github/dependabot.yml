@@ -8,3 +8,10 @@ updates:
       interval: monthly
     commit-message:
       prefix: ci
+    groups:
+      # init and analyze are two steps of one action, released together, and
+      # a run whose steps are at different versions fails, so they are bumped
+      # in one pull request rather than one each.
+      codeql:
+        patterns:
+          - "github/codeql-action*"
