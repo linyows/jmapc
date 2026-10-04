@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/linyows/jmapc"
 	"github.com/linyows/jmapc/internal/spec"
@@ -236,6 +237,11 @@ func (c *checker) mapValue(t *spec.Type, raw json.RawMessage, where, doc string)
 	// travel down.
 	creationIDs := c.creationIDs
 	c.creationIDs = false
+	// The map's keys are keys of the property holding it; its values belong
+	// to no property, so a map inside one has keys of nothing named.
+	property := c.property
+	c.property = ""
+	defer func() { c.property = property }()
 
 	out := &Object{Raw: raw}
 	for _, key := range keys {
@@ -246,7 +252,7 @@ func (c *checker) mapValue(t *spec.Type, raw json.RawMessage, where, doc string)
 		if creationIDs && !embeddedParamPattern.MatchString(key) {
 			c.creations = append(c.creations, key)
 		}
-		field := ObjectField{Key: key, KeySegments: c.keySegments(key, keyType, where, doc)}
+		field := ObjectField{Key: key, KeySegments: c.keySegments(key, keyType, property, where, doc)}
 		if field.KeySegments == nil && keyType.Name == spec.IdType &&
 			!isCreationID(key) && !jmapc.ID(key).Valid() {
 			c.errorf(where+"."+key, "", "%q is not a valid id", key)
@@ -313,7 +319,10 @@ func (c *checker) object(t *spec.Type, raw json.RawMessage, where string) Node {
 		}
 		c.enum = field.Enum
 		c.useCapability(field)
+		savedProperty := c.property
+		c.property = key
 		value := c.value(elemType, members[key], where+"."+key, field.Doc)
+		c.property = savedProperty
 		c.patchTarget, c.sortTarget, c.enum = savedPatch, savedSort, savedEnum
 		out.Fields = append(out.Fields, ObjectField{Key: key, Value: value})
 	}
@@ -450,19 +459,51 @@ func (c *checker) primitive(t *spec.Type, raw json.RawMessage, where string) Nod
 	return &Literal{JSON: raw}
 }
 
-// keyDoc describes what a parameter standing in for a map key selects. The
-// context is the documentation of the property holding the map, which says
-// which map this is a key into; on its own, "the id of the record" could be a
-// key into anything.
-func keyDoc(keyType *spec.Type, context string) string {
-	lead := "The key this entry is stored under."
-	if keyType.Name == spec.IdType {
-		lead = "The id of the record this entry applies to."
+// keyDoc describes what a parameter standing in for a map key selects. It
+// names the property holding the map, where that is known, and continues with
+// that property's documentation, which says what the keys are of; on its own,
+// "the id of the record" could be a key into anything, and the property's
+// documentation read on its own describes the map rather than the key.
+func keyDoc(keyType *spec.Type, property, context string) string {
+	isID := keyType.Name == spec.IdType
+	if property == "" {
+		if isID {
+			return "The id of the record this entry applies to."
+		}
+		return "The key this entry is stored under."
+	}
+	lead := "A key of " + property
+	if isID {
+		lead = "An id that is a key of " + property
 	}
 	if context == "" {
-		return lead
+		return lead + "."
 	}
-	return lead + "\n\n" + context
+	return lead + ": " + lowerFirst(context)
+}
+
+// lowerFirst lowers the first letter of a sentence to continue another with
+// it, where the first word is an ordinary one: a capital and lower-case
+// letters after it, as The or Patches are, or the article A. A word with
+// anything else in it is an acronym or a name, as JMAP, Email/get and
+// PushSubscription are, and is left as it is.
+func lowerFirst(s string) string {
+	word, _, _ := strings.Cut(s, " ")
+	r := []rune(word)
+	if len(r) == 0 || !unicode.IsUpper(r[0]) {
+		return s
+	}
+	for _, c := range r[1:] {
+		if !unicode.IsLower(c) {
+			return s
+		}
+	}
+	if len(r) == 1 && word != "A" {
+		return s
+	}
+	first := []rune(s)
+	first[0] = unicode.ToLower(first[0])
+	return string(first)
 }
 
 // elemDoc describes a value inside a list the way keyDoc describes the key of
@@ -487,7 +528,7 @@ func elemDoc(elemType *spec.Type, context string) string {
 // A keyType of nil means the name itself says nothing about what the parameter
 // is, so it is recorded weakly: another use of the same parameter, somewhere
 // that does say, settles its type.
-func (c *checker) keySegments(key string, keyType *spec.Type, where, doc string) []KeySegment {
+func (c *checker) keySegments(key string, keyType *spec.Type, property, where, doc string) []KeySegment {
 	matches := embeddedParamPattern.FindAllStringSubmatchIndex(key, -1)
 	if len(matches) == 0 {
 		return nil
@@ -497,7 +538,7 @@ func (c *checker) keySegments(key string, keyType *spec.Type, where, doc string)
 		keyType = &spec.Type{Name: spec.String}
 		doc = "The name of the property this patch applies to."
 	} else {
-		doc = keyDoc(keyType, doc)
+		doc = keyDoc(keyType, property, doc)
 	}
 	var segments []KeySegment
 	last := 0
@@ -668,17 +709,18 @@ func (c *checker) patchObject(members map[string]json.RawMessage, keys []string,
 
 		valueType := &spec.Type{Name: spec.Any}
 		var keyTypes []*spec.Type
+		var properties []bool
 		var target *spec.Field
 		if c.patchTarget != "" {
-			resolved, value, resolvedField, err := c.spec.ResolvePatch(c.patchTarget, segments, unknown)
+			resolved, named, value, resolvedField, err := c.spec.ResolvePatch(c.patchTarget, segments, unknown)
 			if err != nil {
 				c.errorf(where+"."+key, propertyHint(err), "%v", err)
 				continue
 			}
-			keyTypes, valueType, target = resolved, value, resolvedField
+			keyTypes, properties, valueType, target = resolved, named, value, resolvedField
 		}
 
-		field.KeySegments = c.patchKeySegments(segments, keyTypes, where+"."+key)
+		field.KeySegments = c.patchKeySegments(segments, keyTypes, properties, where+"."+key)
 		// null in a patch means "remove this", so it is allowed wherever a value
 		// is, whether or not the property itself may hold null.
 		removable := *valueType
@@ -690,8 +732,16 @@ func (c *checker) patchObject(members map[string]json.RawMessage, keys []string,
 		if target != nil {
 			valueDoc, c.enum = target.Doc, target.Enum
 		}
+		// A value replacing a property whole has keys of that property, as
+		// mailboxIds does in {"mailboxIds": {"m1": true}}; one at a key has
+		// keys of nothing named.
+		savedProperty := c.property
+		c.property = ""
+		if last := len(segments) - 1; !unknown[last] && last < len(properties) && properties[last] {
+			c.property = segments[last]
+		}
 		field.Value = c.value(&removable, members[key], where+"."+key, valueDoc)
-		c.enum = savedEnum
+		c.enum, c.property = savedEnum, savedProperty
 		out.Fields = append(out.Fields, field)
 	}
 	return out
@@ -702,7 +752,7 @@ func (c *checker) patchObject(members map[string]json.RawMessage, keys []string,
 // left open. A segment's type comes from what the pointer selects by at that
 // depth, so a parameter naming a mailbox in "mailboxIds/{{id}}" is an Id, the
 // same as it would be anywhere else.
-func (c *checker) patchKeySegments(segments []string, keyTypes []*spec.Type, where string) []KeySegment {
+func (c *checker) patchKeySegments(segments []string, keyTypes []*spec.Type, properties []bool, where string) []KeySegment {
 	var out []KeySegment
 	var found bool
 	for i, seg := range segments {
@@ -721,7 +771,14 @@ func (c *checker) patchKeySegments(segments []string, keyTypes []*spec.Type, whe
 		}
 		segDoc := "The name of the property this patch applies to."
 		if !weak {
-			segDoc = keyDoc(segType, "")
+			// The segment before is the property whose key this is, as
+			// mailboxIds is in mailboxIds/{id}, where it names a property
+			// rather than being a key itself.
+			property := ""
+			if i > 0 && i-1 < len(properties) && properties[i-1] {
+				property = segments[i-1]
+			}
+			segDoc = keyDoc(segType, property, "")
 		}
 		last := 0
 		for _, m := range matches {
@@ -792,10 +849,11 @@ func (c *checker) comparator(members map[string]json.RawMessage, keys []string, 
 				continue
 			}
 		}
-		out.Fields = append(out.Fields, ObjectField{
-			Key:   key,
-			Value: c.value(field.ParsedType(), members[key], where+"."+key, field.Doc),
-		})
+		savedProperty := c.property
+		c.property = key
+		value := c.value(field.ParsedType(), members[key], where+"."+key, field.Doc)
+		c.property = savedProperty
+		out.Fields = append(out.Fields, ObjectField{Key: key, Value: value})
 	}
 
 	if sortProperty != nil {

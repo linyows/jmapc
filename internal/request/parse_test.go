@@ -1,6 +1,8 @@
 package request
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -1928,5 +1930,110 @@ func TestACallIDThatIsNotAnIdentifierFallsBack(t *testing.T) {
 	}
 	if got, want := q.Calls[1].Field, "EmailGet"; got != want {
 		t.Errorf("field = %q, want %q", got, want)
+	}
+}
+
+// TestAParameterUsedAsAKeyNamesTheMapItIsAKeyOf checks the documentation of a
+// parameter standing in for a map key: it names the property holding the map,
+// and goes on with what the property is, rather than reading as though the
+// property's documentation were about the key.
+func TestAParameterUsedAsAKeyNamesTheMapItIsAKeyOf(t *testing.T) {
+	q := parse(t, "FileIt.jmap.json", `{
+	  "methodCalls": [
+	    ["Email/import", {"emails": {"new": {"blobId": "{{blobId}}", "mailboxIds": {"{{mailboxId}}": true}}}}, "import"],
+	    ["Email/set", {"update": {"{{emailId}}": {"mailboxIds/{{fromMailboxId}}": null}}}, "set"]
+	  ]
+	}`)
+	docs := map[string]string{}
+	for _, p := range q.Params {
+		docs[p.Name] = p.Doc
+	}
+	for name, want := range map[string]string{
+		"mailboxId":     "An id that is a key of mailboxIds: the mailboxes",
+		"emailId":       "An id that is a key of update: a map of record id",
+		"fromMailboxId": "An id that is a key of mailboxIds.",
+	} {
+		if !strings.HasPrefix(docs[name], want) {
+			t.Errorf("%s is documented as %q, want it to start %q", name, docs[name], want)
+		}
+	}
+}
+
+func TestLowerFirstLeavesAcronymsAndNamesAlone(t *testing.T) {
+	for in, want := range map[string]string{
+		"The mailboxes the email is in.": "the mailboxes the email is in.",
+		"A map of record id to a patch.": "a map of record id to a patch.",
+		"JMAP defines no range.":         "JMAP defines no range.",
+		"Email/get returns them.":        "Email/get returns them.",
+		"PushSubscription objects.":      "PushSubscription objects.",
+		"Patches to apply.":              "patches to apply.",
+		"I":                              "I",
+		"":                               "",
+	} {
+		if got := lowerFirst(in); got != want {
+			t.Errorf("lowerFirst(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// TestAKeyOfAMapInAMapNamesNoProperty checks a map whose values are maps: a key
+// of the outer map is a key of the property holding it, and a key of an inner
+// map is a key of a value, which no property names. The path to the inner map
+// passes through the outer key, which is data and not a property's name.
+func TestAKeyOfAMapInAMapNamesNoProperty(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "schema.json")
+	if err := os.WriteFile(path, []byte(`{
+	  "capability": "urn:example:params:jmap:grid",
+	  "types": [
+	    {"name": "Grid", "doc": "Grid is a table of switches.", "properties": [
+	      {"name": "id", "type": "Id", "serverSet": true, "immutable": true, "doc": "The id of the grid."},
+	      {"name": "cells", "type": "String[String[Boolean]]", "doc": "The switches, by row and column."}
+	    ], "methods": ["get", "set"]}
+	  ],
+	  "methods": [
+	    {"name": "Grid/flip", "doc": "Flips switches.", "dataType": "Grid",
+	     "arguments": [
+	       {"name": "accountId", "type": "Id", "doc": "The account to operate on."},
+	       {"name": "matrix", "type": "String[String[Boolean]]", "doc": "The switches to flip, by row and column."}
+	     ],
+	     "response": [{"name": "accountId", "type": "Id", "doc": "The account operated on."}]}
+	  ]
+	}`), 0o644); err != nil {
+		t.Fatalf("writing the schema: %v", err)
+	}
+	sc, err := spec.LoadSchema(path)
+	if err != nil {
+		t.Fatalf("loading the schema: %v", err)
+	}
+	catalogue := spec.Standard()
+	if err := catalogue.Extend(sc); err != nil {
+		t.Fatalf("extending the catalogue: %v", err)
+	}
+	q, err := NewParser(catalogue).Parse("Flip.jmap.json", []byte(`{
+	  "methodCalls": [
+	    ["Grid/flip", {"matrix": {"{{row}}": {"{{column}}": true}}}, "flip"],
+	    ["Grid/set", {"update": {"g1": {"cells/{{patchRow}}": {"{{patchColumn}}": true}, "cells/r1/{{onlyColumn}}": false}}}, "set"]
+	  ]
+	}`))
+	if err != nil {
+		t.Fatalf("parsing: %v", err)
+	}
+	docs := map[string]string{}
+	for _, p := range q.Params {
+		docs[p.Name] = p.Doc
+	}
+	if want := "A key of matrix: the switches to flip, by row and column."; docs["row"] != want {
+		t.Errorf("row is documented as %q, want %q", docs["row"], want)
+	}
+	for _, name := range []string{"column", "patchColumn", "onlyColumn"} {
+		if want := "The key this entry is stored under."; docs[name] != want {
+			t.Errorf("%s is documented as %q, want %q", name, docs[name], want)
+		}
+	}
+	// In a patch, the segment before a key names the property only where it
+	// is one: cells/{row} is a key of cells, and cells/r1/{column} a key of r1,
+	// which is a row and no property.
+	if want := "A key of cells."; docs["patchRow"] != want {
+		t.Errorf("patchRow is documented as %q, want %q", docs["patchRow"], want)
 	}
 }

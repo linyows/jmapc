@@ -6,12 +6,11 @@ import type { ContactCardSetResponse, Id } from "./types.js"
 
 // UpdateContactEmailParams holds the values UpdateContactEmail leaves open.
 export interface UpdateContactEmailParams {
-  // The id of the record this entry applies to.
-  //
-  // A map of record id to the patch to apply to it.
+  // An id that is a key of update: a map of record id to the patch to apply
+  // to it.
   cardId: Id
 
-  // The id of the record this entry applies to.
+  // An id that is a key of emails.
   emailKey: Id
 
   // The address itself, as an addr-spec.

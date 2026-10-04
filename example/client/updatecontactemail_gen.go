@@ -12,12 +12,11 @@ import (
 
 // UpdateContactEmailParams holds the values UpdateContactEmail leaves open.
 type UpdateContactEmailParams struct {
-	// The id of the record this entry applies to.
-	//
-	// A map of record id to the patch to apply to it.
+	// An id that is a key of update: a map of record id to the patch to apply to
+	// it.
 	CardID jmapc.ID
 
-	// The id of the record this entry applies to.
+	// An id that is a key of emails.
 	EmailKey jmapc.ID
 
 	// The address itself, as an addr-spec.

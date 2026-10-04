@@ -12,9 +12,8 @@ use super::types::{EmailSetResponse, EmailSubmissionSetResponse, Id};
 /// SendEmailParams holds the values SendEmail leaves open.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct SendEmailParams {
-    /// The id of the record this entry applies to.
-    ///
-    /// The mailboxes the email is in, as a set of ids mapped to true.
+    /// An id that is a key of mailboxIds: the mailboxes the email is in, as a
+    /// set of ids mapped to true.
     pub drafts_mailbox_id: Id,
 
     /// The addr-spec of the address.
@@ -32,7 +31,7 @@ pub struct SendEmailParams {
     /// The id of the identity to send from.
     pub identity_id: Id,
 
-    /// The id of the record this entry applies to.
+    /// An id that is a key of mailboxIds.
     pub sent_mailbox_id: Id,
 }
 

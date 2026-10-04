@@ -440,6 +440,11 @@ type checker struct {
 	// left out: leaving it out takes the argument with it. It is cleared as
 	// soon as the value is reached, so that nothing nested inside inherits it.
 	argumentValue bool
+	// property is the property or argument whose value is being checked,
+	// which a parameter standing for a key of a map in it is documented as a
+	// key of. It is empty inside the values of a map, which belong to no
+	// property of their own.
+	property string
 
 	// creationIDs says that the keys of the map about to be checked are the
 	// creation ids the request invents. It travels one level, from the argument
@@ -689,7 +694,10 @@ func (c *checker) arguments(call *Call, argsType *spec.Object, raw json.RawMessa
 		c.creationIDs = field.CreationIDs
 		c.useCapability(field)
 		c.argumentValue = true
+		savedProperty := c.property
+		c.property = key
 		node := c.value(field.ParsedType(), members[key], where+"."+key, field.Doc)
+		c.property = savedProperty
 		c.patchTarget, c.sortTarget, c.enum, c.creationIDs = savedPatch, savedSort, savedEnum, false
 		if ref, isParam := node.(*ParamRef); isParam && ref.Param.Optional && name == AccountIDArgument {
 			c.errorf(where+"."+key, "leave "+AccountIDArgument+" out altogether, and it is filled in from the primary account",

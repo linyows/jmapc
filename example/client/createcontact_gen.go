@@ -17,9 +17,8 @@ type CreateContactParams struct {
 	// between address books.
 	UID string
 
-	// The id of the record this entry applies to.
-	//
-	// The address books the card is in, as a set of ids mapped to true.
+	// An id that is a key of addressBookIds: the address books the card is in,
+	// as a set of ids mapped to true.
 	AddressBookID jmapc.ID
 
 	// The value of this part of the name.

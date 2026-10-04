@@ -9,9 +9,8 @@ export interface AttachNoteParams {
   // The octets as text, which the server encodes as UTF-8.
   note: string
 
-  // The id of the record this entry applies to.
-  //
-  // The mailboxes the email is in, as a set of ids mapped to true.
+  // An id that is a key of mailboxIds: the mailboxes the email is in, as a
+  // set of ids mapped to true.
   draftsMailboxId: Id
 
   // The Subject header field value.

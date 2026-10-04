@@ -16,9 +16,8 @@ pub struct CreateEventParams {
     /// it.
     pub uid: String,
 
-    /// The id of the record this entry applies to.
-    ///
-    /// The calendars the event is in, as a set of ids mapped to true.
+    /// An id that is a key of calendarIds: the calendars the event is in, as
+    /// a set of ids mapped to true.
     pub calendar_id: Id,
 
     /// A short summary of the event.

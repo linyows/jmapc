@@ -7,12 +7,11 @@ import type { CalendarEventSetResponse, Id, LocalDateTime } from "./types.js"
 // RescheduleOccurrenceParams holds the values RescheduleOccurrence leaves
 // open.
 export interface RescheduleOccurrenceParams {
-  // The id of the record this entry applies to.
-  //
-  // A map of record id to the patch to apply to it.
+  // An id that is a key of update: a map of record id to the patch to apply
+  // to it.
   eventId: Id
 
-  // The key this entry is stored under.
+  // A key of recurrenceOverrides.
   occurrence: LocalDateTime
 
   // When the event starts, in the event's own time zone.
