@@ -315,6 +315,9 @@ jobs:
     uses: smtp
     with:
       addr: "{{vars.smtp}}"
+      # Stalwart offers STARTTLS with a certificate it made for itself, as a
+      # server delivering mail between servers takes without checking.
+      insecure_skip_tls: true
       myhostname: mail.remote.test
       from: someone@remote.test
       to: "alice@{{vars.domain}}"
@@ -516,6 +519,9 @@ jobs:
     uses: smtp
     with:
       addr: "{{vars.smtp}}"
+      # Stalwart offers STARTTLS with a certificate it made for itself, as a
+      # server delivering mail between servers takes without checking.
+      insecure_skip_tls: true
       myhostname: mail.remote.test
       from: someone@remote.test
       to: "alice@{{vars.domain}}"
@@ -625,6 +631,9 @@ jobs:
     uses: smtp
     with:
       addr: "{{vars.smtp}}"
+      # Stalwart offers STARTTLS with a certificate it made for itself, as a
+      # server delivering mail between servers takes without checking.
+      insecure_skip_tls: true
       myhostname: mail.remote.test
       from: someone@remote.test
       to: "bob@{{vars.domain}}"
@@ -703,6 +712,9 @@ jobs:
     uses: smtp
     with:
       addr: "{{vars.smtp}}"
+      # Stalwart offers STARTTLS with a certificate it made for itself, as a
+      # server delivering mail between servers takes without checking.
+      insecure_skip_tls: true
       myhostname: mail.remote.test
       from: someone@remote.test
       to: "carol@{{vars.domain}}"

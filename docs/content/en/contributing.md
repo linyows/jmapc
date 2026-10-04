@@ -60,6 +60,7 @@ which are independent of one another, then run in parallel:
 ```mermaid
 flowchart LR
     subgraph server["Start and provision the server"]
+        direction TB
         server_step0["Remove the container and the work directory when the workflow ends"]
         server_step1["Make a CA and a certificate for the push receiver"]
         server_step2["Start Stalwart"]
@@ -69,53 +70,92 @@ flowchart LR
         server_step6["Wait for the server"]
         server_step7["Find the domain bootstrap created"]
         server_step8["Create alice, bob and carol"]
+        server_step0 --> server_step1
+        server_step1 --> server_step2
+        server_step2 --> server_step3
+        server_step3 --> server_step4
+        server_step4 --> server_step5
+        server_step5 --> server_step6
+        server_step6 --> server_step7
+        server_step7 --> server_step8
     end
     subgraph driver["Build the driver"]
+        direction TB
         driver_step0["go build"]
     end
     subgraph job_2["The session as jmapc reads it"]
+        direction TB
         job_2_step0["Fetch the session directly"]
         job_2_step1["Fetch it through jmapc"]
         job_2_step2["Verify every request through jmapc"]
+        job_2_step0 --> job_2_step1
+        job_2_step1 --> job_2_step2
     end
     subgraph job_3["Mail delivered over SMTP, found through jmapc"]
+        direction TB
         job_3_step0["Deliver to alice on port 25"]
         job_3_step1["Find it through the generated client"]
         job_3_step2["Read alice's mail account"]
         job_3_step3["Find the same email directly"]
+        job_3_step0 --> job_3_step1
+        job_3_step1 --> job_3_step2
+        job_3_step2 --> job_3_step3
     end
     subgraph job_4["Mail imported through jmapc, read over IMAP"]
+        direction TB
         job_4_step0["Import a flagged message through the generated client"]
         job_4_step1["Find it in the inbox over IMAP, flagged and unread"]
         job_4_step2["Mark it read over IMAP"]
         job_4_step3["See it read through the generated client"]
+        job_4_step0 --> job_4_step1
+        job_4_step1 --> job_4_step2
+        job_4_step2 --> job_4_step3
     end
     subgraph job_5["A blob uploaded through jmapc, downloaded directly"]
+        direction TB
         job_5_step0["Upload and download it through jmapc"]
         job_5_step1["Download the whole of it directly"]
         job_5_step2["Ask for the same range directly"]
+        job_5_step0 --> job_5_step1
+        job_5_step1 --> job_5_step2
     end
     subgraph job_6["Changes followed through jmapc, a few at a time"]
+        direction TB
         job_6_step0["Read the state through jmapc"]
         job_6_step1["Deliver three messages to alice"]
         job_6_step2["Follow the changes through the generated client"]
         job_6_step3["Read alice's mail account for the direct request"]
         job_6_step4["See the server page the same changes directly"]
+        job_6_step0 --> job_6_step1
+        job_6_step1 --> job_6_step2
+        job_6_step2 --> job_6_step3
+        job_6_step3 --> job_6_step4
     end
     subgraph job_7["A push followed through jmapc's Watch"]
+        direction TB
         job_7_step0["Read the state through jmapc"]
         job_7_step1["Start watching through the generated client"]
         job_7_step2["Wait until the watch follows pushes"]
         job_7_step3["Deliver to bob on port 25"]
         job_7_step4["See the watch report it"]
+        job_7_step0 --> job_7_step1
+        job_7_step1 --> job_7_step2
+        job_7_step2 --> job_7_step3
+        job_7_step3 --> job_7_step4
     end
     subgraph job_8["A push to a URL, received by PushReceiver"]
+        direction TB
         job_8_step0["Receive pushes through PushReceiver"]
         job_8_step1["Wait until the subscription is verified"]
         job_8_step2["Find the subscription directly"]
         job_8_step3["Deliver to carol on port 25"]
         job_8_step4["See the push received and the subscription removed"]
         job_8_step5["Find no subscription directly"]
+        job_8_step0 --> job_8_step1
+        job_8_step1 --> job_8_step2
+        job_8_step2 --> job_8_step3
+        job_8_step3 --> job_8_step4
+        job_8_step4 --> job_8_step5
     end
     server --> job_2
     driver --> job_2
