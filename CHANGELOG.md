@@ -4,6 +4,29 @@ What changed in each release, and what it means for the code that uses it. The r
 
 This starts at v0.12.0. What went into the releases before it is in the commit history.
 
+## v0.17.0 (2026-10-04)
+
+### Breaking changes
+
+- **A request is refused where its file would be one another file is generated into.** A request's file is named after the request, so a request named `verify` was written to `verify_gen.go` and then replaced by the new `Verify` function, one named `Client` or `Types` was replaced by the TypeScript or Rust runtime, a Rust one named `Mod` by `mod.rs`, one named `properties` by the sets of properties, and two requests differing only in case went to one file — each without an error, and with a request missing from the client. Generation now fails and names both, and a request or a set of properties named `Verify` is refused. Rename the request where this happens; it was not being generated. ([#109](https://github.com/linyows/jmapc/pull/109), [#110](https://github.com/linyows/jmapc/pull/110))
+- **The Rust runtime's `Error` has a `Verify` variant**, which `verify` returns. A `match` on `Error` without a wildcard arm needs one for it. ([#110](https://github.com/linyows/jmapc/pull/110))
+
+### Added
+
+- **`Verify` checks every request against the session as the program starts.** The checks that refuse a request before it is sent run as each request is sent, so a request on a path a program rarely takes was checked only when that path was taken. The generated client now has a `Verify(ctx, c)` in Go, and `verify(client)` in TypeScript and Rust, which checks every request in the package at once: the capabilities it declares, the primary account it leaves the account to and whether that account supports the capability, and its number of calls against `maxCallsInRequest`. Every problem is reported, each as a `VerifyError` naming its request and holding the error sending it would have failed with. ([#109](https://github.com/linyows/jmapc/pull/109), [#110](https://github.com/linyows/jmapc/pull/110))
+- **`PushReceiver` keeps a push subscription to a URL.** It is the `http.Handler` the URL reaches, and its `Run` creates the subscription, waits for the server to post the verification code and sends it back, extends the subscription before it expires within what the server grants, makes it again where the server no longer has it, and removes it when the context ends. Each state change the server posts goes to `OnStateChange`, and each step to `OnEvent`. Pushes are not encrypted: the subscription is made without keys. Go only. ([#113](https://github.com/linyows/jmapc/pull/113))
+- **An `Observer` can be given the bodies of requests and responses.** With `Observer.Redact` set, `RequestInfo.Body` and `ResponseInfo.Body` hold the request as the caller made it and the response as the caller received it, after passing through `Redact`, and `SlogObserver` writes them. A body carries the subjects, addresses and text of the user's mail, so nothing is reported without `Redact`. `RedactContent` keeps method names, call ids, ids, states, property names, numbers and every key, and replaces every other string with `[redacted]`; `KeepBodies` keeps everything, for development. ([#111](https://github.com/linyows/jmapc/pull/111))
+- **`IsRangeIgnored` reports a download whose range the server ignored.** JMAP defines no range on the download endpoint, and `Download` refuses a whole blob answered for a range; a caller resuming a download can now tell that from any other failure and download the whole blob instead. ([#108](https://github.com/linyows/jmapc/pull/108))
+
+### Fixed
+
+- **`IsTemporary` is false for a range the server ignored**, which it counted as temporary, so a retry loop asked the same server for the same range again. ([#108](https://github.com/linyows/jmapc/pull/108))
+- **`HasErrorType` and `IsTemporary` read every request error in a joined error.** They read only the first `errors.As` found, so in an error joined from several, such as `Verify` returns, the rest were missed. Each node is matched as `errors.As` matches it, including through an `As` method of its own. ([#109](https://github.com/linyows/jmapc/pull/109))
+
+### Documentation
+
+- **The end-to-end tests are one probe workflow, and cover push.** `probe e2e/workflow.yml` starts Stalwart, sets it up, runs the scenarios and removes the container however the run ends, and CI runs it through probe-action. The scenarios now also follow `/changes` a few at a time, follow a push through `Watch`, run `Verify` against the session, and receive a push Stalwart posts to a URL through `PushReceiver`. They need probe 1.14.0 or later. ([#107](https://github.com/linyows/jmapc/pull/107), [#109](https://github.com/linyows/jmapc/pull/109), [#112](https://github.com/linyows/jmapc/pull/112), [#114](https://github.com/linyows/jmapc/pull/114))
+
 ## v0.16.1 (2026-10-03)
 
 ### Fixed
