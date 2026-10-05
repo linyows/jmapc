@@ -29,15 +29,17 @@ vars:
   http_port: "{{E2E_HTTP_PORT ?? '18080'}}"
   smtp_port: "{{E2E_SMTP_PORT ?? '10025'}}"
   imap_port: "{{E2E_IMAP_PORT ?? '10993'}}"
-  base: "http://localhost:{{E2E_HTTP_PORT ?? '18080'}}"
-  smtp: "localhost:{{E2E_SMTP_PORT ?? '10025'}}"
+  base: "http://localhost:{{vars.http_port}}"
+  smtp: "localhost:{{vars.smtp_port}}"
   imap_host: localhost
   # Where the driver is built, removed when the workflow ends. It is always
   # made for the run, never given, since it is removed whole.
   work: "{{'/tmp/jmapc-e2e-' + random_str(12)}}"
   keep: "{{E2E_KEEP ?? ''}}"
-  # user:password of the administrator the container is started with.
-  recovery_admin: "admin:{{E2E_RECOVERY_PASSWORD ?? random_str(24)}}"
+  # The administrator the container is started with, given to it as
+  # user:password.
+  recovery_password: "{{E2E_RECOVERY_PASSWORD ?? random_str(24)}}"
+  recovery_admin: "admin:{{vars.recovery_password}}"
   domain: example.test
   alice_password: "{{E2E_ALICE_PASSWORD ?? random_str(24)}}"
   bob_password: "{{E2E_BOB_PASSWORD ?? random_str(24)}}"
@@ -129,8 +131,9 @@ jobs:
     uses: http
     with:
       post: /jmap/
-      headers:
-        authorization: "Basic {{encode_base64(vars.recovery_admin)}}"
+      basic_auth:
+        username: admin
+        password: "{{vars.recovery_password}}"
       body:
         using: ["urn:ietf:params:jmap:core", "urn:stalwart:jmap"]
         methodCalls:
@@ -160,8 +163,11 @@ jobs:
     uses: http
     with:
       get: /.well-known/jmap
-      headers:
-        authorization: "Basic {{encode_base64(outputs.boot.user + ':' + outputs.boot.secret)}}"
+      # The administrator bootstrap made, which the steps after this one log
+      # in as too.
+      basic_auth: &admin
+        username: "{{outputs.boot.user}}"
+        password: "{{outputs.boot.secret}}"
     retry: {max_attempts: 60, interval: 1s}
     test: res.code == 200 && res.body.username == outputs.boot.user
 
@@ -170,8 +176,7 @@ jobs:
     uses: http
     with:
       post: /jmap/
-      headers:
-        authorization: "Basic {{encode_base64(outputs.boot.user + ':' + outputs.boot.secret)}}"
+      basic_auth: *admin
       body:
         using: ["urn:ietf:params:jmap:core", "urn:stalwart:jmap"]
         methodCalls:
@@ -181,19 +186,19 @@ jobs:
       id: res.body.methodResponses[0][1].ids[0]
 
   # Stalwart's lists are written as maps keyed by position, which is why the
-  # one credential is under "0".
+  # one credential is under "0". bob and carol are alice with their own name
+  # and password.
   - name: Create alice, bob and carol
     uses: http
     with:
       post: /jmap/
-      headers:
-        authorization: "Basic {{encode_base64(outputs.boot.user + ':' + outputs.boot.secret)}}"
+      basic_auth: *admin
       body:
         using: ["urn:ietf:params:jmap:core", "urn:stalwart:jmap"]
         methodCalls:
         - - x:Account/set
           - create:
-              alice:
+              alice: &user
                 "@type": User
                 name: alice
                 domainId: "{{outputs.domain.id}}"
@@ -205,27 +210,13 @@ jobs:
                 memberGroupIds: {}
                 encryptionAtRest: {"@type": Disabled}
               bob:
-                "@type": User
+                <<: *user
                 name: bob
-                domainId: "{{outputs.domain.id}}"
                 credentials: {"0": {"@type": Password, secret: "{{vars.bob_password}}"}}
-                roles: {"@type": User}
-                permissions: {"@type": Inherit}
-                quotas: {}
-                aliases: {}
-                memberGroupIds: {}
-                encryptionAtRest: {"@type": Disabled}
               carol:
-                "@type": User
+                <<: *user
                 name: carol
-                domainId: "{{outputs.domain.id}}"
                 credentials: {"0": {"@type": Password, secret: "{{vars.carol_password}}"}}
-                roles: {"@type": User}
-                permissions: {"@type": Inherit}
-                quotas: {}
-                aliases: {}
-                memberGroupIds: {}
-                encryptionAtRest: {"@type": Disabled}
           - accounts
     test: res.code == 200 && len(res.body.methodResponses[0][1].created) == 3
 
@@ -241,11 +232,21 @@ jobs:
 
 - name: The session as jmapc reads it
   needs: [server, driver]
-  defaults:
+  # Requests made directly and the driver both log in as alice, here and in
+  # the other jobs that work in her account.
+  defaults: &alice
     http:
       url: "{{vars.base}}"
+      basic_auth:
+        username: "alice@{{vars.domain}}"
+        password: "{{vars.alice_password}}"
       headers:
-        authorization: "Basic {{encode_base64('alice@' + vars.domain + ':' + vars.alice_password)}}"
+        content-type: application/json
+    shell:
+      env:
+        JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
+        JMAPC_E2E_USER: "alice@{{vars.domain}}"
+        JMAPC_E2E_PASSWORD: "{{vars.alice_password}}"
   steps:
   - name: Fetch the session directly
     id: raw
@@ -253,37 +254,27 @@ jobs:
     with:
       get: /.well-known/jmap
     test: res.code == 200
+    # The fields the driver prints, read from the session as the server
+    # wrote it, for match_json to compare whole.
     outputs:
-      username: res.body.username
-      apiUrl: res.body.apiUrl
-      downloadUrl: res.body.downloadUrl
-      uploadUrl: res.body.uploadUrl
-      eventSourceUrl: res.body.eventSourceUrl
-      mailAccountId: res.body.primaryAccounts['urn:ietf:params:jmap:mail']
-      capabilities: toJSON(sort(keys(res.body.capabilities)))
-      maxCallsInRequest: res.body.capabilities['urn:ietf:params:jmap:core'].maxCallsInRequest
-      maxObjectsInGet: res.body.capabilities['urn:ietf:params:jmap:core'].maxObjectsInGet
+      session: |
+        {
+          username: res.body.username,
+          apiUrl: res.body.apiUrl,
+          downloadUrl: res.body.downloadUrl,
+          uploadUrl: res.body.uploadUrl,
+          eventSourceUrl: res.body.eventSourceUrl,
+          mailAccountId: res.body.primaryAccounts['urn:ietf:params:jmap:mail'],
+          capabilities: sort(keys(res.body.capabilities)),
+          maxCallsInRequest: res.body.capabilities['urn:ietf:params:jmap:core'].maxCallsInRequest,
+          maxObjectsInGet: res.body.capabilities['urn:ietf:params:jmap:core'].maxObjectsInGet,
+        }
 
   - name: Fetch it through jmapc
     uses: shell
     with:
       cmd: "{{vars.work}}/driver session"
-      env:
-        JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
-        JMAPC_E2E_USER: "alice@{{vars.domain}}"
-        JMAPC_E2E_PASSWORD: "{{vars.alice_password}}"
-    test: |
-      res.code == 0 &&
-      parse_json(res.stdout).username == outputs.raw.username &&
-      parse_json(res.stdout).apiUrl == outputs.raw.apiUrl &&
-      parse_json(res.stdout).downloadUrl == outputs.raw.downloadUrl &&
-      parse_json(res.stdout).uploadUrl == outputs.raw.uploadUrl &&
-      parse_json(res.stdout).eventSourceUrl == outputs.raw.eventSourceUrl &&
-      parse_json(res.stdout).mailAccountId == outputs.raw.mailAccountId &&
-      toJSON(parse_json(res.stdout).capabilities) == outputs.raw.capabilities &&
-      parse_json(res.stdout).maxCallsInRequest == outputs.raw.maxCallsInRequest &&
-      parse_json(res.stdout).maxObjectsInGet == outputs.raw.maxObjectsInGet
-
+    test: res.code == 0 && match_json(res.json, outputs.raw.session)
 
   # SendReadReceipt uses MDN, and the rest only what this server serves. What
   # Verify has to report follows from the session fetched directly: nothing
@@ -293,21 +284,19 @@ jobs:
     uses: shell
     with:
       cmd: "{{vars.work}}/driver verify"
-      env:
-        JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
-        JMAPC_E2E_USER: "alice@{{vars.domain}}"
-        JMAPC_E2E_PASSWORD: "{{vars.alice_password}}"
     test: |
       res.code == 0 &&
-      outputs.raw.capabilities contains '"urn:ietf:params:jmap:mdn"' &&
-        len(parse_json(res.stdout).problems) == 0 ||
+      'urn:ietf:params:jmap:mdn' in outputs.raw.session.capabilities &&
+        len(res.json.problems) == 0 ||
       res.code == 0 &&
-      !(outputs.raw.capabilities contains '"urn:ietf:params:jmap:mdn"') &&
-        len(parse_json(res.stdout).problems) == 1 &&
-        parse_json(res.stdout).problems[0].request == 'SendReadReceipt' &&
-        parse_json(res.stdout).problems[0].error contains 'urn:ietf:params:jmap:mdn'
+      !('urn:ietf:params:jmap:mdn' in outputs.raw.session.capabilities) &&
+        len(res.json.problems) == 1 &&
+        res.json.problems[0].request == 'SendReadReceipt' &&
+        res.json.problems[0].error contains 'urn:ietf:params:jmap:mdn'
+
 - name: Mail delivered over SMTP, found through jmapc
   needs: [server, driver]
+  defaults: *alice
   steps:
   # The subject carries the run id, and probe appends a tracking id of its
   # own, so the search below matches this delivery and no other.
@@ -329,19 +318,15 @@ jobs:
     uses: shell
     with:
       cmd: "{{vars.work}}/driver find-emails -subject 'inbound {{vars.run_id}}'"
-      env:
-        JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
-        JMAPC_E2E_USER: "alice@{{vars.domain}}"
-        JMAPC_E2E_PASSWORD: "{{vars.alice_password}}"
     retry: {max_attempts: 20, interval: 1s}
     test: |
       res.code == 0 &&
-      parse_json(res.stdout).count == 1 &&
-      parse_json(res.stdout).emails[0].from[0] == 'someone@remote.test' &&
-      parse_json(res.stdout).emails[0].to[0] == 'alice@' + vars.domain &&
-      parse_json(res.stdout).emails[0].mailboxes == 1
+      res.json.count == 1 &&
+      res.json.emails[0].from[0] == 'someone@remote.test' &&
+      res.json.emails[0].to[0] == 'alice@' + vars.domain &&
+      res.json.emails[0].mailboxes == 1
     outputs:
-      id: parse_json(res.stdout).emails[0].id
+      id: res.json.emails[0].id
 
   # A request written by hand names the account, which jmapc fills in from the
   # session where a request leaves it out.
@@ -349,10 +334,7 @@ jobs:
     id: account
     uses: http
     with:
-      url: "{{vars.base}}"
       get: /.well-known/jmap
-      headers:
-        authorization: "Basic {{encode_base64('alice@' + vars.domain + ':' + vars.alice_password)}}"
     test: res.code == 200
     outputs:
       id: res.body.primaryAccounts['urn:ietf:params:jmap:mail']
@@ -360,11 +342,7 @@ jobs:
   - name: Find the same email directly
     uses: http
     with:
-      url: "{{vars.base}}"
       post: /jmap/
-      headers:
-        authorization: "Basic {{encode_base64('alice@' + vars.domain + ':' + vars.alice_password)}}"
-        content-type: application/json
       body:
         using: ["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail"]
         methodCalls:
@@ -374,6 +352,7 @@ jobs:
 - name: Mail imported through jmapc, read over IMAP
   needs: [server, driver]
   defaults:
+    <<: *alice
     imap:
       host: "{{vars.imap_host}}"
       port: "{{vars.imap_port}}"
@@ -388,13 +367,9 @@ jobs:
     uses: shell
     with:
       cmd: "{{vars.work}}/driver import-email -subject 'imported {{vars.run_id}}'"
-      env:
-        JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
-        JMAPC_E2E_USER: "alice@{{vars.domain}}"
-        JMAPC_E2E_PASSWORD: "{{vars.alice_password}}"
-    test: res.code == 0 && parse_json(res.stdout).id != ""
+    test: res.code == 0 && res.json.id != ""
     outputs:
-      id: parse_json(res.stdout).id
+      id: res.json.id
 
   # The keywords set through JMAP are the flags IMAP shows: $flagged is
   # \Flagged, and a message not yet read has no \Seen. The fetch acts on what
@@ -439,23 +414,15 @@ jobs:
     uses: shell
     with:
       cmd: "{{vars.work}}/driver find-emails -subject 'imported {{vars.run_id}}'"
-      env:
-        JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
-        JMAPC_E2E_USER: "alice@{{vars.domain}}"
-        JMAPC_E2E_PASSWORD: "{{vars.alice_password}}"
     test: |
       res.code == 0 &&
-      parse_json(res.stdout).count == 1 &&
-      parse_json(res.stdout).emails[0].id == outputs.imported.id &&
-      parse_json(res.stdout).emails[0].keywords == ['$flagged', '$seen']
+      res.json.count == 1 &&
+      res.json.emails[0].id == outputs.imported.id &&
+      res.json.emails[0].keywords == ['$flagged', '$seen']
 
 - name: A blob uploaded through jmapc, downloaded directly
   needs: [server, driver]
-  defaults:
-    http:
-      url: "{{vars.base}}"
-      headers:
-        authorization: "Basic {{encode_base64('alice@' + vars.domain + ':' + vars.alice_password)}}"
+  defaults: *alice
   steps:
   # jmapc uploads the content and reads back the whole of it, and asks for
   # octets 5 to 12 of it.
@@ -464,19 +431,15 @@ jobs:
     uses: shell
     with:
       cmd: "{{vars.work}}/driver blob -data 'blob {{vars.run_id}} 0123456789' -from 5 -length 8"
-      env:
-        JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
-        JMAPC_E2E_USER: "alice@{{vars.domain}}"
-        JMAPC_E2E_PASSWORD: "{{vars.alice_password}}"
     test: |
       res.code == 0 &&
-      parse_json(res.stdout).whole == 'blob ' + vars.run_id + ' 0123456789' &&
-      parse_json(res.stdout).size == len('blob ' + vars.run_id + ' 0123456789')
+      res.json.whole == 'blob ' + vars.run_id + ' 0123456789' &&
+      res.json.size == len('blob ' + vars.run_id + ' 0123456789')
     outputs:
-      accountId: parse_json(res.stdout).accountId
-      blobId: parse_json(res.stdout).blobId
-      part: parse_json(res.stdout).part ?? ''
-      rangeIgnored: parse_json(res.stdout).rangeIgnored ?? false
+      accountId: res.json.accountId
+      blobId: res.json.blobId
+      part: res.json.part ?? ''
+      rangeIgnored: res.json.rangeIgnored ?? false
 
   - name: Download the whole of it directly
     uses: http
@@ -501,19 +464,16 @@ jobs:
 
 - name: Changes followed through jmapc, a few at a time
   needs: [server, driver]
+  defaults: *alice
   steps:
   - name: Read the state through jmapc
     id: before_changes
     uses: shell
     with:
       cmd: "{{vars.work}}/driver state"
-      env:
-        JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
-        JMAPC_E2E_USER: "alice@{{vars.domain}}"
-        JMAPC_E2E_PASSWORD: "{{vars.alice_password}}"
-    test: res.code == 0 && parse_json(res.stdout).state != ""
+    test: res.code == 0 && res.json.state != ""
     outputs:
-      since: parse_json(res.stdout).state
+      since: res.json.state
 
   - name: Deliver three messages to alice
     uses: smtp
@@ -538,24 +498,17 @@ jobs:
     uses: shell
     with:
       cmd: "{{vars.work}}/driver changes -since '{{outputs.before_changes.since}}' -max 1"
-      env:
-        JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
-        JMAPC_E2E_USER: "alice@{{vars.domain}}"
-        JMAPC_E2E_PASSWORD: "{{vars.alice_password}}"
     retry: {max_attempts: 20, interval: 1s}
     test: |
       res.code == 0 &&
-      count(parse_json(res.stdout).created ?? [], {# startsWith 'changed ' + vars.run_id}) == 3 &&
-      parse_json(res.stdout).requests >= 3
+      count(res.json.created ?? [], {# startsWith 'changed ' + vars.run_id}) == 3 &&
+      res.json.requests >= 3
 
   - name: Read alice's mail account for the direct request
     id: changes_account
     uses: http
     with:
-      url: "{{vars.base}}"
       get: /.well-known/jmap
-      headers:
-        authorization: "Basic {{encode_base64('alice@' + vars.domain + ':' + vars.alice_password)}}"
     test: res.code == 200
     outputs:
       accountId: res.body.primaryAccounts['urn:ietf:params:jmap:mail']
@@ -563,11 +516,7 @@ jobs:
   - name: See the server page the same changes directly
     uses: http
     with:
-      url: "{{vars.base}}"
       post: /jmap/
-      headers:
-        authorization: "Basic {{encode_base64('alice@' + vars.domain + ':' + vars.alice_password)}}"
-        content-type: application/json
       body:
         using: ["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail"]
         methodCalls:
@@ -589,43 +538,36 @@ jobs:
 # report there.
 - name: A push followed through jmapc's Watch
   needs: [server, driver]
+  defaults:
+    shell:
+      env:
+        JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
+        JMAPC_E2E_USER: "bob@{{vars.domain}}"
+        JMAPC_E2E_PASSWORD: "{{vars.bob_password}}"
   steps:
   - name: Read the state through jmapc
     id: before_push
     uses: shell
     with:
       cmd: "{{vars.work}}/driver state"
-      env:
-        JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
-        JMAPC_E2E_USER: "bob@{{vars.domain}}"
-        JMAPC_E2E_PASSWORD: "{{vars.bob_password}}"
-    test: res.code == 0 && parse_json(res.stdout).state != ""
+    test: res.code == 0 && res.json.state != ""
     outputs:
-      since: parse_json(res.stdout).state
+      since: res.json.state
 
-  # The watch runs in the background, and creates the ready file once its
+  # The watch runs in the background, and the step returns once it says its
   # event stream is open. Watch does not poll, so an email it reports reached
   # it by push. probe gives back the process and the file its output goes to.
   - name: Start watching through the generated client
     id: watching
     uses: shell
     with:
-      cmd: "{{vars.work}}/driver watch -since '{{outputs.before_push.since}}' -subject 'pushed {{vars.run_id}}' -ready '{{vars.work}}/watch.ready'"
+      cmd: "{{vars.work}}/driver watch -since '{{outputs.before_push.since}}' -subject 'pushed {{vars.run_id}}'"
       background: true
-      env:
-        JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
-        JMAPC_E2E_USER: "bob@{{vars.domain}}"
-        JMAPC_E2E_PASSWORD: "{{vars.bob_password}}"
+      ready:
+        log: following pushes
     test: res.pid > 0 && res.log != ""
     outputs:
       log: res.log
-
-  - name: Wait until the watch follows pushes
-    uses: shell
-    with:
-      cmd: "test -f '{{vars.work}}/watch.ready'"
-    retry: {max_attempts: 20, interval: 500ms}
-    test: res.code == 0
 
   - name: Deliver to bob on port 25
     uses: smtp
@@ -641,17 +583,17 @@ jobs:
     test: res.code == 0 && res.sent == 1
 
   # The first run of the request is the catch-up when the stream opens, so the
-  # email has to arrive in a later one, which only a push starts.
+  # email has to arrive in a later one, which only a push starts. The email is
+  # the last line of the log, after the one the step above waited for.
   - name: See the watch report it
     uses: shell
     with:
-      cmd: "cat '{{outputs.watching.log}}'"
+      cmd: "tail -n 1 '{{outputs.watching.log}}'"
     retry: {max_attempts: 20, interval: 1s}
     test: |
       res.code == 0 &&
-      res.stdout contains '"subject"' &&
-      parse_json(res.stdout).subject startsWith 'pushed ' + vars.run_id &&
-      parse_json(res.stdout).runs >= 2
+      res.json.subject startsWith 'pushed ' + vars.run_id &&
+      res.json.runs >= 2
 
 # Carol's account is this scenario's alone, as bob's is the Watch's: a push
 # for any other change there would satisfy it whether or not the delivery
@@ -661,14 +603,21 @@ jobs:
   defaults:
     http:
       url: "{{vars.base}}"
+      basic_auth:
+        username: "carol@{{vars.domain}}"
+        password: "{{vars.carol_password}}"
       headers:
-        authorization: "Basic {{encode_base64('carol@' + vars.domain + ':' + vars.carol_password)}}"
         content-type: application/json
+    shell:
+      env:
+        JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
+        JMAPC_E2E_USER: "carol@{{vars.domain}}"
+        JMAPC_E2E_PASSWORD: "{{vars.carol_password}}"
   steps:
   # The driver serves PushReceiver over https on the host, subscribes carol
   # to it, and ends once a change to her email is pushed, removing the
-  # subscription as it does. It creates the ready file once the server has
-  # verified the subscription.
+  # subscription as it does. The step returns once the server has verified
+  # the subscription.
   - name: Receive pushes through PushReceiver
     id: receiving
     uses: shell
@@ -678,22 +627,12 @@ jobs:
         -url https://{{vars.push_host}}:{{vars.push_port}}/push/{{vars.run_id}}
         -listen :{{vars.push_port}}
         -cert {{vars.work}}/push.pem -key {{vars.work}}/push.key
-        -ready {{vars.work}}/push.ready
       background: true
-      env:
-        JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
-        JMAPC_E2E_USER: "carol@{{vars.domain}}"
-        JMAPC_E2E_PASSWORD: "{{vars.carol_password}}"
+      ready:
+        log: '"event":"verified"'
     test: res.pid > 0
     outputs:
       log: res.log
-
-  - name: Wait until the subscription is verified
-    uses: shell
-    with:
-      cmd: "test -f '{{vars.work}}/push.ready'"
-    retry: {max_attempts: 40, interval: 500ms}
-    test: res.code == 0
 
   - name: Find the subscription directly
     uses: http

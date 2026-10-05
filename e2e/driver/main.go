@@ -18,8 +18,8 @@
 //	driver blob -data <content> -from <offset> -length <octets>
 //	driver state
 //	driver changes -since <state> -max <changes>
-//	driver watch -since <state> -subject <phrase> -ready <file>
-//	driver receive -url <url> -listen <addr> -cert <file> -key <file> -ready <file>
+//	driver watch -since <state> -subject <phrase>
+//	driver receive -url <url> -listen <addr> -cert <file> -key <file>
 package main
 
 import (
@@ -101,22 +101,20 @@ func run(args []string) error {
 		fs := flag.NewFlagSet("watch", flag.ContinueOnError)
 		since := fs.String("since", "", "state to watch from")
 		subject := fs.String("subject", "", "phrase the subject of the email to wait for contains")
-		ready := fs.String("ready", "", "file to create once the watch is following pushes")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
-		return watch(ctx, c, *since, *subject, *ready)
+		return watch(ctx, c, *since, *subject)
 	case "receive":
 		fs := flag.NewFlagSet("receive", flag.ContinueOnError)
 		url := fs.String("url", "", "URL the server is to post to")
 		listen := fs.String("listen", "", "address to serve https on")
 		cert := fs.String("cert", "", "certificate to serve")
 		key := fs.String("key", "", "key of the certificate")
-		ready := fs.String("ready", "", "file to create once the subscription is verified")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
-		return receive(ctx, c, *url, *listen, *cert, *key, *ready)
+		return receive(ctx, c, *url, *listen, *cert, *key)
 	default:
 		return fmt.Errorf("unknown subcommand %q", args[0])
 	}
@@ -371,23 +369,22 @@ var errFound = errors.New("found")
 // watch follows pushes from since, through the Watch function generated from
 // requests/SyncEmails.jmap.json, until an email whose subject contains the
 // phrase is created, and prints it. Watch runs the request once as soon as the
-// event stream is open, to catch up, and ready is created then, so that
-// whatever creates the email can wait until the push would reach this side.
+// event stream is open, to catch up, and "following pushes" goes to stderr
+// then, so that whatever creates the email can wait until the push would reach
+// this side. stdout is left to the email alone.
 //
 // The command is bounded by the context: if no push brings the email, it
 // fails rather than waiting for ever.
-func watch(ctx context.Context, c *jmapc.Client, since, subject, ready string) error {
-	if since == "" || subject == "" || ready == "" {
-		return errors.New("watch needs -since, -subject and -ready")
+func watch(ctx context.Context, c *jmapc.Client, since, subject string) error {
+	if since == "" || subject == "" {
+		return errors.New("watch needs -since and -subject")
 	}
 	runs := 0
 	var found map[string]any
 	err := client.SyncEmailsWatch(ctx, c, client.SyncEmailsParams{SinceState: since, MaxChanges: 50}, func(ctx context.Context, r *client.SyncEmailsResult) error {
 		runs++
 		if runs == 1 {
-			if err := os.WriteFile(ready, nil, 0o644); err != nil {
-				return err
-			}
+			fmt.Fprintln(os.Stderr, "following pushes")
 		}
 		for _, e := range r.Created.List {
 			if e.Subject != nil && strings.Contains(*e.Subject, subject) {
@@ -429,12 +426,11 @@ func verify(ctx context.Context, c *jmapc.Client) error {
 // receive serves a PushReceiver over https at listen, keeps a subscription to
 // url, and ends once a change to the account's email is pushed, which removes
 // the subscription. It writes a line of JSON for each step of the
-// subscription and each state change, and creates ready once the server has
-// verified the subscription, so that whatever changes the email can wait until
-// the change would be pushed.
-func receive(ctx context.Context, c *jmapc.Client, url, listen, cert, key, ready string) error {
-	if url == "" || listen == "" || cert == "" || key == "" || ready == "" {
-		return errors.New("receive needs -url, -listen, -cert, -key and -ready")
+// subscription and each state change; the one for "verified" says that
+// whatever changes the email can go ahead, since the change would be pushed.
+func receive(ctx context.Context, c *jmapc.Client, url, listen, cert, key string) error {
+	if url == "" || listen == "" || cert == "" || key == "" {
+		return errors.New("receive needs -url, -listen, -cert and -key")
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -453,9 +449,6 @@ func receive(ctx context.Context, c *jmapc.Client, url, listen, cert, key, ready
 		VerifyTimeout:  20 * time.Second,
 		OnEvent: func(e jmapc.PushEvent) {
 			line(map[string]any{"event": e.Kind, "id": e.SubscriptionID})
-			if e.Kind == jmapc.PushVerified {
-				_ = os.WriteFile(ready, nil, 0o644)
-			}
 		},
 		OnStateChange: func(_ context.Context, change *jmapc.StateChange) {
 			line(map[string]any{"stateChange": change.Changed})
