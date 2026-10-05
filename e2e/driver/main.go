@@ -448,6 +448,9 @@ func receive(ctx context.Context, c *jmapc.Client, url, listen, cert, key string
 		Lifetime:       time.Hour,
 		VerifyTimeout:  20 * time.Second,
 		OnEvent: func(e jmapc.PushEvent) {
+			// The workflow waits for "event":"verified", as encoding/json
+			// writes it, before it delivers anything, so this line keeps that
+			// form.
 			line(map[string]any{"event": e.Kind, "id": e.SubscriptionID})
 		},
 		OnStateChange: func(_ context.Context, change *jmapc.StateChange) {

@@ -17,8 +17,8 @@
 # jmapc sends cannot be hidden by the same mistake in what it reads back.
 #
 # Outputs are kept for the whole run and can be read by name alone, so an
-# output is not named after the id of any step: outputs.account.id would
-# otherwise find the output named account rather than the step.
+# output is not named after the id of any step: outputs.domain.id would
+# otherwise find an output named domain rather than the step.
 name: jmapc against Stalwart
 
 vars:
@@ -53,6 +53,16 @@ vars:
   # read each other's mail.
   run_id: "{{random_str(8)}}"
 
+# The sender of every delivery, merged into the jobs' defaults: probe leaves
+# a top-level key that starts with x- alone. Stalwart offers STARTTLS with a
+# certificate it made for itself, as a server delivering mail between
+# servers takes without checking.
+x-remote-smtp: &remote_smtp
+  addr: "{{vars.smtp}}"
+  insecure_skip_tls: true
+  myhostname: mail.remote.test
+  from: someone@remote.test
+
 secrets:
   - E2E_RECOVERY_PASSWORD
   - E2E_ALICE_PASSWORD
@@ -77,7 +87,7 @@ jobs:
     with:
       cmd: "trap 'docker rm -f {{vars.container}} >/dev/null 2>&1; rm -rf {{vars.work}}; exit 0' TERM INT; while :; do sleep 1; done"
       background: true
-    test: res.pid > 0
+    test: status == -1
 
   # STALWART_PUBLIC_URL is what the session's URLs are built from. Without it
   # they name the server's hostname, which nothing outside the container
@@ -220,6 +230,20 @@ jobs:
           - accounts
     test: res.code == 200 && len(res.body.methodResponses[0][1].created) == 3
 
+  # A request written by hand names the account, which jmapc fills in from the
+  # session where a request leaves it out.
+  - name: Read alice's mail account
+    id: alice_account
+    uses: http
+    with:
+      get: /.well-known/jmap
+      basic_auth:
+        username: "alice@{{vars.domain}}"
+        password: "{{vars.alice_password}}"
+    test: res.code == 200
+    outputs:
+      mail_account: res.body.primaryAccounts['urn:ietf:params:jmap:mail']
+
 - name: Build the driver
   id: driver
   steps:
@@ -242,6 +266,7 @@ jobs:
         password: "{{vars.alice_password}}"
       headers:
         content-type: application/json
+    smtp: *remote_smtp
     shell:
       env:
         JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
@@ -303,12 +328,6 @@ jobs:
   - name: Deliver to alice on port 25
     uses: smtp
     with:
-      addr: "{{vars.smtp}}"
-      # Stalwart offers STARTTLS with a certificate it made for itself, as a
-      # server delivering mail between servers takes without checking.
-      insecure_skip_tls: true
-      myhostname: mail.remote.test
-      from: someone@remote.test
       to: "alice@{{vars.domain}}"
       subject: "inbound {{vars.run_id}}"
     test: res.code == 0 && res.sent == 1
@@ -328,17 +347,6 @@ jobs:
     outputs:
       id: res.json.emails[0].id
 
-  # A request written by hand names the account, which jmapc fills in from the
-  # session where a request leaves it out.
-  - name: Read alice's mail account
-    id: account
-    uses: http
-    with:
-      get: /.well-known/jmap
-    test: res.code == 200
-    outputs:
-      id: res.body.primaryAccounts['urn:ietf:params:jmap:mail']
-
   - name: Find the same email directly
     uses: http
     with:
@@ -346,7 +354,7 @@ jobs:
       body:
         using: ["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail"]
         methodCalls:
-        - [Email/query, {accountId: "{{outputs.account.id}}", filter: {subject: "inbound {{vars.run_id}}"}}, search]
+        - [Email/query, {accountId: "{{outputs.alice_account.mail_account}}", filter: {subject: "inbound {{vars.run_id}}"}}, search]
     test: res.code == 200 && res.body.methodResponses[0][1].ids == [outputs.found.id]
 
 - name: Mail imported through jmapc, read over IMAP
@@ -478,12 +486,6 @@ jobs:
   - name: Deliver three messages to alice
     uses: smtp
     with:
-      addr: "{{vars.smtp}}"
-      # Stalwart offers STARTTLS with a certificate it made for itself, as a
-      # server delivering mail between servers takes without checking.
-      insecure_skip_tls: true
-      myhostname: mail.remote.test
-      from: someone@remote.test
       to: "alice@{{vars.domain}}"
       subject: "changed {{vars.run_id}}"
       session: 1
@@ -504,15 +506,6 @@ jobs:
       count(res.json.created ?? [], {# startsWith 'changed ' + vars.run_id}) == 3 &&
       res.json.requests >= 3
 
-  - name: Read alice's mail account for the direct request
-    id: changes_account
-    uses: http
-    with:
-      get: /.well-known/jmap
-    test: res.code == 200
-    outputs:
-      accountId: res.body.primaryAccounts['urn:ietf:params:jmap:mail']
-
   - name: See the server page the same changes directly
     uses: http
     with:
@@ -520,7 +513,7 @@ jobs:
       body:
         using: ["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail"]
         methodCalls:
-        - [Email/changes, {accountId: "{{outputs.changes_account.accountId}}", sinceState: "{{outputs.before_changes.since}}", maxChanges: 1}, changes]
+        - [Email/changes, {accountId: "{{outputs.alice_account.mail_account}}", sinceState: "{{outputs.before_changes.since}}", maxChanges: 1}, changes]
     # One change at most, which may be an update rather than a creation: the
     # IMAP scenario marks a message read in the same inbox at the same time.
     test: |
@@ -539,6 +532,7 @@ jobs:
 - name: A push followed through jmapc's Watch
   needs: [server, driver]
   defaults:
+    smtp: *remote_smtp
     shell:
       env:
         JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
@@ -565,19 +559,13 @@ jobs:
       background: true
       ready:
         log: following pushes
-    test: res.pid > 0 && res.log != ""
+    test: status == -1
     outputs:
       log: res.log
 
   - name: Deliver to bob on port 25
     uses: smtp
     with:
-      addr: "{{vars.smtp}}"
-      # Stalwart offers STARTTLS with a certificate it made for itself, as a
-      # server delivering mail between servers takes without checking.
-      insecure_skip_tls: true
-      myhostname: mail.remote.test
-      from: someone@remote.test
       to: "bob@{{vars.domain}}"
       subject: "pushed {{vars.run_id}}"
     test: res.code == 0 && res.sent == 1
@@ -592,7 +580,7 @@ jobs:
     retry: {max_attempts: 20, interval: 1s}
     test: |
       res.code == 0 &&
-      res.json.subject startsWith 'pushed ' + vars.run_id &&
+      res.json?.subject startsWith 'pushed ' + vars.run_id &&
       res.json.runs >= 2
 
 # Carol's account is this scenario's alone, as bob's is the Watch's: a push
@@ -608,6 +596,7 @@ jobs:
         password: "{{vars.carol_password}}"
       headers:
         content-type: application/json
+    smtp: *remote_smtp
     shell:
       env:
         JMAPC_E2E_SESSION_URL: "{{vars.base}}/.well-known/jmap"
@@ -630,7 +619,7 @@ jobs:
       background: true
       ready:
         log: '"event":"verified"'
-    test: res.pid > 0
+    test: status == -1
     outputs:
       log: res.log
 
@@ -650,12 +639,6 @@ jobs:
   - name: Deliver to carol on port 25
     uses: smtp
     with:
-      addr: "{{vars.smtp}}"
-      # Stalwart offers STARTTLS with a certificate it made for itself, as a
-      # server delivering mail between servers takes without checking.
-      insecure_skip_tls: true
-      myhostname: mail.remote.test
-      from: someone@remote.test
       to: "carol@{{vars.domain}}"
       subject: "pushed to a URL {{vars.run_id}}"
     test: res.code == 0 && res.sent == 1
