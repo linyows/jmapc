@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -98,5 +99,49 @@ func TestValidateReachesNothingWithoutBeingAsked(t *testing.T) {
 	}
 	if n := hits.Load(); n != 0 {
 		t.Errorf("validate asked the server %d times without being told to", n)
+	}
+}
+
+// TestValidateRefusesWhatGeneratingRefuses checks the requests that only
+// generating them shows to be wrong: a name the generator writes a file of its
+// own under. Validate refuses them for the language it is given, as generate
+// does, and writes nothing. Two names differing only in case are refused the
+// same way, but cannot be written side by side on a file system that ignores
+// case, so they are left to the generator's own tests.
+func TestValidateRefusesWhatGeneratingRefuses(t *testing.T) {
+	for _, tc := range []struct {
+		lang  string
+		names []string
+		want  string
+	}{
+		{"go", []string{"Verify"}, "verifies the requests"},
+		{"typescript", []string{"Client"}, "client.ts"},
+		{"rust", []string{"Mod"}, "mod.rs"},
+		{"rust", []string{"Types"}, "types"},
+		{"go", []string{"Properties"}, "properties_gen.go"},
+	} {
+		t.Run(tc.lang+"/"+strings.Join(tc.names, "+"), func(t *testing.T) {
+			// A set of properties, so that the Go client has a file for the
+			// sets for a request named Properties to collide with.
+			files := map[string]string{"requests/properties.json": `{"MailboxName": {"type": "Mailbox", "properties": ["id", "name"]}}`}
+			for _, name := range tc.names {
+				files["requests/"+name+".jmap.json"] = listMailboxes
+			}
+			dir := workspace(t, files)
+			out := filepath.Join(dir, "client")
+			_, _, err := capture(t, []string{"validate", "-requests", filepath.Join(dir, "requests"), "-lang", tc.lang, "-out", out})
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("validate gave %v, want an error saying %q", err, tc.want)
+			}
+			if _, err := os.Stat(out); err == nil {
+				t.Error("validate wrote the generated client")
+			}
+		})
+	}
+
+	// The same name is free where the language generates nothing under it.
+	dir := workspace(t, map[string]string{"requests/Client.jmap.json": listMailboxes})
+	if _, errOut, err := capture(t, []string{"validate", "-requests", filepath.Join(dir, "requests"), "-lang", "go"}); err != nil {
+		t.Errorf("validate refused a Go request named Client: %v\n%s", err, errOut)
 	}
 }

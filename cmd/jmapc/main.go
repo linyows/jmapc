@@ -226,6 +226,14 @@ func run(args []string) error {
 	noteSameRequests(parsed)
 
 	if command == "validate" {
+		// Some requests are refused only by generating them: one whose file
+		// would be one the generator writes for itself, as Verify is, or two
+		// whose names differ only in case. Generating in memory and keeping
+		// nothing refuses them here too, for the language the configuration
+		// sets, rather than first at generate.
+		if _, err := generate(cfg, catalogue, parsed, props); err != nil {
+			return err
+		}
 		if *session != "" {
 			return validateAgainstServer(catalogue, parsed, *session, *token, *user, *timeout)
 		}

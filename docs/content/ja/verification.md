@@ -114,6 +114,7 @@ jmapc: VerifiedSignatures would be refused: server does not support urn:ietf:par
 関数がその名前で生成されるので、リクエストやプロパティの集合に`Verify`という名前は付けられません。
 また、生成先のファイルがほかのファイルと重なるリクエストも拒否します。
 `verify`という名前のリクエストは`verify_gen.go`に、`Client`は`client.ts`に、`Mod`は`mod.rs`に生成されることになるので、拒否されます。
+`jmapc validate`も、指定された言語について`generate`と同じようにこれらを拒否します。
 
 ## エディタ対応
 
