@@ -50,12 +50,14 @@ description: Write or change jmapc request files (*.jmap.json) and properties.js
 
 ` + skillMarker + `
 
+In a Go module that lists jmapc as a tool, run each jmapc command below as
+` + "`go tool jmapc`" + ` instead.
+
 Before writing or changing a request file, run ` + "`jmapc guide`" + ` and follow it. It
-describes the installed version of jmapc. In a Go module that lists jmapc as a
-tool, run ` + "`go tool jmapc guide`" + ` instead.
+describes the installed version of jmapc.
 
 After changing a request, run ` + "`jmapc validate`" + ` and fix what it reports until it
-passes, then run ` + "`jmapc generate`" + `. Never edit a generated file.
+passes.
 `
 
 // skillDirs are where each agent looks for a skill in a repository.
@@ -74,31 +76,42 @@ func printGuide(args []string) error {
 	)
 	fs.SetOutput(stderr)
 	fs.Usage = func() { fmt.Fprint(stderr, guideUsage) }
-	if err := fs.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return nil
+	// The flags may come after the argument as well as before it, as in
+	// "jmapc guide -install . -for codex", which the flag package alone would
+	// stop parsing at the ".".
+	var positional []string
+	for {
+		if err := fs.Parse(args); err != nil {
+			if errors.Is(err, flag.ErrHelp) {
+				return nil
+			}
+			return err
 		}
-		return err
+		if fs.NArg() == 0 {
+			break
+		}
+		positional = append(positional, fs.Arg(0))
+		args = fs.Args()[1:]
 	}
-	if fs.NArg() > 1 {
-		return fmt.Errorf("guide takes one argument, not %d", fs.NArg())
+	if len(positional) > 1 {
+		return fmt.Errorf("guide takes one argument, not %d", len(positional))
 	}
 
 	if *install {
 		dir := "."
-		if fs.NArg() == 1 {
-			dir = fs.Arg(0)
+		if len(positional) == 1 {
+			dir = positional[0]
 		}
 		return installSkill(dir, *agent)
 	}
 	if *agent != "" {
 		return errors.New("-for is for -install")
 	}
-	if fs.NArg() == 0 {
+	if len(positional) == 0 {
 		_, err := fmt.Fprint(stdout, guide)
 		return err
 	}
-	section, err := guideSection(fs.Arg(0))
+	section, err := guideSection(positional[0])
 	if err != nil {
 		return err
 	}

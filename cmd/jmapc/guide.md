@@ -61,7 +61,7 @@ requests against what that server supports.
 |---|---|
 | `_doc` | The generated function's documentation. Start it with the request's name. |
 | `_returns` | The call id whose response the function returns. Without it, every response is returned. |
-| `_watches` | The call id of a `/changes` call. Generates a function that follows pushes and runs the request whenever there is something to catch up on. |
+| `_watches` | The call id of a `/changes` call. For Go, generates a function that follows pushes and runs the request whenever there is something to catch up on. TypeScript and Rust get the request without that function. |
 | `_pages` | The call id of a `/query` (with `{{position}}`) or `/changes` (with `{{sinceState}}`) call. Generates a function that sends the request again until the whole result is read. |
 | `_createdIds` | `true` to take creation ids from an earlier request and report this one's. |
 | `_comment` | Inside a call's arguments: why the call is there. Stripped before sending. JSON has no comments; use this. |
@@ -223,7 +223,8 @@ A change to one record, named by a parameter used as a key:
 }
 ```
 
-Catching up from a known state, followed whenever the server pushes a change:
+Catching up from a known state, which the Go client follows whenever the server
+pushes a change:
 
 ```json file=SyncEmails.jmap.json
 {

@@ -181,13 +181,20 @@ func TestGuideInstall(t *testing.T) {
 		if !strings.HasPrefix(string(written), "---\nname: jmapc\ndescription: ") || !strings.Contains(string(written), "jmapc guide") {
 			t.Errorf("%s is not a skill that points at the guide:\n%s", path, written)
 		}
+		// A module that has jmapc as a tool runs it through go tool, and
+		// validating is the one step the skill names beside the guide.
+		for _, want := range []string{"go tool jmapc", "jmapc validate"} {
+			if !strings.Contains(string(written), want) {
+				t.Errorf("%s does not mention %s:\n%s", path, want, written)
+			}
+		}
 	}
 	if _, _, err := capture(t, []string{"guide", "-install", dir}); err != nil {
 		t.Errorf("installing over the skill it wrote: %v", err)
 	}
 
 	one := t.TempDir()
-	if _, _, err := capture(t, []string{"guide", "-install", "-for", "codex", one}); err != nil {
+	if _, _, err := capture(t, []string{"guide", "-install", one, "-for", "codex"}); err != nil {
 		t.Fatalf("guide -install -for codex: %v", err)
 	}
 	if !exists(filepath.Join(one, codex)) || exists(filepath.Join(one, claude)) {
