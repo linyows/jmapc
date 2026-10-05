@@ -171,8 +171,8 @@ each of those steps. `OnStateChange` is called while the server's post waits
 for an answer, so it hands the change on rather than acting on it.
 
 JMAP gives a push no signature, so anyone who learns the URL can post to it.
-`Run` therefore makes the subscription with a key pair and an auth secret of its
-own, and the server encrypts every push, the verification included, for them as
+`Run` therefore makes each subscription with a new key pair and auth secret, and
+the server encrypts every push, the verification included, for them as
 RFC 8291 describes. Only a post that decrypts with those keys came from the
 server, and `ServeHTTP` refuses any other with a 400. Put something in the URL
 no one can guess all the same, as `secret` is above, and serve only that path,

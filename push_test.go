@@ -26,6 +26,8 @@ type pushServer struct {
 	subs map[ID]*pushSub
 	// created counts the subscriptions ever created.
 	created int
+	// publicKeys holds the public key each was created with, in order.
+	publicKeys []string
 	// maxLifetime, where set, is the longest expiry the server grants.
 	maxLifetime time.Duration
 	// postCodes says whether a new subscription is sent its code.
@@ -113,6 +115,7 @@ func (ps *pushServer) set(raw json.RawMessage) any {
 		s := &pushSub{url: sub.URL, code: fmt.Sprintf("code-%s", id), expires: ps.grant(sub.Expires)}
 		if sub.Keys != nil {
 			s.keys = map[string]string{"p256dh": sub.Keys.P256dh, "auth": sub.Keys.Auth}
+			ps.publicKeys = append(ps.publicKeys, sub.Keys.P256dh)
 		}
 		ps.subs[id] = s
 		post := ps.postCodes
@@ -444,6 +447,11 @@ func TestPushReceiverMakesALostSubscriptionAgain(t *testing.T) {
 	_ = stop()
 	if ps.created != 2 {
 		t.Errorf("the server created %d subscriptions, want 2", ps.created)
+	}
+	// The subscription made again has keys of its own, not those of the
+	// one it replaces.
+	if len(ps.publicKeys) != 2 || ps.publicKeys[0] == ps.publicKeys[1] {
+		t.Errorf("the subscriptions were made with the public keys %q, want two that differ", ps.publicKeys)
 	}
 }
 

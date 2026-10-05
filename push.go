@@ -44,8 +44,8 @@ type PushReceiverOptions struct {
 	// OnEvent, when set, is told of each step of the subscription's life.
 	OnEvent func(PushEvent)
 	// PlainText makes the subscription without keys, so that the server
-	// posts its pushes as they are. Without it, Run makes a key pair and an
-	// auth secret, the server encrypts every push for them as RFC 8291
+	// posts its pushes as they are. Without it, Run makes a new key pair and
+	// auth secret for each subscription, the server encrypts every push for them as RFC 8291
 	// describes, and ServeHTTP refuses a push that is not encrypted or does
 	// not decrypt, which no one without the keys can write. Set it only for
 	// a server that does not encrypt.
@@ -257,18 +257,6 @@ var errSubscriptionLost = errors.New("jmapc: the push subscription is gone")
 // ctx's error. It returns earlier with an error where a subscription cannot be
 // made or verified, or a failure that waiting will not resolve.
 func (r *PushReceiver) Run(ctx context.Context) error {
-	if !r.opts.PlainText {
-		r.mu.Lock()
-		if r.keys == nil {
-			keys, err := newPushKeys()
-			if err != nil {
-				r.mu.Unlock()
-				return err
-			}
-			r.keys = keys
-		}
-		r.mu.Unlock()
-	}
 	for {
 		id, expires, err := r.subscribe(ctx)
 		if err != nil {
@@ -300,8 +288,19 @@ func (r *PushReceiver) subscribe(ctx context.Context) (ID, time.Time, error) {
 	if r.opts.Types != nil {
 		sub["types"] = r.opts.Types
 	}
-	if r.keys != nil {
-		sub["keys"] = r.keys.subscription()
+	if !r.opts.PlainText {
+		// RFC 8291 gives each subscription keys of its own, so one made
+		// again does not take those of the one it replaces. They are in
+		// place before the create, since the verification is encrypted for
+		// them.
+		keys, err := newPushKeys()
+		if err != nil {
+			return "", time.Time{}, err
+		}
+		r.mu.Lock()
+		r.keys = keys
+		r.mu.Unlock()
+		sub["keys"] = keys.subscription()
 	}
 	asked := r.expiry()
 	if !asked.IsZero() {
