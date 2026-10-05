@@ -38,6 +38,7 @@ jmapc: ListArchiveEmails, ListInboxEmails are the same request under different n
 
 1つのリクエストの中で、前の呼び出しと同じことを問い合わせる呼び出しも、同じように通知します。
 同じメソッドを同じ引数で呼ぶものが対象です。引数の書き順や`_comment`の違いは問わず、パラメータは名前で比べます。
+リクエストにそのまま書かれた値は、書かれたとおりに比べます。
 
 ```
 jmapc: ListInboxEmails: call "again" asks Email/get what call "fetch" already asked, with nothing between them that changes data; refer to "fetch" instead
@@ -45,8 +46,9 @@ jmapc: ListInboxEmails: call "again" asks Email/get what call "fetch" already as
 
 RFC 8620では、1つのリクエストの中でも呼び出しの間にデータが変わりえます。
 読んで、書いて、また読むリクエストには意味があるので、通知するのは2つの間の呼び出しがすべて読むだけのものである場合に限ります。
-読むだけとみなすのは、`/get`、`/query`、`/changes`、`/queryChanges`、`/parse`、`/validate`、`Core/echo`、`Blob/lookup`、`Principal/getAvailability`です。
-ベンダ独自のものを含め、jmapcが読むだけだと知らないメソッドは、データを変えうるものとして扱います。
+読むだけとみなすのは、jmapcが知っている仕様の`/get`、`/query`、`/changes`、`/queryChanges`、`/parse`、`/validate`と、`Core/echo`、`Blob/lookup`、`Principal/getAvailability`です。
+それ以外のメソッドはデータを変えうるものとして扱います。
+ベンダのスキーマが定義するメソッドも、名前にかかわらず同じです。ベンダの`Note/get`が読むだけだという保証はないからです。
 
 `jmapc validate`は、何も書き出さずに検証だけを実行します。
 

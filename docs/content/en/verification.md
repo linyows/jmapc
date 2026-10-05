@@ -54,6 +54,7 @@ generated types of its own.
 Within one request, a call that asks what an earlier call asked is noted the
 same way: the same method with the same arguments, whatever order they are
 written in and whatever their `_comment` says, and the same parameters by name.
+A value the request states outright is compared as it was written.
 
 ```
 jmapc: ListInboxEmails: call "again" asks Email/get what call "fetch" already asked, with nothing between them that changes data; refer to "fetch" instead
@@ -62,9 +63,10 @@ jmapc: ListInboxEmails: call "again" asks Email/get what call "fetch" already as
 RFC 8620 lets data change between the calls of one request, so reading, writing
 and reading again is a request that means something, and a call is noted only
 where every call between the two only reads: a `/get`, `/query`, `/changes`,
-`/queryChanges`, `/parse`, `/validate`, `Core/echo`, `Blob/lookup` or
-`Principal/getAvailability`. A method jmapc does not know to only read, a
-vendor's own among them, is taken as one that may change data.
+`/queryChanges`, `/parse` or `/validate` of the specifications jmapc knows,
+`Core/echo`, `Blob/lookup` or `Principal/getAvailability`. Any other method is
+taken as one that may change data, and so is every method a vendor schema
+defines, whatever its name: nothing says a vendor's `Note/get` only reads.
 
 `jmapc validate` runs the checks without writing anything.
 

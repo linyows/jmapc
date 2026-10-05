@@ -1,8 +1,12 @@
 package request
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/linyows/jmapc/internal/spec"
 )
 
 // TestRepeats checks which calls are found to repeat an earlier one: the same
@@ -72,6 +76,24 @@ func TestRepeats(t *testing.T) {
 			        ["Email/query", {"limit": 20}, "b"]`,
 		},
 		{
+			name: "integers a float64 cannot tell apart",
+			calls: `["Core/echo", {"payload": [9007199254740992]}, "a"],
+			        ["Core/echo", {"payload": [9007199254740993]}, "b"]`,
+		},
+		{
+			name: "what looks like a reference in a value stated outright",
+			calls: `["Mailbox/get", {"ids": null}, "a"],
+			        ["Mailbox/get", {"ids": null}, "b"],
+			        ["Core/echo", {"payload": {"resultOf": "a"}}, "c"],
+			        ["Core/echo", {"payload": {"resultOf": "b"}}, "d"]`,
+			want: []string{"b=a"},
+		},
+		{
+			name: "what looks like a parameter in a value stated outright",
+			calls: `["Core/echo", {"payload": {"text": "{{id}}"}}, "a"],
+			        ["Core/echo", {"payload": {"text": "{{ id }}"}}, "b"]`,
+		},
+		{
 			name: "references to different calls",
 			calls: `["Email/query", {"limit": 10}, "q1"],
 			        ["Email/query", {"limit": 20}, "q2"],
@@ -105,11 +127,57 @@ func TestReadsOnly(t *testing.T) {
 		"Blob/upload":                 false,
 		"MDN/send":                    false,
 		"Note/pin":                    false,
+		"Note/get":                    false,
+		"Note/echo":                   false,
 		"get":                         false,
 		"urn:example:Note/frobnicate": false,
 	} {
 		if got := readsOnly(method); got != want {
 			t.Errorf("readsOnly(%q) = %v, want %v", method, got, want)
 		}
+	}
+}
+
+// TestRepeatsAcrossAVendorMethod checks that a vendor's method is taken as one
+// that may change data, whatever its name ends in: its Note/echo need not be
+// Core/echo, nor its Note/get a /get as RFC 8620 defines one.
+func TestRepeatsAcrossAVendorMethod(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "schema.json")
+	if err := os.WriteFile(path, []byte(`{
+	  "capability": "urn:example:params:jmap:notes",
+	  "types": [{
+	    "name": "Note",
+	    "doc": "Note is a scrap of text the user keeps.",
+	    "properties": [{"name": "id", "type": "Id", "doc": "The id of the note."}],
+	    "methods": ["get"]
+	  }],
+	  "methods": [
+	    {"name": "Note/echo", "doc": "Echoes, and touches every note.", "dataType": "Note",
+	     "arguments": [{"name": "accountId", "type": "Id", "doc": "The account to operate on."}],
+	     "response": [{"name": "accountId", "type": "Id", "doc": "The account operated on."}]}
+	  ]
+	}`), 0o644); err != nil {
+		t.Fatalf("writing the schema: %v", err)
+	}
+	sc, err := spec.LoadSchema(path)
+	if err != nil {
+		t.Fatalf("loading the schema: %v", err)
+	}
+	catalogue := spec.Standard()
+	if err := catalogue.Extend(sc); err != nil {
+		t.Fatalf("extending the catalogue: %v", err)
+	}
+	q, err := NewParser(catalogue).Parse("Notes"+Extension, []byte(`{"methodCalls": [
+	  ["Mailbox/get", {"ids": null}, "a"],
+	  ["Note/echo", {}, "touch"],
+	  ["Mailbox/get", {"ids": null}, "b"],
+	  ["Note/get", {"ids": null}, "c"],
+	  ["Note/get", {"ids": null}, "d"]
+	]}`))
+	if err != nil {
+		t.Fatalf("parsing: %v", err)
+	}
+	for _, r := range q.Repeats {
+		t.Errorf("%s is reported to repeat %s across a vendor's method", r.Call.ID, r.Same.ID)
 	}
 }
