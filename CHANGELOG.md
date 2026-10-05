@@ -4,6 +4,24 @@ What changed in each release, and what it means for the code that uses it. The r
 
 This starts at v0.12.0. What went into the releases before it is in the commit history.
 
+## v0.18.0 (2026-10-05)
+
+### Breaking changes
+
+- **`PushReceiver` makes its subscription with keys, and accepts only pushes encrypted for them.** A server that does not encrypt pushes cannot deliver to such a subscription, and every post it makes is refused with a 400. Set `PushReceiverOptions.PlainText` for such a server, which makes the subscription without keys and takes posts as they come, as before. ([#122](https://github.com/linyows/jmapc/pull/122))
+
+### Security
+
+- **A push to a `PushReceiver` can no longer be forged by someone who learns its URL.** JMAP gives a push no signature, so anyone who knew the URL could post a state change or a verification code to it. `Run` now makes each subscription with a P-256 key pair and an auth secret of its own, the server encrypts every push for them as RFC 8291 describes, and `ServeHTTP` refuses a post that is not encrypted or does not decrypt with them. A subscription made again after the server lost one gets new keys. Stalwart encrypts pushes for a subscription with keys, and the end-to-end run against it passes encrypted. ([#122](https://github.com/linyows/jmapc/pull/122))
+
+### Added
+
+- **`jmapc guide` prints how to write requests, for a coding agent.** It covers the format, the members jmapc reads, parameters, the steps from a request to a generated client, the mistakes `validate` refuses with what to write instead, and complete examples; `jmapc guide <topic>` prints one section. It is built into the command, so it describes the version that prints it. `jmapc guide -install` writes a short skill to `.claude/skills/jmapc/SKILL.md` for Claude Code and `.agents/skills/jmapc/SKILL.md` for Codex that has the agent read the guide before writing a request and run `jmapc validate` after, and never replaces a `SKILL.md` it did not write. ([#123](https://github.com/linyows/jmapc/pull/123))
+
+### Fixed
+
+- **`jmapc validate` refuses the names `jmapc generate` refuses.** A request named after a file jmapc generates for itself — `Verify`, `Properties` where sets of properties are declared, `Client` or `Types` in TypeScript or Rust, `Mod` in Rust — passed `validate` and was refused only by `generate`. `validate` now generates in memory for the language it is given and keeps nothing, so it refuses whatever generating would. ([#124](https://github.com/linyows/jmapc/pull/124))
+
 ## v0.17.1 (2026-10-05)
 
 ### Fixed
