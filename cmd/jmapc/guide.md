@@ -36,10 +36,10 @@ in Go, Rust or TypeScript. You write the requests; you do not write the client.
 3. Write or change the request file.
 4. Run `jmapc validate`. It checks every request against the JMAP data model:
    method names, argument names and types, result references, properties,
-   capabilities. Each error names the place in the file and says how to fix it.
-   Fix what it reports and run it again until it passes.
-5. Run `jmapc generate`. It also refuses a request whose name collides with a
-   file it generates itself, which `validate` does not check.
+   capabilities, and names that collide with what jmapc generates for the
+   language `jmapc.json` sets. Each error names the place in the file and says
+   how to fix it. Fix what it reports and run it again until it passes.
+5. Run `jmapc generate`.
 6. Build and test the project as usual, then run `jmapc generate -check`, which
    fails where the generated client is out of date.
 
@@ -161,11 +161,13 @@ A `using` that lacks a capability. Leave `using` out instead.
 {"using": ["urn:ietf:params:jmap:core"], "methodCalls": [["Email/query", {}, "search"]]}
 ```
 
+A request named after something jmapc generates: `Verify`; `Properties` where
+`properties.json` declares any set; for TypeScript or Rust also `Client` and
+`Types`, and for Rust `Mod`; or two requests whose names differ only in case. `validate` refuses these for the language `jmapc.json`
+sets. Rename the request.
+
 Not refused by `validate`, but wrong all the same:
 
-- Naming a request after a file jmapc generates: `Verify`, and for TypeScript
-  or Rust also `Client` and `Types`, for Rust `Mod`, or two names differing only
-  in case. `jmapc generate` refuses these; rename the request.
 - Editing a generated file. The next `jmapc generate` replaces it.
 - Sending `null` where the argument should be absent. Use `{{name?}}`.
 - Writing two requests that differ only in a value. Make the value a parameter.

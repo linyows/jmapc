@@ -140,6 +140,7 @@ or a set of properties cannot be named `Verify`, since the function is
 generated under that name, and a request is refused where its file would be
 one another file is generated into: `verify_gen.go` for a request named
 `verify`, `client.ts` for one named `Client`, `mod.rs` for one named `Mod`.
+`jmapc validate` refuses these as `generate` does, for the language it is given.
 
 ## Editor support
 
