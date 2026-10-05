@@ -77,6 +77,7 @@ Usage:
 	jmapc validate [flags]   check the requests without writing anything
 	jmapc run <request>      send one request to a server and print the response
 	jmapc schema [flags]     write a JSON Schema describing the request files
+	jmapc guide [topic]      print how to write requests, for a coding agent
 	jmapc version            print the version
 
 Flags:
@@ -96,8 +97,8 @@ The validate command also takes -session, to check the requests against a
 server rather than against the specifications alone, with -token or -user to
 authenticate and -timeout to bound the wait.
 
-The run and schema commands take flags of their own, which "jmapc run -h"
-and "jmapc schema -h" describe.
+The run, schema and guide commands take flags of their own, which
+"jmapc run -h", "jmapc schema -h" and "jmapc guide -h" describe.
 
 A request file is named after the function to generate, as in
 ListInboxEmails` + request.Extension + `, and holds the JMAP request that
@@ -116,6 +117,8 @@ func run(args []string) error {
 		return runRequest(args[1:])
 	case "schema":
 		return writeSchema(args[1:])
+	case "guide":
+		return printGuide(args[1:])
 	case "version", "-version", "--version":
 		fmt.Println(versionString())
 		return nil
