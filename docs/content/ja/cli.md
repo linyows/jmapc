@@ -1,6 +1,6 @@
 # jmapcコマンド
 
-`jmapc`には5つのサブコマンドがあります。
+`jmapc`には6つのサブコマンドがあります。
 
 | サブコマンド | |
 |---|---|
@@ -8,9 +8,23 @@
 | `jmapc validate` | リクエストを検証するだけで、何も書き出しません。`-session`を付けると稼働中のサーバに対しても検証します。[検証](verification.md)を参照してください。 |
 | `jmapc run <request>` | リクエストを1つサーバに送り、レスポンスを表示します。[リクエストを送る](run.md)を参照してください。 |
 | `jmapc schema` | リクエストファイルを記述するJSON Schemaを、エディタのために書き出します。[エディタ対応](verification.md#エディタ対応)を参照してください。 |
+| `jmapc guide` | リクエストの書き方を、コーディングエージェントのために表示します。[コーディングエージェント](#コーディングエージェント)を参照してください。 |
 | `jmapc version` | バージョンを表示します。 |
 
-`generate`と`validate`が取るフラグは`jmapc -h`で、`run`と`schema`が取るフラグは`jmapc run -h`と`jmapc schema -h`で表示できます。
+`generate`と`validate`が取るフラグは`jmapc -h`で、`run`、`schema`、`guide`が取るフラグは`jmapc run -h`、`jmapc schema -h`、`jmapc guide -h`で表示できます。
+
+## コーディングエージェント
+
+`jmapc guide`は、コーディングエージェントがリクエストを追加・変更する前に読むためのガイドを表示します。
+内容は、ファイルの形式、jmapcが読むメンバー、パラメータ、リクエストを書いてからクライアントを生成するまでの手順、`validate`が拒否する間違いとその直し方です。
+ガイドはコマンドに組み込まれているので、表示したjmapcの版のとおりの内容になります。
+`jmapc guide mistakes`のように指定すると1つの節だけを表示し、節の一覧は`jmapc guide -h`で表示できます。
+
+`jmapc guide -install`は、リクエストを書く前にガイドを読み、書いた後に`jmapc validate`を実行するようエージェントに指示するskillを書き出します。
+書き出し先は、Claude Code向けが`.claude/skills/jmapc/SKILL.md`、Codex向けが`.agents/skills/jmapc/SKILL.md`です。
+`-for claude`または`-for codex`を付けると片方だけを書き出します。
+skillはガイドを指し示すだけなので、jmapcを上げても書き直す必要はありません。
+また、`-install`は自分が書いたのではない`SKILL.md`を上書きしません。
 
 ## 生成物が最新かを確かめる
 

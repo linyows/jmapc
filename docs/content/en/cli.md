@@ -1,6 +1,6 @@
 # The jmapc command
 
-`jmapc` has five subcommands.
+`jmapc` has six subcommands.
 
 | Subcommand | |
 |---|---|
@@ -8,10 +8,27 @@
 | `jmapc validate` | Checks the requests and writes nothing; with `-session`, against a running server as well. See [Verification](verification.md). |
 | `jmapc run <request>` | Sends one request to a server and prints the response. See [Sending a request](run.md). |
 | `jmapc schema` | Writes a JSON Schema describing the request files, for an editor. See [Editor support](verification.md#editor-support). |
+| `jmapc guide` | Prints how to write requests, for a coding agent. See [Coding agents](#coding-agents). |
 | `jmapc version` | Prints the version. |
 
-`jmapc -h` lists the flags `generate` and `validate` take, and `jmapc run -h` and
-`jmapc schema -h` the flags of their own.
+`jmapc -h` lists the flags `generate` and `validate` take, and `jmapc run -h`,
+`jmapc schema -h` and `jmapc guide -h` the flags of their own.
+
+## Coding agents
+
+`jmapc guide` prints a guide to writing requests for a coding agent to read
+before it adds or changes one: the format, the members jmapc reads, the
+parameters, the steps from writing a request to generating the client, and the
+mistakes `validate` refuses, with what to write instead. It is built into the
+command, so it describes the version of jmapc that prints it. `jmapc guide
+mistakes` prints one section; `jmapc guide -h` lists them.
+
+`jmapc guide -install` writes a skill that has the agent read the guide before
+writing a request and run `jmapc validate` after, to
+`.claude/skills/jmapc/SKILL.md` for Claude Code and `.agents/skills/jmapc/SKILL.md`
+for Codex. `-for claude` or `-for codex` writes one of them. The skill only
+points at the guide, so it does not need writing again when jmapc is upgraded,
+and `-install` does not replace a `SKILL.md` it did not write.
 
 ## Checking that the generated client is up to date
 
