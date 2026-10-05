@@ -344,6 +344,34 @@ func TestSameRequestIsANoteRatherThanAnError(t *testing.T) {
 	}
 }
 
+// TestRepeatedCallIsANote checks the note for a call that asks what an earlier
+// one in the same request asked: it names the request and both calls, and the
+// request still validates and generates, since the server takes it.
+func TestRepeatedCallIsANote(t *testing.T) {
+	dir := workspace(t, map[string]string{
+		"requests/ListMailboxesTwice.jmap.json": `{
+		  "methodCalls": [
+		    ["Mailbox/get", {"ids": null, "properties": ["id", "name"]}, "first"],
+		    ["Mailbox/get", {"properties": ["id", "name"], "ids": null}, "again"]
+		  ]
+		}`,
+	})
+	requests := filepath.Join(dir, "requests")
+	want := `jmapc: ListMailboxesTwice: call "again" asks Mailbox/get what call "first" already asked, with nothing between them that changes data; refer to "first" instead`
+	for _, args := range [][]string{
+		{"validate", "-requests", requests},
+		{"generate", "-requests", requests, "-out", filepath.Join(dir, "client")},
+	} {
+		_, errOut, err := capture(t, args)
+		if err != nil {
+			t.Fatalf("%s: %v", args[0], err)
+		}
+		if !strings.Contains(errOut, want) {
+			t.Errorf("%s said:\n%s\nwant:\n%s", args[0], errOut, want)
+		}
+	}
+}
+
 // generated lays out a workspace holding the requests, generates the client
 // into it, and returns the directory and the arguments that generated it, so
 // that a test can run the same generation again with -check.

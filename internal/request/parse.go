@@ -204,6 +204,9 @@ func (p *Parser) Parse(path string, src []byte) (*Request, error) {
 	if len(c.errs) > 0 {
 		return nil, c.errs
 	}
+	for _, pair := range repeatsOf(f.MethodCalls) {
+		q.Repeats = append(q.Repeats, Repeat{Call: c.byID[pair[0]], Same: c.byID[pair[1]]})
+	}
 	return q, nil
 }
 

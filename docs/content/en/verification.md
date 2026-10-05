@@ -51,6 +51,21 @@ Both are generated all the same, since a project may want two names for one
 request. It is worth knowing about because each name produces a set of
 generated types of its own.
 
+Within one request, a call that asks what an earlier call asked is noted the
+same way: the same method with the same arguments, whatever order they are
+written in and whatever their `_comment` says, and the same parameters by name.
+
+```
+jmapc: ListInboxEmails: call "again" asks Email/get what call "fetch" already asked, with nothing between them that changes data; refer to "fetch" instead
+```
+
+RFC 8620 lets data change between the calls of one request, so reading, writing
+and reading again is a request that means something, and a call is noted only
+where every call between the two only reads: a `/get`, `/query`, `/changes`,
+`/queryChanges`, `/parse`, `/validate`, `Core/echo`, `Blob/lookup` or
+`Principal/getAvailability`. A method jmapc does not know to only read, a
+vendor's own among them, is taken as one that may change data.
+
 `jmapc validate` runs the checks without writing anything.
 
 ## What only the server can report

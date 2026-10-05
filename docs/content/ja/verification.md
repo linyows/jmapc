@@ -30,11 +30,23 @@ requests/BadQuery.jmap.json: methodCalls[1].arguments.#ids.name: the referenced 
 jmapcはこれを失敗ではなく通知として伝えます。
 
 ```
-jmapc: ListArchiveEmails, ListInboxEmails are the same query under different names; one of them would do for all of them
+jmapc: ListArchiveEmails, ListInboxEmails are the same request under different names; one of them would do for all of them
 ```
 
 両方とも生成はされます。1つのリクエストに2つの名前を付けたいこともあるからです。
 知らせるのは、名前の数だけ生成される型が増えるためです。
+
+1つのリクエストの中で、前の呼び出しと同じことを問い合わせる呼び出しも、同じように通知します。
+同じメソッドを同じ引数で呼ぶものが対象です。引数の書き順や`_comment`の違いは問わず、パラメータは名前で比べます。
+
+```
+jmapc: ListInboxEmails: call "again" asks Email/get what call "fetch" already asked, with nothing between them that changes data; refer to "fetch" instead
+```
+
+RFC 8620では、1つのリクエストの中でも呼び出しの間にデータが変わりえます。
+読んで、書いて、また読むリクエストには意味があるので、通知するのは2つの間の呼び出しがすべて読むだけのものである場合に限ります。
+読むだけとみなすのは、`/get`、`/query`、`/changes`、`/queryChanges`、`/parse`、`/validate`、`Core/echo`、`Blob/lookup`、`Principal/getAvailability`です。
+ベンダ独自のものを含め、jmapcが読むだけだと知らないメソッドは、データを変えうるものとして扱います。
 
 `jmapc validate`は、何も書き出さずに検証だけを実行します。
 
