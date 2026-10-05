@@ -171,10 +171,18 @@ each of those steps. `OnStateChange` is called while the server's post waits
 for an answer, so it hands the change on rather than acting on it.
 
 JMAP gives a push no signature, so anyone who learns the URL can post to it.
-Put something in it no one can guess, as `secret` is above, and serve only that
-path. The subscription is made without keys, so what the server posts is not
-encrypted; a server may also require the URL to be https and to resolve to a
-public address, as Stalwart does.
+`Run` therefore makes each subscription with a new key pair and auth secret, and
+the server encrypts every push, the verification included, for them as
+RFC 8291 describes. Only a post that decrypts with those keys came from the
+server, and `ServeHTTP` refuses any other with a 400. Put something in the URL
+no one can guess all the same, as `secret` is above, and serve only that path,
+so that a stranger's posts do not reach the handler at all.
+
+A server that does not encrypt pushes cannot deliver to such a subscription.
+`PlainText` makes it without keys, and the receiver then takes posts as they
+come, so the URL is the only thing that keeps others out. A server may also
+require the URL to be https and to resolve to a public address, as Stalwart
+does.
 
 `RegisterPush` and `ConfirmPush` in
 [`example/requests`](https://github.com/linyows/jmapc/tree/main/example/requests)

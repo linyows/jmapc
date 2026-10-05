@@ -26,6 +26,8 @@ type pushServer struct {
 	subs map[ID]*pushSub
 	// created counts the subscriptions ever created.
 	created int
+	// publicKeys holds the public key each was created with, in order.
+	publicKeys []string
 	// maxLifetime, where set, is the longest expiry the server grants.
 	maxLifetime time.Duration
 	// postCodes says whether a new subscription is sent its code.
@@ -44,6 +46,25 @@ type pushSub struct {
 	code     string
 	verified bool
 	expires  *UTCDate
+	// keys are what the subscription was made with, which every push to it
+	// is encrypted for; nil for one made without.
+	keys map[string]string
+}
+
+// deliver posts a push to a subscription's URL as the server does: encrypted
+// for its keys where it has them, as it is.
+func deliver(t *testing.T, s *pushSub, body string) (*http.Response, error) {
+	t.Helper()
+	if s.keys == nil {
+		return http.Post(s.url, "application/json", strings.NewReader(body))
+	}
+	req, err := http.NewRequest(http.MethodPost, s.url, bytes.NewReader(encryptPush(t, s.keys, []byte(body), 4096)))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/octet-stream")
+	req.Header.Set("Content-Encoding", "aes128gcm")
+	return http.DefaultClient.Do(req)
 }
 
 func newPushServer(t *testing.T) *pushServer {
@@ -92,12 +113,16 @@ func (ps *pushServer) set(raw json.RawMessage) any {
 		ps.created++
 		id := ID(fmt.Sprintf("ps%d", ps.created))
 		s := &pushSub{url: sub.URL, code: fmt.Sprintf("code-%s", id), expires: ps.grant(sub.Expires)}
+		if sub.Keys != nil {
+			s.keys = map[string]string{"p256dh": sub.Keys.P256dh, "auth": sub.Keys.Auth}
+			ps.publicKeys = append(ps.publicKeys, sub.Keys.P256dh)
+		}
 		ps.subs[id] = s
 		post := ps.postCodes
 		ps.mu.Unlock()
 		if post {
 			body := fmt.Sprintf(`{"@type":"PushVerification","pushSubscriptionId":%q,"verificationCode":%q}`, id, s.code)
-			resp, err := http.Post(s.url, "application/json", strings.NewReader(body))
+			resp, err := deliver(ps.t, s, body)
 			if err != nil {
 				ps.t.Errorf("posting the verification: %v", err)
 			} else {
@@ -313,10 +338,25 @@ func TestPushReceiverSubscribesVerifiesAndRemoves(t *testing.T) {
 	if len(subs) != 1 || !subs[verified.SubscriptionID].verified {
 		t.Fatalf("the server holds %v, want the one subscription, verified", subs)
 	}
+	sub := subs[verified.SubscriptionID]
+	if sub.keys == nil {
+		t.Fatal("the subscription was made without keys, though nothing asked for plain text")
+	}
+
+	// A plain state change, which anyone who knows the URL could post, is
+	// refused: only one encrypted for the keys came from the server.
+	plain, err := http.Post(r.opts.URL, "application/json",
+		strings.NewReader(`{"@type":"StateChange","changed":{"a1":{"Email":"forged"}}}`))
+	if err != nil {
+		t.Fatalf("posting a plain state change: %v", err)
+	}
+	plain.Body.Close()
+	if plain.StatusCode != http.StatusBadRequest {
+		t.Errorf("the receiver answered a plain state change with %d, want 400", plain.StatusCode)
+	}
 
 	// A state change the server pushes reaches OnStateChange.
-	resp, err := http.Post(r.opts.URL, "application/json",
-		strings.NewReader(`{"@type":"StateChange","changed":{"a1":{"Email":"s2"}}}`))
+	resp, err := deliver(t, &sub, `{"@type":"StateChange","changed":{"a1":{"Email":"s2"}}}`)
 	if err != nil {
 		t.Fatalf("pushing a state change: %v", err)
 	}
@@ -408,6 +448,11 @@ func TestPushReceiverMakesALostSubscriptionAgain(t *testing.T) {
 	if ps.created != 2 {
 		t.Errorf("the server created %d subscriptions, want 2", ps.created)
 	}
+	// The subscription made again has keys of its own, not those of the
+	// one it replaces.
+	if len(ps.publicKeys) != 2 || ps.publicKeys[0] == ps.publicKeys[1] {
+		t.Errorf("the subscriptions were made with the public keys %q, want two that differ", ps.publicKeys)
+	}
 }
 
 // TestPushReceiverChecksASubscriptionThatDoesNotExpire checks a subscription
@@ -468,7 +513,7 @@ func TestPushReceiverGivesUpWithoutAVerificationCode(t *testing.T) {
 }
 
 func TestPushReceiverRefusesWhatIsNotAPush(t *testing.T) {
-	r := NewPushReceiver(nil, PushReceiverOptions{})
+	r := NewPushReceiver(nil, PushReceiverOptions{PlainText: true})
 	for _, tt := range []struct {
 		method, body string
 		want         int
@@ -491,7 +536,7 @@ func TestPushReceiverRefusesWhatIsNotAPush(t *testing.T) {
 // TestPushReceiverKeepsFewCodes checks that codes posted for subscriptions
 // Run never asks about cannot pile up without end.
 func TestPushReceiverKeepsFewCodes(t *testing.T) {
-	r := NewPushReceiver(nil, PushReceiverOptions{})
+	r := NewPushReceiver(nil, PushReceiverOptions{PlainText: true})
 	for i := range maxPendingCodes * 4 {
 		body := fmt.Sprintf(`{"@type":"PushVerification","pushSubscriptionId":"x%d","verificationCode":"c"}`, i)
 		r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/push", strings.NewReader(body)))
@@ -564,5 +609,40 @@ func TestPushReceiverReportsOnlyWhatWasDestroyed(t *testing.T) {
 		if kind == PushDestroyed {
 			t.Errorf("a subscription the server kept was reported destroyed: %v", ev.kinds())
 		}
+	}
+}
+
+// TestPushReceiverInPlainTextTakesPlainPushes checks a receiver for a server
+// that does not encrypt: the subscription is made without keys, and the
+// pushes are read as they come.
+func TestPushReceiverInPlainTextTakesPlainPushes(t *testing.T) {
+	ps := newPushServer(t)
+	_, ev, stop := startReceiver(t, ps, PushReceiverOptions{DeviceClientID: "app-1", PlainText: true},
+		func(r *PushReceiver) { r.wait = blockAfter(0, new([]time.Duration), new(sync.Mutex)) })
+	verified := ev.waitFor(t, PushVerified)
+	if sub := ps.subscriptions()[verified.SubscriptionID]; sub.keys != nil {
+		t.Errorf("the subscription was made with keys, though plain text was asked for")
+	}
+	_ = stop()
+}
+
+// TestPushReceiverRefusesAPushForOtherKeys checks that an encrypted push the
+// receiver's keys do not open is refused, as one forged with keys of the
+// forger's own would be.
+func TestPushReceiverRefusesAPushForOtherKeys(t *testing.T) {
+	ps := newPushServer(t)
+	r, ev, stop := startReceiver(t, ps, PushReceiverOptions{DeviceClientID: "app-1"},
+		func(r *PushReceiver) { r.wait = blockAfter(0, new([]time.Duration), new(sync.Mutex)) })
+	defer stop()
+	ev.waitFor(t, PushVerified)
+	other, _ := newPushKeys()
+	forged := &pushSub{url: r.opts.URL, keys: other.subscription()}
+	resp, err := deliver(t, forged, `{"@type":"StateChange","changed":{}}`)
+	if err != nil {
+		t.Fatalf("posting: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("the receiver answered a push for other keys with %d, want 400", resp.StatusCode)
 	}
 }
