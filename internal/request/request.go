@@ -60,6 +60,10 @@ type Request struct {
 	// ids of a request in and out, which is what lets a proxy split one
 	// request across several and have the references still resolve.
 	CreatedIDs bool
+	// Repeats are the calls that ask what an earlier call already asked, with
+	// nothing between that could change the answer. The request is valid all
+	// the same, so they are something to note rather than an error.
+	Repeats []Repeat
 }
 
 // Call is one method call within a request.

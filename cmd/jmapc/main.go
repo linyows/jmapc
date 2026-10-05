@@ -224,6 +224,7 @@ func run(args []string) error {
 		return fmt.Errorf("%s", plural(failures, "request", "requests")+" did not check out")
 	}
 	noteSameRequests(parsed)
+	noteRepeatedCalls(parsed)
 
 	if command == "validate" {
 		// Some requests are refused only by generating them: one whose file
@@ -474,6 +475,19 @@ func noteSameRequests(requests []*request.Request) {
 		sort.Strings(names)
 		fmt.Fprintf(stderr, "jmapc: %s are the same request under different names; one of them would do for all of them\n",
 			strings.Join(names, ", "))
+	}
+}
+
+// noteRepeatedCalls says so where a call asks what an earlier call in the same
+// request asked, with nothing between that could change the answer. The server
+// answers it twice, and the request is valid, so it is a note rather than an
+// error.
+func noteRepeatedCalls(requests []*request.Request) {
+	for _, q := range requests {
+		for _, r := range q.Repeats {
+			fmt.Fprintf(stderr, "jmapc: %s: call %q asks %s what call %q already asked, with nothing between them that changes data; refer to %q instead\n",
+				q.Name, r.Call.ID, r.Call.Method.Name, r.Same.ID, r.Same.ID)
+		}
 	}
 }
 

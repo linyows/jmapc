@@ -204,6 +204,7 @@ func (p *Parser) Parse(path string, src []byte) (*Request, error) {
 	if len(c.errs) > 0 {
 		return nil, c.errs
 	}
+	q.Repeats = repeatsOf(q.Calls)
 	return q, nil
 }
 

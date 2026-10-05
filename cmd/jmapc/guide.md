@@ -171,6 +171,9 @@ Not refused by `validate`, but wrong all the same:
 - Editing a generated file. The next `jmapc generate` replaces it.
 - Sending `null` where the argument should be absent. Use `{{name?}}`.
 - Writing two requests that differ only in a value. Make the value a parameter.
+- Asking twice in one request for the same thing, with no write between: the
+  same method with the same arguments. `validate` notes it and still passes.
+  Refer to the first call's result instead.
 
 ## Examples
 
