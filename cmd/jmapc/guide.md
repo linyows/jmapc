@@ -161,9 +161,9 @@ A `using` that lacks a capability. Leave `using` out instead.
 {"using": ["urn:ietf:params:jmap:core"], "methodCalls": [["Email/query", {}, "search"]]}
 ```
 
-A request named after something jmapc generates: `Verify`, and for TypeScript
-or Rust also `Client` and `Types`, for Rust `Mod`, or two requests whose names
-differ only in case. `validate` refuses these for the language `jmapc.json`
+A request named after something jmapc generates: `Verify`; `Properties` where
+`properties.json` declares any set; for TypeScript or Rust also `Client` and
+`Types`, and for Rust `Mod`; or two requests whose names differ only in case. `validate` refuses these for the language `jmapc.json`
 sets. Rename the request.
 
 Not refused by `validate`, but wrong all the same:
