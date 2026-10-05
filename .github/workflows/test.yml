@@ -113,19 +113,16 @@ jobs:
           cache-dependency-path: go.mod
 
       # The action downloads a released probe rather than building one, and
-      # checks the archive against the release's checksums.txt. It checks
-      # only what it downloads, not what it takes from its cache, whose key
-      # does not say which version of the action filled it, so the cache is
-      # off: the archive is about 12 MB, and every run checks what it runs.
-      # The workflow needs a probe that stops a background command when it
-      # ends, which is how it removes the container, and 1.14.0 is the first
-      # that does; the version is named rather than left to the latest, so
-      # that a new probe arrives as a change to this line.
+      # checks the archive against the release's checksums.txt on every run,
+      # including one that takes the archive from its cache, before running
+      # anything from it. The workflow needs a probe that stops a background
+      # command when it ends, which is how it removes the container, and
+      # 1.14.0 is the first that does; the version is named rather than left
+      # to the latest, so that a new probe arrives as a change to this line.
       - name: Run the scenarios against Stalwart
-        uses: linyows/probe-action@fe78fd70fd87859460f1d91c0956e677159c4f6e # v1.2.0
+        uses: linyows/probe-action@58e59821ea0c348da201080736ddcdb2b3cd3313 # v1.2.1
         with:
           version: v1.16.0
-          cache: false
           path: e2e/workflow.yml
           options: --report github-summary
 
