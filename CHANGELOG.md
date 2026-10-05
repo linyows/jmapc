@@ -4,6 +4,12 @@ What changed in each release, and what it means for the code that uses it. The r
 
 This starts at v0.12.0. What went into the releases before it is in the commit history.
 
+## v0.19.0 (2026-10-05)
+
+### Added
+
+- **A call that asks what an earlier call in its request asked is noted.** Where a call has the same method and arguments as an earlier one in the same request, with only reads between them, the server gives the same answer twice, and `validate`, `generate` and `generate -check` now say which call repeats which and to refer to the first instead. It is a note, so nothing fails. Arguments are compared as checked — the order of members and `_comment` do not count, parameters are compared by name, and a value stated outright is compared as written — and a back reference to a repeated call counts as one to the call it repeats, so a query and its get written twice are both noted. RFC 8620 lets data change between calls, so a write between the two keeps them apart, and so does any method a vendor schema defines, whatever its name. ([#127](https://github.com/linyows/jmapc/pull/127))
+
 ## v0.18.0 (2026-10-05)
 
 ### Breaking changes
