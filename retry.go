@@ -2,10 +2,13 @@ package jmapc
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -91,14 +94,19 @@ func (p RetryPolicy) wait(attempt int, retryAfter time.Duration) time.Duration {
 	if retryAfter > 0 {
 		return retryAfter
 	}
-	d := minRetryWait
-	for i := 2; i < attempt && d < maxRetryWait; i++ {
+	// The first attempt is sent without asking how long to wait; the second
+	// waits the least, and so does the first if it is asked about.
+	return doubled(minRetryWait, maxRetryWait, attempt-2)
+}
+
+// doubled returns least doubled n times, and no more than most: the wait of a
+// backoff whose nth retry waits twice as long as the one before.
+func doubled(least, most time.Duration, n int) time.Duration {
+	d := least
+	for i := 0; i < n && d < most; i++ {
 		d *= 2
 	}
-	if d > maxRetryWait {
-		return maxRetryWait
-	}
-	return d
+	return min(d, most)
 }
 
 // retryAfter reads the delay the server requested in Retry-After, which RFC
@@ -127,6 +135,25 @@ func retryAfter(resp *http.Response, now time.Time) time.Duration {
 	return 0
 }
 
+// exchangeJSON sends req, as sendWithRetry does, and decodes the JSON the
+// server answers with into v. An answer with a status other than those in ok is
+// the request error the server reports, and one that does not decode says what
+// it was meant to be.
+func (c *Client) exchangeJSON(req *http.Request, kind RequestKind, v any, what string, ok ...int) error {
+	resp, err := c.sendWithRetry(req, kind)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if !slices.Contains(ok, resp.StatusCode) {
+		return c.requestError(resp)
+	}
+	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+		return fmt.Errorf("jmapc: decoding %s: %w", what, err)
+	}
+	return nil
+}
+
 // sendWithRetry sends a request, and sends it again while the policy reports
 // the response is worth another attempt, or where a server has refused the
 // token that was sent.
@@ -152,7 +179,11 @@ func (c *Client) sendWithRetry(req *http.Request, kind RequestKind) (*http.Respo
 		switch {
 		case tokensLeft > 0 && c.refusedToken(resp):
 			tokensLeft--
-			c.tokens.discard()
+			var refused string
+			if resp.Request != nil {
+				refused, _ = strings.CutPrefix(resp.Request.Header.Get("Authorization"), "Bearer ")
+			}
+			c.tokens.discard(refused)
 		case attempt < c.retry.Attempts && c.retry.worthRetrying(resp, err):
 			after := retryAfter(resp, time.Now())
 			if after > maxRetryAfter {

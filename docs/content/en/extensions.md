@@ -32,6 +32,16 @@ Naming the six standard methods is enough to get them: their arguments and
 responses follow the shapes RFC 8620 fixes. A method that does not follow one is
 declared outright, with its arguments and response spelled out.
 
+A type is named as the specifications name theirs, with a capital and letters
+and digits after it, and not as a type JMAP already has, however it is
+capitalised: a generator writes `email` and `Email` as one name. A schema that
+gets a name or a reference wrong is refused when it is read, with what is wrong
+and where.
+
+A type whose /get takes properties beyond its fields, as an Email takes a header
+field, lists them under `"dynamic"`: `["meta:"]` takes every property beginning
+`meta:`, and an entry without the colon takes that one name.
+
 ```
 jmapc generate -schema schema/notes.json
 ```

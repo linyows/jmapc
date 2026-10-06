@@ -145,3 +145,14 @@ func TestValidateRefusesWhatGeneratingRefuses(t *testing.T) {
 		t.Errorf("validate refused a Go request named Client: %v\n%s", err, errOut)
 	}
 }
+
+// TestValidateRefusesTwoKindsOfCredentials checks that validate settles its
+// credentials as run does: -token and -user given together are refused.
+func TestValidateRefusesTwoKindsOfCredentials(t *testing.T) {
+	dir := workspace(t, map[string]string{"requests/ListMailboxes.jmap.json": listMailboxes})
+	_, _, err := capture(t, []string{"validate", "-requests", filepath.Join(dir, "requests"),
+		"-session", "http://127.0.0.1:1/.well-known/jmap", "-token", "t", "-user", "alice:pw"})
+	if err == nil || !strings.Contains(err.Error(), "both given") {
+		t.Errorf("err = %v, want the two flags refused", err)
+	}
+}

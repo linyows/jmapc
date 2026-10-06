@@ -80,12 +80,14 @@ func registerBlobUpload(s *Spec) {
 		},
 	})
 
-	args := s.AddObject(&Object{
-		Name:       "BlobUploadArguments",
+	s.defineMethod(&Method{
+		Name:       "Blob/upload",
 		Capability: CapabilityBlob,
-		Kind:       KindArguments,
-		Doc:        "BlobUploadArguments holds the arguments of the Blob/upload method.",
-		Fields: []*Field{
+		Doc: "Creates blobs from data given in the request itself, or assembled out of blobs the server already holds. " +
+			"Unlike the upload endpoint of RFC 8620, this takes part in a request, so a blob can be created and used by a later call without a round trip in between.",
+		DataType: "BlobData",
+	},
+		[]*Field{
 			accountIDField(),
 			{
 				Name:        "create",
@@ -94,13 +96,7 @@ func registerBlobUpload(s *Spec) {
 				CreationIDs: true,
 			},
 		},
-	})
-	resp := s.AddObject(&Object{
-		Name:       "BlobUploadResponse",
-		Capability: CapabilityBlob,
-		Kind:       KindResponse,
-		Doc:        "BlobUploadResponse holds the response to the Blob/upload method.",
-		Fields: []*Field{
+		[]*Field{
 			accountIDField(),
 			{
 				Name: "created",
@@ -113,22 +109,16 @@ func registerBlobUpload(s *Spec) {
 				Doc:  "A map of creation id to the reason the blob could not be created.",
 			},
 		},
-	})
-	s.AddMethod(&Method{
-		Name:       "Blob/upload",
-		Capability: CapabilityBlob,
-		Doc: "Creates blobs from data given in the request itself, or assembled out of blobs the server already holds. " +
-			"Unlike the upload endpoint of RFC 8620, this takes part in a request, so a blob can be created and used by a later call without a round trip in between.",
-		Arguments: args.Name,
-		Response:  resp.Name,
-		DataType:  "BlobData",
-	})
+	)
 }
 
 func registerBlobGet(s *Spec) {
 	s.AddObject(&Object{
 		Name:       "BlobData",
 		Capability: CapabilityBlob,
+		// A digest in whatever algorithm the session says it supports, and the
+		// content as text or as base64, whichever fits: RFC 9404, Section 4.2.
+		Dynamic: []string{"digest:", "data"},
 		Doc: "BlobData is the content of a blob as the API returns it, rather than as a download. " +
 			"RFC 9404 calls it a blob; the name is qualified here because the runtime's Blob is an open download.",
 		Fields: []*Field{
@@ -163,12 +153,17 @@ func registerBlobGet(s *Spec) {
 		},
 	})
 
-	args := s.AddObject(&Object{
-		Name:       "BlobGetArguments",
+	s.defineMethod(&Method{
+		Name:       "Blob/get",
 		Capability: CapabilityBlob,
-		Kind:       KindArguments,
-		Doc:        "BlobGetArguments holds the arguments of the Blob/get method.",
-		Fields: []*Field{
+		Doc: "Returns the content of blobs through the API rather than over the download endpoint, " +
+			"which suits something small enough to want alongside the rest of a response.",
+		DataType:           "BlobData",
+		PropertiesArgument: "properties",
+		ResultProperty:     "list",
+		ReturnsID:          true,
+	},
+		[]*Field{
 			accountIDField(),
 			{Name: "ids", Type: "Id[]", Doc: "The ids of the blobs to fetch."},
 			{
@@ -190,29 +185,12 @@ func registerBlobGet(s *Spec) {
 				Doc:  "How many octets to return, defaulting to the rest of the blob.",
 			},
 		},
-	})
-	resp := s.AddObject(&Object{
-		Name:       "BlobGetResponse",
-		Capability: CapabilityBlob,
-		Kind:       KindResponse,
-		Doc:        "BlobGetResponse holds the response to the Blob/get method.",
-		Fields: []*Field{
+		[]*Field{
 			accountIDField(),
 			{Name: "list", Type: "BlobData[]", Doc: "The blobs that were found."},
 			{Name: "notFound", Type: "Id[]", Doc: "The ids that were requested but do not exist."},
 		},
-	})
-	s.AddMethod(&Method{
-		Name:       "Blob/get",
-		Capability: CapabilityBlob,
-		Doc: "Returns the content of blobs through the API rather than over the download endpoint, " +
-			"which suits something small enough to want alongside the rest of a response.",
-		Arguments:          args.Name,
-		Response:           resp.Name,
-		DataType:           "BlobData",
-		PropertiesArgument: "properties",
-		ResultProperty:     "list",
-	})
+	)
 }
 
 func registerBlobLookup(s *Spec) {
@@ -231,12 +209,15 @@ func registerBlobLookup(s *Spec) {
 		},
 	})
 
-	args := s.AddObject(&Object{
-		Name:       "BlobLookupArguments",
+	s.defineMethod(&Method{
+		Name:       "Blob/lookup",
 		Capability: CapabilityBlob,
-		Kind:       KindArguments,
-		Doc:        "BlobLookupArguments holds the arguments of the Blob/lookup method.",
-		Fields: []*Field{
+		Doc: "Reports which records refer to a blob, which is how a client finds out whether deleting something " +
+			"would take an attachment with it, or which message an attachment came from.",
+		DataType:       "BlobLookupInfo",
+		ResultProperty: "list",
+	},
+		[]*Field{
 			accountIDField(),
 			{
 				Name: "typeNames",
@@ -245,26 +226,10 @@ func registerBlobLookup(s *Spec) {
 			},
 			{Name: "ids", Type: "Id[]", Doc: "The ids of the blobs to look for."},
 		},
-	})
-	resp := s.AddObject(&Object{
-		Name:       "BlobLookupResponse",
-		Capability: CapabilityBlob,
-		Kind:       KindResponse,
-		Doc:        "BlobLookupResponse holds the response to the Blob/lookup method.",
-		Fields: []*Field{
+		[]*Field{
 			accountIDField(),
 			{Name: "list", Type: "BlobLookupInfo[]", Doc: "What was found for each blob."},
 			{Name: "notFound", Type: "Id[]", Doc: "The ids that were requested but do not exist."},
 		},
-	})
-	s.AddMethod(&Method{
-		Name:       "Blob/lookup",
-		Capability: CapabilityBlob,
-		Doc: "Reports which records refer to a blob, which is how a client finds out whether deleting something " +
-			"would take an attachment with it, or which message an attachment came from.",
-		Arguments:      args.Name,
-		Response:       resp.Name,
-		DataType:       "BlobLookupInfo",
-		ResultProperty: "list",
-	})
+	)
 }

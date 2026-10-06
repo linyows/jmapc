@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/linyows/jmapc/internal/gen/shared"
@@ -53,7 +52,7 @@ func (g *RequestGenerator) writeImports(buf *bytes.Buffer, p *plan) {
 	}
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
-		if info.recordType == "" {
+		if info.RecordType == "" {
 			// The shared response type comes from types.ts.
 			names[spec.ExportedName(c.Method.Response)] = true
 			continue
@@ -79,7 +78,7 @@ func (g *RequestGenerator) writeImports(buf *bytes.Buffer, p *plan) {
 		sort.Strings(sorted)
 		fmt.Fprintf(buf, "import type { %s } from \"./types.js\"\n", strings.Join(sorted, ", "))
 	}
-	if sets := g.setsUsed(p); len(sets) > 0 {
+	if sets := shared.SetsUsed(p.q, func(name string) string { return name }); len(sets) > 0 {
 		fmt.Fprintf(buf, "import type { %s } from \"./%s.js\"\n", strings.Join(sets, ", "), PropertiesModule)
 	}
 	buf.WriteString("\n")
@@ -101,20 +100,20 @@ func (g *RequestGenerator) collectRecordTypeNames(c *request.Call, info *call, n
 			collectTypeNames(f.ParsedType(), names)
 		}
 	}
-	if dataType, ok := g.Spec.Object(c.Method.DataType); ok && !info.sharedRecord {
+	if dataType, ok := g.Spec.Object(c.Method.DataType); ok && !info.SharedRecord {
 		properties := c.Properties
 		if properties == nil {
 			properties = dataType.PropertyNames()
 		}
-		add(dataType, shared.RecordProperties(properties))
+		add(dataType, shared.RecordProperties(properties, c.Method.ReturnsID))
 	}
-	if info.nestedType != "" && !info.sharedNested {
+	if info.NestedType != "" && !info.SharedNested {
 		if nested, ok := g.Spec.Object(c.Method.NestedType); ok {
 			add(nested, c.NestedProperties)
 		}
 	}
 	// A narrowed type replaces the runtime one, so that name is not imported.
-	if info.nestedType != "" {
+	if info.NestedType != "" {
 		delete(names, spec.ExportedName(c.Method.NestedType))
 	}
 }
@@ -162,7 +161,7 @@ func (g *RequestGenerator) writeCreations(buf *bytes.Buffer, p *plan) {
 		shared.WriteComment(buf, "", fmt.Sprintf(
 			"%s is the creation id %s gives a record it creates, which the response reports it under.",
 			c.Name, p.q.Name))
-		fmt.Fprintf(buf, "export const %s: Id = %s\n\n", c.Name, strconv.Quote(c.ID))
+		fmt.Fprintf(buf, "export const %s: Id = %s\n\n", c.Name, quote(c.ID))
 	}
 }
 
@@ -195,7 +194,7 @@ func (g *RequestGenerator) writeParams(buf *bytes.Buffer, p *plan) {
 func (g *RequestGenerator) writeNestedTypes(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
-		if info.nestedType == "" || info.sharedNested {
+		if info.NestedType == "" || info.SharedNested {
 			continue
 		}
 		nested, ok := g.Spec.Object(c.Method.NestedType)
@@ -203,13 +202,13 @@ func (g *RequestGenerator) writeNestedTypes(buf *bytes.Buffer, p *plan) {
 			continue
 		}
 		shared.WriteComment(buf, "", fmt.Sprintf("%s holds the properties of %s that the %s call in %s asks for.",
-			info.nestedType, nested.Name, c.Method.Name, p.q.Name))
-		fmt.Fprintf(buf, "export interface %s {\n", info.nestedType)
+			info.NestedType, nested.Name, c.Method.Name, p.q.Name))
+		fmt.Fprintf(buf, "export interface %s {\n", info.NestedType)
 		for i, name := range c.NestedProperties {
 			if i > 0 {
 				buf.WriteString("\n")
 			}
-			g.writeRecordField(buf, nested, name, info.nestedType, c.Method.NestedType)
+			g.writeRecordField(buf, nested, name, info.NestedType, c.Method.NestedType)
 		}
 		buf.WriteString("}\n\n")
 	}
@@ -219,7 +218,7 @@ func (g *RequestGenerator) writeNestedTypes(buf *bytes.Buffer, p *plan) {
 func (g *RequestGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
-		if info.recordType == "" || !info.writesTypes || info.sharedRecord {
+		if info.RecordType == "" || !info.WritesTypes || info.SharedRecord {
 			continue
 		}
 		dataType, ok := g.Spec.Object(c.Method.DataType)
@@ -227,17 +226,17 @@ func (g *RequestGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 			continue
 		}
 		shared.WriteComment(buf, "", fmt.Sprintf("%s holds the properties of %s that the %s call in %s asks for.",
-			info.recordType, dataType.Name, c.Method.Name, p.q.Name))
-		fmt.Fprintf(buf, "export interface %s {\n", info.recordType)
+			info.RecordType, dataType.Name, c.Method.Name, p.q.Name))
+		fmt.Fprintf(buf, "export interface %s {\n", info.RecordType)
 		properties := c.Properties
 		if properties == nil {
 			properties = dataType.PropertyNames()
 		}
-		for i, name := range shared.RecordProperties(properties) {
+		for i, name := range shared.RecordProperties(properties, c.Method.ReturnsID) {
 			if i > 0 {
 				buf.WriteString("\n")
 			}
-			g.writeRecordField(buf, dataType, name, info.nestedType, c.Method.NestedType)
+			g.writeRecordField(buf, dataType, name, info.NestedType, c.Method.NestedType)
 		}
 		buf.WriteString("}\n\n")
 	}
@@ -247,7 +246,7 @@ func (g *RequestGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 func (g *RequestGenerator) writeRecordField(buf *bytes.Buffer, dataType *spec.Object, name, nestedTo, nestedFrom string) {
 	memberName := name
 	if spec.TSNeedsQuoting(memberName) {
-		memberName = strconv.Quote(memberName)
+		memberName = quote(memberName)
 	}
 
 	field, known := dataType.Field(name)
@@ -280,7 +279,7 @@ func (g *RequestGenerator) nestedTSType(t *spec.Type, nestedTo, nestedFrom strin
 func (g *RequestGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
-		if info.recordType == "" || !info.writesTypes {
+		if info.RecordType == "" || !info.WritesTypes {
 			continue
 		}
 		respType, err := g.Spec.ResponseOf(c.Method.Name)
@@ -288,8 +287,8 @@ func (g *RequestGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 			continue
 		}
 		shared.WriteComment(buf, "", fmt.Sprintf("%s holds the response to the %s call in %s.",
-			info.responseType, c.Method.Name, p.q.Name))
-		fmt.Fprintf(buf, "export interface %s {\n", info.responseType)
+			info.ResponseType, c.Method.Name, p.q.Name))
+		fmt.Fprintf(buf, "export interface %s {\n", info.ResponseType)
 		for i, field := range respType.Fields {
 			if i > 0 {
 				buf.WriteString("\n")
@@ -297,11 +296,11 @@ func (g *RequestGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 			shared.WriteComment(buf, "  ", field.Doc)
 			tsType := field.ParsedType().TSType()
 			if field.Name == c.Method.ResultProperty {
-				tsType = info.recordType + "[]"
+				tsType = info.RecordType + "[]"
 			}
 			name := field.Name
 			if spec.TSNeedsQuoting(name) {
-				name = strconv.Quote(name)
+				name = quote(name)
 			}
 			fmt.Fprintf(buf, "  %s: %s\n", name, tsType)
 		}
@@ -322,7 +321,7 @@ func (g *RequestGenerator) writeResultType(buf *bytes.Buffer, p *plan) {
 			buf.WriteString("\n")
 		}
 		shared.WriteComment(buf, "  ", fmt.Sprintf("The response to the %s call, made as %q.", c.Method.Name, c.ID))
-		fmt.Fprintf(buf, "  %s: %s\n", tsMemberName(c.Field), p.calls[c].responseType)
+		fmt.Fprintf(buf, "  %s: %s\n", tsMemberName(c.Field), p.calls[c].ResponseType)
 	}
 	if p.q.CreatedIDs {
 		buf.WriteString("\n")

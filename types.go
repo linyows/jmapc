@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/linyows/jmapc/internal/syntax"
 )
 
 // ID is the JMAP Id data type defined in RFC 8620, Section 1.2. It is a string
@@ -156,7 +158,7 @@ func (p PatchObject) Remove(pointer string) PatchObject {
 // location that this type cannot represent.
 type LocalDateTime string
 
-var localDateTimePattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$`)
+var localDateTimePattern = regexp.MustCompile(syntax.LocalDateTime)
 
 // Valid reports whether the value has the form the specification requires.
 func (d LocalDateTime) Valid() bool { return localDateTimePattern.MatchString(string(d)) }
@@ -190,17 +192,10 @@ type Duration string
 
 // durationPattern matches the subset of ISO 8601 durations that JSCalendar
 // allows: weeks, or days with an optional time, with no years or months.
-var durationPattern = regexp.MustCompile(`^P(?:\d+W|(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?)$`)
+var durationPattern = regexp.MustCompile(syntax.Duration)
 
 // Valid reports whether the value has the form the specification requires.
-func (d Duration) Valid() bool {
-	s := string(d)
-	// "P" and "PT" match the pattern but denote nothing.
-	if s == "P" || s == "PT" {
-		return false
-	}
-	return durationPattern.MatchString(s)
-}
+func (d Duration) Valid() bool { return durationPattern.MatchString(string(d)) }
 
 func (d Duration) String() string { return string(d) }
 
@@ -249,9 +244,12 @@ type SignedDuration string
 // Valid reports whether the value has the form the specification requires.
 func (d SignedDuration) Valid() bool {
 	s := string(d)
-	negative := strings.HasPrefix(s, "-")
-	s = strings.TrimPrefix(strings.TrimPrefix(s, "-"), "+")
-	_ = negative
+	// One sign at most, as ToTimeDuration reads it.
+	if rest, ok := strings.CutPrefix(s, "-"); ok {
+		s = rest
+	} else if rest, ok := strings.CutPrefix(s, "+"); ok {
+		s = rest
+	}
 	return Duration(s).Valid()
 }
 

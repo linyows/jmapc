@@ -1249,7 +1249,7 @@ export interface CalendarEventNotificationQueryChangesResponse {
 
   // The total number of matching records, present only if calculateTotal was
   // true.
-  total: number
+  total?: number
 
   // The ids to remove from the cached result list.
   removed: Id[]
@@ -1282,11 +1282,11 @@ export interface CalendarEventNotificationQueryResponse {
 
   // The total number of matching records, present only if calculateTotal was
   // true.
-  total: number
+  total?: number
 
   // The limit the server applied, present only if it is lower than the one
   // requested.
-  limit: number
+  limit?: number
 }
 
 // CalendarEventNotificationSetArguments holds the arguments of the
@@ -1491,7 +1491,7 @@ export interface CalendarEventQueryChangesResponse {
 
   // The total number of matching records, present only if calculateTotal was
   // true.
-  total: number
+  total?: number
 
   // The ids to remove from the cached result list.
   removed: Id[]
@@ -1524,11 +1524,11 @@ export interface CalendarEventQueryResponse {
 
   // The total number of matching records, present only if calculateTotal was
   // true.
-  total: number
+  total?: number
 
   // The limit the server applied, present only if it is lower than the one
   // requested.
-  limit: number
+  limit?: number
 }
 
 // CalendarEventSetArguments holds the arguments of the CalendarEvent/set
@@ -2300,7 +2300,7 @@ export interface ContactCardQueryChangesResponse {
 
   // The total number of matching records, present only if calculateTotal was
   // true.
-  total: number
+  total?: number
 
   // The ids to remove from the cached result list.
   removed: Id[]
@@ -2333,11 +2333,11 @@ export interface ContactCardQueryResponse {
 
   // The total number of matching records, present only if calculateTotal was
   // true.
-  total: number
+  total?: number
 
   // The limit the server applied, present only if it is lower than the one
   // requested.
-  limit: number
+  limit?: number
 }
 
 // ContactCardSetArguments holds the arguments of the ContactCard/set method.
@@ -3614,7 +3614,7 @@ export interface EmailQueryChangesResponse {
 
   // The total number of matching records, present only if calculateTotal was
   // true.
-  total: number
+  total?: number
 
   // The ids to remove from the cached result list.
   removed: Id[]
@@ -3646,11 +3646,11 @@ export interface EmailQueryResponse {
 
   // The total number of matching records, present only if calculateTotal was
   // true.
-  total: number
+  total?: number
 
   // The limit the server applied, present only if it is lower than the one
   // requested.
-  limit: number
+  limit?: number
 }
 
 // EmailSetArguments holds the arguments of the Email/set method.
@@ -3960,7 +3960,7 @@ export interface EmailSubmissionQueryChangesResponse {
 
   // The total number of matching records, present only if calculateTotal was
   // true.
-  total: number
+  total?: number
 
   // The ids to remove from the cached result list.
   removed: Id[]
@@ -3993,11 +3993,11 @@ export interface EmailSubmissionQueryResponse {
 
   // The total number of matching records, present only if calculateTotal was
   // true.
-  total: number
+  total?: number
 
   // The limit the server applied, present only if it is lower than the one
   // requested.
-  limit: number
+  limit?: number
 }
 
 // EmailSubmissionSetArguments holds the arguments of the EmailSubmission/set
@@ -4904,6 +4904,12 @@ export interface MailboxChangesResponse {
 
   // The ids of records destroyed since oldState.
   destroyed: Id[]
+
+  // The properties that may have changed on the mailboxes in the updated
+  // list, where only totalEmails, unreadEmails, totalThreads and
+  // unreadThreads have, or null if the server cannot tell that only the
+  // counts changed.
+  updatedProperties: string[] | null
 }
 
 // MailboxFilterCondition is a condition a mailbox must satisfy to match a
@@ -5064,7 +5070,7 @@ export interface MailboxQueryChangesResponse {
 
   // The total number of matching records, present only if calculateTotal was
   // true.
-  total: number
+  total?: number
 
   // The ids to remove from the cached result list.
   removed: Id[]
@@ -5096,11 +5102,11 @@ export interface MailboxQueryResponse {
 
   // The total number of matching records, present only if calculateTotal was
   // true.
-  total: number
+  total?: number
 
   // The limit the server applied, present only if it is lower than the one
   // requested.
-  limit: number
+  limit?: number
 }
 
 // MailboxRights says what the authenticated user may do with a mailbox.
@@ -5630,7 +5636,7 @@ export interface PrincipalQueryChangesResponse {
 
   // The total number of matching records, present only if calculateTotal was
   // true.
-  total: number
+  total?: number
 
   // The ids to remove from the cached result list.
   removed: Id[]
@@ -5662,11 +5668,11 @@ export interface PrincipalQueryResponse {
 
   // The total number of matching records, present only if calculateTotal was
   // true.
-  total: number
+  total?: number
 
   // The limit the server applied, present only if it is lower than the one
   // requested.
-  limit: number
+  limit?: number
 }
 
 // PrincipalSetArguments holds the arguments of the Principal/set method.
@@ -6086,7 +6092,7 @@ export interface QuotaQueryChangesResponse {
 
   // The total number of matching records, present only if calculateTotal was
   // true.
-  total: number
+  total?: number
 
   // The ids to remove from the cached result list.
   removed: Id[]
@@ -6118,11 +6124,11 @@ export interface QuotaQueryResponse {
 
   // The total number of matching records, present only if calculateTotal was
   // true.
-  total: number
+  total?: number
 
   // The limit the server applied, present only if it is lower than the one
   // requested.
-  limit: number
+  limit?: number
 }
 
 // SearchSnippet is the part of an email that matched a search, with the
@@ -6441,7 +6447,7 @@ export interface ShareNotificationQueryChangesResponse {
 
   // The total number of matching records, present only if calculateTotal was
   // true.
-  total: number
+  total?: number
 
   // The ids to remove from the cached result list.
   removed: Id[]
@@ -6474,11 +6480,11 @@ export interface ShareNotificationQueryResponse {
 
   // The total number of matching records, present only if calculateTotal was
   // true.
-  total: number
+  total?: number
 
   // The limit the server applied, present only if it is lower than the one
   // requested.
-  limit: number
+  limit?: number
 }
 
 // ShareNotificationSetArguments holds the arguments of the
@@ -6673,11 +6679,11 @@ export interface SieveScriptQueryResponse {
 
   // The total number of matching records, present only if calculateTotal was
   // true.
-  total: number
+  total?: number
 
   // The limit the server applied, present only if it is lower than the one
   // requested.
-  limit: number
+  limit?: number
 }
 
 // SieveScriptSetArguments holds the arguments of the SieveScript/set method.

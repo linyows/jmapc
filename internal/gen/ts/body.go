@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/linyows/jmapc/internal/gen/shared"
@@ -28,7 +27,7 @@ func (g *RequestGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
 
 	for _, capability := range p.sessionCapabilities {
 		fmt.Fprintf(buf, "  const %s = await client.primaryAccountId(%s)\n",
-			accountIDVar(capability), strconv.Quote(capability))
+			accountIDVar(capability), quote(capability))
 	}
 	if len(p.sessionCapabilities) > 0 {
 		buf.WriteString("\n")
@@ -54,9 +53,9 @@ func (g *RequestGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
 		// The one call this returns is the whole of the answer, so a failure
 		// there leaves nothing to return.
 		fmt.Fprintf(buf, "  if (failed && !answered(res, %s)) throw failed\n",
-			strconv.Quote(p.q.Returns.ID))
+			quote(p.q.Returns.ID))
 		fmt.Fprintf(buf, "  const out = decode<%s>(req, res, %s)\n",
-			p.returnType, strconv.Quote(p.q.Returns.ID))
+			p.returnType, quote(p.q.Returns.ID))
 	} else {
 		// A call the server would not run is left out rather than taking the
 		// others with it, so what reaches a caller reading the error is a
@@ -64,7 +63,7 @@ func (g *RequestGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
 		fmt.Fprintf(buf, "  const out = {\n")
 		for _, c := range p.q.Calls {
 			fmt.Fprintf(buf, "    ...(answered(res, %[1]s) ? { %[2]s: decode<%[3]s>(req, res, %[1]s) } : {}),\n",
-				strconv.Quote(c.ID), tsMemberName(c.Field), p.calls[c].responseType)
+				quote(c.ID), tsMemberName(c.Field), p.calls[c].ResponseType)
 		}
 		if p.q.CreatedIDs {
 			buf.WriteString("    createdIds: res.createdIds ?? {},\n")
@@ -106,7 +105,7 @@ func (g *RequestGenerator) setErrorChecks(p *plan) []setErrorCheck {
 			ch.object = "out." + tsMemberName(c.Field)
 		case c != p.q.Returns:
 			ch.object = fmt.Sprintf("refused%d", i)
-			ch.decode = p.calls[c].responseType
+			ch.decode = p.calls[c].ResponseType
 		}
 		checks = append(checks, ch)
 	}
@@ -125,12 +124,12 @@ func (g *RequestGenerator) writeSetErrorChecks(buf *bytes.Buffer, checks []setEr
 			continue
 		}
 		fmt.Fprintf(buf, "  const %s = decode<%s>(req, res, %s)\n",
-			ch.object, ch.decode, strconv.Quote(ch.call.ID))
+			ch.object, ch.decode, quote(ch.call.ID))
 	}
 	buf.WriteString("  const failures: SetFailure[] = []\n")
 	for _, ch := range checks {
 		fmt.Fprintf(buf, "  collectSetErrors(%s, %s, {\n",
-			strconv.Quote(ch.call.Method.Name), strconv.Quote(ch.call.ID))
+			quote(ch.call.Method.Name), quote(ch.call.ID))
 		for _, name := range ch.fields {
 			fmt.Fprintf(buf, "    %s: %s.%s,\n", name, ch.object, tsMemberName(name))
 		}
@@ -142,26 +141,7 @@ func (g *RequestGenerator) writeSetErrorChecks(buf *bytes.Buffer, checks []setEr
 
 // writeFuncDoc writes the function's documentation.
 func (g *RequestGenerator) writeFuncDoc(buf *bytes.Buffer, p *plan) {
-	doc := strings.TrimSpace(p.q.Doc)
-	if doc == "" {
-		doc = fmt.Sprintf("%s sends the JMAP request in %s.", p.funcName, p.q.Path)
-	}
-	methods := make([]string, len(p.q.Calls))
-	for i, c := range p.q.Calls {
-		methods[i] = c.Method.Name
-	}
-	doc += fmt.Sprintf("\n\nIt makes %s in a single request, so that %s.",
-		shared.JoinMethods(methods), shared.RoundTripPhrase(len(p.q.Calls)))
-	if p.q.Returns != nil {
-		doc += fmt.Sprintf(" It returns the response to the %s call.", p.q.Returns.Method.Name)
-	}
-	if len(p.sessionCapabilities) > 0 {
-		doc += "\n\n" + shared.PrimaryAccountPhrase(p.sessionCapabilities)
-	}
-	if p.q.CreatedIDs {
-		doc += "\n\nIt takes the creation ids of an earlier request and reports its own, so that a reference to something created there still resolves here."
-	}
-	shared.WriteComment(buf, "", doc)
+	shared.WriteComment(buf, "", shared.FuncDoc(p.q, p.funcName, p.sessionCapabilities))
 }
 
 // writeRequest writes the literal request the function sends.
@@ -169,7 +149,7 @@ func (g *RequestGenerator) writeRequest(buf *bytes.Buffer, p *plan) {
 	buf.WriteString("  const req: Request = {\n")
 	uris := make([]string, len(p.q.Using))
 	for i, uri := range p.q.Using {
-		uris[i] = strconv.Quote(uri)
+		uris[i] = quote(uri)
 	}
 	fmt.Fprintf(buf, "    using: [%s],\n", strings.Join(uris, ", "))
 	buf.WriteString("    methodCalls: [\n")
@@ -188,9 +168,9 @@ func (g *RequestGenerator) writeInvocation(buf *bytes.Buffer, p *plan, c *reques
 	if c.Comment != "" {
 		shared.WriteComment(buf, "      ", c.Comment)
 	}
-	fmt.Fprintf(buf, "      [%s, {\n", strconv.Quote(c.Method.Name))
-	if v := p.calls[c].accountIDVar; v != "" {
-		fmt.Fprintf(buf, "        %s: %s,\n", strconv.Quote(request.AccountIDArgument), v)
+	fmt.Fprintf(buf, "      [%s, {\n", quote(c.Method.Name))
+	if v := p.calls[c].AccountIDVar; v != "" {
+		fmt.Fprintf(buf, "        %s: %s,\n", quote(request.AccountIDArgument), v)
 	}
 	for _, field := range c.Args.Fields {
 		// An argument the caller may leave out is spread in, so that leaving
@@ -203,18 +183,18 @@ func (g *RequestGenerator) writeInvocation(buf *bytes.Buffer, p *plan, c *reques
 		}
 		fmt.Fprintf(buf, "        %s: %s,\n", g.keyExpr(field), g.expr(field.Value, "        "))
 	}
-	fmt.Fprintf(buf, "      }, %s],\n", strconv.Quote(c.ID))
+	fmt.Fprintf(buf, "      }, %s],\n", quote(c.ID))
 }
 
 // keyExpr renders an argument name, which a request may build from parameters.
 func (g *RequestGenerator) keyExpr(f request.ObjectField) string {
 	if len(f.KeySegments) == 0 {
-		return strconv.Quote(f.Key)
+		return quote(f.Key)
 	}
 	parts := make([]string, 0, len(f.KeySegments))
 	for _, seg := range f.KeySegments {
 		if seg.Param == nil {
-			parts = append(parts, strconv.Quote(seg.Text))
+			parts = append(parts, quote(seg.Text))
 			continue
 		}
 		parts = append(parts, "p."+tsMemberName(seg.Param.Field))
@@ -229,7 +209,7 @@ func (g *RequestGenerator) expr(n request.Node, indent string) string {
 	switch v := n.(type) {
 	case *request.ResultRef:
 		return fmt.Sprintf("{ resultOf: %s, name: %s, path: %s }",
-			strconv.Quote(v.Ref.ResultOf), strconv.Quote(v.Ref.Name), strconv.Quote(v.Ref.Path))
+			quote(v.Ref.ResultOf), quote(v.Ref.Name), quote(v.Ref.Path))
 
 	case *request.ParamRef:
 		return "p." + tsMemberName(v.Param.Field)
@@ -308,8 +288,9 @@ func (g *RequestGenerator) writePages(buf *bytes.Buffer, p *plan) {
 		fmt.Fprintf(buf, "    start = window.%s + window.%s.length\n",
 			tsMemberName(spec.ExportedName(request.PositionArgument)), ids)
 		// Where the call asked for the total, the end is known without asking
-		// for a window that is not there.
-		fmt.Fprintf(buf, "    if (window.%[1]s > 0 && start >= window.%[1]s) {\n      return\n    }\n",
+		// for a window that is not there. The server leaves the total out
+		// otherwise.
+		fmt.Fprintf(buf, "    if (window.%[1]s !== undefined && start >= window.%[1]s) {\n      return\n    }\n",
 			tsMemberName(spec.ExportedName(request.TotalProperty)))
 
 	case request.PageChanges:
@@ -340,4 +321,17 @@ func (g *RequestGenerator) writePagesDoc(buf *bytes.Buffer, p *plan) {
 	}
 	doc += "\n\nA failure throws, as it does from the request itself, and leaving the loop early sends no further request."
 	shared.WriteComment(buf, "", doc)
+}
+
+// quote renders a TypeScript string literal. Go's quoting is not JavaScript's,
+// which reads \a as a and has no \x escapes above 0x7f; JSON's is, and a JSON
+// string is a JavaScript string as it stands.
+func quote(s string) string {
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(s); err != nil {
+		return `""`
+	}
+	return strings.TrimSuffix(b.String(), "\n")
 }

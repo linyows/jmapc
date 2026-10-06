@@ -25,21 +25,9 @@ type RequestGenerator struct {
 	Properties *request.PropertySets
 }
 
-// call holds the names settled for one method call.
+// call is what the TypeScript generator writes for one method call.
 type call struct {
-	responseType string
-	recordType   string
-	nestedType   string
-	accountIDVar string
-	// writesTypes says this call is the one that writes the types it names. A
-	// call reading the same records in the same shape as an earlier one shares
-	// its types rather than declaring them again.
-	writesTypes bool
-	// sharedRecord says the record type is one of the named sets, which the
-	// properties module declares rather than this one.
-	sharedRecord bool
-	// sharedNested says the same of the nested type.
-	sharedNested bool
+	shared.CallPlan
 }
 
 // plan is the naming decided for one request before any code is written.
@@ -99,8 +87,10 @@ func (g *RequestGenerator) Generate() (map[string][]byte, error) {
 	return out, nil
 }
 
-// FileName returns the file a request is generated into. TypeScript names a file
-// after what it exports, so this is the function's own name.
+// FileName returns the file a request is generated into: the request's name
+// with a lower-case first letter, which is the function's name too, but for a
+// name a reserved word takes, where the function takes an underscore and the
+// file keeps the name.
 func FileName(queryName string) string {
 	return lowerFirst(queryName) + ".ts"
 }
@@ -122,76 +112,45 @@ func (g *RequestGenerator) plan() ([]*plan, error) {
 		}
 		p := &plan{
 			q:        q,
-			funcName: lowerFirst(q.Name),
+			funcName: spec.TSBindingName(lowerFirst(q.Name)),
 			calls:    make(map[*request.Call]*call, len(q.Calls)),
 		}
 		if len(q.Params) > 0 {
 			p.paramsType = shared.Unique(taken, q.Name+"Params")
 		}
-		p.creations = shared.Creations(taken, p.funcName, q.Creations, spec.ExportedName)
-		same := shared.SameNarrowing(q.Calls)
-		for _, c := range q.Calls {
-			info := &call{}
-			switch {
-			case same[c] != nil && same[c] != c:
-				// Another call of this request reads the same records in the
-				// same shape, and one shape is one type.
-				*info = *p.calls[same[c]]
-				info.writesTypes = false
-			case c.PropertySet != nil:
-				// The set names the type, so every call asking for it answers
-				// with the one the properties module declares.
-				info.recordType = c.PropertySet.Name
-				info.responseType = shared.Unique(taken, q.Name+c.Field+"Response")
-				info.writesTypes = true
-				info.sharedRecord = true
-			case c.Properties != nil || c.NestedProperties != nil:
-				info.recordType = shared.Unique(taken, q.Name+c.Field+spec.ExportedName(c.Method.DataType))
-				info.responseType = shared.Unique(taken, q.Name+c.Field+"Response")
-				info.writesTypes = true
-			default:
-				info.responseType = spec.ExportedName(c.Method.Response)
+		// The constants of the creation ids share the module with the
+		// function, and are no more able than it is to take a reserved word.
+		taken[p.funcName] = true
+		p.creations = shared.Creations(taken, lowerFirst(q.Name), q.Creations, spec.ExportedName)
+		for i, c := range p.creations {
+			if escaped := spec.TSBindingName(c.Name); escaped != c.Name {
+				p.creations[i].Name = shared.Unique(taken, escaped)
 			}
-			switch {
-			case c.NestedPropertySet != nil:
-				info.nestedType = c.NestedPropertySet.Name
-				info.sharedNested = true
-			case c.NestedProperties != nil && info.writesTypes:
-				info.nestedType = shared.Unique(taken, q.Name+c.Field+spec.ExportedName(c.Method.NestedType))
-			}
-			p.calls[c] = info
 		}
+		calls, capabilities := shared.PlanCalls(g.Spec, q, taken, shared.Namer{
+			Prefix:    q.Name,
+			Field:     func(name string) string { return name },
+			Part:      spec.ExportedName,
+			Set:       func(name string) string { return name },
+			Runtime:   spec.ExportedName,
+			AccountID: accountIDVar,
+		})
+		for _, c := range q.Calls {
+			p.calls[c] = &call{CallPlan: *calls[c]}
+		}
+		p.sessionCapabilities = capabilities
 		if q.Pages != nil {
 			p.pagesName = lowerFirst(shared.Unique(taken, q.Name+"Pages"))
 		}
 		if q.Returns != nil {
-			p.returnType = p.calls[q.Returns].responseType
+			p.returnType = p.calls[q.Returns].ResponseType
 		} else {
 			p.resultType = shared.Unique(taken, q.Name+"Result")
 			p.returnType = p.resultType
 		}
-		g.planAccountIDs(p)
 		plans = append(plans, p)
 	}
 	return plans, nil
-}
-
-// planAccountIDs works out which calls need an accountId filling in, and from
-// which capability's primary account.
-func (g *RequestGenerator) planAccountIDs(p *plan) {
-	seen := make(map[string]bool)
-	for _, c := range p.q.Calls {
-		capability, needed := c.AccountIDCapability(g.Spec)
-		if !needed {
-			continue
-		}
-		if !seen[capability] {
-			seen[capability] = true
-			p.sessionCapabilities = append(p.sessionCapabilities, capability)
-		}
-		p.calls[c].accountIDVar = accountIDVar(capability)
-	}
-	sort.Strings(p.sessionCapabilities)
 }
 
 // accountIDVar names the local holding the primary account id for a capability.

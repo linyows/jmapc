@@ -220,6 +220,105 @@ func TestEventSourceRejected(t *testing.T) {
 	}
 }
 
+// TestEventSourceResumesFromTheLastEventRead checks that an id becomes the one
+// to resume from only once its event has been read to the end. A stream that
+// drops in the middle of an event has not delivered it, and resuming after it
+// would lose it.
+func TestEventSourceResumesFromTheLastEventRead(t *testing.T) {
+	es := newEventServer(t)
+	es.stream = "" +
+		"event: state\n" +
+		"id: s1\n" +
+		`data: {"@type":"StateChange","changed":{"a1":{"Email":"e2"}}}` + "\n" +
+		"\n" +
+		// A keep-alive leaves the point to resume from where it was.
+		": still here\n" +
+		"\n" +
+		// The stream drops before the blank line that would end this event.
+		"event: state\n" +
+		"id: s2\n" +
+		`data: {"@type":"StateChange","changed":{"a1":{"Email":"e3"}}}` + "\n"
+
+	stream, err := es.client().EventSource(context.Background(), &EventSourceOptions{LastEventID: "s0"})
+	if err != nil {
+		t.Fatalf("EventSource: %v", err)
+	}
+	defer stream.Close()
+
+	if _, err := stream.Next(); err != nil {
+		t.Fatalf("Next: %v", err)
+	}
+	if got := stream.LastEventID(); got != "s1" {
+		t.Errorf("LastEventID after the first event = %q, want s1", got)
+	}
+	if _, err := stream.Next(); !errors.Is(err, io.EOF) {
+		t.Fatalf("Next: %v, want io.EOF for the stream that dropped", err)
+	}
+	if got := stream.LastEventID(); got != "s1" {
+		t.Errorf("LastEventID = %q, want s1: s2 was never delivered", got)
+	}
+}
+
+// TestEventSourceKeepsWhereItResumedFrom checks a stream that resumed from an id
+// and drops before it delivers anything. A keep-alive comes first, and then an
+// event the stream drops in the middle of, so the point to resume from is
+// still the one it was opened with.
+func TestEventSourceKeepsWhereItResumedFrom(t *testing.T) {
+	es := newEventServer(t)
+	es.stream = "" +
+		": still here\n" +
+		"\n" +
+		"event: state\n" +
+		"id: s1\n" +
+		`data: {"@type":"StateChange","changed":{"a1":{"Email":"e2"}}}` + "\n"
+
+	stream, err := es.client().EventSource(context.Background(), &EventSourceOptions{LastEventID: "s0"})
+	if err != nil {
+		t.Fatalf("EventSource: %v", err)
+	}
+	defer stream.Close()
+
+	if _, err := stream.Next(); !errors.Is(err, io.EOF) {
+		t.Fatalf("Next: %v, want io.EOF for the stream that dropped", err)
+	}
+	if got := stream.LastEventID(); got != "s0" {
+		t.Errorf("LastEventID = %q, want s0, where the stream resumed from", got)
+	}
+}
+
+// TestEventSourceTakesAnIDWithoutAnEvent checks a block that gives an id and no
+// data. It dispatches no event, and still moves the point to resume from, as
+// an EventSource's does: the server has said where the stream stands.
+func TestEventSourceTakesAnIDWithoutAnEvent(t *testing.T) {
+	es := newEventServer(t)
+	es.stream = "" +
+		"event: state\n" +
+		"id: s1\n" +
+		`data: {"@type":"StateChange","changed":{"a1":{"Email":"e2"}}}` + "\n" +
+		"\n" +
+		"id: s2\n" +
+		"\n" +
+		// An id holding a NUL is ignored, as an EventSource ignores it.
+		"id: s\x003\n" +
+		"\n"
+
+	stream, err := es.client().EventSource(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("EventSource: %v", err)
+	}
+	defer stream.Close()
+
+	if _, err := stream.Next(); err != nil {
+		t.Fatalf("Next: %v", err)
+	}
+	if _, err := stream.Next(); !errors.Is(err, io.EOF) {
+		t.Fatalf("Next: %v, want io.EOF", err)
+	}
+	if got := stream.LastEventID(); got != "s2" {
+		t.Errorf("LastEventID = %q, want s2, which the server gave as where the stream stands", got)
+	}
+}
+
 // TestEventSourceUnavailable checks the error when the server has no push
 // endpoint at all, which is allowed: push is optional.
 func TestEventSourceUnavailable(t *testing.T) {
@@ -230,6 +329,50 @@ func TestEventSourceUnavailable(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "eventSourceUrl") {
 		t.Errorf("error = %v, want it to mention eventSourceUrl", err)
+	}
+}
+
+// TestEventSourceTemplateThatDoesNotExpand checks a push endpoint the session
+// advertises in a form that cannot be used. Connecting again reads the same
+// session, so the failure is as permanent as an endpoint that is missing.
+func TestEventSourceTemplateThatDoesNotExpand(t *testing.T) {
+	for _, template := range []string{
+		"/events?types={types&ping={ping}",
+		"/events?types={types}&since={since}",
+	} {
+		ts := newTestServer(t)
+		ts.sessionHandler = fmt.Sprintf(`{
+		  "capabilities": {"urn:ietf:params:jmap:core": {}},
+		  "accounts": {}, "primaryAccounts": {}, "username": "someone",
+		  "apiUrl": %q, "eventSourceUrl": %q, "state": "sess1"
+		}`, ts.URL+"/api", ts.URL+template)
+		_, err := ts.client().EventSource(context.Background(), nil)
+		if err == nil || !strings.Contains(err.Error(), "expanding eventSourceUrl") {
+			t.Errorf("%s: EventSource: %v, want the template reported", template, err)
+			continue
+		}
+		if IsTemporary(err) {
+			t.Errorf("%s: IsTemporary(%v) = true, want a template that does not expand to be permanent", template, err)
+		}
+	}
+}
+
+// TestEventSourceURLThatCannotBeRequested checks a push endpoint that expands
+// into something that is not a URL. Like a template that does not expand, it is
+// what the session says, and connecting again does not change it.
+func TestEventSourceURLThatCannotBeRequested(t *testing.T) {
+	ts := newTestServer(t)
+	ts.sessionHandler = fmt.Sprintf(`{
+	  "capabilities": {"urn:ietf:params:jmap:core": {}},
+	  "accounts": {}, "primaryAccounts": {}, "username": "someone",
+	  "apiUrl": %q, "eventSourceUrl": %q, "state": "sess1"
+	}`, ts.URL+"/api", ts.URL+"/ev%zz?types={types}")
+	_, err := ts.client().EventSource(context.Background(), nil)
+	if err == nil || !strings.Contains(err.Error(), "building event source request") {
+		t.Fatalf("EventSource: %v, want the URL reported", err)
+	}
+	if IsTemporary(err) {
+		t.Errorf("IsTemporary(%v) = true, want a URL that cannot be requested to be permanent", err)
 	}
 }
 

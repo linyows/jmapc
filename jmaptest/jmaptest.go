@@ -29,13 +29,16 @@ package jmaptest
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/linyows/jmapc"
 	"github.com/linyows/jmapc/internal/request"
@@ -64,8 +67,26 @@ type Server struct {
 	session  *jmapc.Session
 	fail     *jmapc.RequestError
 	checks   bool
-	watchers map[chan string]bool
+	watchers map[*watcher]bool
 	sent     int
+	// events counts the events pushed, which name each one with an id of its
+	// own, as a server's event ids do. pushing holds one push from numbering
+	// its event until it has been sent to every client, so that pushes made
+	// together reach a client in the order of their ids.
+	events  int
+	pushing sync.Mutex
+}
+
+// watcher is one connection to the push endpoint, with what it asked for: the
+// types it follows, where nil follows every type, and whether the stream ends
+// after the first change it is sent.
+type watcher struct {
+	events     chan string
+	types      map[string]bool
+	closeAfter bool
+	// done is closed once the connection has ended, so that a push sent
+	// after it does not wait for a reader that is gone.
+	done chan struct{}
 }
 
 // Option configures the server before it answers anything.
@@ -92,7 +113,7 @@ func New(t testing.TB, opts ...Option) *Server {
 		t:        t,
 		handlers: map[string]Handler{},
 		checks:   true,
-		watchers: map[chan string]bool{},
+		watchers: map[*watcher]bool{},
 	}
 	s.mux = http.NewServeMux()
 	s.mux.HandleFunc("/.well-known/jmap", s.ServeSession)
@@ -215,28 +236,47 @@ func (s *Server) Requests() int {
 // Push sends a state change to every client watching the push endpoint, as a
 // server does when something in an account has changed. It is what a watch
 // waits for.
+//
+// Each client is sent the types it subscribed to and no others, as RFC 8620,
+// Section 7.3 has a server do, and one following none of the types that
+// changed is sent nothing.
 func (s *Server) Push(accountID jmapc.ID, states map[string]string) {
-	change := jmapc.StateChange{
-		Type:    "StateChange",
-		Changed: map[jmapc.ID]map[string]string{accountID: states},
-	}
-	body, err := json.Marshal(change)
-	if err != nil {
-		s.t.Errorf("jmaptest: encoding the event: %v", err)
-		return
-	}
+	s.pushing.Lock()
+	defer s.pushing.Unlock()
 	s.mu.Lock()
-	watchers := make([]chan string, 0, len(s.watchers))
+	watchers := make([]*watcher, 0, len(s.watchers))
 	for w := range s.watchers {
 		watchers = append(watchers, w)
 	}
+	s.events++
+	id := s.events
 	s.mu.Unlock()
 	if len(watchers) == 0 {
 		s.t.Error("jmaptest: nothing is watching the push endpoint")
 		return
 	}
 	for _, w := range watchers {
-		w <- fmt.Sprintf("id: e%d\nevent: state\ndata: %s\n\n", s.Requests()+1, body)
+		followed := make(map[string]string, len(states))
+		for typeName, state := range states {
+			if w.types == nil || w.types[typeName] {
+				followed[typeName] = state
+			}
+		}
+		if len(followed) == 0 {
+			continue
+		}
+		body, err := json.Marshal(jmapc.StateChange{
+			Type:    "StateChange",
+			Changed: map[jmapc.ID]map[string]string{accountID: followed},
+		})
+		if err != nil {
+			s.t.Errorf("jmaptest: encoding the event: %v", err)
+			return
+		}
+		select {
+		case w.events <- fmt.Sprintf("id: e%d\nevent: state\ndata: %s\n\n", id, body):
+		case <-w.done:
+		}
 	}
 }
 
@@ -257,16 +297,48 @@ func (s *Server) ServeSession(w http.ResponseWriter, r *http.Request) {
 
 // ServeEvents is the push endpoint, mounted at /events. Mount it where a
 // client of your own listens. It holds the connection open and writes what
-// Push sends it.
+// Push sends it, honouring the types, closeafter and ping the client asked for
+// as RFC 8620, Section 7.3 defines them.
 func (s *Server) ServeEvents(w http.ResponseWriter, r *http.Request) {
-	events := make(chan string, 8)
+	query := r.URL.Query()
+	watch := &watcher{
+		events:     make(chan string, 8),
+		closeAfter: query.Get("closeafter") == "state",
+		done:       make(chan struct{}),
+	}
+	if types := query.Get("types"); types != "" && types != "*" {
+		watch.types = make(map[string]bool)
+		for _, typeName := range strings.Split(types, ",") {
+			watch.types[typeName] = true
+		}
+	}
+	// RFC 8620 lets a server ping less often than asked, and an interval past
+	// what a Duration holds is pinged at the most this one does.
+	const maxPing = 24 * 60 * 60
+	// The interval is read as 64 bits whatever int is, so that one too large
+	// for an int is clamped as any other too long, rather than dropped.
+	// A ping is due once the interval passes with nothing sent, so the timer
+	// starts again after every event written, a state as well as a ping.
+	var ping <-chan time.Time
+	var idle *time.Timer
+	var seconds int64
+	if asked, err := strconv.ParseUint(query.Get("ping"), 10, 64); err == nil && asked > 0 {
+		seconds = maxPing
+		if asked < maxPing {
+			seconds = int64(asked)
+		}
+		idle = time.NewTimer(time.Duration(seconds) * time.Second)
+		defer idle.Stop()
+		ping = idle.C
+	}
 	s.mu.Lock()
-	s.watchers[events] = true
+	s.watchers[watch] = true
 	s.mu.Unlock()
 	defer func() {
 		s.mu.Lock()
-		delete(s.watchers, events)
+		delete(s.watchers, watch)
 		s.mu.Unlock()
+		close(watch.done)
 	}()
 
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -276,16 +348,25 @@ func (s *Server) ServeEvents(w http.ResponseWriter, r *http.Request) {
 		flush.Flush()
 	}
 	for {
+		var event string
 		select {
 		case <-r.Context().Done():
 			return
-		case event := <-events:
-			if _, err := fmt.Fprint(w, event); err != nil {
-				return
-			}
-			if flush != nil {
-				flush.Flush()
-			}
+		case <-ping:
+			event = fmt.Sprintf("event: ping\ndata: {\"interval\":%d}\n\n", seconds)
+		case event = <-watch.events:
+		}
+		if _, err := fmt.Fprint(w, event); err != nil {
+			return
+		}
+		if flush != nil {
+			flush.Flush()
+		}
+		if watch.closeAfter && strings.Contains(event, "event: state") {
+			return
+		}
+		if idle != nil {
+			idle.Reset(time.Duration(seconds) * time.Second)
 		}
 	}
 }
@@ -320,6 +401,18 @@ func (s *Server) ServeAPI(w http.ResponseWriter, r *http.Request) {
 		s.writeRequestError(w, err)
 		return
 	}
+	core := s.core()
+	if max := core.MaxCallsInRequest; max > 0 && jmapc.UnsignedInt(len(req.MethodCalls)) > max {
+		// RFC 8620, Section 3.6.1: a request over a limit the session states
+		// is refused whole.
+		s.writeRequestError(w, &jmapc.RequestError{
+			Status: http.StatusBadRequest,
+			Type:   jmapc.ErrTypeLimit,
+			Limit:  "maxCallsInRequest",
+			Detail: fmt.Sprintf("the request makes %d method calls, and the server takes %d", len(req.MethodCalls), max),
+		})
+		return
+	}
 
 	check := request.NewRequestCheck(spec.Standard(), req.Using)
 	responses := make([]jmapc.Invocation, 0, len(req.MethodCalls))
@@ -348,6 +441,12 @@ func (s *Server) ServeAPI(w http.ResponseWriter, r *http.Request) {
 		handler, known := s.handlers[call.Method]
 		s.calls = append(s.calls, call)
 		s.mu.Unlock()
+		// A call over a limit was still sent, and is among the calls a test
+		// reads back; it is the handler it does not reach.
+		if detail := tooLarge(call, core); detail != "" {
+			responses = append(responses, methodError(call.ID, "requestTooLarge", detail))
+			continue
+		}
 		if !known {
 			s.t.Errorf("jmaptest: nothing answers %s; add srv.Reply(%q, ...) or srv.Handle(%q, ...)",
 				call.Method, call.Method, call.Method)
@@ -358,7 +457,7 @@ func (s *Server) ServeAPI(w http.ResponseWriter, r *http.Request) {
 		value, err := handler(call)
 		if err != nil {
 			var refused *refusal
-			if !as(err, &refused) {
+			if !errors.As(err, &refused) {
 				s.t.Errorf("jmaptest: the handler for %s failed: %v", call.Method, err)
 				refused = &refusal{Type: "serverFail", Description: err.Error()}
 			}
@@ -390,6 +489,52 @@ func (s *Server) ServeAPI(w http.ResponseWriter, r *http.Request) {
 // checkUsing reports a capability the request declares and the session does
 // not advertise, which a server answers with a request-level error rather than
 // by running the calls.
+// core returns the limits the session states, which a server holds requests
+// to. A session that states none, as one a test has replaced may, holds them to
+// nothing.
+func (s *Server) core() *jmapc.CoreCapability {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	core, err := s.session.Core()
+	if err != nil {
+		return &jmapc.CoreCapability{}
+	}
+	return core
+}
+
+// tooLarge reports a /get or /set that names more records than the session
+// says the server takes in one call, which RFC 8620, Sections 5.1 and 5.3 have
+// the server refuse as requestTooLarge. It returns the reason, and nothing
+// where the call is within the limits.
+func tooLarge(call *Call, core *jmapc.CoreCapability) string {
+	count := func(arg string, keyed bool) int {
+		raw, ok := call.Args[arg]
+		if !ok {
+			return 0
+		}
+		if keyed {
+			var m map[string]json.RawMessage
+			_ = json.Unmarshal(raw, &m)
+			return len(m)
+		}
+		var list []json.RawMessage
+		_ = json.Unmarshal(raw, &list)
+		return len(list)
+	}
+	switch {
+	case strings.HasSuffix(call.Method, "/get"):
+		if n, max := count("ids", false), core.MaxObjectsInGet; max > 0 && jmapc.UnsignedInt(n) > max {
+			return fmt.Sprintf("the call asks for %d records, and the server returns %d in one /get", n, max)
+		}
+	case strings.HasSuffix(call.Method, "/set"):
+		n := count("create", true) + count("update", true) + count("destroy", false)
+		if max := core.MaxObjectsInSet; max > 0 && jmapc.UnsignedInt(n) > max {
+			return fmt.Sprintf("the call changes %d records, and the server takes %d in one /set", n, max)
+		}
+	}
+	return ""
+}
+
 func (s *Server) checkUsing(using []string) *jmapc.RequestError {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -463,23 +608,6 @@ func Refuse(errType string, description ...string) error {
 		r.Description = strings.Join(description, " ")
 	}
 	return r
-}
-
-// as is errors.As for the one type this package unwraps to, kept here so that
-// the reader does not have to look up what is being matched.
-func as(err error, target **refusal) bool {
-	for err != nil {
-		if r, ok := err.(*refusal); ok {
-			*target = r
-			return true
-		}
-		unwrapper, ok := err.(interface{ Unwrap() error })
-		if !ok {
-			return false
-		}
-		err = unwrapper.Unwrap()
-	}
-	return false
 }
 
 // methodNames lists what was called, for a message about what was not.

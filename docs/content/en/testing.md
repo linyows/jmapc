@@ -32,12 +32,19 @@ What it removes from the test:
 - **The failures.** `srv.Fail` for a method-level error, `srv.FailRequest` for a
   request rejected as a whole, and a `/set` response listing what it refused for
   the failure that answers 200.
+- **The limits.** A request making more calls than the session's
+  `maxCallsInRequest` is refused whole, and a `/get` or `/set` naming more
+  records than `maxObjectsInGet` or `maxObjectsInSet` is refused as
+  `requestTooLarge`, as a server does, so a client that splits its requests is
+  tested against limits that hold.
 - **What was requested.** `srv.Call("Email/query")` is the last call to a method,
   `srv.Calls()` all of them, and `srv.Requests()` how many requests they took —
   which is how to check that calls were sent in one request rather than one at
   a time.
 - **The push.** `srv.Push` sends a state change to a watching client, which is
-  what a watching request's loop waits for.
+  what a watching request's loop waits for. The push endpoint honours the
+  `types`, `closeafter` and `ping` a client asks for, as RFC 8620 has a server
+  do, so a client is sent only the types it subscribed to.
 
 What it does not do is store anything. It is a server to test a client against
 rather than an implementation of JMAP: nothing a `/set` creates comes back from

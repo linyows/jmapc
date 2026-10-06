@@ -85,12 +85,17 @@ func registerPushSubscription(s *Spec) {
 	// Not the standard /get: there is no accountId, because a subscription
 	// belongs to the credentials rather than to an account, and no state,
 	// because there is nothing to compare it against.
-	getArgs := s.AddObject(&Object{
-		Name:       "PushSubscriptionGetArguments",
+	s.defineMethod(&Method{
+		Name:       "PushSubscription/get",
 		Capability: CapabilityCore,
-		Kind:       KindArguments,
-		Doc:        "PushSubscriptionGetArguments holds the arguments of the PushSubscription/get method.",
-		Fields: []*Field{
+		Doc: "Fetches the push subscriptions the current credentials created. " +
+			"It never returns the url or the keys, which may be private to one device.",
+		DataType:           "PushSubscription",
+		PropertiesArgument: "properties",
+		ResultProperty:     "list",
+		ReturnsID:          true,
+	},
+		[]*Field{
 			{
 				Name: "ids",
 				Type: "Id[]|null",
@@ -103,13 +108,7 @@ func registerPushSubscription(s *Spec) {
 					"and leaving this out returns everything except those two.",
 			},
 		},
-	})
-	getResp := s.AddObject(&Object{
-		Name:       "PushSubscriptionGetResponse",
-		Capability: CapabilityCore,
-		Kind:       KindResponse,
-		Doc:        "PushSubscriptionGetResponse holds the response to the PushSubscription/get method.",
-		Fields: []*Field{
+		[]*Field{
 			{
 				Name: "list",
 				Type: "PushSubscription[]",
@@ -117,27 +116,18 @@ func registerPushSubscription(s *Spec) {
 			},
 			{Name: "notFound", Type: "Id[]", Doc: "The ids that were requested but do not exist."},
 		},
-	})
-	s.AddMethod(&Method{
-		Name:       "PushSubscription/get",
-		Capability: CapabilityCore,
-		Doc: "Fetches the push subscriptions the current credentials created. " +
-			"It never returns the url or the keys, which may be private to one device.",
-		Arguments:          getArgs.Name,
-		Response:           getResp.Name,
-		DataType:           "PushSubscription",
-		PropertiesArgument: "properties",
-		ResultProperty:     "list",
-	})
+	)
 
 	// Not the standard /set either: no accountId, and no ifInState or state
 	// strings, since there is no shared state to be out of step with.
-	setArgs := s.AddObject(&Object{
-		Name:       "PushSubscriptionSetArguments",
+	s.defineMethod(&Method{
+		Name:       "PushSubscription/set",
 		Capability: CapabilityCore,
-		Kind:       KindArguments,
-		Doc:        "PushSubscriptionSetArguments holds the arguments of the PushSubscription/set method.",
-		Fields: []*Field{
+		Doc: "Creates, updates, and destroys push subscriptions. Creating one starts the verification exchange: " +
+			"the server pushes a code to the URL, and until the client writes that code back the server sends nothing else.",
+		DataType: "PushSubscription",
+	},
+		[]*Field{
 			{
 				Name:        "create",
 				Type:        "Id[PushSubscription]|null",
@@ -158,13 +148,7 @@ func registerPushSubscription(s *Spec) {
 				Doc:  "The ids of the subscriptions to destroy.",
 			},
 		},
-	})
-	setResp := s.AddObject(&Object{
-		Name:       "PushSubscriptionSetResponse",
-		Capability: CapabilityCore,
-		Kind:       KindResponse,
-		Doc:        "PushSubscriptionSetResponse holds the response to the PushSubscription/set method.",
-		Fields: []*Field{
+		[]*Field{
 			{
 				Name: "created",
 				Type: "Id[PushSubscription|null]|null",
@@ -193,14 +177,5 @@ func registerPushSubscription(s *Spec) {
 				Doc:  "A map of subscription id to the reason it could not be destroyed.",
 			},
 		},
-	})
-	s.AddMethod(&Method{
-		Name:       "PushSubscription/set",
-		Capability: CapabilityCore,
-		Doc: "Creates, updates, and destroys push subscriptions. Creating one starts the verification exchange: " +
-			"the server pushes a code to the URL, and until the client writes that code back the server sends nothing else.",
-		Arguments: setArgs.Name,
-		Response:  setResp.Name,
-		DataType:  "PushSubscription",
-	})
+	)
 }

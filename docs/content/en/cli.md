@@ -73,7 +73,9 @@ In a workflow:
 
 Every subcommand reads its settings from `jmapc.json` in the directory it runs
 in, where there is one, or from the file `-config` names. A flag overrides the
-setting of the same name.
+setting of the same name. The paths a settings file gives, and the defaults it
+leaves in place, are relative to the file, so it means the same wherever jmapc
+runs; a path given as a flag is relative to where jmapc runs.
 
 ```json
 {

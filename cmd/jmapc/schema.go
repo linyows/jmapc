@@ -34,12 +34,8 @@ or from the editor's own settings, matching every file at once.
 // written rather than at the next build.
 func writeSchema(args []string) error {
 	fs := flag.NewFlagSet("jmapc schema", flag.ContinueOnError)
-	var (
-		configPath = fs.String("config", "", "settings file to read")
-		out        = fs.String("out", "", "file to write to")
-		schemas    stringList
-	)
-	fs.Var(&schemas, "schema", "schema file describing a vendor extension; repeatable")
+	project := addProjectFlags(fs, false)
+	out := fs.String("out", "", "file to write to")
 	fs.SetOutput(stderr)
 	fs.Usage = func() { fmt.Fprint(stderr, schemaUsage) }
 	if err := fs.Parse(args); err != nil {
@@ -49,12 +45,9 @@ func writeSchema(args []string) error {
 		return err
 	}
 
-	cfg, err := loadConfig(*configPath)
+	cfg, err := project.settings()
 	if err != nil {
 		return err
-	}
-	if len(schemas) > 0 {
-		cfg.Schemas = append(cfg.Schemas, schemas...)
 	}
 	catalogue, err := loadCatalogue(cfg.Schemas)
 	if err != nil {

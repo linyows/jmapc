@@ -190,7 +190,7 @@ impl SearchEmailsPages {
             return Ok(None);
         }
         self.start = window.position as i64 + window.ids.len() as i64;
-        if window.total > 0 && self.start as u64 >= window.total {
+        if matches!(window.total, Some(total) if self.start as u64 >= total) {
             self.done = true;
         }
         Ok(Some(res))

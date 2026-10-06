@@ -506,6 +506,19 @@ func TestACreationIDGetsAName(t *testing.T) {
 	}
 }
 
+// TestAnImportedEmailGetsAName checks that Email/import names the emails it
+// creates as a /set does: they are keyed by creation id, and the response
+// reports each one under it.
+func TestAnImportedEmailGetsAName(t *testing.T) {
+	src := generateOne(t, "ImportMessage", `{
+	  "methodCalls": [["Email/import", {"emails": {"message": {
+	    "blobId": "{{blobId}}", "mailboxIds": {"{{mailboxId}}": true}}}}, "import"]]
+	}`)
+	if want := `const ImportMessageMessage jmapc.ID = "message"`; !strings.Contains(src, want) {
+		t.Errorf("the generated request does not contain %q:\n%s", want, src)
+	}
+}
+
 // TestARecordIDIsNotACreationID checks that the keys of an update are left
 // alone: they are record ids the caller already has, not names the request
 // invents.
@@ -708,6 +721,110 @@ func TestVerifyNamesTheDirectoryHoldingEveryRequest(t *testing.T) {
 	} {
 		if got := requestsDir(plans(tt.paths...)); got != tt.want {
 			t.Errorf("requestsDir(%q) = %q, want %q", tt.paths, got, tt.want)
+		}
+	}
+}
+
+// TestAnEmptyListOfPropertiesFetchesTheIDAlone checks the record a call asking
+// for no properties decodes into. The server answers with the id and nothing
+// else, so the record holds the id rather than every property of the type.
+func TestAnEmptyListOfPropertiesFetchesTheIDAlone(t *testing.T) {
+	src := generateOne(t, "MailboxIDs", `{
+	  "methodCalls": [["Mailbox/get", {"ids": null, "properties": []}, "ids"]],
+	  "_returns": "ids"
+	}`)
+	record := src[strings.Index(src, "type MailboxIDsIDsMailbox struct {"):]
+	record = record[:strings.Index(record, "\n}\n")]
+	if !strings.Contains(record, "ID jmapc.ID `json:\"id\"`") {
+		t.Errorf("the record does not hold the id:\n%s", record)
+	}
+	if n := strings.Count(record, "`json:"); n != 1 {
+		t.Errorf("the record holds %d properties, want the id alone:\n%s", n, record)
+	}
+	if !strings.Contains(src, "\"properties\": json.RawMessage(`[]`)") {
+		t.Errorf("the request does not send the empty list:\n%s", src)
+	}
+}
+
+// TestAnEmptyListOfPropertiesOfAParseIsNoIDOfItsOwn checks an empty list given
+// to a method other than a /get. It asks for no properties, as it does of a
+// /get, but RFC 8620 promises the id of a /get alone, and a parsed email has
+// none, so the record holds nothing.
+func TestAnEmptyListOfPropertiesOfAParseIsNoIDOfItsOwn(t *testing.T) {
+	src := generateOne(t, "ParseNothing", `{
+	  "methodCalls": [["Email/parse", {"blobIds": ["{{blobId}}"], "properties": []}, "parse"]],
+	  "_returns": "parse"
+	}`)
+	i := strings.Index(src, "type ParseNothingParseEmail struct {")
+	if i < 0 {
+		t.Fatalf("no record was made for the parsed emails, which fetch nothing:\n%s", src)
+	}
+	record := src[i:]
+	record = record[:strings.Index(record, "}\n")]
+	if n := strings.Count(record, "`json:"); n != 0 {
+		t.Errorf("the record of a parsed email holds %d properties, want none, not even an id:\n%s", n, record)
+	}
+}
+
+// TestAnEmptyListOfBodyPropertiesFetchesNothingOfAPart checks the body parts of
+// a call asking for none of their properties. A part has no id to be returned
+// whatever is asked for, so its record holds nothing.
+func TestAnEmptyListOfBodyPropertiesFetchesNothingOfAPart(t *testing.T) {
+	src := generateOne(t, "Parts", `{
+	  "methodCalls": [["Email/get", {"ids": ["{{id}}"], "properties": ["textBody"], "bodyProperties": []}, "g"]],
+	  "_returns": "g"
+	}`)
+	part := src[strings.Index(src, "type PartsGEmailBodyPart struct {"):]
+	part = part[:strings.Index(part, "}\n")]
+	if n := strings.Count(part, "`json:"); n != 0 {
+		t.Errorf("the part holds %d properties, want none:\n%s", n, part)
+	}
+	if !strings.Contains(src, "TextBody []PartsGEmailBodyPart") {
+		t.Errorf("the email does not hold its parts in the narrowed record:\n%s", src)
+	}
+}
+
+// TestADocumentedPackageIsNotImported checks that the imports are the packages
+// the code uses, not the names its comments hold. A request documented as
+// reading settings.json. would otherwise import encoding/json, which go vet
+// and the compiler then refuse as unused.
+func TestADocumentedPackageIsNotImported(t *testing.T) {
+	src := generateOne(t, "Settings", `{
+	  "_doc": "Settings reads what settings.json. says, and errors.Join any failures.",
+	  "methodCalls": [["Mailbox/get", {"ids": null}, "c0"]],
+	  "_returns": "c0"
+	}`)
+	for _, unused := range []string{`"encoding/json"`, `"errors"`} {
+		if strings.Contains(src, unused) {
+			t.Errorf("the request imports %s, which it does not use:\n%s", unused, src)
+		}
+	}
+}
+
+// TestASetDocumentedWithPackageNamesImportsNeither checks the file of property
+// sets, whose imports are decided apart from a request's: a set whose record
+// holds strings alone, documented in words that name json. and jmapc., imports
+// neither package.
+func TestASetDocumentedWithPackageNamesImportsNeither(t *testing.T) {
+	props, err := request.ParsePropertySets(request.PropertiesName, []byte(`{
+	  "PartLabel": {
+	    "doc": "PartLabel is what settings.json. shows of a part, as jmapc.Client reads it.",
+	    "type": "EmailBodyPart",
+	    "properties": ["partId", "type"]
+	  }
+	}`), spec.Standard())
+	if err != nil {
+		t.Fatalf("parsing the sets:\n%v", err)
+	}
+	g := &RequestGenerator{Spec: spec.Standard(), Package: "client", Qualifier: "jmapc.", Properties: props}
+	files, err := g.Generate()
+	if err != nil {
+		t.Fatalf("generating: %v", err)
+	}
+	src := string(files[PropertiesFileName])
+	for _, unused := range []string{`"encoding/json"`, `"github.com/linyows/jmapc"`} {
+		if strings.Contains(src, unused) {
+			t.Errorf("the sets import %s, which they do not use:\n%s", unused, src)
 		}
 	}
 }

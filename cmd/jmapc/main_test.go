@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -285,6 +286,76 @@ func TestUnknownCommand(t *testing.T) {
 	}
 }
 
+// TestEveryCommandAnswersHelp checks -h on each command that takes flags. It
+// asks for the usage, which is printed to stderr, and is not a failure.
+func TestEveryCommandAnswersHelp(t *testing.T) {
+	for _, command := range []string{"generate", "validate", "run", "schema", "guide"} {
+		_, errOut, err := capture(t, []string{command, "-h"})
+		if err != nil {
+			t.Errorf("%s -h: %v", command, err)
+		}
+		if errOut == "" {
+			t.Errorf("%s -h printed no usage", command)
+		}
+	}
+}
+
+// TestAFlagMistakeIsReportedWhereTheCommandWrites checks that a flag a command
+// does not take is reported on the command's stderr, as everything else it
+// says is, rather than straight to the process's.
+func TestAFlagMistakeIsReportedWhereTheCommandWrites(t *testing.T) {
+	for _, command := range []string{"generate", "validate"} {
+		_, errOut, err := capture(t, []string{command, "-nonesuch"})
+		if err == nil {
+			t.Errorf("%s -nonesuch succeeded", command)
+		}
+		if !strings.Contains(errOut, "flag provided but not defined: -nonesuch") {
+			t.Errorf("%s -nonesuch wrote %q, want the mistake reported", command, errOut)
+		}
+	}
+}
+
+// TestASettingsFileResolvesItsPathsAgainstItself checks a settings file read
+// from somewhere other than where jmapc runs. Its paths, and the defaults it
+// leaves alone, are relative to the file, so that the file means the same
+// wherever it is read from.
+func TestASettingsFileResolvesItsPathsAgainstItself(t *testing.T) {
+	dir := workspace(t, map[string]string{
+		"project/jmapc.json":                       `{"out": "gen"}`,
+		"project/requests/ListMailboxes.jmap.json": listMailboxes,
+	})
+	config := filepath.Join(dir, "project", "jmapc.json")
+	if _, errOut, err := capture(t, []string{"generate", "-config", config}); err != nil {
+		t.Fatalf("generate: %v\n%s", err, errOut)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "project", "gen", "listmailboxes_gen.go")); err != nil {
+		t.Errorf("the client was not written beside the settings file: %v", err)
+	}
+	if _, errOut, err := capture(t, []string{"generate", "-config", config, "-check"}); err != nil {
+		t.Errorf("generate -check: %v\n%s", err, errOut)
+	}
+}
+
+// TestAPackageNameGoCannotTakeIsRefused checks the package named after the
+// output directory, which may be named what a package cannot: refused with the
+// way out, rather than failing to format with the whole source printed.
+func TestAPackageNameGoCannotTakeIsRefused(t *testing.T) {
+	dir := workspace(t, map[string]string{"requests/ListMailboxes.jmap.json": listMailboxes})
+	// Validating generates in memory, so the output directories are given as
+	// they are, "." among them, rather than joined to a path that would clean
+	// it away.
+	for _, out := range []string{"out-go", "x/go", ".", "_"} {
+		_, _, err := capture(t, []string{"validate", "-requests", filepath.Join(dir, "requests"), "-out", out})
+		if err == nil || !strings.Contains(err.Error(), "-package") {
+			t.Errorf("-out %s: %v, want the package name refused", out, err)
+		}
+	}
+	if _, errOut, err := capture(t, []string{"validate", "-requests", filepath.Join(dir, "requests"),
+		"-out", filepath.Join(dir, "out-go"), "-package", "client"}); err != nil {
+		t.Errorf("-package client: %v\n%s", err, errOut)
+	}
+}
+
 // TestSameRequestUnderTwoNames covers two request files holding one request. They
 // differ only in what they call their parameters and their calls, so they make
 // the same request, and each brings a set of generated types along with it.
@@ -535,5 +606,76 @@ func TestGenerateRemovesWhatADeletedRequestLeftBehind(t *testing.T) {
 
 	if _, errOut, err := capture(t, append(args, "-check")); err != nil {
 		t.Errorf("generate -check rejects what generate just wrote: %v\n%s", err, errOut)
+	}
+}
+
+// TestGenerateKeepsARequestRenamedByCase covers a request whose name changes
+// only in case, on a file system that ignores case. The file it was generated
+// into is the file it is now generated into, and generating must leave it
+// there, under the name it now has, rather than take it for what a deleted
+// request left behind.
+func TestGenerateKeepsARequestRenamedByCase(t *testing.T) {
+	dir := workspace(t, map[string]string{"requests/AttachNote.jmap.json": listMailboxes})
+	if _, err := os.Stat(filepath.Join(dir, "requests", "attachnote.jmap.json")); err != nil {
+		t.Skip("the file system tells names apart by case, where the two are two files")
+	}
+	args := []string{"generate", "-requests", filepath.Join(dir, "requests"),
+		"-out", filepath.Join(dir, "ts"), "-lang", "typescript"}
+	if _, errOut, err := capture(t, args); err != nil {
+		t.Fatalf("generate: %v\n%s", err, errOut)
+	}
+	if err := os.Rename(filepath.Join(dir, "requests", "AttachNote.jmap.json"),
+		filepath.Join(dir, "requests", "Attachnote.jmap.json")); err != nil {
+		t.Fatalf("renaming the request: %v", err)
+	}
+
+	_, errOut, err := capture(t, append(args, "-check"))
+	if err == nil || !strings.Contains(errOut, "named attachNote.ts on disk") {
+		t.Errorf("generate -check: %v, want the name on disk reported:\n%s", err, errOut)
+	}
+	if _, errOut, err := capture(t, args); err != nil {
+		t.Fatalf("generate: %v\n%s", err, errOut)
+	} else if strings.Contains(errOut, "removed") {
+		t.Errorf("generate removed a file it had just written:\n%s", errOut)
+	}
+	entries, err := os.ReadDir(filepath.Join(dir, "ts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	if !slices.Contains(names, "attachnote.ts") {
+		t.Errorf("the files are %v, want attachnote.ts among them", names)
+	}
+	if _, errOut, err := capture(t, append(args, "-check")); err != nil {
+		t.Errorf("generate -check rejects what generate just wrote: %v\n%s", err, errOut)
+	}
+}
+
+// TestGenerateLeavesALinkByCaseAlone covers a file system that tells names
+// apart by case, holding the file generated and a link to it whose name differs
+// only in case. The two are two entries, and the link is not the file renamed:
+// renaming it over the file would leave a link to itself.
+func TestGenerateLeavesALinkByCaseAlone(t *testing.T) {
+	dir := workspace(t, map[string]string{"requests/AttachNote.jmap.json": listMailboxes})
+	if _, err := os.Stat(filepath.Join(dir, "requests", "attachnote.jmap.json")); err == nil {
+		t.Skip("the file system ignores case, where the two names are one file")
+	}
+	args := []string{"generate", "-requests", filepath.Join(dir, "requests"),
+		"-out", filepath.Join(dir, "ts"), "-lang", "typescript"}
+	if _, errOut, err := capture(t, args); err != nil {
+		t.Fatalf("generate: %v\n%s", err, errOut)
+	}
+	link := filepath.Join(dir, "ts", "attachnote.ts")
+	if err := os.Symlink("attachNote.ts", link); err != nil {
+		t.Skipf("making a link: %v", err)
+	}
+	if _, errOut, err := capture(t, args); err != nil {
+		t.Fatalf("generate: %v\n%s", err, errOut)
+	}
+	if info, err := os.Lstat(filepath.Join(dir, "ts", "attachNote.ts")); err != nil || !info.Mode().IsRegular() {
+		t.Errorf("the generated file is not a file any more: %v, %v", info, err)
 	}
 }

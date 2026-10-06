@@ -314,3 +314,88 @@ func TestACallIDThatIsARustKeyword(t *testing.T) {
 		}
 	}
 }
+
+// TestARequestNamedAfterAKeyword checks the module and function a request named
+// after a Rust keyword gets: a raw identifier where Rust has one, and an
+// underscore where it has none, with the file named as rustc looks for it.
+func TestARequestNamedAfterAKeyword(t *testing.T) {
+	var requests []*request.Request
+	for _, name := range []string{"Type", "Self", "Gen"} {
+		q, err := request.NewParser(spec.Standard()).Parse(name+request.Extension,
+			[]byte(`{"methodCalls": [["Mailbox/get", {"ids": null}, "c0"]]}`))
+		if err != nil {
+			t.Fatalf("checking %s:\n%v", name, err)
+		}
+		requests = append(requests, q)
+	}
+	files, err := (&RequestGenerator{Spec: spec.Standard(), Requests: requests}).Generate()
+	if err != nil {
+		t.Fatalf("generating: %v", err)
+	}
+	for file, want := range map[string]string{
+		"type.rs":  "pub async fn r#type<T: Transport>(",
+		"self_.rs": "pub async fn self_<T: Transport>(",
+		"gen.rs":   "pub async fn r#gen<T: Transport>(",
+		"mod.rs":   "pub mod r#type;",
+	} {
+		if !strings.Contains(string(files[file]), want) {
+			t.Errorf("%s does not contain %q:\n%s", file, want, files[file])
+		}
+	}
+	if !strings.Contains(string(files["mod.rs"]), "pub mod self_;") {
+		t.Errorf("mod.rs does not declare self_:\n%s", files["mod.rs"])
+	}
+}
+
+// TestStringsAreWrittenAsRustWritesThem checks the strings a request states, in
+// a json! literal and in a constant, which Rust reads as its own string
+// literals: it has no \x escape above 0x7f and no \/, and writes a code point
+// as \u{...}.
+func TestStringsAreWrittenAsRustWritesThem(t *testing.T) {
+	q, err := request.NewParser(spec.Standard()).Parse("Odd"+request.Extension, []byte(`{
+	  "methodCalls": [["Mailbox/query", {"filter": {"name": "a\/b\u200b\u0007\"c\\"}}, "c0"]]
+	}`))
+	if err != nil {
+		t.Fatalf("checking the request:\n%v", err)
+	}
+	files, err := (&RequestGenerator{Spec: spec.Standard(), Requests: []*request.Request{q}}).Generate()
+	if err != nil {
+		t.Fatalf("generating: %v", err)
+	}
+	src := string(files["odd.rs"])
+	if want := `"a/b\u{200b}\u{7}\"c\\"`; !strings.Contains(src, want) {
+		t.Errorf("the name is not written as %s:\n%s", want, src)
+	}
+}
+
+// TestAnEmptyListOfPropertiesGivesTheIDAloneOfAGet checks the records of two
+// calls asking for no properties: a /get's hold the id, which it returns
+// whatever it is asked for, and a parse's hold nothing, having no id.
+func TestAnEmptyListOfPropertiesGivesTheIDAloneOfAGet(t *testing.T) {
+	q, err := request.NewParser(spec.Standard()).Parse("Nothing"+request.Extension, []byte(`{"methodCalls": [
+	  ["Mailbox/get", {"ids": null, "properties": []}, "ids"],
+	  ["Email/parse", {"blobIds": ["b1"], "properties": []}, "parse"]
+	]}`))
+	if err != nil {
+		t.Fatalf("checking the request:\n%v", err)
+	}
+	files, err := (&RequestGenerator{Spec: spec.Standard(), Requests: []*request.Request{q}}).Generate()
+	if err != nil {
+		t.Fatalf("generating: %v", err)
+	}
+	src := string(files["nothing.rs"])
+	for name, fields := range map[string]int{"NothingIdsMailbox": 1, "NothingParseEmail": 0} {
+		i := strings.Index(src, "pub struct "+name+" {")
+		if i < 0 {
+			t.Fatalf("no struct %s:\n%s", name, src)
+		}
+		body := src[i : i+strings.Index(src[i:], "}")]
+		if n := strings.Count(body, "pub "); n-1 != fields {
+			t.Errorf("%s holds %d fields, want %d:\n%s", name, n-1, fields, body)
+		}
+	}
+	get := src[strings.Index(src, "pub struct NothingIdsMailbox {"):]
+	if !strings.Contains(get[:strings.Index(get, "}")], "pub id: Id,") {
+		t.Errorf("the record of the /get does not hold the id:\n%s", src)
+	}
+}

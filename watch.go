@@ -91,7 +91,9 @@ const (
 //
 // It returns the context's error when the context ends, the caller's error when
 // catchUp fails, and a *RequestError when the server refuses the connection for
-// a reason that retrying will not resolve.
+// a reason that retrying will not resolve. Where the session shows there is no
+// push to connect to, having no eventSourceUrl or one that does not expand into
+// a URL, it returns at once with an error IsTemporary reports as permanent.
 func (c *Client) Watch(ctx context.Context, accountID ID, typeName, state string, catchUp CatchUp, opts ...WatchOption) error {
 	cfg := watchConfig{ping: defaultWatchPing}
 	for _, opt := range opts {
@@ -206,26 +208,12 @@ func wait(ctx context.Context, retry func(int) time.Duration, attempt int) error
 	if d <= 0 {
 		return ctx.Err()
 	}
-	timer := time.NewTimer(d)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-timer.C:
-		return nil
-	}
+	return sleep(ctx, d)
 }
 
 // backoff returns the delay before the nth attempt, doubling up to a maximum
 // so that a server that is down is not polled every second for the whole of
 // its downtime.
 func backoff(attempt int) time.Duration {
-	d := minWatchRetry
-	for i := 1; i < attempt && d < maxWatchRetry; i++ {
-		d *= 2
-	}
-	if d > maxWatchRetry {
-		return maxWatchRetry
-	}
-	return d
+	return doubled(minWatchRetry, maxWatchRetry, attempt-1)
 }

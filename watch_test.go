@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -270,6 +271,27 @@ func TestWatchStopsOnARefusal(t *testing.T) {
 	}
 	if conns := ws.connections(); len(conns) != 1 {
 		t.Errorf("subscribed %d times, want the one refusal to be enough", len(conns))
+	}
+}
+
+// TestWatchStopsWhereTheServerHasNoPush checks that a session without a push
+// endpoint ends the watch at once. Reconnecting reads the same session, so
+// waiting would only last until the caller gave up.
+func TestWatchStopsWhereTheServerHasNoPush(t *testing.T) {
+	ts := newTestServer(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	err := ts.client().Watch(ctx, "a1", "Email", "e1",
+		func(context.Context, string) (string, bool, error) { return "", false, nil },
+		WithReconnect(func(int) time.Duration { return 0 }))
+	if err == nil || ctx.Err() != nil {
+		t.Fatalf("Watch: %v, want it to stop before the deadline", err)
+	}
+	if !strings.Contains(err.Error(), "eventSourceUrl") {
+		t.Errorf("Watch: %v, want the missing eventSourceUrl reported", err)
+	}
+	if IsTemporary(err) {
+		t.Errorf("IsTemporary(%v) = true, want a missing push endpoint to be permanent", err)
 	}
 }
 

@@ -245,7 +245,7 @@ func importEmail(ctx context.Context, c *jmapc.Client, subject string) error {
 	if err != nil {
 		return err
 	}
-	imported, ok := resp.Import.Created["imported"]
+	imported, ok := resp.Import.Created[client.ImportEmailImported]
 	if !ok {
 		return fmt.Errorf("the import reported no email created: %+v", resp.Import.NotCreated)
 	}
@@ -413,7 +413,7 @@ func verify(ctx context.Context, c *jmapc.Client) error {
 		for _, e := range joined.Unwrap() {
 			var v *jmapc.VerifyError
 			if !errors.As(e, &v) {
-				return fmt.Errorf("Verify reported %T: %w", e, e)
+				return fmt.Errorf("the generated Verify reported %T: %w", e, e)
 			}
 			problems = append(problems, map[string]string{"request": v.Request, "error": v.Error()})
 		}
@@ -486,10 +486,14 @@ func receive(ctx context.Context, c *jmapc.Client, url, listen, cert, key string
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if pushed && errors.Is(err, context.Canceled) {
+	// Run returns only with an error, and the context's where it was told to
+	// stop: cancelled once the push came, or past its deadline, which may
+	// come first by a hair even where the push did arrive.
+	stopped := errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+	if pushed && stopped {
 		return nil
 	}
-	if err == nil || errors.Is(err, context.Canceled) {
+	if stopped {
 		err = errors.New("the receiver stopped before a change to the email was pushed")
 	}
 	return err

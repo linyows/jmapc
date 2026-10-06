@@ -61,8 +61,14 @@ type tokenHolder struct {
 	// there is none. It is what makes several requests arriving at once share
 	// one call to the source.
 	fetching chan struct{}
-	// err is what the last call to the source returned.
-	err error
+	// err is what the last call to the source returned, and abandoned says
+	// the call ended because the request making it gave up, its own context
+	// ending, which is no failure of the requests waiting on it.
+	err       error
+	abandoned bool
+	// sharing, where set, is called as a request starts waiting on a call
+	// another request is making. Tests use it to know a request is waiting.
+	sharing func()
 }
 
 // valid reports whether the token held may still be used. The caller holds mu.
@@ -82,14 +88,37 @@ func (t *tokenHolder) token(ctx context.Context) (string, error) {
 		t.mu.Unlock()
 		return value, nil
 	}
-	if wait := t.fetching; wait != nil {
+	for t.fetching != nil {
+		wait := t.fetching
 		t.mu.Unlock()
+		if t.sharing != nil {
+			t.sharing()
+		}
 		select {
 		case <-wait:
 		case <-ctx.Done():
 			return "", ctx.Err()
 		}
-		return t.fetched()
+		t.mu.Lock()
+		if ctx.Err() != nil && !t.valid() {
+			// Both channels may have been ready, and the wait chosen: a
+			// request that has given up itself does not call the source.
+			t.mu.Unlock()
+			return "", ctx.Err()
+		}
+		if t.valid() || !t.abandoned {
+			t.mu.Unlock()
+			return t.fetched()
+		}
+		// The request that called the source gave up on it, and this one
+		// has not: it goes round again rather than failing with an error
+		// that was never its own.
+	}
+	// Another request going round may have called the source already.
+	if t.valid() {
+		value := t.held.Value
+		t.mu.Unlock()
+		return value, nil
 	}
 
 	wait := make(chan struct{})
@@ -99,6 +128,7 @@ func (t *tokenHolder) token(ctx context.Context) (string, error) {
 	held, err := t.src(ctx)
 	t.mu.Lock()
 	t.fetching, t.err = nil, err
+	t.abandoned = endedWith(ctx, err)
 	if err == nil {
 		t.held = held
 	}
@@ -125,14 +155,23 @@ func (t *tokenHolder) fetched() (string, error) {
 	if t.err != nil {
 		return "", fmt.Errorf("jmapc: fetching a token: %w", t.err)
 	}
+	if t.held.Value == "" {
+		return "", fmt.Errorf("jmapc: the token source returned an empty token")
+	}
 	return "", fmt.Errorf("jmapc: the token source returned a token that is already expired")
 }
 
 // discard drops the token held, so that the next request fetches another. It
-// is called where a server has refused the one that was sent.
-func (t *tokenHolder) discard() {
+// is called where a server has refused refused, the one that was sent. A token
+// another request has put in its place since is left alone: requests refused
+// together would otherwise each drop the replacement the first one fetched,
+// and call the source once apiece. Where the refused token is not known, the
+// one held is dropped.
+func (t *tokenHolder) discard(refused string) {
 	t.mu.Lock()
-	t.held = Token{}
+	if refused == "" || t.held.Value == refused {
+		t.held = Token{}
+	}
 	t.mu.Unlock()
 }
 

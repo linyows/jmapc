@@ -18,7 +18,9 @@ jmapc: parameter limit: "soon" is not a whole number
 The server comes from `-session`, which takes the session URL or the host to
 find it under, and the credentials from `-token` or `-user`. Each falls back to an
 environment variable — `$JMAP_SESSION_URL`, `$JMAP_TOKEN`, `$JMAP_USER` — which
-is what keeps a token out of shell history. The account id a request leaves out is looked up in the session, exactly
+is what keeps a token out of shell history. A flag given on the command line is
+used over a variable of the other kind, so `-user` is sent where `$JMAP_TOKEN` is
+set as well, and `-token` and `-user` given together are refused. The account id a request leaves out is looked up in the session, exactly
 as the generated function looks it up, and `-account` overrides it. A request
 that sets `_createdIds` takes the ids carried in from an earlier request as
 `-created-id name=id`, once for each.

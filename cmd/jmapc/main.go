@@ -10,6 +10,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"go/token"
 	"io"
 	"io/fs"
 	"os"
@@ -19,12 +20,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/linyows/jmapc/internal/gen"
-	"github.com/linyows/jmapc/internal/gen/rust"
 	"github.com/linyows/jmapc/internal/gen/shared"
-	"github.com/linyows/jmapc/internal/gen/ts"
 	"github.com/linyows/jmapc/internal/request"
 	"github.com/linyows/jmapc/internal/spec"
+	"github.com/linyows/jmapc/internal/target"
 )
 
 // ConfigName is the file jmapc reads its settings from when one is present.
@@ -59,6 +58,12 @@ type Config struct {
 	// Schemas are files describing the types and methods a server offers
 	// beyond the specifications jmapc knows, which requests may then use.
 	Schemas []string `json:"schemas"`
+
+	// dir is the directory of the settings file, which the paths it gives and
+	// the default paths are relative to, so that a settings file means the
+	// same wherever jmapc is run from. A path given as a flag is relative to
+	// where jmapc runs, as a path on a command line is.
+	dir string
 }
 
 func main() {
@@ -131,15 +136,12 @@ func run(args []string) error {
 	}
 
 	fs := flag.NewFlagSet("jmapc "+command, flag.ContinueOnError)
+	project := addProjectFlags(fs, true)
 	var (
-		configPath = fs.String("config", "", "settings file to read")
-		requests   = fs.String("requests", "", "directory holding the request files")
-		out        = fs.String("out", "", "directory to write the generated client to")
-		lang       = fs.String("lang", "", "language to generate: go, rust or typescript")
-		pkg        = fs.String("package", "", "name of the generated package")
-		schemas    stringList
+		out  = fs.String("out", "", "directory to write the generated client to")
+		lang = fs.String("lang", "", "language to generate: go, rust or typescript")
+		pkg  = fs.String("package", "", "name of the generated package")
 	)
-	fs.Var(&schemas, "schema", "schema file describing a vendor extension; repeatable")
 	// Comparing what is on disk with what would be written is generation
 	// without the writing, and it is offered where the writing is.
 	var compare *bool
@@ -159,17 +161,25 @@ func run(args []string) error {
 		user = fs.String("user", os.Getenv("JMAP_USER"), "user:password to authenticate with instead")
 		timeout = fs.Duration("timeout", 30*time.Second, "how long to wait for the server")
 	}
+	fs.SetOutput(stderr)
 	fs.Usage = func() { printUsage(stderr) }
 	if err := fs.Parse(args[1:]); err != nil {
+		// -h asks for the usage, which is printed; that is not a failure,
+		// as it is not for run, schema and guide.
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
 		return err
+	}
+	if command == "validate" {
+		if err := chooseCredentials(fs, token, user); err != nil {
+			return err
+		}
 	}
 
-	cfg, err := loadConfig(*configPath)
+	cfg, err := project.settings()
 	if err != nil {
 		return err
-	}
-	if *requests != "" {
-		cfg.Requests = *requests
 	}
 	if *out != "" {
 		cfg.Out = *out
@@ -179,9 +189,6 @@ func run(args []string) error {
 	}
 	if *pkg != "" {
 		cfg.Package = *pkg
-	}
-	if len(schemas) > 0 {
-		cfg.Schemas = append(cfg.Schemas, schemas...)
 	}
 	cfg.applyDefaults()
 	if err := cfg.check(); err != nil {
@@ -318,6 +325,18 @@ func write(cfg *Config, catalogue *spec.Spec, requests []*request.Request, props
 	if err := os.MkdirAll(cfg.Out, 0o755); err != nil {
 		return err
 	}
+	// A file named as one about to be written but for case is that file on a
+	// file system that ignores case. Writing it would keep the old name on
+	// disk, so it is renamed first.
+	renamed, err := caseOnly(cfg.Out, files)
+	if err != nil {
+		return err
+	}
+	for _, old := range sortedKeys(renamed) {
+		if err := os.Rename(filepath.Join(cfg.Out, old), filepath.Join(cfg.Out, renamed[old])); err != nil {
+			return err
+		}
+	}
 	names := make([]string, 0, len(files))
 	for name := range files {
 		names = append(names, name)
@@ -381,6 +400,14 @@ func verify(cfg *Config, catalogue *spec.Spec, requests []*request.Request, prop
 			differences++
 		}
 	}
+	renamed, err := caseOnly(cfg.Out, files)
+	if err != nil {
+		return err
+	}
+	for _, old := range sortedKeys(renamed) {
+		fmt.Fprintf(stderr, "%s: named %s on disk\n", filepath.Join(cfg.Out, renamed[old]), old)
+		differences++
+	}
 	left, err := leftBehind(cfg.Out, files)
 	if err != nil {
 		return err
@@ -408,12 +435,19 @@ func leftBehind(dir string, files map[string][]byte) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	renamed, err := caseOnly(dir, files)
+	if err != nil {
+		return nil, err
+	}
 	var left []string
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
 		}
 		if _, generated := files[entry.Name()]; generated {
+			continue
+		}
+		if _, same := renamed[entry.Name()]; same {
 			continue
 		}
 		written, err := writtenByJmapc(filepath.Join(dir, entry.Name()))
@@ -426,6 +460,54 @@ func leftBehind(dir string, files map[string][]byte) ([]string, error) {
 	}
 	sort.Strings(left)
 	return left, nil
+}
+
+// caseOnly returns the files in dir whose names differ from a file about to be
+// generated only in case, and which the file system takes to be that file, as
+// one that ignores case does. They are keyed by the name on disk, and map to
+// the name they are generated under. On a file system that tells the two names
+// apart, the file is a different one, and nothing is returned for it.
+func caseOnly(dir string, files map[string][]byte) (map[string]string, error) {
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	lower := make(map[string]string, len(files))
+	for name := range files {
+		lower[strings.ToLower(name)] = name
+	}
+	// A name already on disk as it is spelled is its own file, whatever the
+	// file system makes of the other: a link to it is not the file renamed.
+	present := make(map[string]bool, len(entries))
+	for _, entry := range entries {
+		present[entry.Name()] = true
+	}
+	renamed := map[string]string{}
+	for _, entry := range entries {
+		name := entry.Name()
+		want, ok := lower[strings.ToLower(name)]
+		if entry.IsDir() || !ok || want == name || present[want] {
+			continue
+		}
+		have, err := os.Stat(filepath.Join(dir, name))
+		if err != nil {
+			return nil, err
+		}
+		same, err := os.Stat(filepath.Join(dir, want))
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if os.SameFile(have, same) {
+			renamed[name] = want
+		}
+	}
+	return renamed, nil
 }
 
 // writtenByJmapc reports whether a file starts with the banner jmapc puts at
@@ -513,63 +595,13 @@ func noteUnwatched(cfg *Config, requests []*request.Request) {
 // take the runtime with them: there is no package to depend on, so the client
 // and the data types are written alongside the requests.
 func generate(cfg *Config, catalogue *spec.Spec, requests []*request.Request, props *request.PropertySets) (map[string][]byte, error) {
-	switch cfg.Lang {
-	case LangRust:
-		return generateRust(catalogue, requests, props)
-	case LangTypeScript:
-		files, err := (&ts.RequestGenerator{Spec: catalogue, Requests: requests, Properties: props}).Generate()
-		if err != nil {
-			return nil, err
-		}
-		types, err := (&ts.TypeGenerator{
-			Spec: catalogue,
-			// PatchObject is written by hand in the runtime, being a shape
-			// rather than a record.
-			Skip: map[string]bool{"PatchObject": true},
-		}).Generate()
-		if err != nil {
-			return nil, err
-		}
-		client, err := (&ts.ClientGenerator{}).Generate()
-		if err != nil {
-			return nil, err
-		}
-		files["types.ts"] = types
-		files["client.ts"] = client
-		return files, nil
-	}
-	return (&gen.RequestGenerator{
-		Spec:       catalogue,
+	return (&target.Client{
+		Lang:       cfg.Lang,
 		Package:    cfg.Package,
-		Qualifier:  "jmapc.",
+		Spec:       catalogue,
 		Requests:   requests,
 		Properties: props,
 	}).Generate()
-}
-
-// generateRust produces the Rust module directory: one file per request, the data
-// model, the runtime, and the mod.rs that declares them all.
-func generateRust(catalogue *spec.Spec, requests []*request.Request, props *request.PropertySets) (map[string][]byte, error) {
-	files, err := (&rust.RequestGenerator{Spec: catalogue, Requests: requests, Properties: props}).Generate()
-	if err != nil {
-		return nil, err
-	}
-	types, err := (&rust.TypeGenerator{
-		Spec: catalogue,
-		// PatchObject is written by hand in the runtime, being a shape rather
-		// than a record.
-		Skip: map[string]bool{"PatchObject": true},
-	}).Generate()
-	if err != nil {
-		return nil, err
-	}
-	client, err := (&rust.ClientGenerator{}).Generate()
-	if err != nil {
-		return nil, err
-	}
-	files["types.rs"] = types
-	files["client.rs"] = client
-	return files, nil
 }
 
 // loadConfig reads the settings file, treating a missing default file as an
@@ -592,23 +624,37 @@ func loadConfig(path string) (*Config, error) {
 	if err := dec.Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("reading %s: %w", path, err)
 	}
+	cfg.dir = filepath.Dir(path)
+	cfg.Requests = cfg.resolve(cfg.Requests)
+	cfg.Out = cfg.resolve(cfg.Out)
+	for i, schema := range cfg.Schemas {
+		cfg.Schemas[i] = cfg.resolve(schema)
+	}
 	return &cfg, nil
+}
+
+// resolve returns a path the settings file gives, relative to the file.
+func (c *Config) resolve(path string) string {
+	if path == "" || filepath.IsAbs(path) {
+		return path
+	}
+	return filepath.Join(c.dir, path)
 }
 
 // Languages jmapc can generate.
 const (
-	LangGo         = "go"
-	LangTypeScript = "typescript"
-	LangRust       = "rust"
+	LangGo         = target.Go
+	LangTypeScript = target.TypeScript
+	LangRust       = target.Rust
 )
 
 // applyDefaults fills in the settings that were not given.
 func (c *Config) applyDefaults() {
 	if c.Requests == "" {
-		c.Requests = "requests"
+		c.Requests = c.resolve("requests")
 	}
 	if c.Out == "" {
-		c.Out = "client"
+		c.Out = c.resolve("client")
 	}
 	if c.Lang == "" {
 		c.Lang = LangGo
@@ -621,7 +667,16 @@ func (c *Config) applyDefaults() {
 // check reports a setting that cannot be acted on.
 func (c *Config) check() error {
 	switch c.Lang {
-	case LangGo, LangTypeScript, LangRust:
+	case LangGo:
+		// The package is named after the output directory unless it is given,
+		// and a directory may be named what a package cannot.
+		// The blank identifier is an identifier, and not a package name.
+		if !token.IsIdentifier(c.Package) || token.IsKeyword(c.Package) || c.Package == "_" {
+			return fmt.Errorf("%q cannot name a Go package; name it with -package, or package in %s",
+				c.Package, ConfigName)
+		}
+		return nil
+	case LangTypeScript, LangRust:
 		return nil
 	}
 	return fmt.Errorf("cannot generate %q; the languages are %s, %s and %s",
@@ -654,4 +709,15 @@ func plural(n int, one, many string) string {
 		return fmt.Sprintf("%d %s", n, one)
 	}
 	return fmt.Sprintf("%d %s", n, many)
+}
+
+// sortedKeys returns the keys of m in order, so that what is done or reported
+// for each is done in the same order every run.
+func sortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }

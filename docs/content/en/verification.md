@@ -13,13 +13,17 @@ Everything below is a compile-time failure rather than a server round trip:
   ones nested inside `AND`, `OR`, and `NOT` operators
 - `properties` names properties the type has, and `bodyProperties` names
   properties an `EmailBodyPart` has
-- a property naming a header field asks for a parsed form the specification
-  defines, so `header:List-Id:asText` is a string and `header:To:asAddresses` a
-  list of addresses
+- a property naming a header field is asked of an `Email` or an
+  `EmailBodyPart`, the types that have header fields, and asks for a parsed
+  form the specification defines, so `header:List-Id:asText` is a string and
+  `header:To:asAddresses` a list of addresses; an email created with one is
+  given no `Content-*` field, which belongs to a body part, and no header field
+  twice, in two forms or as the property that stands for it, such as `subject`
 - a `PatchObject` points at properties the record being patched actually has,
   and sets them to values of the right type, its keys written the way RFC 8620
   writes them: the leading `/` of the pointer is implicit, so a keyword is set
-  at `keywords/$seen` rather than at `/keywords/$seen`
+  at `keywords/$seen` rather than at `/keywords/$seen`, and the pointer stops at
+  a list, which is replaced as a whole rather than patched in place
 - `sort` names properties the type can actually be sorted by, and supplies the
   extra member a comparator like `hasKeyword` needs
 - a property whose specification fixes the values it may take is given one of

@@ -3,6 +3,9 @@ package shared
 import (
 	"strings"
 	"testing"
+
+	"github.com/linyows/jmapc/internal/request"
+	"github.com/linyows/jmapc/internal/spec"
 )
 
 // TestWriteComment checks the wrapping both generators depend on: a comment
@@ -116,7 +119,7 @@ func TestRecordProperties(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := RecordProperties(tt.in)
+			got := RecordProperties(tt.in, true)
 			if strings.Join(got, ",") != strings.Join(tt.want, ",") {
 				t.Errorf("RecordProperties(%v) = %v, want %v", tt.in, got, tt.want)
 			}
@@ -129,7 +132,7 @@ func TestRecordProperties(t *testing.T) {
 // TypeScript pass.
 func TestRecordPropertiesLeavesItsInputAlone(t *testing.T) {
 	props := []string{"subject", "from"}
-	RecordProperties(props)
+	RecordProperties(props, true)
 	if strings.Join(props, ",") != "subject,from" {
 		t.Errorf("the input became %v", props)
 	}
@@ -175,5 +178,31 @@ func TestPrimaryAccountPhrase(t *testing.T) {
 				t.Errorf("PrimaryAccountPhrase() =\n%q\nwant\n%q", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestSameNarrowingTellsNoListFromAnEmptyOne checks two calls that read the
+// same records in different shapes: one asks for no properties of the email,
+// which is its id alone, and the other for every property of it and none of
+// its body parts. Neither list being given is not the same as one being empty.
+func TestSameNarrowingTellsNoListFromAnEmptyOne(t *testing.T) {
+	q, err := request.NewParser(spec.Standard()).Parse("Shapes"+request.Extension, []byte(`{"methodCalls": [
+	  ["Email/get", {"ids": ["e1"], "properties": []}, "ids"],
+	  ["Email/get", {"ids": ["e1"], "bodyProperties": []}, "bodies"]
+	]}`))
+	if err != nil {
+		t.Fatalf("checking the request:\n%v", err)
+	}
+	same := SameNarrowing(q.Calls)
+	if same[q.Calls[1]] == q.Calls[0] {
+		t.Error("a call fetching every property was given the shape of one fetching the id alone")
+	}
+}
+
+// TestRecordPropertiesWithoutAnID checks a method that does not return the id
+// whatever it is asked for: the record holds what was asked for and no more.
+func TestRecordPropertiesWithoutAnID(t *testing.T) {
+	if got := RecordProperties([]string{"subject"}, false); strings.Join(got, ",") != "subject" {
+		t.Errorf("RecordProperties = %v, want subject alone", got)
 	}
 }

@@ -106,7 +106,7 @@ func (g *RequestGenerator) writeSetErrorChecks(buf *bytes.Buffer, p *plan) {
 		case p.q.Returns == nil:
 			ch.prefix = "out." + c.Field + "."
 		case c != p.q.Returns:
-			ch.decode = p.calls[c].responseType
+			ch.decode = p.calls[c].ResponseType
 			ch.prefix = "" // named below, once the variable exists
 		}
 		checks = append(checks, ch)
@@ -143,25 +143,9 @@ func (g *RequestGenerator) writeSetErrorChecks(buf *bytes.Buffer, p *plan) {
 // writeFuncDoc writes the generated function's documentation, using what the
 // request says about itself and filling in what it does not.
 func (g *RequestGenerator) writeFuncDoc(buf *bytes.Buffer, p *plan) {
-	doc := strings.TrimSpace(p.q.Doc)
-	if doc == "" {
-		doc = fmt.Sprintf("%s sends the JMAP request in %s.", p.q.Name, p.q.Path)
-	}
-	methods := make([]string, len(p.q.Calls))
-	for i, c := range p.q.Calls {
-		methods[i] = c.Method.Name
-	}
-	doc += fmt.Sprintf("\n\nIt makes %s in a single request, so that %s.",
-		shared.JoinMethods(methods), shared.RoundTripPhrase(len(p.q.Calls)))
-	if p.q.Returns != nil {
-		doc += fmt.Sprintf(" It returns the response to the %s call.", p.q.Returns.Method.Name)
-	}
-	if len(p.sessionCapabilities) > 0 {
-		doc += "\n\n" + shared.PrimaryAccountPhrase(p.sessionCapabilities)
-	}
+	doc := shared.FuncDoc(p.q, p.q.Name, p.sessionCapabilities)
 	if p.q.CreatedIDs {
-		doc += "\n\nIt takes the creation ids of an earlier request and reports its own, so that a reference to something created there still resolves here. " +
-			"Pass nil where there is no earlier request."
+		doc += " Pass nil where there is no earlier request."
 	}
 	shared.WriteComment(buf, "", doc)
 }
@@ -200,7 +184,7 @@ func (g *RequestGenerator) writeArgVars(buf *bytes.Buffer, p *plan) {
 		}
 		name := argsVar(c)
 		fmt.Fprintf(buf, "\t%s := map[string]any{\n", name)
-		if expr := p.calls[c].accountIDExpr; expr != "" {
+		if expr := p.calls[c].AccountIDVar; expr != "" {
 			fmt.Fprintf(buf, "\t\t%q: %s,\n", request.AccountIDArgument, expr)
 		}
 		for _, field := range c.Args.Fields {
@@ -265,7 +249,7 @@ func (g *RequestGenerator) writeInvocation(buf *bytes.Buffer, p *plan, c *reques
 		return
 	}
 	fmt.Fprintf(buf, "\t\t\t{Name: %q, CallID: %q, Args: map[string]any{\n", c.Method.Name, c.ID)
-	if expr := p.calls[c].accountIDExpr; expr != "" {
+	if expr := p.calls[c].AccountIDVar; expr != "" {
 		fmt.Fprintf(buf, "\t\t\t\t%q: %s,\n", request.AccountIDArgument, expr)
 	}
 	for _, field := range c.Args.Fields {
@@ -382,9 +366,6 @@ func rawExpr(raw json.RawMessage) string {
 	return "json.RawMessage(" + strconv.Quote(s) + ")"
 }
 
-// nodeHasParam reports whether a node depends on a parameter.
-func nodeHasParam(n request.Node) bool { return n.HasParam() }
-
 // writeWatch writes the function that follows the changes to the type the
 // request watches. The server pushes only that a type has changed, not what
 // changed, so the loop calls the request; the runtime holds the connection open,
@@ -440,7 +421,7 @@ func (g *RequestGenerator) writeWatchDoc(buf *bytes.Buffer, p *plan) {
 // so a watch has to know which one before it makes any request at all.
 func (g *RequestGenerator) watchAccount(buf *bytes.Buffer, p *plan) string {
 	watched := p.q.Watches
-	if expr := p.calls[watched].accountIDExpr; expr != "" {
+	if expr := p.calls[watched].AccountIDVar; expr != "" {
 		capability := watched.Method.Capability
 		if capability == "" {
 			capability = spec.CapabilityCore

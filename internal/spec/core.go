@@ -174,23 +174,18 @@ func registerEcho(s *Spec) {
 // registerBlobCopy adds Blob/copy, which moves raw blobs between accounts and
 // does not follow the shape of the standard /copy method.
 func registerBlobCopy(s *Spec) {
-	args := s.AddObject(&Object{
-		Name:       "BlobCopyArguments",
+	s.defineMethod(&Method{
+		Name:       "Blob/copy",
 		Capability: CapabilityCore,
-		Kind:       KindArguments,
-		Doc:        "BlobCopyArguments holds the arguments of the Blob/copy method.",
-		Fields: []*Field{
+		Doc:        "Copies blobs from one account to another, which is how an attachment is reused without downloading and uploading it again.",
+		DataType:   "Blob",
+	},
+		[]*Field{
 			{Name: "fromAccountId", Type: "Id", Doc: "The id of the account to copy blobs from."},
 			accountIDField(),
 			{Name: "blobIds", Type: "Id[]", Doc: "The ids of the blobs to copy."},
 		},
-	})
-	resp := s.AddObject(&Object{
-		Name:       "BlobCopyResponse",
-		Capability: CapabilityCore,
-		Kind:       KindResponse,
-		Doc:        "BlobCopyResponse holds the response to the Blob/copy method.",
-		Fields: []*Field{
+		[]*Field{
 			{Name: "fromAccountId", Type: "Id", Doc: "The id of the account the blobs were copied from."},
 			accountIDField(),
 			{
@@ -204,13 +199,5 @@ func registerBlobCopy(s *Spec) {
 				Doc:  "A map of blob id to the reason it could not be copied.",
 			},
 		},
-	})
-	s.AddMethod(&Method{
-		Name:       "Blob/copy",
-		Capability: CapabilityCore,
-		Doc:        "Copies blobs from one account to another, which is how an attachment is reused without downloading and uploading it again.",
-		Arguments:  args.Name,
-		Response:   resp.Name,
-		DataType:   "Blob",
-	})
+	)
 }

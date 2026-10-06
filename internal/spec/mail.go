@@ -29,12 +29,13 @@ func registerEmailImport(s *Spec) {
 			},
 		},
 	})
-	args := s.AddObject(&Object{
-		Name:       "EmailImportArguments",
+	s.defineMethod(&Method{
+		Name:       "Email/import",
 		Capability: CapabilityMail,
-		Kind:       KindArguments,
-		Doc:        "EmailImportArguments holds the arguments of the Email/import method.",
-		Fields: []*Field{
+		Doc:        "Creates emails from blobs that already hold a complete RFC 5322 message, which is how mail is moved in from another system.",
+		DataType:   "Email",
+	},
+		[]*Field{
 			accountIDField(),
 			{
 				Name: "ifInState",
@@ -42,18 +43,13 @@ func registerEmailImport(s *Spec) {
 				Doc:  "The state the emails are expected to be in. The call fails with a stateMismatch error if the server has moved on.",
 			},
 			{
-				Name: "emails",
-				Type: "Id[EmailImport]",
-				Doc:  "The messages to import, keyed by creation id.",
+				Name:        "emails",
+				Type:        "Id[EmailImport]",
+				CreationIDs: true,
+				Doc:         "The messages to import, keyed by creation id.",
 			},
 		},
-	})
-	resp := s.AddObject(&Object{
-		Name:       "EmailImportResponse",
-		Capability: CapabilityMail,
-		Kind:       KindResponse,
-		Doc:        "EmailImportResponse holds the response to the Email/import method.",
-		Fields: []*Field{
+		[]*Field{
 			accountIDField(),
 			{Name: "oldState", Type: "String|null", Doc: "The state before the import."},
 			{Name: "newState", Type: "String", Doc: "The state after the import."},
@@ -68,27 +64,23 @@ func registerEmailImport(s *Spec) {
 				Doc:  "A map of creation id to the reason the message could not be imported.",
 			},
 		},
-	})
-	s.AddMethod(&Method{
-		Name:       "Email/import",
-		Capability: CapabilityMail,
-		Doc:        "Creates emails from blobs that already hold a complete RFC 5322 message, which is how mail is moved in from another system.",
-		Arguments:  args.Name,
-		Response:   resp.Name,
-		DataType:   "Email",
-	})
+	)
 }
 
 // registerEmailParse adds Email/parse, RFC 8621, Section 4.9. It reads a blob
 // as a message without filing it anywhere, which is how an attached message is
 // shown.
 func registerEmailParse(s *Spec) {
-	args := s.AddObject(&Object{
-		Name:       "EmailParseArguments",
-		Capability: CapabilityMail,
-		Kind:       KindArguments,
-		Doc:        "EmailParseArguments holds the arguments of the Email/parse method.",
-		Fields: []*Field{
+	s.defineMethod(&Method{
+		Name:                     "Email/parse",
+		Capability:               CapabilityMail,
+		Doc:                      "Reads blobs as RFC 5322 messages without filing them in the account, which is how a message sent as an attachment is displayed.",
+		DataType:                 "Email",
+		PropertiesArgument:       "properties",
+		NestedPropertiesArgument: "bodyProperties",
+		NestedType:               "EmailBodyPart",
+	},
+		append([]*Field{
 			accountIDField(),
 			{Name: "blobIds", Type: "Id[]", Doc: "The ids of the blobs to parse as messages."},
 			{
@@ -96,42 +88,8 @@ func registerEmailParse(s *Spec) {
 				Type: "String[]|null",
 				Doc:  "The properties to include in each parsed email, or null for the default set.",
 			},
-			{
-				Name: "bodyProperties",
-				Type: "String[]|null",
-				Doc:  "The properties to include for each EmailBodyPart returned.",
-			},
-			{
-				Name:    "fetchTextBodyValues",
-				Type:    "Boolean",
-				Default: "false",
-				Doc:     "Whether to populate bodyValues for the parts listed in textBody.",
-			},
-			{
-				Name:    "fetchHTMLBodyValues",
-				Type:    "Boolean",
-				Default: "false",
-				Doc:     "Whether to populate bodyValues for the parts listed in htmlBody.",
-			},
-			{
-				Name:    "fetchAllBodyValues",
-				Type:    "Boolean",
-				Default: "false",
-				Doc:     "Whether to populate bodyValues for every textual body part.",
-			},
-			{
-				Name: "maxBodyValueBytes",
-				Type: "UnsignedInt",
-				Doc:  "The maximum number of octets to return for each body value, truncating longer ones.",
-			},
-		},
-	})
-	resp := s.AddObject(&Object{
-		Name:       "EmailParseResponse",
-		Capability: CapabilityMail,
-		Kind:       KindResponse,
-		Doc:        "EmailParseResponse holds the response to the Email/parse method.",
-		Fields: []*Field{
+		}, bodyFetchArguments()...),
+		[]*Field{
 			accountIDField(),
 			{
 				Name: "parsed",
@@ -145,18 +103,7 @@ func registerEmailParse(s *Spec) {
 			},
 			{Name: "notFound", Type: "Id[]|null", Doc: "The ids of the blobs that do not exist."},
 		},
-	})
-	s.AddMethod(&Method{
-		Name:                     "Email/parse",
-		Capability:               CapabilityMail,
-		Doc:                      "Reads blobs as RFC 5322 messages without filing them in the account, which is how a message sent as an attachment is displayed.",
-		Arguments:                args.Name,
-		Response:                 resp.Name,
-		DataType:                 "Email",
-		PropertiesArgument:       "properties",
-		NestedPropertiesArgument: "bodyProperties",
-		NestedType:               "EmailBodyPart",
-	})
+	)
 }
 
 // registerSearchSnippet adds SearchSnippet/get, RFC 8621, Section 5. It takes a
@@ -181,12 +128,14 @@ func registerSearchSnippet(s *Spec) {
 			},
 		},
 	})
-	args := s.AddObject(&Object{
-		Name:       "SearchSnippetGetArguments",
-		Capability: CapabilityMail,
-		Kind:       KindArguments,
-		Doc:        "SearchSnippetGetArguments holds the arguments of the SearchSnippet/get method.",
-		Fields: []*Field{
+	s.defineMethod(&Method{
+		Name:           "SearchSnippet/get",
+		Capability:     CapabilityMail,
+		Doc:            "Returns the parts of the given emails that matched a search, marked up for display.",
+		DataType:       "SearchSnippet",
+		ResultProperty: "list",
+	},
+		[]*Field{
 			accountIDField(),
 			{
 				Name: "filter",
@@ -195,27 +144,12 @@ func registerSearchSnippet(s *Spec) {
 			},
 			{Name: "emailIds", Type: "Id[]", Doc: "The ids of the emails to return snippets for."},
 		},
-	})
-	resp := s.AddObject(&Object{
-		Name:       "SearchSnippetGetResponse",
-		Capability: CapabilityMail,
-		Kind:       KindResponse,
-		Doc:        "SearchSnippetGetResponse holds the response to the SearchSnippet/get method.",
-		Fields: []*Field{
+		[]*Field{
 			accountIDField(),
 			{Name: "list", Type: "SearchSnippet[]", Doc: "The snippets that were generated, one per email that was found."},
 			{Name: "notFound", Type: "Id[]|null", Doc: "The ids that were requested but do not exist."},
 		},
-	})
-	s.AddMethod(&Method{
-		Name:           "SearchSnippet/get",
-		Capability:     CapabilityMail,
-		Doc:            "Returns the parts of the given emails that matched a search, marked up for display.",
-		Arguments:      args.Name,
-		Response:       resp.Name,
-		DataType:       "SearchSnippet",
-		ResultProperty: "list",
-	})
+	)
 }
 
 func registerMailbox(s *Spec) {
@@ -286,6 +220,16 @@ func registerMailbox(s *Spec) {
 
 	s.RegisterStandard("Mailbox", CapabilityMail, StandardMethods{
 		Get: true, Changes: true, Set: true, Query: true, QueryChanges: true,
+	})
+	// A mailbox's counts move with every email delivered to it, while the rest
+	// of it rarely changes, so the server may say that only the counts did and
+	// spare the client fetching the whole record. RFC 8621, Section 2.2.
+	s.AppendResponse("Mailbox/changes", &Field{
+		Name: "updatedProperties",
+		Type: "String[]|null",
+		Doc: "The properties that may have changed on the mailboxes in the updated list, " +
+			"where only totalEmails, unreadEmails, totalThreads and unreadThreads have, " +
+			"or null if the server cannot tell that only the counts changed.",
 	})
 	s.AppendArguments("Mailbox/set", &Field{
 		Name:    "onDestroyRemoveEmails",
@@ -389,6 +333,9 @@ func registerEmail(s *Spec) {
 		Name:       "EmailBodyPart",
 		Capability: CapabilityMail,
 		Doc:        "EmailBodyPart is one part of an email's MIME structure.",
+		// The header fields of the part, in the forms RFC 8621, Section 4.1.4
+		// allows a body part as it allows the message.
+		Dynamic: []string{"header:"},
 		Fields: []*Field{
 			{
 				Name: "partId",
@@ -417,6 +364,8 @@ func registerEmail(s *Spec) {
 		Name:       "Email",
 		Capability: CapabilityMail,
 		Doc:        "Email is a single message, presented as structured data rather than as raw RFC 5322 text.",
+		// The header fields of the message, RFC 8621, Section 4.1.3.
+		Dynamic: []string{"header:"},
 		Fields: []*Field{
 			{Name: "id", Type: "Id", ServerSet: true, Immutable: true, Doc: "The id of the email."},
 			{Name: "blobId", Type: "Id", ServerSet: true, Immutable: true, Doc: "The id of the blob holding the raw message."},
@@ -635,36 +584,7 @@ func registerEmail(s *Spec) {
 		m.NestedType = "EmailBodyPart"
 	}
 
-	s.AppendArguments("Email/get",
-		&Field{
-			Name: "bodyProperties",
-			Type: "String[]|null",
-			Doc:  "The properties to include for each EmailBodyPart returned.",
-		},
-		&Field{
-			Name:    "fetchTextBodyValues",
-			Type:    "Boolean",
-			Default: "false",
-			Doc:     "Whether to populate bodyValues for the parts listed in textBody.",
-		},
-		&Field{
-			Name:    "fetchHTMLBodyValues",
-			Type:    "Boolean",
-			Default: "false",
-			Doc:     "Whether to populate bodyValues for the parts listed in htmlBody.",
-		},
-		&Field{
-			Name:    "fetchAllBodyValues",
-			Type:    "Boolean",
-			Default: "false",
-			Doc:     "Whether to populate bodyValues for every textual body part.",
-		},
-		&Field{
-			Name: "maxBodyValueBytes",
-			Type: "UnsignedInt",
-			Doc:  "The maximum number of octets to return for each body value, truncating longer ones.",
-		},
-	)
+	s.AppendArguments("Email/get", bodyFetchArguments()...)
 
 	collapseThreads := func() *Field {
 		return &Field{
@@ -676,4 +596,40 @@ func registerEmail(s *Spec) {
 	}
 	s.AppendArguments("Email/query", collapseThreads())
 	s.AppendArguments("Email/queryChanges", collapseThreads())
+}
+
+// bodyFetchArguments are the arguments with which a call returning emails says
+// what of their body parts it fetches, as Email/get and Email/parse both do,
+// RFC 8621, Sections 4.2 and 4.9.
+func bodyFetchArguments() []*Field {
+	return []*Field{
+		{
+			Name: "bodyProperties",
+			Type: "String[]|null",
+			Doc:  "The properties to include for each EmailBodyPart returned.",
+		},
+		{
+			Name:    "fetchTextBodyValues",
+			Type:    "Boolean",
+			Default: "false",
+			Doc:     "Whether to populate bodyValues for the parts listed in textBody.",
+		},
+		{
+			Name:    "fetchHTMLBodyValues",
+			Type:    "Boolean",
+			Default: "false",
+			Doc:     "Whether to populate bodyValues for the parts listed in htmlBody.",
+		},
+		{
+			Name:    "fetchAllBodyValues",
+			Type:    "Boolean",
+			Default: "false",
+			Doc:     "Whether to populate bodyValues for every textual body part.",
+		},
+		{
+			Name: "maxBodyValueBytes",
+			Type: "UnsignedInt",
+			Doc:  "The maximum number of octets to return for each body value, truncating longer ones.",
+		},
+	}
 }

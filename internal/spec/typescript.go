@@ -2,39 +2,10 @@ package spec
 
 import "strings"
 
-// tsPrimitives maps every primitive JMAP type to the TypeScript type it
-// becomes. The types that carry a format rather than a shape — an id, a date, a
-// duration — become named aliases of string, so that the format is visible in a
-// signature and two of them cannot be swapped by accident.
-var tsPrimitives = map[string]string{
-	String:      "string",
-	Boolean:     "boolean",
-	Number:      "number",
-	Int:         "number",
-	UnsignedInt: "number",
-	IdType:      "Id",
-	DateType:    "Date",
-	UTCDateType: "UTCDate",
-	Any:         "unknown",
-
-	LocalDateTimeType:  "LocalDateTime",
-	DurationType:       "Duration",
-	SignedDurationType: "SignedDuration",
-	TimeZoneIDType:     "TimeZoneId",
-}
-
 // TSPrimitiveAliases returns the named string aliases the generated types need,
 // in a stable order, each with what it is an alias for.
 func TSPrimitiveAliases() []struct{ Name, Doc string } {
-	return []struct{ Name, Doc string }{
-		{"Id", "An id assigned by the server: 1 to 255 characters from A-Z, a-z, 0-9, _ and -, not beginning with - or #."},
-		{"UTCDate", "A date and time in UTC, written as 2006-01-02T15:04:05Z."},
-		{"Date", "A date and time with an offset, written as 2006-01-02T15:04:05Z07:00."},
-		{"LocalDateTime", "A date and time with no zone at all, written as 2006-01-02T15:04:05. What it means depends on the time zone the enclosing object gives."},
-		{"Duration", "A length of time in the ISO 8601 form, such as PT1H30M or P1D. Not a number of milliseconds: a day is not always 24 hours."},
-		{"SignedDuration", "A Duration that may be negative, which is how an alert says it fires before the event it belongs to."},
-		{"TimeZoneId", "A time zone from the IANA database, such as Europe/London, or a name beginning with / that refers to a zone the event itself defines."},
-	}
+	return primitiveAliases(func(p primitive) string { return p.ts })
 }
 
 // TSType renders t as a TypeScript type. Nullability is a union with null, as
@@ -59,8 +30,8 @@ func (t *Type) TSType() string {
 		}
 		base = strings.Join(parts, " | ")
 	default:
-		if p, ok := tsPrimitives[t.Name]; ok {
-			base = p
+		if p, ok := primitives[t.Name]; ok {
+			base = p.ts
 		} else {
 			base = ExportedName(t.Name)
 		}
@@ -81,16 +52,31 @@ func tsElement(t *Type) string {
 	return s
 }
 
-// TSName converts a JMAP name to a TypeScript identifier. TypeScript names its
-// members as JMAP does, in lowerCamelCase, so a name that is already an
-// identifier is left exactly as it is.
-func TSName(name string) string {
-	if isTSIdentifier(name) {
-		return name
+// TSBindingName returns name as the name of a function or a constant, which a
+// word JavaScript reserves cannot be. Such a name has an underscore added, as
+// there is no way to write the word itself as a name.
+func TSBindingName(name string) string {
+	if tsReserved[name] {
+		return name + "_"
 	}
-	// A property such as "header:List-Id:asText" or "@type" is not an
-	// identifier, and is written as a quoted key instead.
 	return name
+}
+
+// tsReserved are the words that cannot name a function or a constant in a
+// module, which is strict mode code: the reserved words of ECMAScript, those
+// strict mode adds, await, which a module reserves, and eval and arguments,
+// which strict mode does not let a binding take.
+var tsReserved = map[string]bool{
+	"await": true, "break": true, "case": true, "catch": true, "class": true,
+	"const": true, "continue": true, "debugger": true, "default": true, "delete": true,
+	"do": true, "else": true, "enum": true, "export": true, "extends": true,
+	"false": true, "finally": true, "for": true, "function": true, "if": true,
+	"import": true, "in": true, "instanceof": true, "new": true, "null": true,
+	"return": true, "super": true, "switch": true, "this": true, "throw": true,
+	"true": true, "try": true, "typeof": true, "var": true, "void": true,
+	"while": true, "with": true, "yield": true, "let": true, "static": true,
+	"implements": true, "interface": true, "package": true, "private": true,
+	"protected": true, "public": true, "eval": true, "arguments": true,
 }
 
 // TSNeedsQuoting reports whether a member name has to be quoted in a

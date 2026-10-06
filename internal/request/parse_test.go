@@ -238,6 +238,33 @@ func TestParseErrors(t *testing.T) {
 		]}`,
 		want: `/list/*/threadId selects threadId from the Email/get call, which does not fetch it`,
 	}, {
+		// An empty list asks for the id alone, which the server returns
+		// whatever is asked for. It narrows as much as a list of names does.
+		name: "back reference reads a property of a call that fetches none",
+		src: `{"methodCalls": [
+			["Email/get", {"ids": ["a"], "properties": []}, "matched"],
+			["Thread/get", {"#ids": {"resultOf": "matched", "name": "Email/get", "path": "/list/*/threadId"}}, "threads"]
+		]}`,
+		want: `/list/*/threadId selects threadId from the Email/get call, which does not fetch it`,
+	}, {
+		// A parse asked for no properties fetches nothing, not even an id,
+		// which only a /get returns whatever it is asked for.
+		name: "back reference reads the id of a parse that fetches none",
+		src: `{"methodCalls": [
+			["Email/parse", {"blobIds": ["b1"], "properties": []}, "parsed"],
+			["Email/get", {"#ids": {"resultOf": "parsed", "name": "Email/parse", "path": "/parsed/b1/id"}}, "fetch"]
+		]}`,
+		want: `selects id from the Email/parse call, which does not fetch it`,
+	}, {
+		// The same holds for the body parts: an empty bodyProperties fetches
+		// none of their properties.
+		name: "back reference reads a property of body parts the call fetches none of",
+		src: `{"methodCalls": [
+			["Email/get", {"ids": ["a"], "properties": ["id", "textBody"], "bodyProperties": []}, "fetch"],
+			["Blob/get", {"#ids": {"resultOf": "fetch", "name": "Email/get", "path": "/list/*/textBody/*/blobId"}}, "blobs"]
+		]}`,
+		want: `selects blobId from the Email/get call, which does not fetch it`,
+	}, {
 		name: "back reference reads a nested property the call did not fetch",
 		src: `{"methodCalls": [
 			["Email/get", {"ids": ["a"], "properties": ["id", "textBody"],
@@ -265,11 +292,58 @@ func TestParseErrors(t *testing.T) {
 		src:  `{"methodCalls": [["Email/query", {"accountId": "acct-{{x}}"}, "c0"]]}`,
 		want: `a parameter cannot be embedded in a larger string`,
 	}, {
+		name: "UTCDate with a comma before the fraction of a second",
+		src:  `{"methodCalls": [["Email/query", {"filter": {"before": "2026-09-04T09:00:00,5Z"}}, "c0"]]}`,
+		want: `is not a UTCDate`,
+	}, {
 		name: "patch key written with the leading slash it already has",
 		src: `{"methodCalls": [
 			["Email/set", {"update": {"e1": {"/keywords/$seen": true}}}, "c0"]
 		]}`,
 		want: `the leading "/" of a patch key is there already`,
+	}, {
+		name: "patch key reaching inside a list",
+		src: `{"methodCalls": [
+			["Identity/set", {"update": {"i1": {"replyTo/0/email": "someone@example.com"}}}, "c0"]
+		]}`,
+		want: `a patch cannot reach inside EmailAddress[]|null, a list, to "0"`,
+	}, {
+		// A header field is a property of a message, and of a part of one.
+		name: "header field asked of a mailbox",
+		src:  `{"methodCalls": [["Mailbox/get", {"ids": null, "properties": ["header:Subject"]}, "c0"]]}`,
+		want: `Mailbox has no property "header:Subject"`,
+	}, {
+		name: "content of a blob asked of an email",
+		src:  `{"methodCalls": [["Email/get", {"ids": ["e1"], "properties": ["data"]}, "c0"]]}`,
+		want: `Email has no property "data"`,
+	}, {
+		// RFC 8621, Section 4.6: a Content-* header field belongs to a part.
+		name: "Content-Type given to the email as a whole",
+		src: `{"methodCalls": [["Email/set", {"create": {"draft": {
+			"mailboxIds": {"m1": true}, "header:Content-Type:asRaw": "text/plain"}}}, "c0"]]}`,
+		want: `Content-Type is a header field of a body part`,
+	}, {
+		// A patch is held to the same rule as a record written out whole.
+		name: "Content-Type patched onto the email as a whole",
+		src: `{"methodCalls": [["Email/set", {"update": {"e1": {
+			"header:Content-Type:asRaw": "text/plain"}}}, "c0"]]}`,
+		want: `Content-Type is a header field of a body part`,
+	}, {
+		name: "header field created in a form the specification does not define",
+		src: `{"methodCalls": [["Email/set", {"create": {"draft": {
+			"mailboxIds": {"m1": true}, "header:X-Foo:asBogus": "bar"}}}, "c0"]]}`,
+		want: `asks for the asBogus form`,
+	}, {
+		// The forms are suggested wherever a header field is named.
+		name: "header field patched in a form the specification does not define",
+		src: `{"methodCalls": [["Email/set", {"update": {"e1": {
+			"bodyStructure/header:X-Foo:asBogus": "bar"}}}, "c0"]]}`,
+		want: `known names are asAddresses`,
+	}, {
+		name: "header field read back in a form the specification does not define",
+		src: `{"methodCalls": [["Email/get", {"ids": ["e1"], "properties": ["header:X-Foo:asText"]}, "g"],
+			["Core/echo", {"#x": {"resultOf": "g", "name": "Email/get", "path": "/list/0/header:X-Foo:asBogus"}}, "e"]]}`,
+		want: `known names are asAddresses`,
 	}, {
 		name: "patch key with a leading slash and a parameter in it",
 		src: `{"methodCalls": [
@@ -893,6 +967,12 @@ func TestEnumeratedValuesAreChecked(t *testing.T) {
 		}}}, "c0"]]}`,
 		want: `"organiser" is not one of the values this property takes (owner, attendee, optional, informational, chair, contact)`,
 	}, {
+		name: "a set's key reached by a patch is an enumerated value",
+		src: `{"methodCalls": [["CalendarEvent/set", {"update": {"e1": {
+			"participants/p/roles/organiser": true
+		}}}, "c0"]]}`,
+		want: `"organiser" is not one of the values this property takes (owner, attendee, optional, informational, chair, contact)`,
+	}, {
 		name: "contact card kind",
 		src:  `{"methodCalls": [["ContactCard/set", {"create": {"c": {"kind": "person"}}}, "c0"]]}`,
 		want: `"person" is not one of the values this property takes`,
@@ -1237,6 +1317,64 @@ func TestQuotaChangesReportsUpdatedProperties(t *testing.T) {
 	    "#ids": {"resultOf": "c0", "name": "Quota/changes", "path": "/updated"},
 	    "#properties": {"resultOf": "c0", "name": "Quota/changes", "path": "/updatedProperties"}
 	  }, "c1"]
+	]}`)
+}
+
+// TestMailboxChangesReportsUpdatedProperties checks the response property RFC
+// 8621 gives Mailbox/changes, which a client reads to fetch the counts of the
+// mailboxes alone where those are all that moved.
+func TestMailboxChangesReportsUpdatedProperties(t *testing.T) {
+	parse(t, "MailboxCountsSince"+Extension, `{"methodCalls": [
+	  ["Mailbox/changes", {"sinceState": "{{state}}"}, "c0"],
+	  ["Mailbox/get", {
+	    "#ids": {"resultOf": "c0", "name": "Mailbox/changes", "path": "/updated"},
+	    "#properties": {"resultOf": "c0", "name": "Mailbox/changes", "path": "/updatedProperties"}
+	  }, "c1"]
+	]}`)
+}
+
+// TestDynamicPropertiesOfTheTypesThatHaveThem checks the properties a server
+// gives meaning to, asked of the types that have them: the header fields of a
+// message and of a part of one, and the digest and content of a blob.
+func TestDynamicPropertiesOfTheTypesThatHaveThem(t *testing.T) {
+	q := parse(t, "Headers"+Extension, `{"methodCalls": [
+	  ["Email/get", {"ids": ["e1"], "properties": ["header:List-Id:asText", "bodyStructure"],
+	                 "bodyProperties": ["partId", "header:Content-Type:asRaw"]}, "c0"],
+	  ["Blob/get", {"ids": ["b1"], "properties": ["digest:sha", "data", "size"]}, "c1"]
+	]}`)
+	if got := strings.Join(q.Calls[0].NestedProperties, ","); got != "partId,header:Content-Type:asRaw" {
+		t.Errorf("bodyProperties = %q", got)
+	}
+}
+
+// TestAPatchSetsAnEnumeratedKey checks that a key of a set reached by a patch
+// passes where it is one of the values the specification fixes, and that a
+// parameter in its place is left to the caller.
+func TestAPatchSetsAnEnumeratedKey(t *testing.T) {
+	parse(t, "MakeChair"+Extension, `{"methodCalls": [["CalendarEvent/set", {"update": {"{{eventId}}": {
+	  "participants/{{participantId}}/roles/chair": true,
+	  "participants/{{participantId}}/roles/{{role}}": true
+	}}}, "c0"]]}`)
+}
+
+// TestABodyPartIsCreatedWithAContentHeader checks that a Content-* header field
+// may be given to a body part, which is where RFC 8621 puts it.
+func TestABodyPartIsCreatedWithAContentHeader(t *testing.T) {
+	parse(t, "PartWithHeader"+Extension, `{"methodCalls": [["Email/set", {"create": {"draft": {
+	  "mailboxIds": {"m1": true},
+	  "bodyStructure": {"partId": "1", "header:Content-Language:asText": "en"}}}}, "c0"]]}`)
+}
+
+// TestAnEmailIsCreatedWithAHeaderField checks a header field set when an email
+// is created, which RFC 8621, Section 4.6 allows in any form that can be
+// written, and a back reference reading one back.
+func TestAnEmailIsCreatedWithAHeaderField(t *testing.T) {
+	parse(t, "DraftWithHeader"+Extension, `{"methodCalls": [
+	  ["Email/set", {"create": {"draft": {
+	    "mailboxIds": {"{{mailboxId}}": true},
+	    "header:X-Foo:asText": "{{foo}}"}}}, "c0"],
+	  ["Email/get", {"ids": ["e1"], "properties": ["header:List-Id:asText"]}, "c1"],
+	  ["Core/echo", {"#listId": {"resultOf": "c1", "name": "Email/get", "path": "/list/0/header:List-Id:asText"}}, "c2"]
 	]}`)
 }
 
@@ -2035,5 +2173,122 @@ func TestAKeyOfAMapInAMapNamesNoProperty(t *testing.T) {
 	// which is a row and no property.
 	if want := "A key of cells."; docs["patchRow"] != want {
 		t.Errorf("patchRow is documented as %q, want %q", docs["patchRow"], want)
+	}
+}
+
+// TestAPatchKeyIsReadAsThePointerToken checks an enumerated key reached by a
+// patch that holds a slash, which a pointer writes as ~1: the key the token
+// names is what is held to the values, as it is in the set written whole.
+func TestAPatchKeyIsReadAsThePointerToken(t *testing.T) {
+	s := spec.Standard()
+	if err := s.Extend(&spec.Schema{
+		Capability: "urn:example:devices",
+		Types: []*spec.SchemaType{{Name: "Device", Methods: []string{"set"}, Properties: []*spec.SchemaField{
+			{Name: "id", Type: "Id", ServerSet: true},
+			{Name: "features", Type: "String[Boolean]", Enum: []string{"audio/video", "text"}},
+		}}},
+	}); err != nil {
+		t.Fatalf("Extend: %v", err)
+	}
+	p := NewParser(s)
+	if _, err := p.Parse("Enable"+Extension, []byte(`{"methodCalls": [["Device/set",
+	  {"update": {"d1": {"features/audio~1video": true}}}, "c0"]]}`)); err != nil {
+		t.Errorf("a key written as its pointer token was refused:\n%v", err)
+	}
+	if _, err := p.Parse("Enable"+Extension, []byte(`{"methodCalls": [["Device/set",
+	  {"update": {"d1": {"features/audio": true}}}, "c0"]]}`)); err == nil {
+		t.Error("a key the values do not hold passed")
+	}
+}
+
+// TestAVendorDynamicPropertyIsReadNotWritten checks a dynamic property a vendor's
+// type names: a /get may ask for it, and a record written out may not set it,
+// since nothing says it is one to write.
+func TestAVendorDynamicPropertyIsReadNotWritten(t *testing.T) {
+	s := spec.Standard()
+	if err := s.Extend(&spec.Schema{
+		Capability: "urn:example:notes",
+		Types: []*spec.SchemaType{{Name: "Note", Methods: []string{"get", "set"}, Dynamic: []string{"meta:", "header:"},
+			Properties: []*spec.SchemaField{{Name: "id", Type: "Id", ServerSet: true}}}},
+	}); err != nil {
+		t.Fatalf("Extend: %v", err)
+	}
+	p := NewParser(s)
+	if _, err := p.Parse("ReadMeta"+Extension, []byte(`{"methodCalls": [["Note/get", {"ids": ["n1"], "properties": ["meta:colour"]}, "c0"]]}`)); err != nil {
+		t.Errorf("asking for meta:colour: %v", err)
+	}
+	_, err := p.Parse("PatchMeta"+Extension, []byte(`{"methodCalls": [["Note/set", {"update": {"n1": {"meta:colour": "red"}}}, "c0"]]}`))
+	if err == nil || !strings.Contains(err.Error(), "not one to write") {
+		t.Errorf("patching meta:colour: %v, want it refused", err)
+	}
+	for _, member := range []string{`"meta:colour": "red"`, `"header:X-Foo:asText": "bar"`} {
+		_, err := p.Parse("WriteMeta"+Extension, []byte(`{"methodCalls": [["Note/set", {"create": {"n": {`+member+`}}}, "c0"]]}`))
+		if err == nil || !strings.Contains(err.Error(), "not one to write") {
+			t.Errorf("writing %s: %v, want it refused", member, err)
+		}
+	}
+}
+
+// TestADynamicPropertyIsReadOnlyWhereItWasAskedFor checks a back reference to a
+// header field of what a /get returned: the /get returns it only where its
+// properties name it, so one left to fetch the fields of the type has none to
+// read, while a list the caller gives may name it.
+func TestADynamicPropertyIsReadOnlyWhereItWasAskedFor(t *testing.T) {
+	ref := `["Core/echo", {"#listId": {"resultOf": "g", "name": "Email/get", "path": "/list/0/header:List-Id:asText"}}, "e"]`
+	for get, ok := range map[string]bool{
+		`["Email/get", {"ids": ["e1"]}, "g"]`:                                          false,
+		`["Email/get", {"ids": ["e1"], "properties": ["header:List-Id:asText"]}, "g"]`: true,
+		`["Email/get", {"ids": ["e1"], "properties": "{{properties}}"}, "g"]`:          true,
+		`["Email/get", {"ids": ["e1"], "properties": ["subject"]}, "g"]`:               false,
+	} {
+		_, err := NewParser(spec.Standard()).Parse("ListID"+Extension, []byte(`{"methodCalls": [`+get+`, `+ref+`]}`))
+		if ok != (err == nil) {
+			t.Errorf("%s: %v, want it accepted %v", get, err, ok)
+		}
+	}
+}
+
+// TestAHeaderFieldIsGivenOnce checks a record created with a header field it is
+// also given another way: in another form or spelling, or as the property that
+// stands for it. RFC 8621, Section 4.6 leaves the server no way to tell which
+// was meant.
+func TestAHeaderFieldIsGivenOnce(t *testing.T) {
+	for draft, ok := range map[string]bool{
+		`"subject": "a", "header:Subject:asText": "b"`:                                 false,
+		`"header:X-Foo": " a", "header:x-foo:asText": "b"`:                             false,
+		`"bodyStructure": {"type": "text/plain", "header:Content-Type": " text/html"}`: false,
+		`"bodyStructure": {"name": "a.txt", "header:Content-Disposition": " inline"}`:  false,
+		`"bodyStructure": {"name": "a.txt", "header:Content-Type": " text/plain"}`:     false,
+		`"subject": "a", "header:X-Foo:asText": "b"`:                                   true,
+	} {
+		_, err := NewParser(spec.Standard()).Parse("Draft"+Extension, []byte(`{"methodCalls": [["Email/set",
+		  {"create": {"d": {"mailboxIds": {"m1": true}, `+draft+`}}}, "c0"]]}`))
+		if ok != (err == nil) {
+			t.Errorf("%s: %v, want it accepted %v", draft, err, ok)
+		}
+	}
+}
+
+// TestTheContentOfABlobIsReadAsItWasAskedFor checks a back reference to the
+// content of a blob, which a /get asked for as data returns as data:asText or
+// data:asBase64: a call asking for data fetches them.
+func TestTheContentOfABlobIsReadAsItWasAskedFor(t *testing.T) {
+	ref := `["Core/echo", {"#text": {"resultOf": "g", "name": "Blob/get", "path": "/list/0/data:asText"}}, "e"]`
+	for get, ok := range map[string]bool{
+		`["Blob/get", {"ids": ["b1"], "properties": ["data"]}, "g"]`:        true,
+		`["Blob/get", {"ids": ["b1"], "properties": ["data:asText"]}, "g"]`: true,
+		// RFC 9404, Section 4.2: properties left out are data and size.
+		`["Blob/get", {"ids": ["b1"]}, "g"]`:                         true,
+		`["Blob/get", {"ids": ["b1"], "properties": ["size"]}, "g"]`: false,
+	} {
+		_, err := NewParser(spec.Standard()).Parse("Text"+Extension, []byte(`{"methodCalls": [`+get+`, `+ref+`]}`))
+		if ok != (err == nil) {
+			t.Errorf("%s: %v, want it accepted %v", get, err, ok)
+		}
+	}
+	_, err := NewParser(spec.Standard()).Parse("Part"+Extension, []byte(`{"methodCalls": [["Email/set",
+	  {"create": {"d": {"mailboxIds": {"m1": true}, "bodyStructure": {"charset": "utf-8", "header:Content-Type": " text/plain"}}}}, "c0"]]}`))
+	if err == nil {
+		t.Error("a part given charset and a Content-Type header field passed")
 	}
 }

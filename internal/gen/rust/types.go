@@ -188,8 +188,13 @@ func (g *TypeGenerator) writeField(buf *bytes.Buffer, o *spec.Object, f *spec.Fi
 // which every property of a record or an argument object may be unless the
 // specification requires it. A required property is what tells one member of a
 // union from another, so it is left as it is rather than wrapped in an Option.
+// A response holds what the server always sends, apart from the properties it
+// leaves out where they do not apply.
 func omittable(o *spec.Object, f *spec.Field) bool {
-	return o.Kind != spec.KindResponse && !f.Required
+	if o.Kind == spec.KindResponse {
+		return f.Optional
+	}
+	return !f.Required
 }
 
 // writeMember writes one field, with the serde attributes its name and its

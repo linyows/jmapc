@@ -43,6 +43,12 @@ type Object struct {
 	// need not support sorting on everything it stores, and the specifications
 	// say which properties it must.
 	Sort []*SortProperty
+	// Dynamic lists the properties beyond its fields that a /get may ask this
+	// type for, whose names are made up as the request is written. An entry
+	// ending in a colon stands for every name it begins: "header:" is a header
+	// field of a message (RFC 8621, Section 4.1.3) and "digest:" a digest of a
+	// blob (RFC 9404, Section 4.2). Any other entry is a name of its own.
+	Dynamic []string
 }
 
 // SortProperty is one property a /query may sort by, together with any extra
@@ -90,6 +96,11 @@ type Field struct {
 	// type at all. It is what tells one member of a union from another when a
 	// value would otherwise fit either.
 	Required bool
+	// Optional marks a property of a response that the server leaves out where
+	// it does not apply, as the total of a /query is left out unless the
+	// request asked for it. Every other property of a response is one the
+	// server always sends, and is decoded as such.
+	Optional bool
 	// Capability is the URI a request must declare in order to use this
 	// property, for one that a specification other than its type's own adds.
 	// The S/MIME properties of an Email are the case this exists for: the type
@@ -149,6 +160,48 @@ func (o *Object) Field(name string) (*Field, bool) {
 	return nil, false
 }
 
+// AcceptsDynamic reports whether name is one of the properties Dynamic says a
+// /get may ask this type for.
+func (o *Object) AcceptsDynamic(name string) bool {
+	for _, d := range o.Dynamic {
+		if prefix, ok := strings.CutSuffix(d, ":"); ok {
+			if strings.HasPrefix(name, prefix+":") {
+				return true
+			}
+		} else if name == d {
+			return true
+		}
+	}
+	return false
+}
+
+// DynamicField returns a field for a property Dynamic says this type has, typed
+// as far as the specifications say: a header field in the form it asks for, a
+// digest of a blob as a string, and anything else, such as the properties a
+// vendor's type names, as a value of any shape. The content of a blob is asked
+// for as data and comes back as data:asText or data:asBase64, which are fields
+// of their own, so data names nothing a record holds and has no field. It
+// returns nil where the type has no such property, and an error where the name
+// is one but the form it asks for is not.
+func (o *Object) DynamicField(name string) (*Field, error) {
+	if !o.AcceptsDynamic(name) {
+		return nil, nil
+	}
+	header, err := ParseHeaderProperty(name)
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case header != nil:
+		return &Field{Name: name, Type: header.Type}, nil
+	case o.Name == "BlobData" && strings.HasPrefix(name, "digest:"):
+		return &Field{Name: name, Type: String}, nil
+	case o.Name == "BlobData" && name == "data":
+		return nil, nil
+	}
+	return &Field{Name: name, Type: Any}, nil
+}
+
 // PropertyNames returns the names of every property, sorted, for use in
 // diagnostics that suggest what the caller may have meant.
 func (o *Object) PropertyNames() []string {
@@ -188,6 +241,12 @@ type Method struct {
 	NestedPropertiesArgument string
 	// NestedType names the type that argument narrows.
 	NestedType string
+	// ReturnsID says the method returns the id of every record it returns,
+	// whatever properties it is asked for, as RFC 8620, Section 5.1 has a
+	// standard /get do. It is stated rather than read from the name: a
+	// SearchSnippet/get returns records with no id, and a method a schema
+	// defines promises only what it says.
+	ReturnsID bool
 }
 
 // TypeNamePrefix returns the method name with its slash removed, so that
@@ -419,7 +478,14 @@ func (w *pathWalk) walk(t *Type, tokens []string, path string) (*Type, error) {
 	}
 	f, ok := o.Field(token)
 	if !ok {
-		return nil, &UnknownPropertyError{TypeName: o.Name, Property: token, Known: o.PropertyNames()}
+		dynamic, err := o.DynamicField(token)
+		if err != nil {
+			return nil, fmt.Errorf("path %q: %w", path, err)
+		}
+		if dynamic == nil {
+			return nil, &UnknownPropertyError{TypeName: o.Name, Property: token, Known: o.PropertyNames()}
+		}
+		f = dynamic
 	}
 	w.selections = append(w.selections, Selection{Type: o.Name, Property: token})
 	return w.walk(f.ParsedType(), rest, path)
@@ -436,8 +502,9 @@ func unescapePointer(token string) string {
 // pointer selects by, along with the type of the value at the end and the
 // property it belongs to, which carries its documentation and the values it is
 // allowed to take. properties marks the segments that name a property of an
-// object, as against a key of a map or an index of a list, which keyTypes
-// alone cannot tell apart from a map keyed by strings.
+// object, as against a key of a map, which keyTypes alone cannot tell apart
+// from a map keyed by strings. A pointer reaching a list is an error, since
+// RFC 8620 has a list replaced whole rather than patched in place.
 //
 // unknown marks the segments a parameter stands in for. A parameter in place of
 // a property name leaves everything past it unknowable, so resolution stops
@@ -469,8 +536,10 @@ func (s *Spec) ResolvePatch(dataType string, segments []string, unknown []bool) 
 			target = nil
 
 		case cur.IsArray():
-			keyTypes[i] = &Type{Name: UnsignedInt}
-			cur = cur.Elem
+			// RFC 8620, Section 5.3: a patch does not reach inside a list,
+			// which is replaced as a whole or not at all.
+			return nil, nil, nil, nil, fmt.Errorf("a patch cannot reach inside %s, a list, to %q; "+
+				"RFC 8620 has a list replaced as a whole", cur, seg)
 
 		case cur.IsMap():
 			keyTypes[i] = cur.Key
@@ -492,9 +561,19 @@ func (s *Spec) ResolvePatch(dataType string, segments []string, unknown []bool) 
 			}
 			f, known := o.Field(seg)
 			if !known {
-				return nil, nil, nil, nil, &UnknownPropertyError{
-					TypeName: o.Name, Property: seg, Known: o.PropertyNames(),
+				dynamic, err := o.DynamicField(seg)
+				if err != nil {
+					return nil, nil, nil, nil, err
 				}
+				if dynamic == nil {
+					return nil, nil, nil, nil, &UnknownPropertyError{
+						TypeName: o.Name, Property: seg, Known: o.PropertyNames(),
+					}
+				}
+				if err := o.CheckWritable(seg); err != nil {
+					return nil, nil, nil, nil, err
+				}
+				f = dynamic
 			}
 			cur = f.ParsedType()
 			target = f
@@ -505,6 +584,39 @@ func (s *Spec) ResolvePatch(dataType string, segments []string, unknown []bool) 
 		}
 	}
 	return keyTypes, properties, cur, target, nil
+}
+
+// UnwritableError reports a property beyond a type's fields that a record of
+// the type cannot be written with, whether written out whole or patched.
+type UnwritableError struct {
+	// Problem says why the property cannot be written.
+	Problem string
+	// Hint says what to do instead, where there is something to say.
+	Hint string
+}
+
+func (e *UnwritableError) Error() string { return e.Problem }
+
+// CheckWritable reports whether a record of o may be written with name, a
+// property beyond its fields. What a record is written with is its fields and,
+// of a message and its parts, the header fields RFC 8621, Section 4.6 lets an
+// email be created with; the other dynamic properties, a digest or a vendor's,
+// are there to be read. A vendor's type may name header: among what a /get
+// takes, and that says nothing of writing one.
+func (o *Object) CheckWritable(name string) error {
+	header, _ := ParseHeaderProperty(name)
+	if header == nil || (o.Name != "Email" && o.Name != "EmailBodyPart") {
+		return &UnwritableError{Problem: fmt.Sprintf("%s is a property to ask %s for, not one to write", name, o.Name)}
+	}
+	// A Content-* header field belongs to a body part, which says what it
+	// holds; the message as a whole is not given one.
+	if o.Name == "Email" && strings.HasPrefix(strings.ToLower(header.Name), "content-") {
+		return &UnwritableError{
+			Problem: fmt.Sprintf("%s is a header field of a body part, which RFC 8621 does not let an Email be given", header.Name),
+			Hint:    "set it on the body part it describes",
+		}
+	}
+	return nil
 }
 
 // SetErrorTypeName is the type a /set response uses to report why it could not

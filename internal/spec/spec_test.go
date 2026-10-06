@@ -109,6 +109,10 @@ func TestResolvePath(t *testing.T) {
 		{"Email/changes", "/created", "Id[]"},
 		{"Email/set", "/created", "Id[Email|null]|null"},
 		{"Email/get", "/list/*/mailboxIds", "Id[Boolean][]"},
+		{"Mailbox/changes", "/updatedProperties", "String[]|null"},
+		{"Email/get", "/list/0/header:List-Id:asText", "String|null"},
+		{"Email/get", "/list/0/bodyStructure/header:Content-Type:asRaw", "String|null"},
+		{"Blob/get", "/list/0/digest:sha", "String"},
 	}
 	for _, tt := range tests {
 		got, err := s.ResolvePath(tt.method, tt.path)
@@ -527,5 +531,66 @@ func TestUnionGoNames(t *testing.T) {
 			t.Errorf("ParseType(%q): the Rust enum is %q and the Go struct is %q, and they should be one name",
 				tt.in, RustUnionName(got), tt.goType)
 		}
+	}
+}
+
+// TestReturnsIDIsStatedNotNamed checks which methods promise the id of every
+// record: a standard /get does, and SearchSnippet/get, whose records have no
+// id, does not, though its name is a /get's.
+func TestReturnsIDIsStatedNotNamed(t *testing.T) {
+	s := Standard()
+	for name, want := range map[string]bool{
+		"Email/get": true, "Blob/get": true, "PushSubscription/get": true,
+		"SearchSnippet/get": false, "Email/parse": false,
+	} {
+		m, ok := s.Method(name)
+		if !ok {
+			t.Fatalf("no method %s", name)
+		}
+		if m.ReturnsID != want {
+			t.Errorf("%s.ReturnsID = %v, want %v", name, m.ReturnsID, want)
+		}
+	}
+}
+
+// TestResolvePatchReachesAHeaderField checks a header field as the last segment
+// of a patch, typed by the form it names. Whether a server lets one be changed
+// once the email exists is the server's to say; the data model has the field.
+func TestResolvePatchReachesAHeaderField(t *testing.T) {
+	s := Standard()
+	_, _, value, _, err := s.ResolvePatch("Email", []string{"header:X-Foo:asText"}, []bool{false})
+	if err != nil {
+		t.Fatalf("ResolvePatch: %v", err)
+	}
+	if got := value.String(); got != "String|null" {
+		t.Errorf("value = %q, want String|null", got)
+	}
+	if _, _, _, _, err := s.ResolvePatch("Mailbox", []string{"header:X-Foo:asText"}, []bool{false}); err == nil {
+		t.Error("a header field of a mailbox was resolved")
+	}
+}
+
+// TestDynamicFieldsAreTypedAsFarAsTheSpecificationsSay checks the type a
+// dynamic property resolves to: a digest of a blob is a string, the content of
+// one is asked for as data and held as data:asText or data:asBase64, so data
+// itself resolves to nothing, and a property a vendor's type names is a value of
+// any shape.
+func TestDynamicFieldsAreTypedAsFarAsTheSpecificationsSay(t *testing.T) {
+	s := Standard()
+	if got, err := s.ResolvePath("Blob/get", "/list/0/digest:sha"); err != nil || got.String() != "String" {
+		t.Errorf("digest:sha resolved to %v, %v, want String", got, err)
+	}
+	if _, err := s.ResolvePath("Blob/get", "/list/0/data"); err == nil {
+		t.Error("data resolved, though the record holds data:asText or data:asBase64 in its place")
+	}
+	if err := s.Extend(&Schema{
+		Capability: "urn:example:notes",
+		Types: []*SchemaType{{Name: "Note", Methods: []string{"get"}, Dynamic: []string{"meta:"},
+			Properties: []*SchemaField{{Name: "id", Type: "Id"}}}},
+	}); err != nil {
+		t.Fatalf("Extend: %v", err)
+	}
+	if got, err := s.ResolvePath("Note/get", "/list/0/meta:colour"); err != nil || got.String() != Any {
+		t.Errorf("meta:colour resolved to %v, %v, want Any", got, err)
 	}
 }

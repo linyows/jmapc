@@ -5,7 +5,10 @@ package gen
 import (
 	"bytes"
 	"fmt"
+	"go/ast"
 	"go/format"
+	"go/parser"
+	"go/token"
 	"sort"
 	"strings"
 
@@ -32,29 +35,9 @@ type RequestGenerator struct {
 	Properties *request.PropertySets
 }
 
-// call holds the names the generator settled on for one method call.
+// call is what the Go generator writes for one method call.
 type call struct {
-	// responseType is the Go type the call's response decodes into.
-	responseType string
-	// recordType names the generated record type, empty when the call fetches
-	// whole records and the runtime type is used.
-	recordType string
-	// nestedType names the generated type for the records' nested type, as
-	// bodyProperties gives an Email's body parts, empty when that is not
-	// narrowed either.
-	nestedType string
-	// accountIDExpr is the Go expression for the accountId argument the request
-	// left out, empty when the request supplies one.
-	accountIDExpr string
-	// writesTypes says this call is the one that writes the types it names.
-	// A call reading the same records in the same shape as an earlier one
-	// shares its types rather than declaring them again.
-	writesTypes bool
-	// sharedRecord says the record type is one of the named sets, which is
-	// written once for the package rather than by the request that asks for it.
-	sharedRecord bool
-	// sharedNested says the same of the nested type.
-	sharedNested bool
+	shared.CallPlan
 }
 
 // plan is the naming decided for one request before any code is written.
@@ -176,47 +159,24 @@ func (g *RequestGenerator) plan() ([]*plan, error) {
 			p.paramsType = shared.Unique(taken, q.Name+"Params")
 		}
 		p.creations = shared.Creations(taken, q.Name, q.Creations, spec.ExportedName)
-		same := shared.SameNarrowing(q.Calls)
+		calls, capabilities := shared.PlanCalls(g.Spec, q, taken, shared.Namer{
+			Prefix:    q.Name,
+			Field:     func(name string) string { return name },
+			Part:      spec.ExportedName,
+			Set:       func(name string) string { return name },
+			Runtime:   func(name string) string { return g.Qualifier + spec.ExportedName(name) },
+			AccountID: accountIDVar,
+		})
 		for _, c := range q.Calls {
-			info := &call{}
-			// Narrowing the nested type means the record type has to be
-			// generated too, since its own fields change to refer to it.
-			switch {
-			case same[c] != nil && same[c] != c:
-				// Another call of this request reads the same records in the
-				// same shape, and one shape is one type.
-				*info = *p.calls[same[c]]
-				info.writesTypes = false
-			case c.PropertySet != nil:
-				// The set names the type, so every call asking for it answers
-				// with the one the package declares.
-				info.recordType = c.PropertySet.Name
-				info.responseType = shared.Unique(taken, q.Name+c.Field+"Response")
-				info.writesTypes = true
-				info.sharedRecord = true
-			case c.Properties != nil || c.NestedProperties != nil:
-				info.recordType = shared.Unique(taken, q.Name+c.Field+spec.ExportedName(c.Method.DataType))
-				info.responseType = shared.Unique(taken, q.Name+c.Field+"Response")
-				info.writesTypes = true
-			default:
-				info.responseType = g.Qualifier + spec.ExportedName(c.Method.Response)
-			}
-			switch {
-			case c.NestedPropertySet != nil:
-				info.nestedType = c.NestedPropertySet.Name
-				info.sharedNested = true
-			case c.NestedProperties != nil && info.writesTypes:
-				info.nestedType = shared.Unique(taken, q.Name+c.Field+spec.ExportedName(c.Method.NestedType))
-			}
-			p.calls[c] = info
+			p.calls[c] = &call{CallPlan: *calls[c]}
 		}
+		p.sessionCapabilities = capabilities
 		if q.Returns != nil {
-			p.returnType = p.calls[q.Returns].responseType
+			p.returnType = p.calls[q.Returns].ResponseType
 		} else {
 			p.resultType = shared.Unique(taken, q.Name+"Result")
 			p.returnType = p.resultType
 		}
-		g.planAccountIDs(p)
 		if q.Watches != nil {
 			p.watchName = shared.Unique(taken, q.Name+"Watch")
 		}
@@ -226,25 +186,6 @@ func (g *RequestGenerator) plan() ([]*plan, error) {
 		plans = append(plans, p)
 	}
 	return plans, nil
-}
-
-// planAccountIDs works out which calls need an accountId filling in, and from
-// which capability's primary account. A request that is not specific to an
-// account should not have to state that in every call.
-func (g *RequestGenerator) planAccountIDs(p *plan) {
-	seen := make(map[string]bool)
-	for _, c := range p.q.Calls {
-		capability, needed := c.AccountIDCapability(g.Spec)
-		if !needed {
-			continue
-		}
-		if !seen[capability] {
-			seen[capability] = true
-			p.sessionCapabilities = append(p.sessionCapabilities, capability)
-		}
-		p.calls[c].accountIDExpr = accountIDVar(capability)
-	}
-	sort.Strings(p.sessionCapabilities)
 }
 
 // accountIDVar names the local variable holding the primary account id for a
@@ -287,16 +228,42 @@ func (g *RequestGenerator) file(p *plan) ([]byte, error) {
 	return src, nil
 }
 
+// packagesUsed returns the names of the packages body refers to, as in json.
+// for encoding/json. It reads body as Go rather than as text, so that a name
+// in a comment, which the documentation of a request may well hold, does not
+// bring in a package nothing uses. Where body does not parse, it falls back to
+// the text, and formatting the file reports what is wrong with it.
+func packagesUsed(body []byte) map[string]bool {
+	used := map[string]bool{}
+	file, err := parser.ParseFile(token.NewFileSet(), "", append([]byte("package p\n"), body...), 0)
+	if err != nil {
+		for _, name := range []string{"json", "errors", "iter"} {
+			used[name] = bytes.Contains(body, []byte(name+"."))
+		}
+		return used
+	}
+	ast.Inspect(file, func(n ast.Node) bool {
+		if sel, ok := n.(*ast.SelectorExpr); ok {
+			if x, ok := sel.X.(*ast.Ident); ok {
+				used[x.Name] = true
+			}
+		}
+		return true
+	})
+	return used
+}
+
 // writeImports writes the import block, including only what the body uses.
 func (g *RequestGenerator) writeImports(buf *bytes.Buffer, body []byte) {
+	used := packagesUsed(body)
 	imports := []string{"context"}
-	if bytes.Contains(body, []byte("json.")) {
+	if used["json"] {
 		imports = append(imports, "encoding/json")
 	}
-	if bytes.Contains(body, []byte("errors.Join")) {
+	if used["errors"] {
 		imports = append(imports, "errors")
 	}
-	if bytes.Contains(body, []byte("iter.Seq2")) {
+	if used["iter"] {
 		imports = append(imports, "iter")
 	}
 	buf.WriteString("import (\n")
@@ -342,20 +309,20 @@ func (g *RequestGenerator) writeParams(buf *bytes.Buffer, p *plan) {
 func (g *RequestGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
-		if info.recordType == "" || !info.writesTypes || info.sharedRecord {
+		if info.RecordType == "" || !info.WritesTypes || info.SharedRecord {
 			continue
 		}
 		dataType, ok := g.Spec.Object(c.Method.DataType)
 		if !ok {
 			continue
 		}
-		if info.nestedType != "" && !info.sharedNested {
+		if info.NestedType != "" && !info.SharedNested {
 			g.writeNestedType(buf, p, c, info)
 		}
 
 		shared.WriteComment(buf, "", fmt.Sprintf("%s holds the properties of %s that the %s call in %s asks for.",
-			info.recordType, dataType.Name, c.Method.Name, p.q.Name))
-		fmt.Fprintf(buf, "type %s struct {\n", info.recordType)
+			info.RecordType, dataType.Name, c.Method.Name, p.q.Name))
+		fmt.Fprintf(buf, "type %s struct {\n", info.RecordType)
 		properties := c.Properties
 		if properties == nil {
 			// Only the nested type was narrowed, so the record keeps all of
@@ -363,11 +330,11 @@ func (g *RequestGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 			// type change.
 			properties = dataType.PropertyNames()
 		}
-		for i, name := range shared.RecordProperties(properties) {
+		for i, name := range shared.RecordProperties(properties, c.Method.ReturnsID) {
 			if i > 0 {
 				buf.WriteString("\n")
 			}
-			g.writeRecordField(buf, dataType, name, info.nestedType, c.Method.NestedType)
+			g.writeRecordField(buf, dataType, name, info.NestedType, c.Method.NestedType)
 		}
 		buf.WriteString("}\n\n")
 	}
@@ -383,13 +350,13 @@ func (g *RequestGenerator) writeNestedType(buf *bytes.Buffer, p *plan, c *reques
 		return
 	}
 	shared.WriteComment(buf, "", fmt.Sprintf("%s holds the properties of %s that the %s call in %s asks for.",
-		info.nestedType, nested.Name, c.Method.Name, p.q.Name))
-	fmt.Fprintf(buf, "type %s struct {\n", info.nestedType)
+		info.NestedType, nested.Name, c.Method.Name, p.q.Name))
+	fmt.Fprintf(buf, "type %s struct {\n", info.NestedType)
 	for i, name := range c.NestedProperties {
 		if i > 0 {
 			buf.WriteString("\n")
 		}
-		g.writeRecordField(buf, nested, name, info.nestedType, c.Method.NestedType)
+		g.writeRecordField(buf, nested, name, info.NestedType, c.Method.NestedType)
 	}
 	buf.WriteString("}\n\n")
 }
@@ -434,7 +401,7 @@ func (g *RequestGenerator) nestedGoType(t *spec.Type, nestedTo, nestedFrom strin
 func (g *RequestGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
-		if info.recordType == "" || !info.writesTypes {
+		if info.RecordType == "" || !info.WritesTypes {
 			continue
 		}
 		respType, err := g.Spec.ResponseOf(c.Method.Name)
@@ -442,8 +409,8 @@ func (g *RequestGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 			continue
 		}
 		shared.WriteComment(buf, "", fmt.Sprintf("%s holds the response to the %s call in %s.",
-			info.responseType, c.Method.Name, p.q.Name))
-		fmt.Fprintf(buf, "type %s struct {\n", info.responseType)
+			info.ResponseType, c.Method.Name, p.q.Name))
+		fmt.Fprintf(buf, "type %s struct {\n", info.ResponseType)
 		for i, field := range respType.Fields {
 			if i > 0 {
 				buf.WriteString("\n")
@@ -451,7 +418,7 @@ func (g *RequestGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 			shared.WriteComment(buf, "\t", field.Doc)
 			goType := field.ParsedType().GoType(g.Qualifier)
 			if field.Name == c.Method.ResultProperty {
-				goType = "[]" + info.recordType
+				goType = "[]" + info.RecordType
 			}
 			fmt.Fprintf(buf, "\t%s %s `json:%q`\n", spec.ExportedName(field.Name), goType, field.Name)
 		}
@@ -472,7 +439,7 @@ func (g *RequestGenerator) writeResultType(buf *bytes.Buffer, p *plan) {
 			buf.WriteString("\n")
 		}
 		shared.WriteComment(buf, "\t", fmt.Sprintf("The response to the %s call, made as %q.", c.Method.Name, c.ID))
-		fmt.Fprintf(buf, "\t%s %s\n", c.Field, p.calls[c].responseType)
+		fmt.Fprintf(buf, "\t%s %s\n", c.Field, p.calls[c].ResponseType)
 	}
 	if p.q.CreatedIDs {
 		buf.WriteString("\n")

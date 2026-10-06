@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/linyows/jmapc/internal/gen/shared"
 	"github.com/linyows/jmapc/internal/request"
@@ -48,7 +49,7 @@ func (g *RequestGenerator) writeUses(buf *bytes.Buffer, p *plan, body string) {
 	}
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
-		if info.recordType == "" {
+		if info.RecordType == "" {
 			// The shared response type comes from types.rs.
 			imports.types[spec.RustTypeName(c.Method.Response)] = true
 			continue
@@ -95,7 +96,7 @@ func (g *RequestGenerator) writeUses(buf *bytes.Buffer, p *plan, body string) {
 	}
 	// The sets come before the data model, which is the order rustfmt sorts
 	// the paths of a block into.
-	if sets := g.setsUsed(p); len(sets) > 0 {
+	if sets := shared.SetsUsed(p.q, spec.RustTypeName); len(sets) > 0 {
 		writeUse(buf, "super::"+PropertiesModule, sets)
 	}
 	if len(used) > 0 {
@@ -250,15 +251,15 @@ func (g *RequestGenerator) collectRecordTypes(c *request.Call, info *call, impor
 			imports.collect(f.ParsedType())
 		}
 	}
-	if dataType, ok := g.Spec.Object(c.Method.DataType); ok && !info.sharedRecord {
+	if dataType, ok := g.Spec.Object(c.Method.DataType); ok && !info.SharedRecord {
 		properties := c.Properties
 		if properties == nil {
 			properties = dataType.PropertyNames()
 		}
-		add(dataType, shared.RecordProperties(properties))
+		add(dataType, shared.RecordProperties(properties, c.Method.ReturnsID))
 	}
-	if info.nestedType != "" {
-		if nested, ok := g.Spec.Object(c.Method.NestedType); ok && !info.sharedNested {
+	if info.NestedType != "" {
+		if nested, ok := g.Spec.Object(c.Method.NestedType); ok && !info.SharedNested {
 			add(nested, c.NestedProperties)
 		}
 		// A narrowed type replaces the shared one, so that name is not brought
@@ -314,7 +315,7 @@ func (g *RequestGenerator) writeParams(buf *bytes.Buffer, p *plan) {
 func (g *RequestGenerator) writeNestedTypes(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
-		if info.nestedType == "" || info.sharedNested {
+		if info.NestedType == "" || info.SharedNested {
 			continue
 		}
 		nested, ok := g.Spec.Object(c.Method.NestedType)
@@ -322,15 +323,15 @@ func (g *RequestGenerator) writeNestedTypes(buf *bytes.Buffer, p *plan) {
 			continue
 		}
 		writeDoc(buf, "", fmt.Sprintf("%s holds the properties of %s that the %s call in %s asks for.",
-			info.nestedType, nested.Name, c.Method.Name, p.q.Name))
+			info.NestedType, nested.Name, c.Method.Name, p.q.Name))
 		writeDerive(buf)
 		buf.WriteString("#[serde(rename_all = \"camelCase\")]\n")
-		fmt.Fprintf(buf, "pub struct %s {\n", info.nestedType)
+		fmt.Fprintf(buf, "pub struct %s {\n", info.NestedType)
 		for i, name := range c.NestedProperties {
 			if i > 0 {
 				buf.WriteString("\n")
 			}
-			g.writeRecordField(buf, nested, name, info.nestedType, c.Method.NestedType)
+			g.writeRecordField(buf, nested, name, info.NestedType, c.Method.NestedType)
 		}
 		buf.WriteString("}\n\n")
 	}
@@ -340,7 +341,7 @@ func (g *RequestGenerator) writeNestedTypes(buf *bytes.Buffer, p *plan) {
 func (g *RequestGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
-		if info.recordType == "" || !info.writesTypes || info.sharedRecord {
+		if info.RecordType == "" || !info.WritesTypes || info.SharedRecord {
 			continue
 		}
 		dataType, ok := g.Spec.Object(c.Method.DataType)
@@ -348,19 +349,19 @@ func (g *RequestGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 			continue
 		}
 		writeDoc(buf, "", fmt.Sprintf("%s holds the properties of %s that the %s call in %s asks for.",
-			info.recordType, dataType.Name, c.Method.Name, p.q.Name))
+			info.RecordType, dataType.Name, c.Method.Name, p.q.Name))
 		writeDerive(buf)
 		buf.WriteString("#[serde(rename_all = \"camelCase\")]\n")
-		fmt.Fprintf(buf, "pub struct %s {\n", info.recordType)
+		fmt.Fprintf(buf, "pub struct %s {\n", info.RecordType)
 		properties := c.Properties
 		if properties == nil {
 			properties = dataType.PropertyNames()
 		}
-		for i, name := range shared.RecordProperties(properties) {
+		for i, name := range shared.RecordProperties(properties, c.Method.ReturnsID) {
 			if i > 0 {
 				buf.WriteString("\n")
 			}
-			g.writeRecordField(buf, dataType, name, info.nestedType, c.Method.NestedType)
+			g.writeRecordField(buf, dataType, name, info.NestedType, c.Method.NestedType)
 		}
 		buf.WriteString("}\n\n")
 	}
@@ -419,7 +420,7 @@ func writeNestedMember(buf *bytes.Buffer, owner, wireName string, t *spec.Type, 
 func (g *RequestGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
-		if info.recordType == "" || !info.writesTypes {
+		if info.RecordType == "" || !info.WritesTypes {
 			continue
 		}
 		respType, err := g.Spec.ResponseOf(c.Method.Name)
@@ -427,10 +428,10 @@ func (g *RequestGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 			continue
 		}
 		writeDoc(buf, "", fmt.Sprintf("%s holds the response to the %s call in %s.",
-			info.responseType, c.Method.Name, p.q.Name))
+			info.ResponseType, c.Method.Name, p.q.Name))
 		writeDerive(buf)
 		buf.WriteString("#[serde(rename_all = \"camelCase\")]\n")
-		fmt.Fprintf(buf, "pub struct %s {\n", info.responseType)
+		fmt.Fprintf(buf, "pub struct %s {\n", info.ResponseType)
 		for i, field := range respType.Fields {
 			if i > 0 {
 				buf.WriteString("\n")
@@ -439,7 +440,7 @@ func (g *RequestGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 			if field.Name == c.Method.ResultProperty {
 				ident := spec.RustFieldName(field.Name)
 				writeSerdeAttr(buf, "    ", renameAndDefault(field.Name, ident))
-				fmt.Fprintf(buf, "    pub %s: Vec<%s>,\n", ident, info.recordType)
+				fmt.Fprintf(buf, "    pub %s: Vec<%s>,\n", ident, info.RecordType)
 				continue
 			}
 			writeMember(buf, respType.Name, field.Name, field.ParsedType(), false, true)
@@ -464,7 +465,7 @@ func (g *RequestGenerator) writeResultType(buf *bytes.Buffer, p *plan) {
 			buf.WriteString("\n")
 		}
 		writeDoc(buf, "    ", fmt.Sprintf("The response to the %s call, made as %q.", c.Method.Name, c.ID))
-		fmt.Fprintf(buf, "    pub %s: %s,\n", spec.RustFieldName(c.Field), p.calls[c].responseType)
+		fmt.Fprintf(buf, "    pub %s: %s,\n", spec.RustFieldName(c.Field), p.calls[c].ResponseType)
 	}
 	if p.q.CreatedIDs {
 		buf.WriteString("\n")
@@ -520,15 +521,91 @@ func writeMod(modules []string, properties bool) []byte {
 	return finish(&buf)
 }
 
-// literalExpr renders a JSON value the request stated outright. JSON is what the
-// json! macro takes, so it goes in as it is.
+// literalExpr renders a JSON value the request stated outright, for the json!
+// macro. The macro takes JSON's shape but Rust's tokens, so its strings are
+// Rust string literals: JSON's own escapes, such as \/ and \u00e9, are not
+// ones Rust reads, and each string is written again as Rust writes it.
 func literalExpr(raw json.RawMessage) string {
-	var compact bytes.Buffer
-	if err := json.Compact(&compact, raw); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var b strings.Builder
+	if err := writeLiteral(dec, &b); err != nil {
 		return "null"
 	}
-	return compact.String()
+	return b.String()
 }
 
-// quote renders a Rust string literal.
-func quote(s string) string { return strconv.Quote(s) }
+// writeLiteral writes the next JSON value dec holds, compactly and in the order
+// it was written, with its strings as Rust string literals.
+func writeLiteral(dec *json.Decoder, b *strings.Builder) error {
+	tok, err := dec.Token()
+	if err != nil {
+		return err
+	}
+	switch v := tok.(type) {
+	case json.Delim:
+		open, close := byte(v), byte(']')
+		if v == '{' {
+			close = '}'
+		}
+		b.WriteByte(open)
+		for i := 0; dec.More(); i++ {
+			if i > 0 {
+				b.WriteByte(',')
+			}
+			if v == '{' {
+				key, err := dec.Token()
+				if err != nil {
+					return err
+				}
+				b.WriteString(quote(key.(string)))
+				b.WriteByte(':')
+			}
+			if err := writeLiteral(dec, b); err != nil {
+				return err
+			}
+		}
+		if _, err := dec.Token(); err != nil {
+			return err
+		}
+		b.WriteByte(close)
+	case string:
+		b.WriteString(quote(v))
+	case json.Number:
+		b.WriteString(v.String())
+	case bool:
+		b.WriteString(strconv.FormatBool(v))
+	case nil:
+		b.WriteString("null")
+	}
+	return nil
+}
+
+// quote renders a Rust string literal. Go's quoting is not Rust's: Rust has no
+// \a or \x escapes above 0x7f, and writes a code point as \u{...}.
+func quote(s string) string {
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, r := range s {
+		switch {
+		case r == '"':
+			b.WriteString(`\"`)
+		case r == '\\':
+			b.WriteString(`\\`)
+		case r == '\n':
+			b.WriteString(`\n`)
+		case r == '\r':
+			b.WriteString(`\r`)
+		case r == '\t':
+			b.WriteString(`\t`)
+		case r == 0:
+			b.WriteString(`\0`)
+		case !unicode.IsPrint(r):
+			fmt.Fprintf(&b, `\u{%x}`, r)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
+}

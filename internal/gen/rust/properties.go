@@ -3,7 +3,6 @@ package rust
 import (
 	"bytes"
 	"fmt"
-	"sort"
 
 	"github.com/linyows/jmapc/internal/gen/shared"
 	"github.com/linyows/jmapc/internal/request"
@@ -41,7 +40,7 @@ func (g *RequestGenerator) writePropertyUses(buf *bytes.Buffer, body string) {
 		if !ok {
 			continue
 		}
-		for _, name := range setProperties(set, dataType) {
+		for _, name := range shared.SetProperties(set, dataType) {
 			field, known := dataType.Field(name)
 			if !known {
 				if header, err := spec.ParseHeaderProperty(name); err == nil && header != nil {
@@ -80,7 +79,7 @@ func (g *RequestGenerator) writePropertySet(buf *bytes.Buffer, set *request.Prop
 	if !ok {
 		return
 	}
-	writeDoc(buf, "", propertySetDoc(set))
+	writeDoc(buf, "", shared.SetDoc(set, spec.RustTypeName(set.Name)))
 	writeDerive(buf)
 	buf.WriteString("#[serde(rename_all = \"camelCase\")]\n")
 	fmt.Fprintf(buf, "pub struct %s {\n", spec.RustTypeName(set.Name))
@@ -89,59 +88,11 @@ func (g *RequestGenerator) writePropertySet(buf *bytes.Buffer, set *request.Prop
 		buf.WriteString("    #[serde(flatten)]\n")
 		fmt.Fprintf(buf, "    pub %s: %s,\n", spec.RustFieldName(set.Extends.Name), spec.RustTypeName(set.Extends.Name))
 	}
-	for i, name := range setProperties(set, dataType) {
+	for i, name := range shared.SetProperties(set, dataType) {
 		if i > 0 || set.Extends != nil {
 			buf.WriteString("\n")
 		}
 		g.writeRecordField(buf, dataType, name, "", "")
 	}
 	buf.WriteString("}\n\n")
-}
-
-// setsUsed returns the sets a request asks for, as the module names them, so
-// that the code brings in the ones it names and no others.
-func (g *RequestGenerator) setsUsed(p *plan) []string {
-	found := map[string]bool{}
-	for _, c := range p.q.Calls {
-		if c.PropertySet != nil {
-			found[spec.RustTypeName(c.PropertySet.Name)] = true
-		}
-		if c.NestedPropertySet != nil {
-			found[spec.RustTypeName(c.NestedPropertySet.Name)] = true
-		}
-	}
-	out := make([]string, 0, len(found))
-	for name := range found {
-		out = append(out, name)
-	}
-	sort.Strings(out)
-	return out
-}
-
-// setProperties returns the properties the struct for a set declares itself:
-// its own, and the id a /get answers with whether or not it was asked for.
-//
-// The id belongs to the set that declares no base, since that is the one the
-// others hold, and only to a set narrowing a type that has one: a set narrowing
-// the body parts of an Email describes something a record holds rather than a
-// record.
-func setProperties(set *request.PropertySet, dataType *spec.Object) []string {
-	if set.Extends != nil {
-		return set.Own
-	}
-	if _, hasID := dataType.Field("id"); !hasID {
-		return set.Own
-	}
-	return shared.RecordProperties(set.Own)
-}
-
-// propertySetDoc is the documentation the struct for a set carries: what the
-// author said it is for, and what asking for it gets.
-func propertySetDoc(set *request.PropertySet) string {
-	asked := fmt.Sprintf("%s holds the properties of %s that a call asking for @%s receives.",
-		spec.RustTypeName(set.Name), set.Type, set.Name)
-	if set.Doc == "" {
-		return asked
-	}
-	return set.Doc + "\n\n" + asked
 }

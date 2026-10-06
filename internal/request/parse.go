@@ -246,10 +246,8 @@ func (c *checker) watch(q *Request, f fileSyntax) {
 	if f.Watches == "" {
 		return
 	}
-	call, ok := c.byID[f.Watches]
-	if !ok {
-		c.errorf(WatchesMember, "", "no method call has the id %q", f.Watches).
-			hint(hintFor(f.Watches, c.callIDs()))
+	call := c.loopedCall(WatchesMember, f.Watches)
+	if call == nil {
 		return
 	}
 	if !c.reportsChanges(call) {
@@ -257,29 +255,12 @@ func (c *checker) watch(q *Request, f fileSyntax) {
 			"%s cannot be watched", call.Method.Name)
 		return
 	}
-	if f.CreatedIDs {
-		c.errorf(WatchesMember, "",
-			"a watching request cannot carry creation ids: they belong to one request, and a watch makes many")
-	}
-	if f.Returns != "" && f.Returns != f.Watches {
-		c.errorf(ReturnsMember, "leave "+ReturnsMember+" out, or name the watched call",
-			"a watching request cannot return only %q, since the loop reads the state it goes on from out of the %q response",
-			f.Returns, f.Watches)
-	}
-
-	since, given := call.Args.Find(SinceStateArgument)
-	switch value := since.(type) {
-	case *ParamRef:
-		q.WatchState = value.Param
-	default:
-		_ = value
-		where := fmt.Sprintf("%s.arguments.%s", callPath(q, call), SinceStateArgument)
-		if !given {
-			where = WatchesMember
-		}
-		c.errorf(where, `write "`+SinceStateArgument+`": "{{sinceState}}"`,
-			"the %s of a watched call is the state the loop has reached, so it has to be a parameter", SinceStateArgument)
-	}
+	c.checkLooping(f, loop{
+		member: WatchesMember, request: "watching", call: "watched", maker: "a watch",
+		reads: "the state it goes on from", id: f.Watches,
+	})
+	q.WatchState = c.loopParameter(q, call, WatchesMember, SinceStateArgument,
+		"the "+SinceStateArgument+" of a watched call is the state the loop has reached")
 	if _, referenced := call.Args.Find("#" + AccountIDArgument); referenced {
 		c.errorf(WatchesMember, "",
 			"the account of a watched call comes from an earlier call, and a watch has to know whose events to listen for before it makes any")
@@ -299,10 +280,8 @@ func (c *checker) pages(q *Request, f fileSyntax) {
 	if f.Pages == "" {
 		return
 	}
-	call, ok := c.byID[f.Pages]
-	if !ok {
-		c.errorf(PagesMember, "", "no method call has the id %q", f.Pages).
-			hint(hintFor(f.Pages, c.callIDs()))
+	call := c.loopedCall(PagesMember, f.Pages)
+	if call == nil {
 		return
 	}
 
@@ -322,28 +301,64 @@ func (c *checker) pages(q *Request, f fileSyntax) {
 		c.errorf(PagesMember, "",
 			"a watching request already asks again while the server says there is more, so it does not also take %s", PagesMember)
 	}
-	if f.CreatedIDs {
-		c.errorf(PagesMember, "",
-			"a paged request cannot carry creation ids: they belong to one request, and a pager makes many")
-	}
-	if f.Returns != "" && f.Returns != f.Pages {
-		c.errorf(ReturnsMember, "leave "+ReturnsMember+" out, or name the paged call",
-			"a paged request cannot return only %q, since the loop reads where the next request starts out of the %q response",
-			f.Returns, f.Pages)
-	}
-
-	value, given := call.Args.Find(start)
-	if param, ok := value.(*ParamRef); ok {
-		q.PageStart = param.Param
-	} else {
-		where := fmt.Sprintf("%s.arguments.%s", callPath(q, call), start)
-		if !given {
-			where = PagesMember
-		}
-		c.errorf(where, `write "`+start+`": "{{`+start+`}}"`,
-			"the %s of a paged call is where the next request starts, so it has to be a parameter", start)
-	}
+	c.checkLooping(f, loop{
+		member: PagesMember, request: "paged", call: "paged", maker: "a pager",
+		reads: "where the next request starts", id: f.Pages,
+	})
+	q.PageStart = c.loopParameter(q, call, PagesMember, start,
+		"the "+start+" of a paged call is where the next request starts")
 	q.Pages = call
+}
+
+// loopedCall finds the call a request that is sent again and again names
+// under member, reporting an id no call has.
+func (c *checker) loopedCall(member, id string) *Call {
+	call, ok := c.byID[id]
+	if !ok {
+		c.errorf(member, "", "no method call has the id %q", id).
+			hint(hintFor(id, c.callIDs()))
+		return nil
+	}
+	return call
+}
+
+// loop describes a request that is sent again and again, in the words its
+// errors use: the member naming the call it follows, what such a request and
+// such a call are called, what makes the many requests, and what each one
+// reads from the response to the call to go on.
+type loop struct {
+	member, request, call, maker, reads, id string
+}
+
+// checkLooping reports what a request sent again and again cannot carry:
+// creation ids, which belong to one request, and a response to return other
+// than that of the call it follows, which is where it reads how to go on.
+func (c *checker) checkLooping(f fileSyntax, l loop) {
+	if f.CreatedIDs {
+		c.errorf(l.member, "",
+			"a %s request cannot carry creation ids: they belong to one request, and %s makes many", l.request, l.maker)
+	}
+	if f.Returns != "" && f.Returns != l.id {
+		c.errorf(ReturnsMember, "leave "+ReturnsMember+" out, or name the "+l.call+" call",
+			"a %s request cannot return only %q, since the loop reads %s out of the %q response",
+			l.request, f.Returns, l.reads, l.id)
+	}
+}
+
+// loopParameter returns the parameter an argument of the call a loop follows
+// is given, which is where each request of the loop goes on from, and reports
+// an argument left out or written as a value. why says what the argument is.
+func (c *checker) loopParameter(q *Request, call *Call, member, argument, why string) *Param {
+	value, given := call.Args.Find(argument)
+	if param, ok := value.(*ParamRef); ok {
+		return param.Param
+	}
+	where := fmt.Sprintf("%s.arguments.%s", callPath(q, call), argument)
+	if !given {
+		where = member
+	}
+	c.errorf(where, `write "`+argument+`": "{{`+argument+`}}"`, "%s, so it has to be a parameter", why)
+	return nil
 }
 
 // returnsWindow reports whether a call answers with one window of a longer
@@ -414,43 +429,24 @@ type checker struct {
 	byID   map[string]*Call
 	order  []string
 
+	// sent marks a request that has been sent, which RequestCheck holds to
+	// the data model as it arrives. Its values are values: "{{x}}" in one is a
+	// string like any other, and "@Summary" a string where a list of
+	// properties belongs, rather than a parameter and a set of properties.
+	sent bool
+
 	// props are the named sets of properties a call may ask for instead of
 	// listing them, and is nil where the project names none.
 	props *PropertySets
 
-	// filterUnion is the type a /query filter may take, carried down so that
-	// the conditions nested inside a FilterOperator can be checked against the
-	// data type being queried instead of being waved through as Any.
-	filterUnion *spec.Type
-
-	// patchTarget names the data type that the PatchObjects being checked
-	// apply to, carried down from the argument that holds them.
-	patchTarget string
-
-	// sortTarget names the data type whose sortable properties a Comparator
-	// being checked may name, carried down the same way.
-	sortTarget string
-
-	// enum holds the values the property being checked may take, for one whose
-	// specification fixes them. It travels with the property so that it reaches
-	// the elements of an array and the keys of a set.
-	enum []string
+	// scope is what the value being checked is checked within.
+	scope
 
 	// argumentValue says that the value about to be checked is a whole
 	// argument of a method call, which is the one place a parameter may be
 	// left out: leaving it out takes the argument with it. It is cleared as
 	// soon as the value is reached, so that nothing nested inside inherits it.
 	argumentValue bool
-	// property is the property or argument whose value is being checked,
-	// which a parameter standing for a key of a map in it is documented as a
-	// key of. It is empty inside the values of a map, which belong to no
-	// property of their own.
-	property string
-
-	// creationIDs says that the keys of the map about to be checked are the
-	// creation ids the request invents. It travels one level, from the argument
-	// that holds them to the map itself.
-	creationIDs bool
 
 	// creations collects the creation ids the request invents, in the order they
 	// were written, so that a caller reading a created record back has the
@@ -545,6 +541,9 @@ func (c *checker) methodCall(raw json.RawMessage, where string) *Call {
 // else a string beginning with "@" is a value in its own right, and is checked
 // as one.
 func (c *checker) propertySet(call *Call, name string, raw json.RawMessage, where string) (Node, bool) {
+	if c.sent {
+		return nil, false
+	}
 	nested := name == call.Method.NestedPropertiesArgument
 	if name != call.Method.PropertiesArgument && !nested {
 		return nil, false
@@ -605,6 +604,16 @@ func propertyArray(props []string) *Array {
 	return arr
 }
 
+// hasID reports whether a data type has an id, which a set of it holds.
+func (c *checker) hasID(typeName string) bool {
+	o, ok := c.spec.Object(typeName)
+	if !ok {
+		return false
+	}
+	_, has := o.Field("id")
+	return has
+}
+
 // checkPropertySetUse holds a call asking for a named set to the one thing that
 // makes the set worth naming: that the type generated for it is the same
 // wherever it is asked for.
@@ -614,6 +623,18 @@ func propertyArray(props []string) *Array {
 // narrowed differently in two calls would be two shapes under one name, so a
 // call that asks for a set spells out nothing else about the records.
 func (c *checker) checkPropertySetUse(call *Call, where string) {
+	// A set is one record type wherever it is asked for, holding the id a
+	// /get returns whatever it is asked for, where its type has one. A method
+	// that makes no such promise would be answered without the id the type
+	// says is there. A set of a type with no id holds none, and any method may
+	// ask for it.
+	if call.PropertySet != nil && !call.Method.ReturnsID && c.hasID(call.PropertySet.Type) {
+		c.errorf(fmt.Sprintf("%s.%s", where, call.Method.PropertiesArgument),
+			"write the properties out in this call, leaving out the id, which it does not promise to return",
+			"%s does not return the id of every record whatever it is asked for, as a /get does, so the set %s, which holds it, cannot describe what it returns",
+			call.Method.Name, call.PropertySet.Name)
+		return
+	}
 	if call.PropertySet == nil || call.NestedProperties == nil {
 		return
 	}
@@ -671,6 +692,10 @@ func (c *checker) arguments(call *Call, argsType *spec.Object, raw json.RawMessa
 			// there is no declared type to check the value against.
 			field = &spec.Field{Name: name, Type: spec.Any}
 		}
+		// An argument another specification adds needs its capability
+		// however its value is given, by a back reference as well as written
+		// out.
+		c.useCapability(field)
 		if key != name {
 			ref := c.resultRef(call, field, members[key], where+"."+key)
 			if ref != nil {
@@ -684,22 +709,12 @@ func (c *checker) arguments(call *Call, argsType *spec.Object, raw json.RawMessa
 			}
 			continue
 		}
-		savedPatch, savedSort, savedEnum := c.patchTarget, c.sortTarget, c.enum
-		if field.PatchTarget != "" {
-			c.patchTarget = field.PatchTarget
-		}
-		if field.SortTarget != "" {
-			c.sortTarget = field.SortTarget
-		}
-		c.enum = field.Enum
+		saved := c.scope
+		c.scope = c.scope.within(field, key)
 		c.creationIDs = field.CreationIDs
-		c.useCapability(field)
 		c.argumentValue = true
-		savedProperty := c.property
-		c.property = key
 		node := c.value(field.ParsedType(), members[key], where+"."+key, field.Doc)
-		c.property = savedProperty
-		c.patchTarget, c.sortTarget, c.enum, c.creationIDs = savedPatch, savedSort, savedEnum, false
+		c.scope = saved
 		if ref, isParam := node.(*ParamRef); isParam && ref.Param.Optional && name == AccountIDArgument {
 			c.errorf(where+"."+key, "leave "+AccountIDArgument+" out altogether, and it is filled in from the primary account",
 				"%s cannot be left out on its own, since a method call is made against an account",
@@ -770,22 +785,68 @@ func (c *checker) checkFetched(from *Call, selected []spec.Selection, path, wher
 		var fetched []string
 		var argument string
 		switch {
-		case sel.Type == from.Method.DataType && from.Properties != nil:
+		case sel.Type == from.Method.DataType:
 			fetched, argument = from.Properties, from.Method.PropertiesArgument
-		case sel.Type == from.Method.NestedType && from.NestedProperties != nil:
+		case sel.Type == from.Method.NestedType:
 			fetched, argument = from.NestedProperties, from.Method.NestedPropertiesArgument
 		default:
 			continue
 		}
+		if fetched == nil {
+			// The call fetches every property of the type, or a list the
+			// caller gives, which cannot be known here. Neither is a dynamic
+			// property, a header field or the like, which comes back only
+			// where it is named: every property is every field.
+			if !c.isDynamic(sel) || !c.listedLiterally(from, argument) {
+				continue
+			}
+		}
 		// A /get answers with the id whether or not it was asked for, as
 		// RFC 8620, Section 5.1 has it.
-		if sel.Property == "id" || slices.Contains(fetched, sel.Property) {
+		if (sel.Property == "id" && from.Method.ReturnsID) || slices.Contains(fetched, sel.Property) ||
+			slices.Contains(fetched, askedAs(sel)) {
 			continue
 		}
 		c.errorf(where, fetchedHint(from, sel.Property, argument, fetched),
 			"%s selects %s from the %s call, which does not fetch it",
 			path, sel.Property, from.Method.Name)
 	}
+}
+
+// askedAs returns the name a property is asked for by where that is not its own:
+// the content of a blob is asked for as data, and comes back as data:asText or
+// data:asBase64, RFC 9404, Section 4.2. It is empty for every other property.
+func askedAs(sel spec.Selection) string {
+	if sel.Type == "BlobData" && (sel.Property == "data:asText" || sel.Property == "data:asBase64") {
+		return "data"
+	}
+	return ""
+}
+
+// isDynamic reports whether a selection reads a property a type has beyond its
+// fields, which a /get returns only where it is asked for by name.
+func (c *checker) isDynamic(sel spec.Selection) bool {
+	o, ok := c.spec.Object(sel.Type)
+	if !ok {
+		return false
+	}
+	_, field := o.Field(sel.Property)
+	return !field
+}
+
+// listedLiterally reports whether a call's argument selecting properties is
+// left out or null, which asks for the type's fields, as against given by a
+// parameter, whose list is the caller's and cannot be known.
+func (c *checker) listedLiterally(call *Call, argument string) bool {
+	if call.Args == nil || argument == "" {
+		return true
+	}
+	node, given := call.Args.Find(argument)
+	if !given {
+		return true
+	}
+	lit, ok := node.(*Literal)
+	return ok && string(lit.JSON) == "null"
 }
 
 // fetchedHint says where the missing property is added, which is the set where
@@ -824,7 +885,11 @@ func (c *checker) properties(call *Call, where string) []string {
 	if !ok {
 		return nil
 	}
-	var props []string
+	// An empty list asks for no properties: the id alone of a /get, which
+	// returns it whatever it is asked for, and nothing of a method that
+	// promises no id, as Email/parse does. It is kept as an empty slice rather
+	// than nil, since nil is what says the call fetches everything.
+	props := []string{}
 	for i, item := range arr.Items {
 		lit, ok := item.(*Literal)
 		if !ok {
@@ -865,7 +930,7 @@ func (c *checker) nestedProperties(call *Call, where string) []string {
 	if !ok {
 		return nil
 	}
-	var props []string
+	props := []string{}
 	for i, item := range arr.Items {
 		lit, ok := item.(*Literal)
 		if !ok {
@@ -875,34 +940,15 @@ func (c *checker) nestedProperties(call *Call, where string) []string {
 		if err := json.Unmarshal(lit.JSON, &name); err != nil {
 			return nil
 		}
-		if _, known := nested.Field(name); !known {
-			c.errorf(fmt.Sprintf("%s.%s[%d]", where, call.Method.NestedPropertiesArgument, i),
-				hintFor(name, nested.PropertyNames()),
-				"%s has no property %q", nested.Name, name)
+		selected, hint, err := checkProperty(nested, name)
+		if err != nil {
+			c.errorf(fmt.Sprintf("%s.%s[%d]", where, call.Method.NestedPropertiesArgument, i), hint, "%v", err)
 			continue
 		}
+		c.useCapability(selected)
 		props = append(props, name)
 	}
 	return props
-}
-
-// isDynamicProperty reports whether a property name is one the server gives
-// meaning to rather than one the data model fixes.
-func isDynamicProperty(name string) bool {
-	switch {
-	case strings.HasPrefix(name, "header:"):
-		// The header field forms of RFC 8621, Section 4.1.3.
-		return true
-	case strings.HasPrefix(name, "digest:"):
-		// A digest in whatever algorithm the session says it supports,
-		// RFC 9404, Section 4.2.
-		return true
-	case name == "data":
-		// RFC 9404 asks the server to return the octets as text or as base64,
-		// whichever fits, so what comes back is one of those two properties.
-		return true
-	}
-	return false
 }
 
 // resolveUsing returns the capability URIs the request should declare, either

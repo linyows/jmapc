@@ -107,6 +107,7 @@ func (s *Spec) registerGet(dataType, capability string) {
 		DataType:           dataType,
 		PropertiesArgument: "properties",
 		ResultProperty:     "list",
+		ReturnsID:          true,
 	})
 }
 
@@ -387,14 +388,16 @@ func (s *Spec) registerQuery(dataType, capability string) {
 			{Name: "position", Type: "UnsignedInt", Doc: "The zero-based index of the first returned id in the full result list."},
 			{Name: "ids", Type: "Id[]", Doc: "The ids of the matching records, in sorted order."},
 			{
-				Name: "total",
-				Type: "UnsignedInt",
-				Doc:  "The total number of matching records, present only if calculateTotal was true.",
+				Name:     "total",
+				Type:     "UnsignedInt",
+				Optional: true,
+				Doc:      "The total number of matching records, present only if calculateTotal was true.",
 			},
 			{
-				Name: "limit",
-				Type: "UnsignedInt",
-				Doc:  "The limit the server applied, present only if it is lower than the one requested.",
+				Name:     "limit",
+				Type:     "UnsignedInt",
+				Optional: true,
+				Doc:      "The limit the server applied, present only if it is lower than the one requested.",
 			},
 		},
 	})
@@ -454,9 +457,10 @@ func (s *Spec) registerQueryChanges(dataType, capability string) {
 			{Name: "oldQueryState", Type: "String", Doc: "The query state the changes are calculated from."},
 			{Name: "newQueryState", Type: "String", Doc: "The query state the client reaches by applying these changes."},
 			{
-				Name: "total",
-				Type: "UnsignedInt",
-				Doc:  "The total number of matching records, present only if calculateTotal was true.",
+				Name:     "total",
+				Type:     "UnsignedInt",
+				Optional: true,
+				Doc:      "The total number of matching records, present only if calculateTotal was true.",
 			},
 			{
 				Name: "removed",
@@ -499,4 +503,28 @@ func (s *Spec) AppendResponse(method string, fields ...*Field) {
 		panic("spec: " + err.Error())
 	}
 	o.Fields = append(o.Fields, fields...)
+}
+
+// defineMethod adds a method whose arguments and response are spelled out,
+// with the two types they make named after the method, as every method's are:
+// Email/import takes EmailImportArguments and answers with EmailImportResponse.
+// The method is given its name, capability and the rest; its Arguments and
+// Response are filled in here.
+func (s *Spec) defineMethod(m *Method, args, resp []*Field) {
+	prefix := m.TypeNamePrefix()
+	m.Arguments = s.AddObject(&Object{
+		Name:       prefix + "Arguments",
+		Capability: m.Capability,
+		Kind:       KindArguments,
+		Doc:        prefix + "Arguments holds the arguments of the " + m.Name + " method.",
+		Fields:     args,
+	}).Name
+	m.Response = s.AddObject(&Object{
+		Name:       prefix + "Response",
+		Capability: m.Capability,
+		Kind:       KindResponse,
+		Doc:        prefix + "Response holds the response to the " + m.Name + " method.",
+		Fields:     resp,
+	}).Name
+	s.AddMethod(m)
 }

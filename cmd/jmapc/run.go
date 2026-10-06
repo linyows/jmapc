@@ -51,20 +51,17 @@ const accountPlaceholder = "ACCOUNT_ID"
 // is generated, and nothing is written to disk.
 func runRequest(args []string) error {
 	fs := flag.NewFlagSet("jmapc run", flag.ContinueOnError)
+	project := addProjectFlags(fs, true)
 	var (
-		configPath = fs.String("config", "", "settings file to read")
-		requests   = fs.String("requests", "", "directory holding the request files")
 		session    = fs.String("session", os.Getenv("JMAP_SESSION_URL"), "session URL, or the host to find it under")
 		token      = fs.String("token", os.Getenv("JMAP_TOKEN"), "bearer token to authenticate with")
 		user       = fs.String("user", os.Getenv("JMAP_USER"), "user:password to authenticate with instead")
 		account    = fs.String("account", "", "account id to use where the request leaves accountId out")
 		timeout    = fs.Duration("timeout", 30*time.Second, "how long to wait for the server")
 		dryRun     = fs.Bool("dry-run", false, "print the request and send nothing")
-		schemas    stringList
 		params     stringList
 		createdIDs stringList
 	)
-	fs.Var(&schemas, "schema", "schema file describing a vendor extension; repeatable")
 	fs.Var(&params, "p", "value for a parameter the request leaves open; repeatable")
 	fs.Var(&createdIDs, "created-id", "creation id carried in from an earlier request; repeatable")
 	fs.SetOutput(stderr)
@@ -77,6 +74,9 @@ func runRequest(args []string) error {
 		}
 		return err
 	}
+	if err := chooseCredentials(fs, token, user); err != nil {
+		return err
+	}
 	if name == "" {
 		name = fs.Arg(0)
 	}
@@ -85,15 +85,9 @@ func runRequest(args []string) error {
 		return errors.New("no request named")
 	}
 
-	cfg, err := loadConfig(*configPath)
+	cfg, err := project.settings()
 	if err != nil {
 		return err
-	}
-	if *requests != "" {
-		cfg.Requests = *requests
-	}
-	if len(schemas) > 0 {
-		cfg.Schemas = append(cfg.Schemas, schemas...)
 	}
 	cfg.applyDefaults()
 
@@ -267,6 +261,25 @@ func printRequest(catalogue *spec.Spec, q *request.Request, values map[string]wi
 	return nil
 }
 
+// chooseCredentials settles which credentials a command sends, once its flags
+// are parsed. Each flag falls back to its environment variable, and a flag given
+// on the command line is the more deliberate of the two: -user is what is sent
+// where JMAP_TOKEN is set as well. The two flags given together are refused
+// rather than one of them ignored.
+func chooseCredentials(fs *flag.FlagSet, token, user *string) error {
+	given := make(map[string]bool)
+	fs.Visit(func(f *flag.Flag) { given[f.Name] = true })
+	switch {
+	case given["token"] && given["user"]:
+		return errors.New("-token and -user were both given; pass one of them")
+	case given["user"]:
+		*token = ""
+	case given["token"]:
+		*user = ""
+	}
+	return nil
+}
+
 // newClient builds the client the run sends through.
 func newClient(session, token, user string) (*jmapc.Client, error) {
 	if session == "" {
@@ -282,7 +295,9 @@ func newClient(session, token, user string) (*jmapc.Client, error) {
 	case user != "":
 		name, password, ok := strings.Cut(user, ":")
 		if !ok {
-			return nil, fmt.Errorf("-user %s: credentials are given as user:password", user)
+			// The value is left out of the message: without its colon there
+			// is no telling which part of it is the password.
+			return nil, errors.New("-user takes credentials as user:password, and the value given has no colon")
 		}
 		opts = append(opts, jmapc.WithBasicAuth(name, password))
 	}

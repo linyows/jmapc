@@ -8,7 +8,6 @@ import (
 
 	"github.com/linyows/jmapc/internal/gen/shared"
 	"github.com/linyows/jmapc/internal/request"
-	"github.com/linyows/jmapc/internal/spec"
 )
 
 // PropertiesFileName is the file the types for the named sets of properties are
@@ -41,11 +40,12 @@ func (g *RequestGenerator) propertiesFile() ([]byte, error) {
 // generated into, which needs less than a request does: there is no function
 // here, only the types the records take.
 func (g *RequestGenerator) writePropertyImports(buf *bytes.Buffer, body []byte) {
+	used := packagesUsed(body)
 	var imports []string
-	if bytes.Contains(body, []byte("json.")) {
+	if used["json"] {
 		imports = append(imports, "encoding/json")
 	}
-	runtime := bytes.Contains(body, []byte(g.Qualifier))
+	runtime := used[strings.TrimSuffix(g.Qualifier, ".")]
 	if len(imports) == 0 && !runtime {
 		return
 	}
@@ -70,46 +70,18 @@ func (g *RequestGenerator) writePropertySet(buf *bytes.Buffer, set *request.Prop
 	if !ok {
 		return
 	}
-	shared.WriteComment(buf, "", propertySetDoc(set))
+	shared.WriteComment(buf, "", shared.SetDoc(set, set.Name))
 	fmt.Fprintf(buf, "type %s struct {\n", set.Name)
 	if set.Extends != nil {
 		shared.WriteComment(buf, "\t", fmt.Sprintf(
 			"The properties of %s, which this set adds to.", set.Extends.Name))
 		fmt.Fprintf(buf, "\t%s\n", set.Extends.Name)
 	}
-	for i, name := range setProperties(set, dataType) {
+	for i, name := range shared.SetProperties(set, dataType) {
 		if i > 0 || set.Extends != nil {
 			buf.WriteString("\n")
 		}
 		g.writeRecordField(buf, dataType, name, "", "")
 	}
 	buf.WriteString("}\n\n")
-}
-
-// setProperties returns the properties the type for a set declares itself: its
-// own, and the id that a /get answers with whether or not it was asked for.
-//
-// The id belongs to the set that declares no base, since that is the type every
-// other one embeds, and only to a set narrowing a type that has one: a set
-// narrowing the body parts of an Email describes something a record holds
-// rather than a record.
-func setProperties(set *request.PropertySet, dataType *spec.Object) []string {
-	if set.Extends != nil {
-		return set.Own
-	}
-	if _, hasID := dataType.Field("id"); !hasID {
-		return set.Own
-	}
-	return shared.RecordProperties(set.Own)
-}
-
-// propertySetDoc is the comment the type for a set carries: what the author
-// said it is for, and what asking for it gets.
-func propertySetDoc(set *request.PropertySet) string {
-	asked := fmt.Sprintf("%s holds the properties of %s that a call asking for @%s receives.",
-		set.Name, set.Type, set.Name)
-	if set.Doc == "" {
-		return asked
-	}
-	return set.Doc + "\n\n" + asked
 }

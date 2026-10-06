@@ -8,11 +8,11 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"time"
 	"unicode"
 
 	"github.com/linyows/jmapc"
 	"github.com/linyows/jmapc/internal/spec"
+	"github.com/linyows/jmapc/internal/syntax"
 )
 
 // paramPattern matches a value the request leaves open. The braces are used
@@ -56,7 +56,7 @@ func (c *checker) value(t *spec.Type, raw json.RawMessage, where, doc string) No
 	mayBeOptional := c.argumentValue
 	c.argumentValue = false
 
-	if s, isString := stringValue(raw); isString {
+	if s, isString := stringValue(raw); isString && !c.sent {
 		if m := paramPattern.FindStringSubmatch(s); m != nil {
 			return &ParamRef{Param: c.params.use(c, m[1], t, where, doc, false)}
 		}
@@ -93,17 +93,66 @@ func (c *checker) value(t *spec.Type, raw json.RawMessage, where, doc string) No
 	}
 }
 
+// scope is what a value is checked within, which the values inside it take on
+// unless they say otherwise. A check that changes it for what it holds saves it
+// first and puts it back after, whatever it changed.
+type scope struct {
+	// filterUnion is the type a /query filter may take, carried down so that
+	// the conditions nested inside a FilterOperator can be checked against the
+	// data type being queried instead of being waved through as Any.
+	filterUnion *spec.Type
+
+	// patchTarget names the data type that the PatchObjects being checked
+	// apply to, carried down from the argument that holds them.
+	patchTarget string
+
+	// sortTarget names the data type whose sortable properties a Comparator
+	// being checked may name, carried down the same way.
+	sortTarget string
+
+	// enum holds the values the property being checked may take, for one whose
+	// specification fixes them. It travels with the property so that it reaches
+	// the elements of an array and the keys of a set.
+	enum []string
+
+	// property is the property or argument whose value is being checked,
+	// which a parameter standing for a key of a map in it is documented as a
+	// key of. It is empty inside the values of a map, which belong to no
+	// property of their own.
+	property string
+
+	// creationIDs says that the keys of the map about to be checked are the
+	// creation ids the request invents. It travels one level, from the argument
+	// that holds them to the map itself.
+	creationIDs bool
+}
+
+// within returns the scope of the value of field, named key: it takes the
+// values the field fixes, and the patches and comparators it carries, whose
+// target travels with them wherever in the value they turn up.
+func (s scope) within(field *spec.Field, key string) scope {
+	if field.PatchTarget != "" {
+		s.patchTarget = field.PatchTarget
+	}
+	if field.SortTarget != "" {
+		s.sortTarget = field.SortTarget
+	}
+	s.enum = field.Enum
+	s.property = key
+	return s
+}
+
 // union checks a value that may take either of several shapes, which is how
 // JMAP spells a /query filter. It reports the failure of the closest-fitting
 // alternative rather than of all of them, because a filter that is nearly a
 // valid condition is more usefully described as that condition with one thing
 // wrong.
 func (c *checker) union(t *spec.Type, raw json.RawMessage, where, doc string) Node {
-	saved := c.filterUnion
+	saved := c.scope
 	if unionMentions(t, "FilterOperator") {
 		c.filterUnion = t
 	}
-	defer func() { c.filterUnion = saved }()
+	defer func() { c.scope = saved }()
 
 	var best Node
 	var bestErrs ErrorList
@@ -175,8 +224,17 @@ func (c *checker) checkEnum(value, where string) {
 		value, strings.Join(c.enum, ", "))
 }
 
-// propertyHint suggests what an unknown property in a path may have meant.
+// propertyHint suggests what an unknown property in a path may have meant, the
+// forms a header field is asked for in where it names another, or what to
+// write in place of a property a record cannot be written with.
 func propertyHint(err error) string {
+	if hint := headerFormHint(err); hint != "" {
+		return hint
+	}
+	var unwritable *spec.UnwritableError
+	if errors.As(err, &unwritable) {
+		return unwritable.Hint
+	}
 	var unknown *spec.UnknownPropertyError
 	if !errors.As(err, &unknown) {
 		return ""
@@ -200,11 +258,18 @@ func missingRequired(o *spec.Object, present map[string]bool) bool {
 // leaving the parameters or errors of a failed attempt behind.
 func (c *checker) try(f func() Node) (Node, ErrorList) {
 	errMark, paramMark := len(c.errs), c.params.mark()
+	// The capabilities an alternative uses are the request's only where the
+	// alternative is the one the value is, so they are kept aside until then.
+	used := make(map[string]bool, len(c.used))
+	for uri := range c.used {
+		used[uri] = true
+	}
 	node := f()
 	if len(c.errs) > errMark {
 		errs := append(ErrorList(nil), c.errs[errMark:]...)
 		c.errs = c.errs[:errMark]
 		c.params.rollback(paramMark)
+		c.used = used
 		return node, errs
 	}
 	return node, nil
@@ -292,13 +357,26 @@ func (c *checker) object(t *spec.Type, raw json.RawMessage, where string) Node {
 	if len(o.Fields) == 0 {
 		return c.patchObject(members, keys, raw, where)
 	}
+	c.checkHeaderClashes(o, keys, where)
 
 	out := &Object{Raw: raw}
 	for _, key := range keys {
 		field, isKnown := o.Field(key)
 		if !isKnown {
-			c.errorf(where+"."+key, hintFor(key, o.PropertyNames()), "%s has no property %q", o.Name, key)
-			continue
+			dynamic, err := o.DynamicField(key)
+			if err != nil {
+				c.errorf(where+"."+key, headerFormHint(err), "%v", err)
+				continue
+			}
+			if dynamic == nil {
+				c.errorf(where+"."+key, hintFor(key, o.PropertyNames()), "%s has no property %q", o.Name, key)
+				continue
+			}
+			if err := o.CheckWritable(key); err != nil {
+				c.errorf(where+"."+key, propertyHint(err), "%v", err)
+				continue
+			}
+			field = dynamic
 		}
 		elemType := field.ParsedType()
 		if o.Name == "FilterOperator" && key == "conditions" && c.filterUnion != nil {
@@ -310,20 +388,11 @@ func (c *checker) object(t *spec.Type, raw json.RawMessage, where string) Node {
 		// A property may itself carry patches or comparators, as the
 		// localizations of a contact card carry patches to the card. Their
 		// target travels with them, wherever in the arguments they turn up.
-		savedPatch, savedSort, savedEnum := c.patchTarget, c.sortTarget, c.enum
-		if field.PatchTarget != "" {
-			c.patchTarget = field.PatchTarget
-		}
-		if field.SortTarget != "" {
-			c.sortTarget = field.SortTarget
-		}
-		c.enum = field.Enum
+		saved := c.scope
+		c.scope = c.scope.within(field, key)
 		c.useCapability(field)
-		savedProperty := c.property
-		c.property = key
 		value := c.value(elemType, members[key], where+"."+key, field.Doc)
-		c.property = savedProperty
-		c.patchTarget, c.sortTarget, c.enum = savedPatch, savedSort, savedEnum
+		c.scope = saved
 		out.Fields = append(out.Fields, ObjectField{Key: key, Value: value})
 	}
 	return out
@@ -349,6 +418,29 @@ func (c *checker) objectMembers(t *spec.Type, raw json.RawMessage, where string)
 // was written.
 func (c *checker) anyValue(raw json.RawMessage) Node {
 	return &Literal{JSON: raw}
+}
+
+// Format is what a string of one of the primitive types that carry a format
+// has to look like: whether a string is one, and how one is written.
+type Format struct {
+	Valid func(string) bool
+	Doc   string
+}
+
+// Formats are the primitive types that are strings written in a format, which
+// a value in a request and a parameter given on a command line are both held
+// to.
+var Formats = map[string]Format{
+	spec.UTCDateType: {syntax.ValidUTCDate,
+		"a UTCDate is written as 2006-01-02T15:04:05Z, or 2006-01-02T15:04:05.5Z with a fraction of a second"},
+	spec.DateType: {syntax.ValidDate,
+		"a Date is written as 2006-01-02T15:04:05Z07:00, or 2006-01-02T15:04:05.5Z07:00 with a fraction of a second"},
+	spec.LocalDateTimeType: {func(s string) bool { return jmapc.LocalDateTime(s).Valid() },
+		"a LocalDateTime is written as 2006-01-02T15:04:05, with no time zone"},
+	spec.DurationType: {func(s string) bool { return jmapc.Duration(s).Valid() },
+		"a Duration is written as PT1H30M or P1D, with no years or months"},
+	spec.SignedDurationType: {func(s string) bool { return jmapc.SignedDuration(s).Valid() },
+		"a SignedDuration is a Duration, optionally prefixed with - or +"},
 }
 
 // primitive checks a value against one of the primitive JMAP types.
@@ -406,48 +498,13 @@ func (c *checker) primitive(t *spec.Type, raw json.RawMessage, where string) Nod
 			c.errorf(where, "an id is 1 to 255 characters from A-Z, a-z, 0-9, _ and -, and a creation id is written as \"#\" followed by such a name",
 				"%q is not a valid id", s)
 		}
-	case spec.UTCDateType:
+	case spec.UTCDateType, spec.DateType, spec.LocalDateTimeType, spec.DurationType, spec.SignedDurationType:
 		s, ok := stringValue(raw)
 		if !ok {
 			return fail()
 		}
-		if _, err := time.Parse("2006-01-02T15:04:05Z", s); err != nil {
-			c.errorf(where, "a UTCDate is written as 2006-01-02T15:04:05Z", "%q is not a UTCDate", s)
-		}
-	case spec.DateType:
-		s, ok := stringValue(raw)
-		if !ok {
-			return fail()
-		}
-		if _, err := time.Parse(time.RFC3339, s); err != nil {
-			c.errorf(where, "a Date is written as 2006-01-02T15:04:05Z07:00", "%q is not a Date", s)
-		}
-	case spec.LocalDateTimeType:
-		s, ok := stringValue(raw)
-		if !ok {
-			return fail()
-		}
-		if !jmapc.LocalDateTime(s).Valid() {
-			c.errorf(where, "a LocalDateTime is written as 2006-01-02T15:04:05, with no time zone",
-				"%q is not a LocalDateTime", s)
-		}
-	case spec.DurationType:
-		s, ok := stringValue(raw)
-		if !ok {
-			return fail()
-		}
-		if !jmapc.Duration(s).Valid() {
-			c.errorf(where, "a Duration is written as PT1H30M or P1D, with no years or months",
-				"%q is not a Duration", s)
-		}
-	case spec.SignedDurationType:
-		s, ok := stringValue(raw)
-		if !ok {
-			return fail()
-		}
-		if !jmapc.SignedDuration(s).Valid() {
-			c.errorf(where, "a SignedDuration is a Duration, optionally prefixed with - or +",
-				"%q is not a SignedDuration", s)
+		if f := Formats[t.Name]; !f.Valid(s) {
+			c.errorf(where, f.Doc, "%q is not a %s", s, t.Name)
 		}
 	case spec.TimeZoneIDType:
 		if _, ok := stringValue(raw); !ok {
@@ -529,6 +586,9 @@ func elemDoc(elemType *spec.Type, context string) string {
 // is, so it is recorded weakly: another use of the same parameter, somewhere
 // that does say, settles its type.
 func (c *checker) keySegments(key string, keyType *spec.Type, property, where, doc string) []KeySegment {
+	if c.sent {
+		return nil
+	}
 	matches := embeddedParamPattern.FindAllStringSubmatchIndex(key, -1)
 	if len(matches) == 0 {
 		return nil
@@ -704,7 +764,7 @@ func (c *checker) patchObject(members map[string]json.RawMessage, keys []string,
 		segments := strings.Split(key, "/")
 		unknown := make([]bool, len(segments))
 		for i, seg := range segments {
-			unknown[i] = embeddedParamPattern.MatchString(seg)
+			unknown[i] = !c.sent && embeddedParamPattern.MatchString(seg)
 		}
 
 		valueType := &spec.Type{Name: spec.Any}
@@ -718,16 +778,48 @@ func (c *checker) patchObject(members map[string]json.RawMessage, keys []string,
 				continue
 			}
 			keyTypes, properties, valueType, target = resolved, named, value, resolvedField
+			// A property another specification adds needs its capability
+			// however it is reached, by a patch as well as by name, and so
+			// does every property the pointer passes through on the way.
+			for i := range segments {
+				if i < len(named) && named[i] && !unknown[i] {
+					if _, _, _, through, err := c.spec.ResolvePatch(c.patchTarget, segments[:i+1], unknown[:i+1]); err == nil {
+						c.useCapability(through)
+					}
+				}
+			}
+			// A sent request has its ids written out: each segment the
+			// pointer takes as an id has to be one.
+			if c.sent {
+				for i, seg := range segments {
+					seg = strings.NewReplacer("~1", "/", "~0", "~").Replace(seg)
+					if i < len(keyTypes) && keyTypes[i] != nil && keyTypes[i].Name == spec.IdType &&
+						!isCreationID(seg) && !jmapc.ID(seg).Valid() {
+						c.errorf(where+"."+key, "", "%q is not a valid id", seg)
+					}
+				}
+			}
 		}
 
 		field.KeySegments = c.patchKeySegments(segments, keyTypes, properties, where+"."+key)
+		// A key of a set whose keys the specification fixes, as a participant's
+		// roles are, is held to those keys as it is in the set written whole.
+		if last := len(segments) - 1; target != nil && len(target.Enum) > 0 &&
+			target.ParsedType().IsMap() && last > 0 && properties[last-1] && !unknown[last] {
+			saved := c.scope
+			c.enum = target.Enum
+			// The segment is a JSON pointer token, ~1 and ~0 standing for /
+			// and ~, and the key it names is what the values are.
+			c.checkEnum(strings.NewReplacer("~1", "/", "~0", "~").Replace(segments[last]), where+"."+key)
+			c.scope = saved
+		}
 		// null in a patch means "remove this", so it is allowed wherever a value
 		// is, whether or not the property itself may hold null.
 		removable := *valueType
 		removable.Nullable = true
 
 		var valueDoc string
-		savedEnum := c.enum
+		saved := c.scope
 		c.enum = nil
 		if target != nil {
 			valueDoc, c.enum = target.Doc, target.Enum
@@ -735,13 +827,12 @@ func (c *checker) patchObject(members map[string]json.RawMessage, keys []string,
 		// A value replacing a property whole has keys of that property, as
 		// mailboxIds does in {"mailboxIds": {"m1": true}}; one at a key has
 		// keys of nothing named.
-		savedProperty := c.property
 		c.property = ""
 		if last := len(segments) - 1; !unknown[last] && last < len(properties) && properties[last] {
 			c.property = segments[last]
 		}
 		field.Value = c.value(&removable, members[key], where+"."+key, valueDoc)
-		c.enum, c.property = savedEnum, savedProperty
+		c.scope = saved
 		out.Fields = append(out.Fields, field)
 	}
 	return out
@@ -753,6 +844,9 @@ func (c *checker) patchObject(members map[string]json.RawMessage, keys []string,
 // depth, so a parameter naming a mailbox in "mailboxIds/{{id}}" is an Id, the
 // same as it would be anywhere else.
 func (c *checker) patchKeySegments(segments []string, keyTypes []*spec.Type, properties []bool, where string) []KeySegment {
+	if c.sent {
+		return nil
+	}
 	var out []KeySegment
 	var found bool
 	for i, seg := range segments {
@@ -849,10 +943,10 @@ func (c *checker) comparator(members map[string]json.RawMessage, keys []string, 
 				continue
 			}
 		}
-		savedProperty := c.property
+		saved := c.scope
 		c.property = key
 		value := c.value(field.ParsedType(), members[key], where+"."+key, field.Doc)
-		c.property = savedProperty
+		c.scope = saved
 		out.Fields = append(out.Fields, ObjectField{Key: key, Value: value})
 	}
 
@@ -879,7 +973,7 @@ func (c *checker) sortProperty(dataType *spec.Object, members map[string]json.Ra
 		return nil, extra
 	}
 	name, isString := stringValue(raw)
-	if !isString || paramPattern.MatchString(name) {
+	if !isString || (!c.sent && paramPattern.MatchString(name)) {
 		// The property is left to the caller, so which members the comparator
 		// needs cannot be known here. Allow the extras of every sortable
 		// property rather than rejecting a request that may well be right.
@@ -910,4 +1004,51 @@ func comparatorNames(base *spec.Object, extra map[string]*spec.Field) []string {
 		names = append(names, name)
 	}
 	return names
+}
+
+// convenienceHeaders are the properties of a message and of a part of one that
+// stand for a header field, which RFC 8621, Section 4.6 does not let a record
+// be given as well as the header field itself. A part's name stands for two:
+// RFC 8621, Section 4.1.4 has it the filename of Content-Disposition or, where
+// that has none, the name of Content-Type.
+var convenienceHeaders = map[string]map[string][]string{
+	"Email": {
+		"subject": {"subject"}, "from": {"from"}, "to": {"to"}, "cc": {"cc"}, "bcc": {"bcc"},
+		"replyTo": {"reply-to"}, "sender": {"sender"}, "sentAt": {"date"},
+		"messageId": {"message-id"}, "inReplyTo": {"in-reply-to"}, "references": {"references"},
+	},
+	"EmailBodyPart": {
+		"type": {"content-type"}, "charset": {"content-type"}, "name": {"content-disposition", "content-type"},
+		"disposition": {"content-disposition"}, "cid": {"content-id"},
+		"language": {"content-language"}, "location": {"content-location"},
+	},
+}
+
+// checkHeaderClashes reports a header field a record written out is given
+// twice: in two forms, or in two spellings, or as a header field and as the
+// property that stands for it. The server could not tell which was meant.
+func (c *checker) checkHeaderClashes(o *spec.Object, keys []string, where string) {
+	convenience, ok := convenienceHeaders[o.Name]
+	if !ok {
+		return
+	}
+	given := map[string]string{}
+	for _, key := range keys {
+		for _, header := range convenience[key] {
+			given[header] = key
+		}
+	}
+	for _, key := range keys {
+		h, _ := spec.ParseHeaderProperty(key)
+		if h == nil {
+			continue
+		}
+		name := strings.ToLower(h.Name)
+		if earlier, twice := given[name]; twice {
+			c.errorf(where+"."+key, "give the header field once",
+				"%s gives the %s header field that %s gives already", key, h.Name, earlier)
+			continue
+		}
+		given[name] = key
+	}
 }

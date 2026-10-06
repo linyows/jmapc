@@ -2,7 +2,6 @@ package jmapc
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -149,17 +148,9 @@ func (c *Client) Upload(ctx context.Context, accountID ID, contentType string, b
 	}
 	defer release()
 
-	resp, err := c.sendWithRetry(req, KindUpload)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return nil, c.requestError(resp)
-	}
 	var info BlobInfo
-	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
-		return nil, fmt.Errorf("jmapc: decoding upload response: %w", err)
+	if err := c.exchangeJSON(req, KindUpload, &info, "upload response", http.StatusOK, http.StatusCreated); err != nil {
+		return nil, err
 	}
 	return &info, nil
 }
@@ -189,18 +180,29 @@ func (c *Client) checkUploadSize(ctx context.Context, size int64) error {
 }
 
 // rangeIgnoredError is the failure of a download whose range the server
-// ignored, answering with the whole blob.
+// ignored, answering with the whole blob, or with a part whose bounds do not
+// fit the one asked for, or that it does not say the bounds of.
 type rangeIgnoredError struct {
 	// wanted is the Range header that was sent.
 	wanted string
+	// partial says the server answered with part of the blob, and answered
+	// is the Content-Range it gave the part, empty where it gave none.
+	partial  bool
+	answered string
 }
 
 func (e *rangeIgnoredError) Error() string {
+	if e.partial {
+		return fmt.Sprintf("jmapc: the server answered the range %q with a part whose Content-Range is %q", e.wanted, e.answered)
+	}
 	return fmt.Sprintf("jmapc: the server ignored the range %q and answered with the whole blob", e.wanted)
 }
 
 // IsRangeIgnored reports whether err is a download that asked for part of a
-// blob from a server that answered with the whole of it. JMAP does not define
+// blob from a server that answered with the whole of it, or with a part that
+// does not fit what was asked: one that starts elsewhere, ends past where it
+// was asked to, ends sooner without the blob ending there, or whose bounds the
+// server did not state. JMAP does not define
 // ranges on the download endpoint, so a server that does not offer them is not
 // at fault, and asking again will not change its answer: a caller resuming a
 // download downloads the whole blob instead.
@@ -283,49 +285,149 @@ func (c *Client) Download(ctx context.Context, accountID, blobID ID, opts *Downl
 		Name:       filenameFrom(resp.Header.Get("Content-Disposition")),
 	}
 	if wanted != "" {
-		part, err := parseContentRange(resp.Header.Get("Content-Range"))
-		if err != nil {
+		answered := resp.Header.Get("Content-Range")
+		// The part has to start where it was asked to, or the caller writes
+		// it at the wrong offset, and end where it was asked to, or the
+		// caller is handed less than it asked for. It ends sooner only where
+		// the blob does, and never past the end of the blob. A part whose
+		// bounds cannot be read cannot be placed at all.
+		// Where the server says how long the body is, it has to be as long as
+		// the part it says the body is.
+		part, err := parseContentRange(answered)
+		if err != nil || part.From != opts.From || part.To < part.From ||
+			!endsWhereAsked(part, opts) ||
+			(resp.ContentLength >= 0 && resp.ContentLength != part.To-part.From+1) {
 			resp.Body.Close()
-			return nil, err
+			return nil, &rangeIgnoredError{wanted: wanted, partial: true, answered: answered}
 		}
 		blob.Range = part
+		// A body sent in chunks says how long it is only by ending, so it is
+		// held to the length of the part as it is read.
+		if resp.ContentLength < 0 {
+			blob.ReadCloser = &partReader{body: resp.Body, left: part.To - part.From + 1, part: answered, wanted: wanted}
+		}
 	}
 	return blob, nil
+}
+
+// partReader reads the body of a part whose length the server did not state
+// beforehand, failing where it ends sooner or goes on longer than the part it
+// says it is: the caller would otherwise take a short body for the whole part,
+// or read octets of the blob it did not ask for. A body that goes on longer is
+// the server answering the range wrongly, which IsRangeIgnored reports; one
+// that ends sooner may as well be a connection that dropped, and is
+// io.ErrUnexpectedEOF, which IsTemporary takes as worth another attempt.
+type partReader struct {
+	body   io.ReadCloser
+	left   int64
+	part   string
+	wanted string
+}
+
+func (r *partReader) Read(p []byte) (int, error) {
+	if r.left == 0 {
+		// The part is all here. What follows has to be the end of the body,
+		// and a failure to reach it is the failure it is.
+		var extra [1]byte
+		for {
+			n, err := r.body.Read(extra[:])
+			switch {
+			case n > 0:
+				// The server answered with more than the part it says,
+				// and will again: as permanent as a part that starts in
+				// the wrong place.
+				return 0, &rangeIgnoredError{wanted: r.wanted, partial: true, answered: r.part}
+			case errors.Is(err, io.EOF):
+				return 0, io.EOF
+			case err != nil:
+				return 0, err
+			}
+		}
+	}
+	if int64(len(p)) > r.left {
+		p = p[:r.left]
+	}
+	n, err := r.body.Read(p)
+	r.left -= int64(n)
+	if errors.Is(err, io.EOF) && r.left > 0 {
+		return n, fmt.Errorf("jmapc: the part ended %d octets short of the %s its Content-Range says: %w",
+			r.left, r.part, io.ErrUnexpectedEOF)
+	}
+	if errors.Is(err, io.EOF) {
+		err = nil
+	}
+	return n, err
+}
+
+func (r *partReader) Close() error { return r.body.Close() }
+
+// endsWhereAsked reports whether a part ends where a download asked it to: at
+// the end of the range asked for, or sooner where the server says the blob ends
+// first. A part ending sooner where the server does not say how long the blob
+// is proves nothing about where the blob ends, and is taken at its word only
+// where the download asked for the rest of the blob, however long that is.
+func endsWhereAsked(part *BlobRange, opts *DownloadOptions) bool {
+	if part.Total >= 0 && part.To >= part.Total {
+		return false
+	}
+	if opts.Length > 0 {
+		last := opts.From + opts.Length - 1
+		switch {
+		case part.To > last:
+			return false
+		case part.To == last:
+			return true
+		}
+		return part.Total >= 0 && part.To == part.Total-1
+	}
+	return part.Total < 0 || part.To == part.Total-1
 }
 
 // parseContentRange reads the part of a blob a server reported returning,
 // which RFC 9110, Section 14.4 writes as "bytes 0-99/1234", with the size of
 // the whole written as "*" where the server does not report it.
 func parseContentRange(header string) (*BlobRange, error) {
+	malformed := fmt.Errorf("jmapc: the server answered with part of the blob and a Content-Range of %q", header)
 	value, ok := strings.CutPrefix(strings.TrimSpace(header), "bytes ")
 	if !ok {
-		return nil, fmt.Errorf("jmapc: the server answered with part of the blob and a Content-Range of %q", header)
+		return nil, malformed
 	}
 	span, total, ok := strings.Cut(value, "/")
 	if !ok {
-		return nil, fmt.Errorf("jmapc: the server answered with part of the blob and a Content-Range of %q", header)
+		return nil, malformed
 	}
 	first, last, ok := strings.Cut(span, "-")
 	if !ok {
-		return nil, fmt.Errorf("jmapc: the server answered with part of the blob and a Content-Range of %q", header)
+		return nil, malformed
 	}
-	from, err := strconv.ParseInt(first, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("jmapc: the server answered with part of the blob and a Content-Range of %q", header)
+	from, ok := octets(first)
+	if !ok {
+		return nil, malformed
 	}
-	to, err := strconv.ParseInt(last, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("jmapc: the server answered with part of the blob and a Content-Range of %q", header)
+	to, ok := octets(last)
+	if !ok {
+		return nil, malformed
 	}
 	part := &BlobRange{From: from, To: to, Total: -1}
 	if total != "*" {
-		size, err := strconv.ParseInt(total, 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("jmapc: the server answered with part of the blob and a Content-Range of %q", header)
+		size, ok := octets(total)
+		if !ok {
+			return nil, malformed
 		}
 		part.Total = size
 	}
 	return part, nil
+}
+
+// octets reads a count of octets in a Content-Range, which RFC 9110 writes as
+// digits and nothing else: no sign, so that "-1" is not taken for the "*" a
+// server writes where it does not know the size.
+func octets(s string) (int64, bool) {
+	if s == "" || strings.TrimLeft(s, "0123456789") != "" {
+		return 0, false
+	}
+	n, err := strconv.ParseInt(s, 10, 64)
+	return n, err == nil
 }
 
 // filenameFrom extracts the filename from a Content-Disposition header, and
