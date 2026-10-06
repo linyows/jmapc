@@ -619,5 +619,13 @@ func TestAChunkedPartIsHeldToItsLength(t *testing.T) {
 		if !tt.ok && err == nil {
 			t.Errorf("%q: read %q with no error, want the length refused", tt.body, got)
 		}
+		// Longer is the server answering wrongly; shorter may be a dropped
+		// connection.
+		if len(tt.body) > 4 && !IsRangeIgnored(err) {
+			t.Errorf("%q: %v, want IsRangeIgnored for a part longer than it says", tt.body, err)
+		}
+		if len(tt.body) < 4 && !errors.Is(err, io.ErrUnexpectedEOF) {
+			t.Errorf("%q: %v, want io.ErrUnexpectedEOF for a part shorter than it says", tt.body, err)
+		}
 	}
 }

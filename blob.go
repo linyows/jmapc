@@ -313,7 +313,7 @@ func (c *Client) Download(ctx context.Context, accountID, blobID ID, opts *Downl
 		// A body sent in chunks says how long it is only by ending, so it is
 		// held to the length of the part as it is read.
 		if resp.ContentLength < 0 {
-			blob.ReadCloser = &partReader{body: resp.Body, left: part.To - part.From + 1, part: answered}
+			blob.ReadCloser = &partReader{body: resp.Body, left: part.To - part.From + 1, part: answered, wanted: wanted}
 		}
 	}
 	return blob, nil
@@ -322,20 +322,36 @@ func (c *Client) Download(ctx context.Context, accountID, blobID ID, opts *Downl
 // partReader reads the body of a part whose length the server did not state
 // beforehand, failing where it ends sooner or goes on longer than the part it
 // says it is: the caller would otherwise take a short body for the whole part,
-// or read octets of the blob it did not ask for.
+// or read octets of the blob it did not ask for. A body that goes on longer is
+// the server answering the range wrongly, which IsRangeIgnored reports; one
+// that ends sooner may as well be a connection that dropped, and is
+// io.ErrUnexpectedEOF, which IsTemporary takes as worth another attempt.
 type partReader struct {
-	body io.ReadCloser
-	left int64
-	part string
+	body   io.ReadCloser
+	left   int64
+	part   string
+	wanted string
 }
 
 func (r *partReader) Read(p []byte) (int, error) {
 	if r.left == 0 {
+		// The part is all here. What follows has to be the end of the body,
+		// and a failure to reach it is the failure it is.
 		var extra [1]byte
-		if n, _ := r.body.Read(extra[:]); n > 0 {
-			return 0, fmt.Errorf("jmapc: the part goes on past the %s its Content-Range says", r.part)
+		for {
+			n, err := r.body.Read(extra[:])
+			switch {
+			case n > 0:
+				// The server answered with more than the part it says,
+				// and will again: as permanent as a part that starts in
+				// the wrong place.
+				return 0, &rangeIgnoredError{wanted: r.wanted, partial: true, answered: r.part}
+			case errors.Is(err, io.EOF):
+				return 0, io.EOF
+			case err != nil:
+				return 0, err
+			}
 		}
-		return 0, io.EOF
 	}
 	if int64(len(p)) > r.left {
 		p = p[:r.left]

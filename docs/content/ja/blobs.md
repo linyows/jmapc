@@ -39,6 +39,9 @@ blobが先に終わるために要求より手前で終わる部分は返しま�
 どこまで返ってきたかは`blob.Range`でわかります。
 この失敗は`IsRangeIgnored`で判別できます。
 何度要求してもサーバの答えは変わらないので、再開できないダウンロードは最初からやり直します。
+chunkedで送られる部分は、終わることでしか長さを示さないので、読み取りの途中で失敗します。
+示した部分より長く続く場合は`IsRangeIgnored`で判別できるエラーになります。
+短く終わる場合は接続が切れただけかもしれないので、`IsTemporary`が再試行に値すると判断する`io.ErrUnexpectedEOF`になります。
 
 ```go
 blob, err := c.Download(ctx, accountID, blobID, &jmapc.DownloadOptions{From: written})

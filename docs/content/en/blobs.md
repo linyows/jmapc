@@ -40,7 +40,11 @@ caller would write at the wrong offset, or handing the caller less than it
 asked for. A part that ends sooner because the blob ends first is returned, and
 `blob.Range` says how much came back. `IsRangeIgnored` reports the failure,
 which asking again does not change, so a download that cannot be resumed starts
-over:
+over. A part sent in chunks says how long it is only by ending, so reading it
+fails as it is read: with an error `IsRangeIgnored` reports where it goes on
+past the part, and with `io.ErrUnexpectedEOF`, which `IsTemporary` takes as
+worth another attempt, where it ends short, since that may be a connection that
+dropped:
 
 ```go
 blob, err := c.Download(ctx, accountID, blobID, &jmapc.DownloadOptions{From: written})
