@@ -302,6 +302,12 @@ func TestParseErrors(t *testing.T) {
 		]}`,
 		want: `the leading "/" of a patch key is there already`,
 	}, {
+		name: "patch key reaching inside a list",
+		src: `{"methodCalls": [
+			["Identity/set", {"update": {"i1": {"replyTo/0/email": "someone@example.com"}}}, "c0"]
+		]}`,
+		want: `a patch cannot reach inside EmailAddress[]|null, a list, to "0"`,
+	}, {
 		name: "patch key with a leading slash and a parameter in it",
 		src: `{"methodCalls": [
 			["Email/set", {"update": {"e1": {"/keywords/{{keyword}}": true}}}, "c0"]
