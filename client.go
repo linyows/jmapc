@@ -231,7 +231,9 @@ func (c *Client) fetchSession(ctx context.Context) (*Session, error) {
 	c.fetching, c.fetchErr = nil, err
 	// A timeout of the HTTP client's own is not the caller giving up, though
 	// it is a deadline too: what decides it is whether ctx itself ended.
-	c.fetchAbandoned = err != nil && ctx.Err() != nil
+	// And a failure of the fetch's own, a 500, is not given up for a context
+	// that ended just after: the error has to be the context's.
+	c.fetchAbandoned = err != nil && ctx.Err() != nil && errors.Is(err, ctx.Err())
 	if err == nil {
 		c.session, c.stale = s, false
 	}
