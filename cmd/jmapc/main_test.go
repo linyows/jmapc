@@ -315,6 +315,27 @@ func TestAFlagMistakeIsReportedWhereTheCommandWrites(t *testing.T) {
 	}
 }
 
+// TestASettingsFileResolvesItsPathsAgainstItself checks a settings file read
+// from somewhere other than where jmapc runs. Its paths, and the defaults it
+// leaves alone, are relative to the file, so that the file means the same
+// wherever it is read from.
+func TestASettingsFileResolvesItsPathsAgainstItself(t *testing.T) {
+	dir := workspace(t, map[string]string{
+		"project/jmapc.json":                       `{"out": "gen"}`,
+		"project/requests/ListMailboxes.jmap.json": listMailboxes,
+	})
+	config := filepath.Join(dir, "project", "jmapc.json")
+	if _, errOut, err := capture(t, []string{"generate", "-config", config}); err != nil {
+		t.Fatalf("generate: %v\n%s", err, errOut)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "project", "gen", "listmailboxes_gen.go")); err != nil {
+		t.Errorf("the client was not written beside the settings file: %v", err)
+	}
+	if _, errOut, err := capture(t, []string{"generate", "-config", config, "-check"}); err != nil {
+		t.Errorf("generate -check: %v\n%s", err, errOut)
+	}
+}
+
 // TestSameRequestUnderTwoNames covers two request files holding one request. They
 // differ only in what they call their parameters and their calls, so they make
 // the same request, and each brings a set of generated types along with it.
