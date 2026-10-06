@@ -92,7 +92,8 @@ func (p RetryPolicy) wait(attempt int, retryAfter time.Duration) time.Duration {
 	if retryAfter > 0 {
 		return retryAfter
 	}
-	// The first attempt waits for nothing, and the second for the least.
+	// The first attempt is sent without asking how long to wait; the second
+	// waits the least, and so does the first if it is asked about.
 	return doubled(minRetryWait, maxRetryWait, attempt-2)
 }
 

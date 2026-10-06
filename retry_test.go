@@ -249,8 +249,9 @@ func TestNoLimitWithoutASession(t *testing.T) {
 }
 
 // TestARetryWaitsTwiceAsLongEachTime checks the default wait before each
-// attempt: nothing for the first, the least for the second, twice as long for
-// each after it, and no more than the most.
+// attempt: the least for the second, twice as long for each after it, and no
+// more than the most. The first is sent without a wait, and asked about anyway
+// it says the least, as it always has.
 func TestARetryWaitsTwiceAsLongEachTime(t *testing.T) {
 	var p RetryPolicy
 	want := minRetryWait
