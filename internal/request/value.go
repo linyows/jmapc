@@ -758,7 +758,9 @@ func (c *checker) patchObject(members map[string]json.RawMessage, keys []string,
 			target.ParsedType().IsMap() && last > 0 && properties[last-1] && !unknown[last] {
 			savedEnum := c.enum
 			c.enum = target.Enum
-			c.checkEnum(segments[last], where+"."+key)
+			// The segment is a JSON pointer token, ~1 and ~0 standing for /
+			// and ~, and the key it names is what the values are.
+			c.checkEnum(strings.NewReplacer("~1", "/", "~0", "~").Replace(segments[last]), where+"."+key)
 			c.enum = savedEnum
 		}
 		// null in a patch means "remove this", so it is allowed wherever a value

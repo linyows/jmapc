@@ -2126,3 +2126,28 @@ func TestAKeyOfAMapInAMapNamesNoProperty(t *testing.T) {
 		t.Errorf("patchRow is documented as %q, want %q", docs["patchRow"], want)
 	}
 }
+
+// TestAPatchKeyIsReadAsThePointerToken checks an enumerated key reached by a
+// patch that holds a slash, which a pointer writes as ~1: the key the token
+// names is what is held to the values, as it is in the set written whole.
+func TestAPatchKeyIsReadAsThePointerToken(t *testing.T) {
+	s := spec.Standard()
+	if err := s.Extend(&spec.Schema{
+		Capability: "urn:example:devices",
+		Types: []*spec.SchemaType{{Name: "Device", Methods: []string{"set"}, Properties: []*spec.SchemaField{
+			{Name: "id", Type: "Id", ServerSet: true},
+			{Name: "features", Type: "String[Boolean]", Enum: []string{"audio/video", "text"}},
+		}}},
+	}); err != nil {
+		t.Fatalf("Extend: %v", err)
+	}
+	p := NewParser(s)
+	if _, err := p.Parse("Enable"+Extension, []byte(`{"methodCalls": [["Device/set",
+	  {"update": {"d1": {"features/audio~1video": true}}}, "c0"]]}`)); err != nil {
+		t.Errorf("a key written as its pointer token was refused:\n%v", err)
+	}
+	if _, err := p.Parse("Enable"+Extension, []byte(`{"methodCalls": [["Device/set",
+	  {"update": {"d1": {"features/audio": true}}}, "c0"]]}`)); err == nil {
+		t.Error("a key the values do not hold passed")
+	}
+}
