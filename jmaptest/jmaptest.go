@@ -311,16 +311,19 @@ func (s *Server) ServeEvents(w http.ResponseWriter, r *http.Request) {
 	const maxPing = 24 * 60 * 60
 	// The interval is read as 64 bits whatever int is, so that one too large
 	// for an int is clamped as any other too long, rather than dropped.
+	// A ping is due once the interval passes with nothing sent, so the timer
+	// starts again after every event written, a state as well as a ping.
 	var ping <-chan time.Time
+	var idle *time.Timer
 	var seconds int64
 	if asked, err := strconv.ParseUint(query.Get("ping"), 10, 64); err == nil && asked > 0 {
 		seconds = maxPing
 		if asked < maxPing {
 			seconds = int64(asked)
 		}
-		ticker := time.NewTicker(time.Duration(seconds) * time.Second)
-		defer ticker.Stop()
-		ping = ticker.C
+		idle = time.NewTimer(time.Duration(seconds) * time.Second)
+		defer idle.Stop()
+		ping = idle.C
 	}
 	s.mu.Lock()
 	s.watchers[watch] = true
@@ -355,6 +358,9 @@ func (s *Server) ServeEvents(w http.ResponseWriter, r *http.Request) {
 		}
 		if watch.closeAfter && strings.Contains(event, "event: state") {
 			return
+		}
+		if idle != nil {
+			idle.Reset(time.Duration(seconds) * time.Second)
 		}
 	}
 }

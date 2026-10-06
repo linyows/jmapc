@@ -496,3 +496,45 @@ func TestAPingIsSentAsTheJSONItSays(t *testing.T) {
 		cancel()
 	}
 }
+
+// TestAPingIsSentOnlyAfterAnIdleInterval checks that a ping waits for the
+// interval to pass with nothing sent, as RFC 8620 has it: a state sent starts
+// the interval again, rather than being followed at once by a ping.
+func TestAPingIsSentOnlyAfterAnIdleInterval(t *testing.T) {
+	srv := New(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		srv.BaseURL()+"/events?types=*&closeafter=no&ping=1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET /events: %v", err)
+	}
+	defer resp.Body.Close()
+
+	start := time.Now()
+	go func() {
+		time.Sleep(700 * time.Millisecond)
+		srv.Push(AccountID, map[string]string{"Email": "e2"})
+	}()
+	scan := bufio.NewScanner(resp.Body)
+	var state time.Time
+	for scan.Scan() {
+		switch scan.Text() {
+		case "event: state":
+			state = time.Now()
+		case "event: ping":
+			if state.IsZero() {
+				t.Fatalf("a ping came %v in, before the state pushed at 700ms", time.Since(start))
+			}
+			if gap := time.Since(state); gap < 900*time.Millisecond {
+				t.Errorf("a ping came %v after the state, want a full interval", gap)
+			}
+			return
+		}
+	}
+	t.Errorf("the stream ended without a ping: %v", scan.Err())
+}
