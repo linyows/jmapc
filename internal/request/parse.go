@@ -779,7 +779,7 @@ func (c *checker) checkFetched(from *Call, selected []spec.Selection, path, wher
 		}
 		// A /get answers with the id whether or not it was asked for, as
 		// RFC 8620, Section 5.1 has it.
-		if sel.Property == "id" || slices.Contains(fetched, sel.Property) {
+		if (sel.Property == "id" && from.Method.ReturnsID()) || slices.Contains(fetched, sel.Property) {
 			continue
 		}
 		c.errorf(where, fetchedHint(from, sel.Property, argument, fetched),
@@ -824,15 +824,10 @@ func (c *checker) properties(call *Call, where string) []string {
 	if !ok {
 		return nil
 	}
-	// An empty list asks a /get for the id alone, which RFC 8620, Section 5.1
-	// has it return whatever it is asked for. It is kept as an empty slice
-	// rather than nil, since nil is what says the call fetches everything.
-	// Another method selecting properties, as Email/parse does, makes no such
-	// promise of the id, which a parsed email does not have, so an empty list
-	// there is left as it was, the shape of the whole type.
-	if len(arr.Items) == 0 && !strings.HasSuffix(call.Method.Name, "/get") {
-		return nil
-	}
+	// An empty list asks for no properties: the id alone of a /get, which
+	// returns it whatever it is asked for, and nothing of a method that
+	// promises no id, as Email/parse does. It is kept as an empty slice rather
+	// than nil, since nil is what says the call fetches everything.
 	props := []string{}
 	for i, item := range arr.Items {
 		lit, ok := item.(*Literal)

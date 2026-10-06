@@ -90,9 +90,13 @@ func Unique(taken map[string]bool, name string) string {
 	return candidate
 }
 
-// RecordProperties returns the properties a record type holds. A /get response
-// always carries the id, whether or not the request asked for it.
-func RecordProperties(props []string) []string {
+// RecordProperties returns the properties a record type holds. Where withID
+// says the method returns the id whatever it is asked for, as a /get does, the
+// id is among them whether or not the request asked for it.
+func RecordProperties(props []string, withID bool) []string {
+	if !withID {
+		return props
+	}
 	for _, p := range props {
 		if p == "id" {
 			return props

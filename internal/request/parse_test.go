@@ -247,6 +247,15 @@ func TestParseErrors(t *testing.T) {
 		]}`,
 		want: `/list/*/threadId selects threadId from the Email/get call, which does not fetch it`,
 	}, {
+		// A parse asked for no properties fetches nothing, not even an id,
+		// which only a /get returns whatever it is asked for.
+		name: "back reference reads the id of a parse that fetches none",
+		src: `{"methodCalls": [
+			["Email/parse", {"blobIds": ["b1"], "properties": []}, "parsed"],
+			["Email/get", {"#ids": {"resultOf": "parsed", "name": "Email/parse", "path": "/parsed/b1/id"}}, "fetch"]
+		]}`,
+		want: `selects id from the Email/parse call, which does not fetch it`,
+	}, {
 		// The same holds for the body parts: an empty bodyProperties fetches
 		// none of their properties.
 		name: "back reference reads a property of body parts the call fetches none of",

@@ -119,7 +119,7 @@ func TestRecordProperties(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := RecordProperties(tt.in)
+			got := RecordProperties(tt.in, true)
 			if strings.Join(got, ",") != strings.Join(tt.want, ",") {
 				t.Errorf("RecordProperties(%v) = %v, want %v", tt.in, got, tt.want)
 			}
@@ -132,7 +132,7 @@ func TestRecordProperties(t *testing.T) {
 // TypeScript pass.
 func TestRecordPropertiesLeavesItsInputAlone(t *testing.T) {
 	props := []string{"subject", "from"}
-	RecordProperties(props)
+	RecordProperties(props, true)
 	if strings.Join(props, ",") != "subject,from" {
 		t.Errorf("the input became %v", props)
 	}
@@ -196,5 +196,13 @@ func TestSameNarrowingTellsNoListFromAnEmptyOne(t *testing.T) {
 	same := SameNarrowing(q.Calls)
 	if same[q.Calls[1]] == q.Calls[0] {
 		t.Error("a call fetching every property was given the shape of one fetching the id alone")
+	}
+}
+
+// TestRecordPropertiesWithoutAnID checks a method that does not return the id
+// whatever it is asked for: the record holds what was asked for and no more.
+func TestRecordPropertiesWithoutAnID(t *testing.T) {
+	if got := RecordProperties([]string{"subject"}, false); strings.Join(got, ",") != "subject" {
+		t.Errorf("RecordProperties = %v, want subject alone", got)
 	}
 }

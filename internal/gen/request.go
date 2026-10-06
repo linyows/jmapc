@@ -363,7 +363,7 @@ func (g *RequestGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 			// type change.
 			properties = dataType.PropertyNames()
 		}
-		for i, name := range shared.RecordProperties(properties) {
+		for i, name := range shared.RecordProperties(properties, c.Method.ReturnsID()) {
 			if i > 0 {
 				buf.WriteString("\n")
 			}
