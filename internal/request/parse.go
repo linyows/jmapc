@@ -804,12 +804,21 @@ func (c *checker) checkFetched(from *Call, selected []spec.Selection, path, wher
 		var fetched []string
 		var argument string
 		switch {
-		case sel.Type == from.Method.DataType && from.Properties != nil:
+		case sel.Type == from.Method.DataType:
 			fetched, argument = from.Properties, from.Method.PropertiesArgument
-		case sel.Type == from.Method.NestedType && from.NestedProperties != nil:
+		case sel.Type == from.Method.NestedType:
 			fetched, argument = from.NestedProperties, from.Method.NestedPropertiesArgument
 		default:
 			continue
+		}
+		if fetched == nil {
+			// The call fetches every property of the type, or a list the
+			// caller gives, which cannot be known here. Neither is a dynamic
+			// property, a header field or the like, which comes back only
+			// where it is named: every property is every field.
+			if !c.isDynamic(sel) || !c.listedLiterally(from, argument) {
+				continue
+			}
 		}
 		// A /get answers with the id whether or not it was asked for, as
 		// RFC 8620, Section 5.1 has it.
@@ -820,6 +829,32 @@ func (c *checker) checkFetched(from *Call, selected []spec.Selection, path, wher
 			"%s selects %s from the %s call, which does not fetch it",
 			path, sel.Property, from.Method.Name)
 	}
+}
+
+// isDynamic reports whether a selection reads a property a type has beyond its
+// fields, which a /get returns only where it is asked for by name.
+func (c *checker) isDynamic(sel spec.Selection) bool {
+	o, ok := c.spec.Object(sel.Type)
+	if !ok {
+		return false
+	}
+	_, field := o.Field(sel.Property)
+	return !field
+}
+
+// listedLiterally reports whether a call's argument selecting properties is
+// left out or null, which asks for the type's fields, as against given by a
+// parameter, whose list is the caller's and cannot be known.
+func (c *checker) listedLiterally(call *Call, argument string) bool {
+	if call.Args == nil || argument == "" {
+		return true
+	}
+	node, given := call.Args.Find(argument)
+	if !given {
+		return true
+	}
+	lit, ok := node.(*Literal)
+	return ok && string(lit.JSON) == "null"
 }
 
 // fetchedHint says where the missing property is added, which is the set where

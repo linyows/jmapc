@@ -2207,3 +2207,22 @@ func TestAVendorDynamicPropertyIsReadNotWritten(t *testing.T) {
 		}
 	}
 }
+
+// TestADynamicPropertyIsReadOnlyWhereItWasAskedFor checks a back reference to a
+// header field of what a /get returned: the /get returns it only where its
+// properties name it, so one left to fetch the fields of the type has none to
+// read, while a list the caller gives may name it.
+func TestADynamicPropertyIsReadOnlyWhereItWasAskedFor(t *testing.T) {
+	ref := `["Core/echo", {"#listId": {"resultOf": "g", "name": "Email/get", "path": "/list/0/header:List-Id:asText"}}, "e"]`
+	for get, ok := range map[string]bool{
+		`["Email/get", {"ids": ["e1"]}, "g"]`:                                          false,
+		`["Email/get", {"ids": ["e1"], "properties": ["header:List-Id:asText"]}, "g"]`: true,
+		`["Email/get", {"ids": ["e1"], "properties": "{{properties}}"}, "g"]`:          true,
+		`["Email/get", {"ids": ["e1"], "properties": ["subject"]}, "g"]`:               false,
+	} {
+		_, err := NewParser(spec.Standard()).Parse("ListID"+Extension, []byte(`{"methodCalls": [`+get+`, `+ref+`]}`))
+		if ok != (err == nil) {
+			t.Errorf("%s: %v, want it accepted %v", get, err, ok)
+		}
+	}
+}
