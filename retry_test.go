@@ -247,3 +247,20 @@ func TestNoLimitWithoutASession(t *testing.T) {
 		t.Errorf("the session was fetched %d times by a client told not to", n)
 	}
 }
+
+// TestARetryWaitsTwiceAsLongEachTime checks the default wait before each
+// attempt: nothing for the first, the least for the second, twice as long for
+// each after it, and no more than the most.
+func TestARetryWaitsTwiceAsLongEachTime(t *testing.T) {
+	var p RetryPolicy
+	want := minRetryWait
+	for attempt := 2; attempt < 20; attempt++ {
+		if got := p.wait(attempt, 0); got != want {
+			t.Errorf("attempt %d waits %v, want %v", attempt, got, want)
+		}
+		want = min(want*2, maxRetryWait)
+	}
+	if got := p.wait(1, 0); got != minRetryWait {
+		t.Errorf("attempt 1 waits %v, want %v as it always has", got, minRetryWait)
+	}
+}
