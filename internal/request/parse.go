@@ -614,6 +614,16 @@ func propertyArray(props []string) *Array {
 // narrowed differently in two calls would be two shapes under one name, so a
 // call that asks for a set spells out nothing else about the records.
 func (c *checker) checkPropertySetUse(call *Call, where string) {
+	// A set is one record type wherever it is asked for, holding the id a
+	// /get returns whatever it is asked for. A method that makes no such
+	// promise would be answered without the id the type says is there.
+	if call.PropertySet != nil && !call.Method.ReturnsID {
+		c.errorf(fmt.Sprintf("%s.%s", where, call.Method.PropertiesArgument),
+			"write the properties out in this call",
+			"%s does not return the id of every record whatever it is asked for, as a /get does, so the set %s, which holds it, cannot describe what it returns",
+			call.Method.Name, call.PropertySet.Name)
+		return
+	}
 	if call.PropertySet == nil || call.NestedProperties == nil {
 		return
 	}
@@ -779,7 +789,7 @@ func (c *checker) checkFetched(from *Call, selected []spec.Selection, path, wher
 		}
 		// A /get answers with the id whether or not it was asked for, as
 		// RFC 8620, Section 5.1 has it.
-		if (sel.Property == "id" && from.Method.ReturnsID()) || slices.Contains(fetched, sel.Property) {
+		if (sel.Property == "id" && from.Method.ReturnsID) || slices.Contains(fetched, sel.Property) {
 			continue
 		}
 		c.errorf(where, fetchedHint(from, sel.Property, argument, fetched),

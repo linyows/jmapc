@@ -128,6 +128,7 @@ func registerPushSubscription(s *Spec) {
 		DataType:           "PushSubscription",
 		PropertiesArgument: "properties",
 		ResultProperty:     "list",
+		ReturnsID:          true,
 	})
 
 	// Not the standard /set either: no accountId, and no ifInState or state

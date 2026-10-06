@@ -107,6 +107,7 @@ func (s *Spec) registerGet(dataType, capability string) {
 		DataType:           dataType,
 		PropertiesArgument: "properties",
 		ResultProperty:     "list",
+		ReturnsID:          true,
 	})
 }
 

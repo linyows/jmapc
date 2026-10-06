@@ -256,7 +256,7 @@ func (g *RequestGenerator) collectRecordTypes(c *request.Call, info *call, impor
 		if properties == nil {
 			properties = dataType.PropertyNames()
 		}
-		add(dataType, shared.RecordProperties(properties, c.Method.ReturnsID()))
+		add(dataType, shared.RecordProperties(properties, c.Method.ReturnsID))
 	}
 	if info.nestedType != "" {
 		if nested, ok := g.Spec.Object(c.Method.NestedType); ok && !info.sharedNested {
@@ -357,7 +357,7 @@ func (g *RequestGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 		if properties == nil {
 			properties = dataType.PropertyNames()
 		}
-		for i, name := range shared.RecordProperties(properties, c.Method.ReturnsID()) {
+		for i, name := range shared.RecordProperties(properties, c.Method.ReturnsID) {
 			if i > 0 {
 				buf.WriteString("\n")
 			}

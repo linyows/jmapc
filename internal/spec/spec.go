@@ -193,13 +193,13 @@ type Method struct {
 	NestedPropertiesArgument string
 	// NestedType names the type that argument narrows.
 	NestedType string
+	// ReturnsID says the method returns the id of every record it returns,
+	// whatever properties it is asked for, as RFC 8620, Section 5.1 has a
+	// standard /get do. It is stated rather than read from the name: a
+	// SearchSnippet/get returns records with no id, and a method a schema
+	// defines promises only what it says.
+	ReturnsID bool
 }
-
-// ReturnsID reports whether the method returns the id of every record it
-// returns, whatever properties it is asked for, as RFC 8620, Section 5.1 has a
-// /get do. A method that parses records, which are not stored and have no id,
-// makes no such promise.
-func (m *Method) ReturnsID() bool { return strings.HasSuffix(m.Name, "/get") }
 
 // TypeNamePrefix returns the method name with its slash removed, so that
 // "Email/get" becomes "EmailGet". Generated declarations for a method's

@@ -529,3 +529,22 @@ func TestUnionGoNames(t *testing.T) {
 		}
 	}
 }
+
+// TestReturnsIDIsStatedNotNamed checks which methods promise the id of every
+// record: a standard /get does, and SearchSnippet/get, whose records have no
+// id, does not, though its name is a /get's.
+func TestReturnsIDIsStatedNotNamed(t *testing.T) {
+	s := Standard()
+	for name, want := range map[string]bool{
+		"Email/get": true, "Blob/get": true, "PushSubscription/get": true,
+		"SearchSnippet/get": false, "Email/parse": false,
+	} {
+		m, ok := s.Method(name)
+		if !ok {
+			t.Fatalf("no method %s", name)
+		}
+		if m.ReturnsID != want {
+			t.Errorf("%s.ReturnsID = %v, want %v", name, m.ReturnsID, want)
+		}
+	}
+}

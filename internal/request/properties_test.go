@@ -293,3 +293,17 @@ func TestRequestAsksForSetWithoutAnyDeclared(t *testing.T) {
 		t.Errorf("error was:\n%s\nwant it to say where sets are declared", got)
 	}
 }
+
+// TestASetIsForAMethodThatReturnsTheID checks a set asked of a method that
+// does not return the id whatever it is asked for, as Email/parse does not: the
+// set's type holds the id, which such a method answers without.
+func TestASetIsForAMethodThatReturnsTheID(t *testing.T) {
+	props := sets(t, emailSets)
+	_, err := parseWith(t, props, `{"methodCalls": [["Email/parse", {"blobIds": ["b1"], "properties": "@EmailSummary"}, "c0"]]}`)
+	if err == nil || !strings.Contains(err.Error(), "does not return the id of every record") {
+		t.Errorf("err = %v, want the set refused for Email/parse", err)
+	}
+	if _, err := parseWith(t, props, `{"methodCalls": [["Email/get", {"ids": ["e1"], "properties": "@EmailSummary"}, "c0"]]}`); err != nil {
+		t.Errorf("Email/get: %v", err)
+	}
+}

@@ -212,6 +212,7 @@ func registerBlobGet(s *Spec) {
 		DataType:           "BlobData",
 		PropertiesArgument: "properties",
 		ResultProperty:     "list",
+		ReturnsID:          true,
 	})
 }
 
