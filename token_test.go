@@ -221,3 +221,57 @@ func TestAnEmptyTokenIsReported(t *testing.T) {
 		t.Fatalf("Do returned %v, want an error about an empty token", err)
 	}
 }
+
+// TestAWaitingRequestOutlivesTheOneThatCalledTheSource checks that a request
+// sharing a call to the source is not failed by the request that made it
+// giving up. The call ends with that request's context, and the one waiting,
+// whose context has not ended, calls the source itself.
+func TestAWaitingRequestOutlivesTheOneThatCalledTheSource(t *testing.T) {
+	called := make(chan struct{}, 2)
+	var calls atomic.Int64
+	h := &tokenHolder{src: func(ctx context.Context) (Token, error) {
+		called <- struct{}{}
+		if calls.Add(1) == 1 {
+			<-ctx.Done()
+			return Token{}, ctx.Err()
+		}
+		return Token{Value: "t2"}, nil
+	}}
+	waiting := make(chan struct{})
+	var once sync.Once
+	h.sharing = func() { once.Do(func() { close(waiting) }) }
+
+	first, cancel := context.WithCancel(context.Background())
+	firstDone := make(chan error, 1)
+	go func() {
+		_, err := h.token(first)
+		firstDone <- err
+	}()
+	<-called
+
+	second := make(chan string, 1)
+	go func() {
+		value, err := h.token(context.Background())
+		if err != nil {
+			t.Errorf("the waiting request: %v", err)
+		}
+		second <- value
+	}()
+	<-waiting
+	cancel()
+
+	if err := <-firstDone; !errors.Is(err, context.Canceled) {
+		t.Errorf("the request that gave up: %v, want context.Canceled", err)
+	}
+	select {
+	case value := <-second:
+		if value != "t2" {
+			t.Errorf("the waiting request got %q, want t2", value)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the waiting request never finished")
+	}
+	if n := calls.Load(); n != 2 {
+		t.Errorf("the source was called %d times, want 2", n)
+	}
+}

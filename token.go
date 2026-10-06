@@ -61,8 +61,14 @@ type tokenHolder struct {
 	// there is none. It is what makes several requests arriving at once share
 	// one call to the source.
 	fetching chan struct{}
-	// err is what the last call to the source returned.
-	err error
+	// err is what the last call to the source returned, and abandoned says
+	// the call ended because the request making it gave up, its own context
+	// ending, which is no failure of the requests waiting on it.
+	err       error
+	abandoned bool
+	// sharing, where set, is called as a request starts waiting on a call
+	// another request is making. Tests use it to know a request is waiting.
+	sharing func()
 }
 
 // valid reports whether the token held may still be used. The caller holds mu.
@@ -82,14 +88,37 @@ func (t *tokenHolder) token(ctx context.Context) (string, error) {
 		t.mu.Unlock()
 		return value, nil
 	}
-	if wait := t.fetching; wait != nil {
+	for t.fetching != nil {
+		wait := t.fetching
 		t.mu.Unlock()
+		if t.sharing != nil {
+			t.sharing()
+		}
 		select {
 		case <-wait:
 		case <-ctx.Done():
 			return "", ctx.Err()
 		}
-		return t.fetched()
+		t.mu.Lock()
+		if ctx.Err() != nil && !t.valid() {
+			// Both channels may have been ready, and the wait chosen: a
+			// request that has given up itself does not call the source.
+			t.mu.Unlock()
+			return "", ctx.Err()
+		}
+		if t.valid() || !t.abandoned {
+			t.mu.Unlock()
+			return t.fetched()
+		}
+		// The request that called the source gave up on it, and this one
+		// has not: it goes round again rather than failing with an error
+		// that was never its own.
+	}
+	// Another request going round may have called the source already.
+	if t.valid() {
+		value := t.held.Value
+		t.mu.Unlock()
+		return value, nil
 	}
 
 	wait := make(chan struct{})
@@ -99,6 +128,7 @@ func (t *tokenHolder) token(ctx context.Context) (string, error) {
 	held, err := t.src(ctx)
 	t.mu.Lock()
 	t.fetching, t.err = nil, err
+	t.abandoned = endedWith(ctx, err)
 	if err == nil {
 		t.held = held
 	}

@@ -52,8 +52,14 @@ type Client struct {
 	// fetch of the session resource.
 	fetching chan struct{}
 	// fetchErr is what the last fetch returned, for the callers that waited on
-	// it rather than making one of their own.
-	fetchErr error
+	// it rather than making one of their own. fetchAbandoned says the fetch
+	// ended because the caller making it gave up, its own context ending,
+	// which is no failure of the callers waiting on it.
+	fetchErr       error
+	fetchAbandoned bool
+	// sharing, where set, is called as a caller starts waiting on a fetch
+	// another caller is making. Tests use it to know a caller is waiting.
+	sharing func()
 }
 
 // Option configures a Client.
@@ -184,8 +190,12 @@ func (c *Client) RefreshSession(ctx context.Context) (*Session, error) {
 // change therefore cost one request to the session resource between them.
 func (c *Client) fetchSession(ctx context.Context) (*Session, error) {
 	c.mu.Lock()
-	if wait := c.fetching; wait != nil {
+	for c.fetching != nil {
+		wait := c.fetching
 		c.mu.Unlock()
+		if c.sharing != nil {
+			c.sharing()
+		}
 		select {
 		case <-wait:
 		case <-ctx.Done():
@@ -193,11 +203,23 @@ func (c *Client) fetchSession(ctx context.Context) (*Session, error) {
 		}
 		c.mu.Lock()
 		s, err := c.session, c.fetchErr
-		c.mu.Unlock()
-		if err != nil {
+		if err == nil {
+			c.mu.Unlock()
+			return s, nil
+		}
+		if !c.fetchAbandoned {
+			c.mu.Unlock()
 			return nil, err
 		}
-		return s, nil
+		// Both channels may have been ready, and the wait chosen: a caller
+		// that has given up itself does not make the fetch again.
+		if ctx.Err() != nil {
+			c.mu.Unlock()
+			return nil, ctx.Err()
+		}
+		// The caller that made the fetch gave up on it. This one has not,
+		// so it goes round again, and makes the fetch itself where no other
+		// caller has started one in the meantime.
 	}
 	wait := make(chan struct{})
 	c.fetching = wait
@@ -207,12 +229,27 @@ func (c *Client) fetchSession(ctx context.Context) (*Session, error) {
 
 	c.mu.Lock()
 	c.fetching, c.fetchErr = nil, err
+	// A timeout of the HTTP client's own is not the caller giving up, though
+	// it is a deadline too: what decides it is whether ctx itself ended.
+	// And a failure of the fetch's own, a 500, is not given up for a context
+	// that ended just after: the error has to be the context's.
+	c.fetchAbandoned = endedWith(ctx, err)
 	if err == nil {
 		c.session, c.stale = s, false
 	}
 	c.mu.Unlock()
 	close(wait)
 	return s, err
+}
+
+// endedWith reports whether err is ctx ending: its error, or the cause it was
+// cancelled with, which net/http returns in place of context.Canceled for a
+// context cancelled with WithCancelCause.
+func endedWith(ctx context.Context, err error) bool {
+	if err == nil || ctx.Err() == nil {
+		return false
+	}
+	return errors.Is(err, ctx.Err()) || errors.Is(err, context.Cause(ctx))
 }
 
 // noteSessionState records that a response reported a session other than the

@@ -2,6 +2,7 @@ package jmapc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -293,5 +294,195 @@ func TestASessionWithoutAStateIsNotFetchedAgain(t *testing.T) {
 
 	if got := ts.sessionHits.Load(); got != 1 {
 		t.Errorf("the session was fetched %d times, want 1", got)
+	}
+}
+
+// TestAWaitingCallerOutlivesTheOneThatFetchedTheSession checks that a caller
+// waiting on a fetch of the session another caller started is not failed by
+// that caller giving up. The fetch ends with the context it was made under,
+// and the caller still waiting makes its own.
+func TestAWaitingCallerOutlivesTheOneThatFetchedTheSession(t *testing.T) {
+	var hits atomic.Int64
+	arrived := make(chan struct{}, 2)
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	mux.HandleFunc("/session", func(w http.ResponseWriter, r *http.Request) {
+		arrived <- struct{}{}
+		if hits.Add(1) == 1 {
+			// The first fetch is held until the caller that made it gives up.
+			<-r.Context().Done()
+			return
+		}
+		fmt.Fprintf(w, `{"capabilities": {"urn:ietf:params:jmap:core": {}}, "accounts": {},
+		  "primaryAccounts": {}, "username": "someone", "apiUrl": %q, "state": "s1"}`, srv.URL+"/api")
+	})
+	c := New(srv.URL + "/session")
+	waiting := make(chan struct{})
+	var once sync.Once
+	c.sharing = func() { once.Do(func() { close(waiting) }) }
+
+	first, cancel := context.WithCancel(context.Background())
+	firstDone := make(chan error, 1)
+	go func() {
+		_, err := c.Session(first)
+		firstDone <- err
+	}()
+	<-arrived
+
+	second := make(chan *Session, 1)
+	go func() {
+		s, err := c.Session(context.Background())
+		if err != nil {
+			t.Errorf("the waiting caller: %v", err)
+		}
+		second <- s
+	}()
+	<-waiting
+	cancel()
+
+	if err := <-firstDone; err == nil {
+		t.Error("the caller that gave up got a session")
+	}
+	select {
+	case s := <-second:
+		if s == nil || s.State != "s1" {
+			t.Errorf("the waiting caller got %+v, want the session", s)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the waiting caller never finished")
+	}
+	if n := hits.Load(); n != 2 {
+		t.Errorf("the session was fetched %d times, want 2", n)
+	}
+}
+
+// TestATimeoutOfTheHTTPClientIsShared checks a fetch that fails because the
+// HTTP client's own timeout passed, while the caller making it waited on. That
+// is the fetch failing rather than the caller giving up, so the callers
+// waiting on it share the failure instead of each making a fetch of their own.
+func TestATimeoutOfTheHTTPClientIsShared(t *testing.T) {
+	var hits atomic.Int64
+	arrived := make(chan struct{}, 4)
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	mux.HandleFunc("/session", func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		arrived <- struct{}{}
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+	})
+	c := New(srv.URL+"/session", WithHTTPClient(&http.Client{Timeout: 200 * time.Millisecond}),
+		WithRetryPolicy(RetryPolicy{Attempts: 1}))
+	waiting := make(chan struct{})
+	var once sync.Once
+	c.sharing = func() { once.Do(func() { close(waiting) }) }
+
+	errs := make(chan error, 2)
+	go func() { _, err := c.Session(context.Background()); errs <- err }()
+	<-arrived
+	go func() { _, err := c.Session(context.Background()); errs <- err }()
+	<-waiting
+	for range 2 {
+		if err := <-errs; err == nil {
+			t.Error("a caller got a session from a fetch that timed out")
+		}
+	}
+	if n := hits.Load(); n != 1 {
+		t.Errorf("the session was fetched %d times, want the one fetch shared", n)
+	}
+}
+
+// TestAWaitingCallerThatGaveUpDoesNotFetch covers a caller whose own context
+// ended while the fetch it waited on was given up by the caller making it. Both
+// are ready when it looks, and whichever it sees first, it has given up too, so
+// it does not make the fetch again.
+func TestAWaitingCallerThatGaveUpDoesNotFetch(t *testing.T) {
+	for range 30 {
+		var hits atomic.Int64
+		arrived := make(chan struct{}, 4)
+		mux := http.NewServeMux()
+		srv := httptest.NewServer(mux)
+		mux.HandleFunc("/session", func(w http.ResponseWriter, r *http.Request) {
+			hits.Add(1)
+			arrived <- struct{}{}
+			<-r.Context().Done()
+		})
+		c := New(srv.URL + "/session")
+
+		first, cancelFirst := context.WithCancel(context.Background())
+		second, cancelSecond := context.WithCancel(context.Background())
+		firstDone := make(chan struct{})
+		go func() {
+			_, _ = c.Session(first)
+			close(firstDone)
+		}()
+		<-arrived
+		// The hook runs as the second caller starts waiting: the first one
+		// gives up and finishes, and then the second gives up as well.
+		c.sharing = func() {
+			cancelFirst()
+			<-firstDone
+			cancelSecond()
+		}
+		// Its own error, as it is, rather than that of a fetch it made with a
+		// context that had ended.
+		if _, err := c.Session(second); err != context.Canceled {
+			t.Fatalf("Session: %v, want the caller's own context.Canceled", err)
+		}
+		srv.Close()
+		if n := hits.Load(); n != 1 {
+			t.Fatalf("the session was fetched %d times, want the one: a caller that gave up fetched it again", n)
+		}
+	}
+}
+
+// TestAWaitingCallerOutlivesOneThatGaveUpWithACause covers a caller giving up
+// with a cause of its own, which the HTTP client may return in place of
+// context.Canceled. That is still the caller giving up, and the caller waiting
+// on its fetch makes one of its own rather than taking the cause for its own.
+func TestAWaitingCallerOutlivesOneThatGaveUpWithACause(t *testing.T) {
+	var hits atomic.Int64
+	arrived := make(chan struct{}, 2)
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	mux.HandleFunc("/session", func(w http.ResponseWriter, r *http.Request) {
+		arrived <- struct{}{}
+		if hits.Add(1) == 1 {
+			<-r.Context().Done()
+			return
+		}
+		fmt.Fprintf(w, `{"capabilities": {"urn:ietf:params:jmap:core": {}}, "accounts": {},
+		  "primaryAccounts": {}, "username": "someone", "apiUrl": %q, "state": "s1"}`, srv.URL+"/api")
+	})
+	c := New(srv.URL + "/session")
+	waiting := make(chan struct{})
+	var once sync.Once
+	c.sharing = func() { once.Do(func() { close(waiting) }) }
+
+	first, cancel := context.WithCancelCause(context.Background())
+	go func() { _, _ = c.Session(first) }()
+	<-arrived
+	second := make(chan error, 1)
+	go func() {
+		_, err := c.Session(context.Background())
+		second <- err
+	}()
+	<-waiting
+	cancel(errors.New("the user closed the window"))
+
+	select {
+	case err := <-second:
+		if err != nil {
+			t.Errorf("the waiting caller: %v, want the session", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the waiting caller never finished")
 	}
 }
