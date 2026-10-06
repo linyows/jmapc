@@ -939,6 +939,12 @@ func TestEnumeratedValuesAreChecked(t *testing.T) {
 		}}}, "c0"]]}`,
 		want: `"organiser" is not one of the values this property takes (owner, attendee, optional, informational, chair, contact)`,
 	}, {
+		name: "a set's key reached by a patch is an enumerated value",
+		src: `{"methodCalls": [["CalendarEvent/set", {"update": {"e1": {
+			"participants/p/roles/organiser": true
+		}}}, "c0"]]}`,
+		want: `"organiser" is not one of the values this property takes (owner, attendee, optional, informational, chair, contact)`,
+	}, {
 		name: "contact card kind",
 		src:  `{"methodCalls": [["ContactCard/set", {"create": {"c": {"kind": "person"}}}, "c0"]]}`,
 		want: `"person" is not one of the values this property takes`,
@@ -1311,6 +1317,16 @@ func TestDynamicPropertiesOfTheTypesThatHaveThem(t *testing.T) {
 	if got := strings.Join(q.Calls[0].NestedProperties, ","); got != "partId,header:Content-Type:asRaw" {
 		t.Errorf("bodyProperties = %q", got)
 	}
+}
+
+// TestAPatchSetsAnEnumeratedKey checks that a key of a set reached by a patch
+// passes where it is one of the values the specification fixes, and that a
+// parameter in its place is left to the caller.
+func TestAPatchSetsAnEnumeratedKey(t *testing.T) {
+	parse(t, "MakeChair"+Extension, `{"methodCalls": [["CalendarEvent/set", {"update": {"{{eventId}}": {
+	  "participants/{{participantId}}/roles/chair": true,
+	  "participants/{{participantId}}/roles/{{role}}": true
+	}}}, "c0"]]}`)
 }
 
 // TestCommentArgumentIsNotSent checks the member a request uses to explain a
