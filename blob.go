@@ -2,7 +2,6 @@ package jmapc
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -149,17 +148,9 @@ func (c *Client) Upload(ctx context.Context, accountID ID, contentType string, b
 	}
 	defer release()
 
-	resp, err := c.sendWithRetry(req, KindUpload)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return nil, c.requestError(resp)
-	}
 	var info BlobInfo
-	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
-		return nil, fmt.Errorf("jmapc: decoding upload response: %w", err)
+	if err := c.exchangeJSON(req, KindUpload, &info, "upload response", http.StatusOK, http.StatusCreated); err != nil {
+		return nil, err
 	}
 	return &info, nil
 }

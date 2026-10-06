@@ -2,9 +2,11 @@ package jmapc
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -131,6 +133,25 @@ func retryAfter(resp *http.Response, now time.Time) time.Duration {
 		return d
 	}
 	return 0
+}
+
+// exchangeJSON sends req, as sendWithRetry does, and decodes the JSON the
+// server answers with into v. An answer with a status other than those in ok is
+// the request error the server reports, and one that does not decode says what
+// it was meant to be.
+func (c *Client) exchangeJSON(req *http.Request, kind RequestKind, v any, what string, ok ...int) error {
+	resp, err := c.sendWithRetry(req, kind)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if !slices.Contains(ok, resp.StatusCode) {
+		return c.requestError(resp)
+	}
+	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+		return fmt.Errorf("jmapc: decoding %s: %w", what, err)
+	}
+	return nil
 }
 
 // sendWithRetry sends a request, and sends it again while the policy reports
