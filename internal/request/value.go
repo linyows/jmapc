@@ -56,7 +56,7 @@ func (c *checker) value(t *spec.Type, raw json.RawMessage, where, doc string) No
 	mayBeOptional := c.argumentValue
 	c.argumentValue = false
 
-	if s, isString := stringValue(raw); isString {
+	if s, isString := stringValue(raw); isString && !c.sent {
 		if m := paramPattern.FindStringSubmatch(s); m != nil {
 			return &ParamRef{Param: c.params.use(c, m[1], t, where, doc, false)}
 		}
@@ -200,11 +200,18 @@ func missingRequired(o *spec.Object, present map[string]bool) bool {
 // leaving the parameters or errors of a failed attempt behind.
 func (c *checker) try(f func() Node) (Node, ErrorList) {
 	errMark, paramMark := len(c.errs), c.params.mark()
+	// The capabilities an alternative uses are the request's only where the
+	// alternative is the one the value is, so they are kept aside until then.
+	used := make(map[string]bool, len(c.used))
+	for uri := range c.used {
+		used[uri] = true
+	}
 	node := f()
 	if len(c.errs) > errMark {
 		errs := append(ErrorList(nil), c.errs[errMark:]...)
 		c.errs = c.errs[:errMark]
 		c.params.rollback(paramMark)
+		c.used = used
 		return node, errs
 	}
 	return node, nil
@@ -529,6 +536,9 @@ func elemDoc(elemType *spec.Type, context string) string {
 // is, so it is recorded weakly: another use of the same parameter, somewhere
 // that does say, settles its type.
 func (c *checker) keySegments(key string, keyType *spec.Type, property, where, doc string) []KeySegment {
+	if c.sent {
+		return nil
+	}
 	matches := embeddedParamPattern.FindAllStringSubmatchIndex(key, -1)
 	if len(matches) == 0 {
 		return nil
@@ -704,7 +714,7 @@ func (c *checker) patchObject(members map[string]json.RawMessage, keys []string,
 		segments := strings.Split(key, "/")
 		unknown := make([]bool, len(segments))
 		for i, seg := range segments {
-			unknown[i] = embeddedParamPattern.MatchString(seg)
+			unknown[i] = !c.sent && embeddedParamPattern.MatchString(seg)
 		}
 
 		valueType := &spec.Type{Name: spec.Any}
@@ -718,6 +728,27 @@ func (c *checker) patchObject(members map[string]json.RawMessage, keys []string,
 				continue
 			}
 			keyTypes, properties, valueType, target = resolved, named, value, resolvedField
+			// A property another specification adds needs its capability
+			// however it is reached, by a patch as well as by name, and so
+			// does every property the pointer passes through on the way.
+			for i := range segments {
+				if i < len(named) && named[i] && !unknown[i] {
+					if _, _, _, through, err := c.spec.ResolvePatch(c.patchTarget, segments[:i+1], unknown[:i+1]); err == nil {
+						c.useCapability(through)
+					}
+				}
+			}
+			// A sent request has its ids written out: each segment the
+			// pointer takes as an id has to be one.
+			if c.sent {
+				for i, seg := range segments {
+					seg = strings.NewReplacer("~1", "/", "~0", "~").Replace(seg)
+					if i < len(keyTypes) && keyTypes[i] != nil && keyTypes[i].Name == spec.IdType &&
+						!isCreationID(seg) && !jmapc.ID(seg).Valid() {
+						c.errorf(where+"."+key, "", "%q is not a valid id", seg)
+					}
+				}
+			}
 		}
 
 		field.KeySegments = c.patchKeySegments(segments, keyTypes, properties, where+"."+key)
@@ -753,6 +784,9 @@ func (c *checker) patchObject(members map[string]json.RawMessage, keys []string,
 // depth, so a parameter naming a mailbox in "mailboxIds/{{id}}" is an Id, the
 // same as it would be anywhere else.
 func (c *checker) patchKeySegments(segments []string, keyTypes []*spec.Type, properties []bool, where string) []KeySegment {
+	if c.sent {
+		return nil
+	}
 	var out []KeySegment
 	var found bool
 	for i, seg := range segments {
@@ -879,7 +913,7 @@ func (c *checker) sortProperty(dataType *spec.Object, members map[string]json.Ra
 		return nil, extra
 	}
 	name, isString := stringValue(raw)
-	if !isString || paramPattern.MatchString(name) {
+	if !isString || (!c.sent && paramPattern.MatchString(name)) {
 		// The property is left to the caller, so which members the comparator
 		// needs cannot be known here. Allow the extras of every sortable
 		// property rather than rejecting a request that may well be right.

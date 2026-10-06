@@ -34,6 +34,7 @@ func NewRequestCheck(s *spec.Spec, using []string) *RequestCheck {
 		c: &checker{
 			spec:   s,
 			file:   "the request",
+			sent:   true,
 			params: newParamSet(),
 			byID:   make(map[string]*Call),
 			used:   make(map[string]bool),
@@ -50,6 +51,10 @@ func NewRequestCheck(s *spec.Spec, using []string) *RequestCheck {
 // call can be resolved against it.
 func (r *RequestCheck) Call(raw json.RawMessage, index int) error {
 	before := len(r.c.errs)
+	// The capabilities are those of this call, so that each call using a
+	// property the request did not declare is refused, as the server
+	// refuses each.
+	r.c.used = make(map[string]bool)
 	call := r.c.methodCall(raw, fmt.Sprintf("methodCalls[%d]", index))
 	if call != nil {
 		r.capability(call, index)
@@ -59,13 +64,22 @@ func (r *RequestCheck) Call(raw json.RawMessage, index int) error {
 
 // capability checks that the request declared what the call needs. RFC 8620,
 // Section 3.2 has a server refuse a method whose capability the request did not
-// declare, however well the server supports it.
+// declare, however well the server supports it. That holds for a property a
+// specification other than the method's own adds, such as the S/MIME
+// properties of an Email, as it does for the method.
 func (r *RequestCheck) capability(call *Call, index int) {
 	capability := call.Method.Capability
-	if capability == "" || capability == spec.CapabilityCore || r.using[capability] {
-		return
+	if capability != "" && capability != spec.CapabilityCore && !r.using[capability] {
+		r.c.errorf(fmt.Sprintf("methodCalls[%d][0]", index),
+			"a request has to declare the capabilities of the methods it calls",
+			"%s needs %s, which the request does not declare", call.Method.Name, capability)
 	}
-	r.c.errorf(fmt.Sprintf("methodCalls[%d][0]", index),
-		"a request has to declare the capabilities of the methods it calls",
-		"%s needs %s, which the request does not declare", call.Method.Name, capability)
+	for _, uri := range sortedKeys(r.c.used) {
+		if r.using[uri] {
+			continue
+		}
+		r.c.errorf(fmt.Sprintf("methodCalls[%d][1]", index),
+			"a request has to declare the capabilities of the properties it uses",
+			"the request uses properties from %s, which it does not declare", uri)
+	}
 }
