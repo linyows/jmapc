@@ -180,3 +180,20 @@ func TestAnArgumentByReferenceNeedsItsCapability(t *testing.T) {
 		}
 	}
 }
+
+// TestASentPatchKeyIsHeldToTheEnumeratedValues checks an enumerated key a patch
+// reaches in a request that has been sent, where braces are a string like any
+// other: "{{role}}" is a key the values do not hold, and is refused as one.
+func TestASentPatchKeyIsHeldToTheEnumeratedValues(t *testing.T) {
+	using := []string{"urn:ietf:params:jmap:core", "urn:ietf:params:jmap:calendars"}
+	errs := sent(t, using,
+		`["CalendarEvent/set", {"update": {"e1": {"participants/p1/roles/chair": true}}}, "c0"]`,
+		`["CalendarEvent/set", {"update": {"e1": {"participants/p1/roles/{{role}}": true}}}, "c1"]`,
+	)
+	if errs[0] != nil {
+		t.Errorf("a key the values hold: %v", errs[0])
+	}
+	if errs[1] == nil || !strings.Contains(errs[1].Error(), "is not one of the values") {
+		t.Errorf("a key written in braces: %v, want it refused as a value the set does not hold", errs[1])
+	}
+}
