@@ -146,3 +146,33 @@ func TestDatesReadAsText(t *testing.T) {
 		t.Errorf("printed as %q, want %q", got, want)
 	}
 }
+
+// TestDurationValid checks the forms RFC 8984, Section 1.4.6 allows: weeks, or
+// days with an optional time, where each part names at least one amount.
+func TestDurationValid(t *testing.T) {
+	for _, d := range []Duration{"P1W", "P1D", "PT1H", "PT1H30M", "PT1H30S", "PT0.5S", "P1DT12H"} {
+		if !d.Valid() {
+			t.Errorf("%q.Valid() = false, want true", d)
+		}
+	}
+	for _, d := range []Duration{"", "P", "PT", "P1DT", "P1W2D", "P1M", "P1Y", "PT1M1H", "1D"} {
+		if d.Valid() {
+			t.Errorf("%q.Valid() = true, want false", d)
+		}
+	}
+}
+
+// TestSignedDurationValid checks that a SignedDuration takes one sign at most,
+// which is all ToTimeDuration reads.
+func TestSignedDurationValid(t *testing.T) {
+	for _, d := range []SignedDuration{"PT15M", "-PT15M", "+P1D"} {
+		if !d.Valid() {
+			t.Errorf("%q.Valid() = false, want true", d)
+		}
+	}
+	for _, d := range []SignedDuration{"-+PT15M", "+-PT15M", "--PT15M", "-PT"} {
+		if d.Valid() {
+			t.Errorf("%q.Valid() = true, want false", d)
+		}
+	}
+}

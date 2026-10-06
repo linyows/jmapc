@@ -8,11 +8,11 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"time"
 	"unicode"
 
 	"github.com/linyows/jmapc"
 	"github.com/linyows/jmapc/internal/spec"
+	"github.com/linyows/jmapc/internal/syntax"
 )
 
 // paramPattern matches a value the request leaves open. The braces are used
@@ -411,16 +411,16 @@ func (c *checker) primitive(t *spec.Type, raw json.RawMessage, where string) Nod
 		if !ok {
 			return fail()
 		}
-		if _, err := time.Parse("2006-01-02T15:04:05Z", s); err != nil {
-			c.errorf(where, "a UTCDate is written as 2006-01-02T15:04:05Z", "%q is not a UTCDate", s)
+		if !syntax.ValidUTCDate(s) {
+			c.errorf(where, "a UTCDate is written as 2006-01-02T15:04:05Z, or 2006-01-02T15:04:05.5Z with a fraction of a second", "%q is not a UTCDate", s)
 		}
 	case spec.DateType:
 		s, ok := stringValue(raw)
 		if !ok {
 			return fail()
 		}
-		if _, err := time.Parse(time.RFC3339, s); err != nil {
-			c.errorf(where, "a Date is written as 2006-01-02T15:04:05Z07:00", "%q is not a Date", s)
+		if !syntax.ValidDate(s) {
+			c.errorf(where, "a Date is written as 2006-01-02T15:04:05Z07:00, or 2006-01-02T15:04:05.5Z07:00 with a fraction of a second", "%q is not a Date", s)
 		}
 	case spec.LocalDateTimeType:
 		s, ok := stringValue(raw)

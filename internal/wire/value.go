@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/linyows/jmapc"
 	"github.com/linyows/jmapc/internal/request"
 	"github.com/linyows/jmapc/internal/spec"
+	"github.com/linyows/jmapc/internal/syntax"
 )
 
 // ParseValue turns the text a caller wrote for a parameter into the JSON value
@@ -63,14 +63,14 @@ func parseAs(t *spec.Type, text string) (json.RawMessage, error) {
 		return json.RawMessage(strconv.FormatInt(n, 10)), nil
 
 	case spec.UTCDateType:
-		if _, err := time.Parse("2006-01-02T15:04:05Z", text); err != nil {
-			return nil, fmt.Errorf("%q is not a UTCDate\n\ta UTCDate is written as 2006-01-02T15:04:05Z", text)
+		if !syntax.ValidUTCDate(text) {
+			return nil, fmt.Errorf("%q is not a UTCDate\n\ta UTCDate is written as 2006-01-02T15:04:05Z, or 2006-01-02T15:04:05.5Z with a fraction of a second", text)
 		}
 		return quote(text), nil
 
 	case spec.DateType:
-		if _, err := time.Parse(time.RFC3339, text); err != nil {
-			return nil, fmt.Errorf("%q is not a Date\n\ta Date is written as 2006-01-02T15:04:05Z07:00", text)
+		if !syntax.ValidDate(text) {
+			return nil, fmt.Errorf("%q is not a Date\n\ta Date is written as 2006-01-02T15:04:05Z07:00, or 2006-01-02T15:04:05.5Z07:00 with a fraction of a second", text)
 		}
 		return quote(text), nil
 

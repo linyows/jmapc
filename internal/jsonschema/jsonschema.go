@@ -19,6 +19,7 @@ import (
 
 	"github.com/linyows/jmapc/internal/request"
 	"github.com/linyows/jmapc/internal/spec"
+	"github.com/linyows/jmapc/internal/syntax"
 )
 
 // Draft is the JSON Schema dialect the output is written in. Draft 7 is what
@@ -524,24 +525,15 @@ func (b *builder) primitive(t *spec.Type, ctx fieldContext) any {
 			"pattern": `^#?[A-Za-z0-9_-]{1,255}$`,
 		}
 	case spec.DateType:
-		s = map[string]any{
-			"type":    "string",
-			"pattern": `^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[-+]\d{2}:\d{2})$`,
-		}
+		s = map[string]any{"type": "string", "pattern": syntax.Date}
 	case spec.UTCDateType:
-		s = map[string]any{
-			"type":    "string",
-			"pattern": `^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$`,
-		}
+		s = map[string]any{"type": "string", "pattern": syntax.UTCDate}
 	case spec.LocalDateTimeType:
-		s = map[string]any{
-			"type":    "string",
-			"pattern": `^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$`,
-		}
+		s = map[string]any{"type": "string", "pattern": syntax.LocalDateTime}
 	case spec.DurationType:
-		s = map[string]any{"type": "string", "pattern": durationPattern}
+		s = map[string]any{"type": "string", "pattern": syntax.Duration}
 	case spec.SignedDurationType:
-		s = map[string]any{"type": "string", "pattern": `^[-+]?` + strings.TrimPrefix(durationPattern, "^")}
+		s = map[string]any{"type": "string", "pattern": syntax.SignedDuration}
 	default:
 		return true
 	}
@@ -550,11 +542,6 @@ func (b *builder) primitive(t *spec.Type, ctx fieldContext) any {
 	}
 	return s
 }
-
-// durationPattern matches the ISO 8601 durations JMAP allows, which are the
-// ones with no years and no months: "P1D" across a daylight saving change is
-// not always 24 hours, but a month is not always a fixed number of days at all.
-const durationPattern = `^P(\d+D)?(T(\d+H)?(\d+M)?(\d+(\.\d+)?S)?)?$`
 
 // describe attaches a property's documentation to its schema, where there is
 // somewhere to put it.
