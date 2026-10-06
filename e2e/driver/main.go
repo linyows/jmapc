@@ -486,12 +486,14 @@ func receive(ctx context.Context, c *jmapc.Client, url, listen, cert, key string
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if pushed && errors.Is(err, context.Canceled) {
+	// Run returns only with an error, and the context's where it was told to
+	// stop: cancelled once the push came, or past its deadline, which may
+	// come first by a hair even where the push did arrive.
+	stopped := errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+	if pushed && stopped {
 		return nil
 	}
-	// Run returns only with an error, and the context's where it was told to
-	// stop: cancelled, or past its deadline with nothing pushed.
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+	if stopped {
 		err = errors.New("the receiver stopped before a change to the email was pushed")
 	}
 	return err
