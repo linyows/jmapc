@@ -71,6 +71,12 @@ refuses("a SignedDuration with two signs", {
   methodCalls: [["CalendarEvent/set", { create: { e: { alerts: { a: { trigger: {
     "@type": "OffsetTrigger", offset: "-+PT15M" } } } } } }, "c0"]],
 })
+refuses("a header field asked of a mailbox", {
+  methodCalls: [["Mailbox/get", { ids: null, properties: ["header:Subject"] }, "c0"]],
+})
+refuses("the content of a blob asked of an email", {
+  methodCalls: [["Email/get", { ids: ["e1"], properties: ["data"] }, "c0"]],
+})
 refuses("a member of jmapc's own that is misspelled", {
   methodCalls: [["Core/echo", {}, "c0"]],
   _retruns: "c0",
@@ -85,6 +91,9 @@ refuses("an argument left out from inside another value", {
 })
 
 // And the things that look like mistakes and are not.
+accepts("a header field asked of a body part", {
+  methodCalls: [["Email/get", { ids: ["e1"], properties: ["bodyStructure"], bodyProperties: ["partId", "header:Content-Type:asRaw"] }, "c0"]],
+})
 accepts("a Duration in weeks", {
   methodCalls: [["CalendarEvent/set", { create: { e: { duration: "P1W" } } }, "c0"]],
 })

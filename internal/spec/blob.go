@@ -129,6 +129,9 @@ func registerBlobGet(s *Spec) {
 	s.AddObject(&Object{
 		Name:       "BlobData",
 		Capability: CapabilityBlob,
+		// A digest in whatever algorithm the session says it supports, and the
+		// content as text or as base64, whichever fits: RFC 9404, Section 4.2.
+		Dynamic: []string{"digest:", "data"},
 		Doc: "BlobData is the content of a blob as the API returns it, rather than as a download. " +
 			"RFC 9404 calls it a blob; the name is qualified here because the runtime's Blob is an open download.",
 		Fields: []*Field{

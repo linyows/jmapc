@@ -14,6 +14,7 @@ package jsonschema
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -274,9 +275,9 @@ func (b *builder) properties(m *spec.Method, o *spec.Object, argument bool) map[
 		var s any
 		switch {
 		case m != nil && f.Name == m.PropertiesArgument && m.DataType != "":
-			s = b.propertyNames(f, m.DataType, true)
+			s = b.propertyNames(f, m.DataType)
 		case m != nil && f.Name == m.NestedPropertiesArgument && m.NestedType != "":
-			s = b.propertyNames(f, m.NestedType, false)
+			s = b.propertyNames(f, m.NestedType)
 		default:
 			s = b.value(f.ParsedType(), ctx)
 		}
@@ -304,9 +305,9 @@ func orOptionalParameter(s any) any {
 // propertyNames renders an argument that selects property names of a type,
 // which is the one place a plain array of strings can be completed from the
 // data model. A name the data model does not fix is still accepted where the
-// specifications leave room for one: a property naming a header field, or one
-// the server gives meaning to.
-func (b *builder) propertyNames(f *spec.Field, typeName string, dynamic bool) any {
+// type has room for one, as Dynamic says: a header field of a message or of a
+// part of one, or a digest or the content of a blob.
+func (b *builder) propertyNames(f *spec.Field, typeName string) any {
 	o, ok := b.spec.Object(typeName)
 	if !ok {
 		return b.value(f.ParsedType(), fieldContext{})
@@ -316,11 +317,11 @@ func (b *builder) propertyNames(f *spec.Field, typeName string, dynamic bool) an
 		names = append(names, p.Name)
 	}
 	alternatives := []any{map[string]any{"enum": names}}
-	if dynamic {
+	if pattern := dynamicPattern(o.Dynamic); pattern != "" {
 		alternatives = append(alternatives, map[string]any{
 			"type":        "string",
-			"pattern":     `^(header:|digest:|data$)`,
-			"description": "A property the server gives meaning to rather than one the data model fixes: a header field of the message, or a digest of a blob.",
+			"pattern":     pattern,
+			"description": "A property the server gives meaning to rather than one the data model fixes, of the kinds " + o.Name + " has.",
 		})
 	}
 	alternatives = append(alternatives, ref(parameterDef))
@@ -568,4 +569,22 @@ func stringList(values []string) []any {
 		out[i] = v
 	}
 	return out
+}
+
+// dynamicPattern writes the properties Dynamic names as a pattern: an entry
+// ending in a colon stands for every name it begins, and any other for itself.
+// It is empty for a type with none.
+func dynamicPattern(dynamic []string) string {
+	if len(dynamic) == 0 {
+		return ""
+	}
+	parts := make([]string, len(dynamic))
+	for i, d := range dynamic {
+		if strings.HasSuffix(d, ":") {
+			parts[i] = regexp.QuoteMeta(d) + ".*"
+		} else {
+			parts[i] = regexp.QuoteMeta(d)
+		}
+	}
+	return "^(?:" + strings.Join(parts, "|") + ")$"
 }

@@ -312,6 +312,10 @@ func checkProperty(dataType *spec.Object, name string) (*spec.Field, string, err
 	if known {
 		return field, "", nil
 	}
+	if !dataType.AcceptsDynamic(name) {
+		return nil, hintFor(name, dataType.PropertyNames()),
+			fmt.Errorf("%s has no property %q", dataType.Name, name)
+	}
 	header, err := spec.ParseHeaderProperty(name)
 	switch {
 	case err != nil:
@@ -329,9 +333,7 @@ func checkProperty(dataType *spec.Object, name string) (*spec.Field, string, err
 		// from the form asked for, so it is not a member of the data type and
 		// cannot be checked against one.
 		return nil, "", nil
-	case isDynamicProperty(name):
-		return nil, "", nil
 	}
-	return nil, hintFor(name, dataType.PropertyNames()),
-		fmt.Errorf("%s has no property %q", dataType.Name, name)
+	// A digest or the content of a blob, whose form the server picks.
+	return nil, "", nil
 }
