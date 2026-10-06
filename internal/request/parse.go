@@ -439,39 +439,14 @@ type checker struct {
 	// listing them, and is nil where the project names none.
 	props *PropertySets
 
-	// filterUnion is the type a /query filter may take, carried down so that
-	// the conditions nested inside a FilterOperator can be checked against the
-	// data type being queried instead of being waved through as Any.
-	filterUnion *spec.Type
-
-	// patchTarget names the data type that the PatchObjects being checked
-	// apply to, carried down from the argument that holds them.
-	patchTarget string
-
-	// sortTarget names the data type whose sortable properties a Comparator
-	// being checked may name, carried down the same way.
-	sortTarget string
-
-	// enum holds the values the property being checked may take, for one whose
-	// specification fixes them. It travels with the property so that it reaches
-	// the elements of an array and the keys of a set.
-	enum []string
+	// scope is what the value being checked is checked within.
+	scope
 
 	// argumentValue says that the value about to be checked is a whole
 	// argument of a method call, which is the one place a parameter may be
 	// left out: leaving it out takes the argument with it. It is cleared as
 	// soon as the value is reached, so that nothing nested inside inherits it.
 	argumentValue bool
-	// property is the property or argument whose value is being checked,
-	// which a parameter standing for a key of a map in it is documented as a
-	// key of. It is empty inside the values of a map, which belong to no
-	// property of their own.
-	property string
-
-	// creationIDs says that the keys of the map about to be checked are the
-	// creation ids the request invents. It travels one level, from the argument
-	// that holds them to the map itself.
-	creationIDs bool
 
 	// creations collects the creation ids the request invents, in the order they
 	// were written, so that a caller reading a created record back has the
@@ -734,21 +709,12 @@ func (c *checker) arguments(call *Call, argsType *spec.Object, raw json.RawMessa
 			}
 			continue
 		}
-		savedPatch, savedSort, savedEnum := c.patchTarget, c.sortTarget, c.enum
-		if field.PatchTarget != "" {
-			c.patchTarget = field.PatchTarget
-		}
-		if field.SortTarget != "" {
-			c.sortTarget = field.SortTarget
-		}
-		c.enum = field.Enum
+		saved := c.scope
+		c.scope = c.scope.within(field, key)
 		c.creationIDs = field.CreationIDs
 		c.argumentValue = true
-		savedProperty := c.property
-		c.property = key
 		node := c.value(field.ParsedType(), members[key], where+"."+key, field.Doc)
-		c.property = savedProperty
-		c.patchTarget, c.sortTarget, c.enum, c.creationIDs = savedPatch, savedSort, savedEnum, false
+		c.scope = saved
 		if ref, isParam := node.(*ParamRef); isParam && ref.Param.Optional && name == AccountIDArgument {
 			c.errorf(where+"."+key, "leave "+AccountIDArgument+" out altogether, and it is filled in from the primary account",
 				"%s cannot be left out on its own, since a method call is made against an account",

@@ -93,17 +93,66 @@ func (c *checker) value(t *spec.Type, raw json.RawMessage, where, doc string) No
 	}
 }
 
+// scope is what a value is checked within, which the values inside it take on
+// unless they say otherwise. A check that changes it for what it holds saves it
+// first and puts it back after, whatever it changed.
+type scope struct {
+	// filterUnion is the type a /query filter may take, carried down so that
+	// the conditions nested inside a FilterOperator can be checked against the
+	// data type being queried instead of being waved through as Any.
+	filterUnion *spec.Type
+
+	// patchTarget names the data type that the PatchObjects being checked
+	// apply to, carried down from the argument that holds them.
+	patchTarget string
+
+	// sortTarget names the data type whose sortable properties a Comparator
+	// being checked may name, carried down the same way.
+	sortTarget string
+
+	// enum holds the values the property being checked may take, for one whose
+	// specification fixes them. It travels with the property so that it reaches
+	// the elements of an array and the keys of a set.
+	enum []string
+
+	// property is the property or argument whose value is being checked,
+	// which a parameter standing for a key of a map in it is documented as a
+	// key of. It is empty inside the values of a map, which belong to no
+	// property of their own.
+	property string
+
+	// creationIDs says that the keys of the map about to be checked are the
+	// creation ids the request invents. It travels one level, from the argument
+	// that holds them to the map itself.
+	creationIDs bool
+}
+
+// within returns the scope of the value of field, named key: it takes the
+// values the field fixes, and the patches and comparators it carries, whose
+// target travels with them wherever in the value they turn up.
+func (s scope) within(field *spec.Field, key string) scope {
+	if field.PatchTarget != "" {
+		s.patchTarget = field.PatchTarget
+	}
+	if field.SortTarget != "" {
+		s.sortTarget = field.SortTarget
+	}
+	s.enum = field.Enum
+	s.property = key
+	return s
+}
+
 // union checks a value that may take either of several shapes, which is how
 // JMAP spells a /query filter. It reports the failure of the closest-fitting
 // alternative rather than of all of them, because a filter that is nearly a
 // valid condition is more usefully described as that condition with one thing
 // wrong.
 func (c *checker) union(t *spec.Type, raw json.RawMessage, where, doc string) Node {
-	saved := c.filterUnion
+	saved := c.scope
 	if unionMentions(t, "FilterOperator") {
 		c.filterUnion = t
 	}
-	defer func() { c.filterUnion = saved }()
+	defer func() { c.scope = saved }()
 
 	var best Node
 	var bestErrs ErrorList
@@ -339,20 +388,11 @@ func (c *checker) object(t *spec.Type, raw json.RawMessage, where string) Node {
 		// A property may itself carry patches or comparators, as the
 		// localizations of a contact card carry patches to the card. Their
 		// target travels with them, wherever in the arguments they turn up.
-		savedPatch, savedSort, savedEnum := c.patchTarget, c.sortTarget, c.enum
-		if field.PatchTarget != "" {
-			c.patchTarget = field.PatchTarget
-		}
-		if field.SortTarget != "" {
-			c.sortTarget = field.SortTarget
-		}
-		c.enum = field.Enum
+		saved := c.scope
+		c.scope = c.scope.within(field, key)
 		c.useCapability(field)
-		savedProperty := c.property
-		c.property = key
 		value := c.value(elemType, members[key], where+"."+key, field.Doc)
-		c.property = savedProperty
-		c.patchTarget, c.sortTarget, c.enum = savedPatch, savedSort, savedEnum
+		c.scope = saved
 		out.Fields = append(out.Fields, ObjectField{Key: key, Value: value})
 	}
 	return out
@@ -766,12 +806,12 @@ func (c *checker) patchObject(members map[string]json.RawMessage, keys []string,
 		// roles are, is held to those keys as it is in the set written whole.
 		if last := len(segments) - 1; target != nil && len(target.Enum) > 0 &&
 			target.ParsedType().IsMap() && last > 0 && properties[last-1] && !unknown[last] {
-			savedEnum := c.enum
+			saved := c.scope
 			c.enum = target.Enum
 			// The segment is a JSON pointer token, ~1 and ~0 standing for /
 			// and ~, and the key it names is what the values are.
 			c.checkEnum(strings.NewReplacer("~1", "/", "~0", "~").Replace(segments[last]), where+"."+key)
-			c.enum = savedEnum
+			c.scope = saved
 		}
 		// null in a patch means "remove this", so it is allowed wherever a value
 		// is, whether or not the property itself may hold null.
@@ -779,7 +819,7 @@ func (c *checker) patchObject(members map[string]json.RawMessage, keys []string,
 		removable.Nullable = true
 
 		var valueDoc string
-		savedEnum := c.enum
+		saved := c.scope
 		c.enum = nil
 		if target != nil {
 			valueDoc, c.enum = target.Doc, target.Enum
@@ -787,13 +827,12 @@ func (c *checker) patchObject(members map[string]json.RawMessage, keys []string,
 		// A value replacing a property whole has keys of that property, as
 		// mailboxIds does in {"mailboxIds": {"m1": true}}; one at a key has
 		// keys of nothing named.
-		savedProperty := c.property
 		c.property = ""
 		if last := len(segments) - 1; !unknown[last] && last < len(properties) && properties[last] {
 			c.property = segments[last]
 		}
 		field.Value = c.value(&removable, members[key], where+"."+key, valueDoc)
-		c.enum, c.property = savedEnum, savedProperty
+		c.scope = saved
 		out.Fields = append(out.Fields, field)
 	}
 	return out
@@ -904,10 +943,10 @@ func (c *checker) comparator(members map[string]json.RawMessage, keys []string, 
 				continue
 			}
 		}
-		savedProperty := c.property
+		saved := c.scope
 		c.property = key
 		value := c.value(field.ParsedType(), members[key], where+"."+key, field.Doc)
-		c.property = savedProperty
+		c.scope = saved
 		out.Fields = append(out.Fields, ObjectField{Key: key, Value: value})
 	}
 
