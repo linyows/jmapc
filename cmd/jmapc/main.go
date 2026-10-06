@@ -10,6 +10,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"go/token"
 	"io"
 	"io/fs"
 	"os"
@@ -727,7 +728,15 @@ func (c *Config) applyDefaults() {
 // check reports a setting that cannot be acted on.
 func (c *Config) check() error {
 	switch c.Lang {
-	case LangGo, LangTypeScript, LangRust:
+	case LangGo:
+		// The package is named after the output directory unless it is given,
+		// and a directory may be named what a package cannot.
+		if !token.IsIdentifier(c.Package) || token.IsKeyword(c.Package) {
+			return fmt.Errorf("%q cannot name a Go package; name it with -package, or package in %s",
+				c.Package, ConfigName)
+		}
+		return nil
+	case LangTypeScript, LangRust:
 		return nil
 	}
 	return fmt.Errorf("cannot generate %q; the languages are %s, %s and %s",

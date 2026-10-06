@@ -336,6 +336,24 @@ func TestASettingsFileResolvesItsPathsAgainstItself(t *testing.T) {
 	}
 }
 
+// TestAPackageNameGoCannotTakeIsRefused checks the package named after the
+// output directory, which may be named what a package cannot: refused with the
+// way out, rather than failing to format with the whole source printed.
+func TestAPackageNameGoCannotTakeIsRefused(t *testing.T) {
+	dir := workspace(t, map[string]string{"requests/ListMailboxes.jmap.json": listMailboxes})
+	for _, out := range []string{"out-go", "go", "."} {
+		_, _, err := capture(t, []string{"validate", "-requests", filepath.Join(dir, "requests"),
+			"-out", filepath.Join(dir, out)})
+		if err == nil || !strings.Contains(err.Error(), "-package") {
+			t.Errorf("-out %s: %v, want the package name refused", out, err)
+		}
+	}
+	if _, errOut, err := capture(t, []string{"validate", "-requests", filepath.Join(dir, "requests"),
+		"-out", filepath.Join(dir, "out-go"), "-package", "client"}); err != nil {
+		t.Errorf("-package client: %v\n%s", err, errOut)
+	}
+}
+
 // TestSameRequestUnderTwoNames covers two request files holding one request. They
 // differ only in what they call their parameters and their calls, so they make
 // the same request, and each brings a set of generated types along with it.
