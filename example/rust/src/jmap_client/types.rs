@@ -1773,7 +1773,8 @@ pub struct CalendarEventNotificationQueryChangesResponse {
 
     /// The total number of matching records, present only if calculateTotal
     /// was true.
-    pub total: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total: Option<u64>,
 
     /// The ids to remove from the cached result list.
     #[serde(default)]
@@ -1811,11 +1812,13 @@ pub struct CalendarEventNotificationQueryResponse {
 
     /// The total number of matching records, present only if calculateTotal
     /// was true.
-    pub total: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total: Option<u64>,
 
     /// The limit the server applied, present only if it is lower than the one
     /// requested.
-    pub limit: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u64>,
 }
 
 /// CalendarEventNotificationSetArguments holds the arguments of the
@@ -2074,7 +2077,8 @@ pub struct CalendarEventQueryChangesResponse {
 
     /// The total number of matching records, present only if calculateTotal
     /// was true.
-    pub total: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total: Option<u64>,
 
     /// The ids to remove from the cached result list.
     #[serde(default)]
@@ -2112,11 +2116,13 @@ pub struct CalendarEventQueryResponse {
 
     /// The total number of matching records, present only if calculateTotal
     /// was true.
-    pub total: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total: Option<u64>,
 
     /// The limit the server applied, present only if it is lower than the one
     /// requested.
-    pub limit: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u64>,
 }
 
 /// CalendarEventSetArguments holds the arguments of the CalendarEvent/set
@@ -3124,7 +3130,8 @@ pub struct ContactCardQueryChangesResponse {
 
     /// The total number of matching records, present only if calculateTotal
     /// was true.
-    pub total: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total: Option<u64>,
 
     /// The ids to remove from the cached result list.
     #[serde(default)]
@@ -3162,11 +3169,13 @@ pub struct ContactCardQueryResponse {
 
     /// The total number of matching records, present only if calculateTotal
     /// was true.
-    pub total: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total: Option<u64>,
 
     /// The limit the server applied, present only if it is lower than the one
     /// requested.
-    pub limit: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u64>,
 }
 
 /// ContactCardSetArguments holds the arguments of the ContactCard/set method.
@@ -4816,7 +4825,8 @@ pub struct EmailQueryChangesResponse {
 
     /// The total number of matching records, present only if calculateTotal
     /// was true.
-    pub total: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total: Option<u64>,
 
     /// The ids to remove from the cached result list.
     #[serde(default)]
@@ -4853,11 +4863,13 @@ pub struct EmailQueryResponse {
 
     /// The total number of matching records, present only if calculateTotal
     /// was true.
-    pub total: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total: Option<u64>,
 
     /// The limit the server applied, present only if it is lower than the one
     /// requested.
-    pub limit: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u64>,
 }
 
 /// EmailSetArguments holds the arguments of the Email/set method.
@@ -5245,7 +5257,8 @@ pub struct EmailSubmissionQueryChangesResponse {
 
     /// The total number of matching records, present only if calculateTotal
     /// was true.
-    pub total: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total: Option<u64>,
 
     /// The ids to remove from the cached result list.
     #[serde(default)]
@@ -5283,11 +5296,13 @@ pub struct EmailSubmissionQueryResponse {
 
     /// The total number of matching records, present only if calculateTotal
     /// was true.
-    pub total: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total: Option<u64>,
 
     /// The limit the server applied, present only if it is lower than the one
     /// requested.
-    pub limit: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u64>,
 }
 
 /// EmailSubmissionSetArguments holds the arguments of the EmailSubmission/set
@@ -6647,7 +6662,8 @@ pub struct MailboxQueryChangesResponse {
 
     /// The total number of matching records, present only if calculateTotal
     /// was true.
-    pub total: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total: Option<u64>,
 
     /// The ids to remove from the cached result list.
     #[serde(default)]
@@ -6684,11 +6700,13 @@ pub struct MailboxQueryResponse {
 
     /// The total number of matching records, present only if calculateTotal
     /// was true.
-    pub total: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total: Option<u64>,
 
     /// The limit the server applied, present only if it is lower than the one
     /// requested.
-    pub limit: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u64>,
 }
 
 /// MailboxRights says what the authenticated user may do with a mailbox.
@@ -7360,7 +7378,8 @@ pub struct PrincipalQueryChangesResponse {
 
     /// The total number of matching records, present only if calculateTotal
     /// was true.
-    pub total: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total: Option<u64>,
 
     /// The ids to remove from the cached result list.
     #[serde(default)]
@@ -7397,11 +7416,13 @@ pub struct PrincipalQueryResponse {
 
     /// The total number of matching records, present only if calculateTotal
     /// was true.
-    pub total: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total: Option<u64>,
 
     /// The limit the server applied, present only if it is lower than the one
     /// requested.
-    pub limit: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u64>,
 }
 
 /// PrincipalSetArguments holds the arguments of the Principal/set method.
@@ -7938,7 +7959,8 @@ pub struct QuotaQueryChangesResponse {
 
     /// The total number of matching records, present only if calculateTotal
     /// was true.
-    pub total: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total: Option<u64>,
 
     /// The ids to remove from the cached result list.
     #[serde(default)]
@@ -7975,11 +7997,13 @@ pub struct QuotaQueryResponse {
 
     /// The total number of matching records, present only if calculateTotal
     /// was true.
-    pub total: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total: Option<u64>,
 
     /// The limit the server applied, present only if it is lower than the one
     /// requested.
-    pub limit: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u64>,
 }
 
 /// SearchSnippet is the part of an email that matched a search, with the
@@ -8382,7 +8406,8 @@ pub struct ShareNotificationQueryChangesResponse {
 
     /// The total number of matching records, present only if calculateTotal
     /// was true.
-    pub total: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total: Option<u64>,
 
     /// The ids to remove from the cached result list.
     #[serde(default)]
@@ -8420,11 +8445,13 @@ pub struct ShareNotificationQueryResponse {
 
     /// The total number of matching records, present only if calculateTotal
     /// was true.
-    pub total: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total: Option<u64>,
 
     /// The limit the server applied, present only if it is lower than the one
     /// requested.
-    pub limit: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u64>,
 }
 
 /// ShareNotificationSetArguments holds the arguments of the
@@ -8668,11 +8695,13 @@ pub struct SieveScriptQueryResponse {
 
     /// The total number of matching records, present only if calculateTotal
     /// was true.
-    pub total: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total: Option<u64>,
 
     /// The limit the server applied, present only if it is lower than the one
     /// requested.
-    pub limit: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u64>,
 }
 
 /// SieveScriptSetArguments holds the arguments of the SieveScript/set method.

@@ -254,8 +254,9 @@ fn a_capability_the_session_does_not_have_never_leaves_the_client() {
 }
 
 /// One window of a search, and the emails in it, as the two calls of
-/// SearchEmails ask for them.
-fn window(position: u64, total: u64, ids: &[&str]) -> serde_json::Value {
+/// SearchEmails ask for them. The server leaves the total out where it was not
+/// asked for, and the limit out where it did not lower it, as here.
+fn window(position: u64, total: Option<u64>, ids: &[&str]) -> serde_json::Value {
     let list: Vec<serde_json::Value> = ids
         .iter()
         .map(|id| {
@@ -270,17 +271,19 @@ fn window(position: u64, total: u64, ids: &[&str]) -> serde_json::Value {
             })
         })
         .collect();
+    let mut query = json!({
+        "accountId": "acct1",
+        "queryState": "q1",
+        "canCalculateChanges": false,
+        "position": position,
+        "ids": ids,
+    });
+    if let Some(total) = total {
+        query["total"] = json!(total);
+    }
     json!({
         "methodResponses": [
-            ["Email/query", {
-                "accountId": "acct1",
-                "queryState": "q1",
-                "canCalculateChanges": false,
-                "position": position,
-                "total": total,
-                "limit": 50,
-                "ids": ids,
-            }, "search"],
+            ["Email/query", query, "search"],
             ["Email/get", {"accountId": "acct1", "state": "s1", "list": list, "notFound": []}, "fetch"],
         ],
         "sessionState": "s1",
@@ -291,8 +294,8 @@ fn window(position: u64, total: u64, ids: &[&str]) -> serde_json::Value {
 fn a_walk_asks_for_each_window_in_turn() {
     let stub = Stub::new(vec![
         session(),
-        window(0, 3, &["m1", "m2"]),
-        window(2, 3, &["m3"]),
+        window(0, Some(3), &["m1", "m2"]),
+        window(2, Some(3), &["m3"]),
     ]);
     let client = Client::new("https://example.com/.well-known/jmap", &stub);
 
@@ -318,6 +321,36 @@ fn a_walk_asks_for_each_window_in_turn() {
     let second: serde_json::Value = serde_json::from_slice(sent[2].body.as_ref().unwrap()).unwrap();
     assert_eq!(first["methodCalls"][0][1]["position"], 0);
     assert_eq!(second["methodCalls"][0][1]["position"], 2);
+}
+
+/// Without a total, the end of the list is the window that comes back empty.
+#[test]
+fn a_walk_without_a_total_ends_at_an_empty_window() {
+    let stub = Stub::new(vec![
+        session(),
+        window(0, None, &["m1", "m2"]),
+        window(2, None, &["m3"]),
+        window(3, None, &[]),
+    ]);
+    let client = Client::new("https://example.com/.well-known/jmap", &stub);
+
+    let mut pages = search_emails_pages(SearchEmailsParams {
+        phrase: "invoice".to_string(),
+        first_mailbox_id: "mbx1".to_string(),
+        second_mailbox_id: "mbx2".to_string(),
+        position: 0,
+    });
+    let mut subjects = Vec::new();
+    while let Some(page) = block_on(pages.next(&client)).expect("the walk should hold") {
+        assert_eq!(page.search.total, None);
+        assert_eq!(page.search.limit, None);
+        for email in &page.fetch.list {
+            subjects.push(email.subject.clone().unwrap_or_default());
+        }
+    }
+
+    assert_eq!(subjects, vec!["message m1", "message m2", "message m3"]);
+    assert_eq!(stub.sent().len(), 4);
 }
 
 /// A call the server would not run does not take the answers to the others

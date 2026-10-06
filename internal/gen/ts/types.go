@@ -90,7 +90,7 @@ func (g *TypeGenerator) writeField(buf *bytes.Buffer, o *spec.Object, f *spec.Fi
 		name = strconv.Quote(name)
 	}
 	optional := ""
-	if o.Kind != spec.KindResponse {
+	if o.Kind != spec.KindResponse || f.Optional {
 		optional = "?"
 	}
 	fmt.Fprintf(buf, "  %s%s: %s\n", name, optional, f.ParsedType().TSType())

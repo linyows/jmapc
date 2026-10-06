@@ -308,8 +308,9 @@ func (g *RequestGenerator) writePages(buf *bytes.Buffer, p *plan) {
 		fmt.Fprintf(buf, "    start = window.%s + window.%s.length\n",
 			tsMemberName(spec.ExportedName(request.PositionArgument)), ids)
 		// Where the call asked for the total, the end is known without asking
-		// for a window that is not there.
-		fmt.Fprintf(buf, "    if (window.%[1]s > 0 && start >= window.%[1]s) {\n      return\n    }\n",
+		// for a window that is not there. The server leaves the total out
+		// otherwise.
+		fmt.Fprintf(buf, "    if (window.%[1]s !== undefined && start >= window.%[1]s) {\n      return\n    }\n",
 			tsMemberName(spec.ExportedName(request.TotalProperty)))
 
 	case request.PageChanges:

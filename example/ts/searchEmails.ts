@@ -142,7 +142,7 @@ export async function* searchEmailsPages(client: Client, p: SearchEmailsParams):
     }
     yield res
     start = window.position + window.ids.length
-    if (window.total > 0 && start >= window.total) {
+    if (window.total !== undefined && start >= window.total) {
       return
     }
   }

@@ -387,14 +387,16 @@ func (s *Spec) registerQuery(dataType, capability string) {
 			{Name: "position", Type: "UnsignedInt", Doc: "The zero-based index of the first returned id in the full result list."},
 			{Name: "ids", Type: "Id[]", Doc: "The ids of the matching records, in sorted order."},
 			{
-				Name: "total",
-				Type: "UnsignedInt",
-				Doc:  "The total number of matching records, present only if calculateTotal was true.",
+				Name:     "total",
+				Type:     "UnsignedInt",
+				Optional: true,
+				Doc:      "The total number of matching records, present only if calculateTotal was true.",
 			},
 			{
-				Name: "limit",
-				Type: "UnsignedInt",
-				Doc:  "The limit the server applied, present only if it is lower than the one requested.",
+				Name:     "limit",
+				Type:     "UnsignedInt",
+				Optional: true,
+				Doc:      "The limit the server applied, present only if it is lower than the one requested.",
 			},
 		},
 	})
@@ -454,9 +456,10 @@ func (s *Spec) registerQueryChanges(dataType, capability string) {
 			{Name: "oldQueryState", Type: "String", Doc: "The query state the changes are calculated from."},
 			{Name: "newQueryState", Type: "String", Doc: "The query state the client reaches by applying these changes."},
 			{
-				Name: "total",
-				Type: "UnsignedInt",
-				Doc:  "The total number of matching records, present only if calculateTotal was true.",
+				Name:     "total",
+				Type:     "UnsignedInt",
+				Optional: true,
+				Doc:      "The total number of matching records, present only if calculateTotal was true.",
 			},
 			{
 				Name: "removed",
