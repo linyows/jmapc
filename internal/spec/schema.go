@@ -323,9 +323,9 @@ func (s *Spec) addSchemaMethods(sc *Schema, t *SchemaType) error {
 			return err
 		}
 		for _, f := range fields {
-			if _, has := args.Field(f.Name); has {
+			if other := clashingField(args.Fields, f.Name); other != nil {
 				return fmt.Errorf("%s already has the argument %q, and a schema adds arguments rather than redefining them",
-					method, f.Name)
+					method, other.Name)
 			}
 		}
 		s.AppendArguments(method, fields...)
@@ -401,8 +401,11 @@ func schemaFields(where string, in []*SchemaField) ([]*Field, error) {
 		if f.Name == "" {
 			return nil, fmt.Errorf("a property of %s has no name", where)
 		}
-		if hasField(out, f.Name) {
-			return nil, fmt.Errorf("%s defines %q twice", where, f.Name)
+		if other := clashingField(out, f.Name); other != nil {
+			if other.Name == f.Name {
+				return nil, fmt.Errorf("%s defines %q twice", where, f.Name)
+			}
+			return nil, fmt.Errorf("%s defines %q and %q, which a generator writes as one name", where, other.Name, f.Name)
 		}
 		if f.Type == "" {
 			return nil, fmt.Errorf("%s.%s has no type", where, f.Name)
@@ -425,6 +428,18 @@ func schemaFields(where string, in []*SchemaField) ([]*Field, error) {
 		})
 	}
 	return out, nil
+}
+
+// clashingField returns the field of fields that name would be generated as:
+// one of that name, or one a generator writes as the same identifier, as Go
+// writes accountId and AccountId as AccountID and Rust both as account_id.
+func clashingField(fields []*Field, name string) *Field {
+	for _, f := range fields {
+		if f.Name == name || exportedName(f.Name) == exportedName(name) || RustName(f.Name) == RustName(name) {
+			return f
+		}
+	}
+	return nil
 }
 
 // hasField reports whether fields holds one named name.

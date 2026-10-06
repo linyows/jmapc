@@ -228,6 +228,19 @@ func TestExtendErrors(t *testing.T) {
 		]}]}`,
 		want: `Note defines "title" twice`,
 	}, {
+		name: "two properties a generator writes as one",
+		src: `{"capability": "urn:x:y", "types": [{"name": "Note", "properties": [
+			{"name": "noteId", "type": "Id"}, {"name": "NoteId", "type": "Id"}
+		]}]}`,
+		want: `Note defines "noteId" and "NoteId", which a generator writes as one name`,
+	}, {
+		name: "argument a standard method already has but for case",
+		src: `{"capability": "urn:x:y", "types": [
+			{"name": "Note", "properties": [], "methods": ["get"],
+			 "arguments": {"get": [{"name": "AccountId", "type": "Id"}]}}
+		]}`,
+		want: `Note/get already has the argument "accountId"`,
+	}, {
 		name: "argument a standard method already has",
 		src: `{"capability": "urn:x:y", "types": [
 			{"name": "Note", "properties": [], "methods": ["get"],
