@@ -175,8 +175,17 @@ func (c *checker) checkEnum(value, where string) {
 		value, strings.Join(c.enum, ", "))
 }
 
-// propertyHint suggests what an unknown property in a path may have meant.
+// propertyHint suggests what an unknown property in a path may have meant, the
+// forms a header field is asked for in where it names another, or what to
+// write in place of a property a record cannot be written with.
 func propertyHint(err error) string {
+	if hint := headerFormHint(err); hint != "" {
+		return hint
+	}
+	var unwritable *spec.UnwritableError
+	if errors.As(err, &unwritable) {
+		return unwritable.Hint
+	}
 	var unknown *spec.UnknownPropertyError
 	if !errors.As(err, &unknown) {
 		return ""
@@ -299,13 +308,26 @@ func (c *checker) object(t *spec.Type, raw json.RawMessage, where string) Node {
 	if len(o.Fields) == 0 {
 		return c.patchObject(members, keys, raw, where)
 	}
+	c.checkHeaderClashes(o, keys, where)
 
 	out := &Object{Raw: raw}
 	for _, key := range keys {
 		field, isKnown := o.Field(key)
 		if !isKnown {
-			c.errorf(where+"."+key, hintFor(key, o.PropertyNames()), "%s has no property %q", o.Name, key)
-			continue
+			dynamic, err := o.DynamicField(key)
+			if err != nil {
+				c.errorf(where+"."+key, headerFormHint(err), "%v", err)
+				continue
+			}
+			if dynamic == nil {
+				c.errorf(where+"."+key, hintFor(key, o.PropertyNames()), "%s has no property %q", o.Name, key)
+				continue
+			}
+			if err := o.CheckWritable(key); err != nil {
+				c.errorf(where+"."+key, propertyHint(err), "%v", err)
+				continue
+			}
+			field = dynamic
 		}
 		elemType := field.ParsedType()
 		if o.Name == "FilterOperator" && key == "conditions" && c.filterUnion != nil {
@@ -955,4 +977,51 @@ func comparatorNames(base *spec.Object, extra map[string]*spec.Field) []string {
 		names = append(names, name)
 	}
 	return names
+}
+
+// convenienceHeaders are the properties of a message and of a part of one that
+// stand for a header field, which RFC 8621, Section 4.6 does not let a record
+// be given as well as the header field itself. A part's name stands for two:
+// RFC 8621, Section 4.1.4 has it the filename of Content-Disposition or, where
+// that has none, the name of Content-Type.
+var convenienceHeaders = map[string]map[string][]string{
+	"Email": {
+		"subject": {"subject"}, "from": {"from"}, "to": {"to"}, "cc": {"cc"}, "bcc": {"bcc"},
+		"replyTo": {"reply-to"}, "sender": {"sender"}, "sentAt": {"date"},
+		"messageId": {"message-id"}, "inReplyTo": {"in-reply-to"}, "references": {"references"},
+	},
+	"EmailBodyPart": {
+		"type": {"content-type"}, "charset": {"content-type"}, "name": {"content-disposition", "content-type"},
+		"disposition": {"content-disposition"}, "cid": {"content-id"},
+		"language": {"content-language"}, "location": {"content-location"},
+	},
+}
+
+// checkHeaderClashes reports a header field a record written out is given
+// twice: in two forms, or in two spellings, or as a header field and as the
+// property that stands for it. The server could not tell which was meant.
+func (c *checker) checkHeaderClashes(o *spec.Object, keys []string, where string) {
+	convenience, ok := convenienceHeaders[o.Name]
+	if !ok {
+		return
+	}
+	given := map[string]string{}
+	for _, key := range keys {
+		for _, header := range convenience[key] {
+			given[header] = key
+		}
+	}
+	for _, key := range keys {
+		h, _ := spec.ParseHeaderProperty(key)
+		if h == nil {
+			continue
+		}
+		name := strings.ToLower(h.Name)
+		if earlier, twice := given[name]; twice {
+			c.errorf(where+"."+key, "give the header field once",
+				"%s gives the %s header field that %s gives already", key, h.Name, earlier)
+			continue
+		}
+		given[name] = key
+	}
 }

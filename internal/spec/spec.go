@@ -175,6 +175,33 @@ func (o *Object) AcceptsDynamic(name string) bool {
 	return false
 }
 
+// DynamicField returns a field for a property Dynamic says this type has, typed
+// as far as the specifications say: a header field in the form it asks for, a
+// digest of a blob as a string, and anything else, such as the properties a
+// vendor's type names, as a value of any shape. The content of a blob is asked
+// for as data and comes back as data:asText or data:asBase64, which are fields
+// of their own, so data names nothing a record holds and has no field. It
+// returns nil where the type has no such property, and an error where the name
+// is one but the form it asks for is not.
+func (o *Object) DynamicField(name string) (*Field, error) {
+	if !o.AcceptsDynamic(name) {
+		return nil, nil
+	}
+	header, err := ParseHeaderProperty(name)
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case header != nil:
+		return &Field{Name: name, Type: header.Type}, nil
+	case o.Name == "BlobData" && strings.HasPrefix(name, "digest:"):
+		return &Field{Name: name, Type: String}, nil
+	case o.Name == "BlobData" && name == "data":
+		return nil, nil
+	}
+	return &Field{Name: name, Type: Any}, nil
+}
+
 // PropertyNames returns the names of every property, sorted, for use in
 // diagnostics that suggest what the caller may have meant.
 func (o *Object) PropertyNames() []string {
@@ -451,7 +478,14 @@ func (w *pathWalk) walk(t *Type, tokens []string, path string) (*Type, error) {
 	}
 	f, ok := o.Field(token)
 	if !ok {
-		return nil, &UnknownPropertyError{TypeName: o.Name, Property: token, Known: o.PropertyNames()}
+		dynamic, err := o.DynamicField(token)
+		if err != nil {
+			return nil, fmt.Errorf("path %q: %w", path, err)
+		}
+		if dynamic == nil {
+			return nil, &UnknownPropertyError{TypeName: o.Name, Property: token, Known: o.PropertyNames()}
+		}
+		f = dynamic
 	}
 	w.selections = append(w.selections, Selection{Type: o.Name, Property: token})
 	return w.walk(f.ParsedType(), rest, path)
@@ -527,9 +561,19 @@ func (s *Spec) ResolvePatch(dataType string, segments []string, unknown []bool) 
 			}
 			f, known := o.Field(seg)
 			if !known {
-				return nil, nil, nil, nil, &UnknownPropertyError{
-					TypeName: o.Name, Property: seg, Known: o.PropertyNames(),
+				dynamic, err := o.DynamicField(seg)
+				if err != nil {
+					return nil, nil, nil, nil, err
 				}
+				if dynamic == nil {
+					return nil, nil, nil, nil, &UnknownPropertyError{
+						TypeName: o.Name, Property: seg, Known: o.PropertyNames(),
+					}
+				}
+				if err := o.CheckWritable(seg); err != nil {
+					return nil, nil, nil, nil, err
+				}
+				f = dynamic
 			}
 			cur = f.ParsedType()
 			target = f
@@ -540,6 +584,39 @@ func (s *Spec) ResolvePatch(dataType string, segments []string, unknown []bool) 
 		}
 	}
 	return keyTypes, properties, cur, target, nil
+}
+
+// UnwritableError reports a property beyond a type's fields that a record of
+// the type cannot be written with, whether written out whole or patched.
+type UnwritableError struct {
+	// Problem says why the property cannot be written.
+	Problem string
+	// Hint says what to do instead, where there is something to say.
+	Hint string
+}
+
+func (e *UnwritableError) Error() string { return e.Problem }
+
+// CheckWritable reports whether a record of o may be written with name, a
+// property beyond its fields. What a record is written with is its fields and,
+// of a message and its parts, the header fields RFC 8621, Section 4.6 lets an
+// email be created with; the other dynamic properties, a digest or a vendor's,
+// are there to be read. A vendor's type may name header: among what a /get
+// takes, and that says nothing of writing one.
+func (o *Object) CheckWritable(name string) error {
+	header, _ := ParseHeaderProperty(name)
+	if header == nil || (o.Name != "Email" && o.Name != "EmailBodyPart") {
+		return &UnwritableError{Problem: fmt.Sprintf("%s is a property to ask %s for, not one to write", name, o.Name)}
+	}
+	// A Content-* header field belongs to a body part, which says what it
+	// holds; the message as a whole is not given one.
+	if o.Name == "Email" && strings.HasPrefix(strings.ToLower(header.Name), "content-") {
+		return &UnwritableError{
+			Problem: fmt.Sprintf("%s is a header field of a body part, which RFC 8621 does not let an Email be given", header.Name),
+			Hint:    "set it on the body part it describes",
+		}
+	}
+	return nil
 }
 
 // SetErrorTypeName is the type a /set response uses to report why it could not
