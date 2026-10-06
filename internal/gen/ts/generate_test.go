@@ -264,3 +264,40 @@ func TestStringsAreWrittenAsJavaScriptWritesThem(t *testing.T) {
 		t.Errorf("quote = %s, want %s", got, want)
 	}
 }
+
+// TestAnEmptyListOfPropertiesGivesTheIDAloneOfAGet checks the records of two
+// calls asking for no properties: a /get's hold the id, which it returns
+// whatever it is asked for, and a parse's hold nothing, having no id.
+func TestAnEmptyListOfPropertiesGivesTheIDAloneOfAGet(t *testing.T) {
+	q, err := request.NewParser(spec.Standard()).Parse("Nothing"+request.Extension, []byte(`{"methodCalls": [
+	  ["Mailbox/get", {"ids": null, "properties": []}, "ids"],
+	  ["Email/parse", {"blobIds": ["b1"], "properties": []}, "parse"]
+	]}`))
+	if err != nil {
+		t.Fatalf("checking the request:\n%v", err)
+	}
+	files, err := (&RequestGenerator{Spec: spec.Standard(), Requests: []*request.Request{q}}).Generate()
+	if err != nil {
+		t.Fatalf("generating: %v", err)
+	}
+	src := string(files["nothing.ts"])
+	for name, fields := range map[string][]string{
+		"NothingIDsMailbox": {"  id: Id"},
+		"NothingParseEmail": nil,
+	} {
+		i := strings.Index(src, "export interface "+name+" {\n")
+		if i < 0 {
+			t.Fatalf("no interface %s:\n%s", name, src)
+		}
+		body := src[i : i+strings.Index(src[i:], "}")]
+		var got []string
+		for _, line := range strings.Split(body, "\n")[1:] {
+			if line != "" && !strings.HasPrefix(strings.TrimSpace(line), "//") {
+				got = append(got, line)
+			}
+		}
+		if strings.Join(got, "|") != strings.Join(fields, "|") {
+			t.Errorf("%s holds %q, want %q", name, got, fields)
+		}
+	}
+}

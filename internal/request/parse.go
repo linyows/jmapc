@@ -605,6 +605,16 @@ func propertyArray(props []string) *Array {
 	return arr
 }
 
+// hasID reports whether a data type has an id, which a set of it holds.
+func (c *checker) hasID(typeName string) bool {
+	o, ok := c.spec.Object(typeName)
+	if !ok {
+		return false
+	}
+	_, has := o.Field("id")
+	return has
+}
+
 // checkPropertySetUse holds a call asking for a named set to the one thing that
 // makes the set worth naming: that the type generated for it is the same
 // wherever it is asked for.
@@ -614,6 +624,18 @@ func propertyArray(props []string) *Array {
 // narrowed differently in two calls would be two shapes under one name, so a
 // call that asks for a set spells out nothing else about the records.
 func (c *checker) checkPropertySetUse(call *Call, where string) {
+	// A set is one record type wherever it is asked for, holding the id a
+	// /get returns whatever it is asked for, where its type has one. A method
+	// that makes no such promise would be answered without the id the type
+	// says is there. A set of a type with no id holds none, and any method may
+	// ask for it.
+	if call.PropertySet != nil && !call.Method.ReturnsID && c.hasID(call.PropertySet.Type) {
+		c.errorf(fmt.Sprintf("%s.%s", where, call.Method.PropertiesArgument),
+			"write the properties out in this call, leaving out the id, which it does not promise to return",
+			"%s does not return the id of every record whatever it is asked for, as a /get does, so the set %s, which holds it, cannot describe what it returns",
+			call.Method.Name, call.PropertySet.Name)
+		return
+	}
 	if call.PropertySet == nil || call.NestedProperties == nil {
 		return
 	}
@@ -779,7 +801,7 @@ func (c *checker) checkFetched(from *Call, selected []spec.Selection, path, wher
 		}
 		// A /get answers with the id whether or not it was asked for, as
 		// RFC 8620, Section 5.1 has it.
-		if sel.Property == "id" || slices.Contains(fetched, sel.Property) {
+		if (sel.Property == "id" && from.Method.ReturnsID) || slices.Contains(fetched, sel.Property) {
 			continue
 		}
 		c.errorf(where, fetchedHint(from, sel.Property, argument, fetched),
@@ -824,7 +846,11 @@ func (c *checker) properties(call *Call, where string) []string {
 	if !ok {
 		return nil
 	}
-	var props []string
+	// An empty list asks for no properties: the id alone of a /get, which
+	// returns it whatever it is asked for, and nothing of a method that
+	// promises no id, as Email/parse does. It is kept as an empty slice rather
+	// than nil, since nil is what says the call fetches everything.
+	props := []string{}
 	for i, item := range arr.Items {
 		lit, ok := item.(*Literal)
 		if !ok {
@@ -865,7 +891,7 @@ func (c *checker) nestedProperties(call *Call, where string) []string {
 	if !ok {
 		return nil
 	}
-	var props []string
+	props := []string{}
 	for i, item := range arr.Items {
 		lit, ok := item.(*Literal)
 		if !ok {

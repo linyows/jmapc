@@ -132,7 +132,7 @@ func setProperties(set *request.PropertySet, dataType *spec.Object) []string {
 	if _, hasID := dataType.Field("id"); !hasID {
 		return set.Own
 	}
-	return shared.RecordProperties(set.Own)
+	return shared.RecordProperties(set.Own, true)
 }
 
 // propertySetDoc is the documentation the struct for a set carries: what the

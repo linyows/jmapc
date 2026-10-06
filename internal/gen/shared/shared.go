@@ -90,9 +90,13 @@ func Unique(taken map[string]bool, name string) string {
 	return candidate
 }
 
-// RecordProperties returns the properties a record type holds. A /get response
-// always carries the id, whether or not the request asked for it.
-func RecordProperties(props []string) []string {
+// RecordProperties returns the properties a record type holds. Where withID
+// says the method returns the id whatever it is asked for, as a /get does, the
+// id is among them whether or not the request asked for it.
+func RecordProperties(props []string, withID bool) []string {
+	if !withID {
+		return props
+	}
 	for _, p := range props {
 		if p == "id" {
 			return props
@@ -130,10 +134,10 @@ func SameNarrowing(calls []*request.Call) map[*request.Call]*request.Call {
 			c.Method.Name,
 			c.Method.DataType,
 			setName(c.PropertySet),
-			strings.Join(c.Properties, "\x00"),
+			propertyList(c.Properties),
 			c.Method.NestedType,
 			setName(c.NestedPropertySet),
-			strings.Join(c.NestedProperties, "\x00"),
+			propertyList(c.NestedProperties),
 		}, "\x01")
 		if seen, dup := first[key]; dup {
 			out[c] = seen
@@ -143,6 +147,17 @@ func SameNarrowing(calls []*request.Call) map[*request.Call]*request.Call {
 		out[c] = c
 	}
 	return out
+}
+
+// propertyList writes a list of properties into a narrowing key, keeping apart
+// the list that is not given, which fetches every property, from the list given
+// empty, which fetches none: the id alone of a /get's records, and nothing of
+// a body part.
+func propertyList(props []string) string {
+	if props == nil {
+		return "*"
+	}
+	return "=" + strings.Join(props, "\x00")
 }
 
 // setName returns the name of a property set, and an empty string where a call

@@ -711,3 +711,62 @@ func TestVerifyNamesTheDirectoryHoldingEveryRequest(t *testing.T) {
 		}
 	}
 }
+
+// TestAnEmptyListOfPropertiesFetchesTheIDAlone checks the record a call asking
+// for no properties decodes into. The server answers with the id and nothing
+// else, so the record holds the id rather than every property of the type.
+func TestAnEmptyListOfPropertiesFetchesTheIDAlone(t *testing.T) {
+	src := generateOne(t, "MailboxIDs", `{
+	  "methodCalls": [["Mailbox/get", {"ids": null, "properties": []}, "ids"]],
+	  "_returns": "ids"
+	}`)
+	record := src[strings.Index(src, "type MailboxIDsIDsMailbox struct {"):]
+	record = record[:strings.Index(record, "\n}\n")]
+	if !strings.Contains(record, "ID jmapc.ID `json:\"id\"`") {
+		t.Errorf("the record does not hold the id:\n%s", record)
+	}
+	if n := strings.Count(record, "`json:"); n != 1 {
+		t.Errorf("the record holds %d properties, want the id alone:\n%s", n, record)
+	}
+	if !strings.Contains(src, "\"properties\": json.RawMessage(`[]`)") {
+		t.Errorf("the request does not send the empty list:\n%s", src)
+	}
+}
+
+// TestAnEmptyListOfPropertiesOfAParseIsNoIDOfItsOwn checks an empty list given
+// to a method other than a /get. It asks for no properties, as it does of a
+// /get, but RFC 8620 promises the id of a /get alone, and a parsed email has
+// none, so the record holds nothing.
+func TestAnEmptyListOfPropertiesOfAParseIsNoIDOfItsOwn(t *testing.T) {
+	src := generateOne(t, "ParseNothing", `{
+	  "methodCalls": [["Email/parse", {"blobIds": ["{{blobId}}"], "properties": []}, "parse"]],
+	  "_returns": "parse"
+	}`)
+	i := strings.Index(src, "type ParseNothingParseEmail struct {")
+	if i < 0 {
+		t.Fatalf("no record was made for the parsed emails, which fetch nothing:\n%s", src)
+	}
+	record := src[i:]
+	record = record[:strings.Index(record, "}\n")]
+	if n := strings.Count(record, "`json:"); n != 0 {
+		t.Errorf("the record of a parsed email holds %d properties, want none, not even an id:\n%s", n, record)
+	}
+}
+
+// TestAnEmptyListOfBodyPropertiesFetchesNothingOfAPart checks the body parts of
+// a call asking for none of their properties. A part has no id to be returned
+// whatever is asked for, so its record holds nothing.
+func TestAnEmptyListOfBodyPropertiesFetchesNothingOfAPart(t *testing.T) {
+	src := generateOne(t, "Parts", `{
+	  "methodCalls": [["Email/get", {"ids": ["{{id}}"], "properties": ["textBody"], "bodyProperties": []}, "g"]],
+	  "_returns": "g"
+	}`)
+	part := src[strings.Index(src, "type PartsGEmailBodyPart struct {"):]
+	part = part[:strings.Index(part, "}\n")]
+	if n := strings.Count(part, "`json:"); n != 0 {
+		t.Errorf("the part holds %d properties, want none:\n%s", n, part)
+	}
+	if !strings.Contains(src, "TextBody []PartsGEmailBodyPart") {
+		t.Errorf("the email does not hold its parts in the narrowed record:\n%s", src)
+	}
+}
