@@ -447,8 +447,9 @@ func unescapePointer(token string) string {
 // pointer selects by, along with the type of the value at the end and the
 // property it belongs to, which carries its documentation and the values it is
 // allowed to take. properties marks the segments that name a property of an
-// object, as against a key of a map or an index of a list, which keyTypes
-// alone cannot tell apart from a map keyed by strings.
+// object, as against a key of a map, which keyTypes alone cannot tell apart
+// from a map keyed by strings. A pointer reaching a list is an error, since
+// RFC 8620 has a list replaced whole rather than patched in place.
 //
 // unknown marks the segments a parameter stands in for. A parameter in place of
 // a property name leaves everything past it unknowable, so resolution stops
