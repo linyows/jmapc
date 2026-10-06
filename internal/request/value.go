@@ -752,6 +752,17 @@ func (c *checker) patchObject(members map[string]json.RawMessage, keys []string,
 		}
 
 		field.KeySegments = c.patchKeySegments(segments, keyTypes, properties, where+"."+key)
+		// A key of a set whose keys the specification fixes, as a participant's
+		// roles are, is held to those keys as it is in the set written whole.
+		if last := len(segments) - 1; target != nil && len(target.Enum) > 0 &&
+			target.ParsedType().IsMap() && last > 0 && properties[last-1] && !unknown[last] {
+			savedEnum := c.enum
+			c.enum = target.Enum
+			// The segment is a JSON pointer token, ~1 and ~0 standing for /
+			// and ~, and the key it names is what the values are.
+			c.checkEnum(strings.NewReplacer("~1", "/", "~0", "~").Replace(segments[last]), where+"."+key)
+			c.enum = savedEnum
+		}
 		// null in a patch means "remove this", so it is allowed wherever a value
 		// is, whether or not the property itself may hold null.
 		removable := *valueType
