@@ -265,6 +265,10 @@ func TestParseErrors(t *testing.T) {
 		src:  `{"methodCalls": [["Email/query", {"accountId": "acct-{{x}}"}, "c0"]]}`,
 		want: `a parameter cannot be embedded in a larger string`,
 	}, {
+		name: "UTCDate with a comma before the fraction of a second",
+		src:  `{"methodCalls": [["Email/query", {"filter": {"before": "2026-09-04T09:00:00,5Z"}}, "c0"]]}`,
+		want: `is not a UTCDate`,
+	}, {
 		name: "patch key written with the leading slash it already has",
 		src: `{"methodCalls": [
 			["Email/set", {"update": {"e1": {"/keywords/$seen": true}}}, "c0"]
