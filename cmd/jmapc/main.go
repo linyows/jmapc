@@ -20,12 +20,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/linyows/jmapc/internal/gen"
-	"github.com/linyows/jmapc/internal/gen/rust"
 	"github.com/linyows/jmapc/internal/gen/shared"
-	"github.com/linyows/jmapc/internal/gen/ts"
 	"github.com/linyows/jmapc/internal/request"
 	"github.com/linyows/jmapc/internal/spec"
+	"github.com/linyows/jmapc/internal/target"
 )
 
 // ConfigName is the file jmapc reads its settings from when one is present.
@@ -606,63 +604,13 @@ func noteUnwatched(cfg *Config, requests []*request.Request) {
 // take the runtime with them: there is no package to depend on, so the client
 // and the data types are written alongside the requests.
 func generate(cfg *Config, catalogue *spec.Spec, requests []*request.Request, props *request.PropertySets) (map[string][]byte, error) {
-	switch cfg.Lang {
-	case LangRust:
-		return generateRust(catalogue, requests, props)
-	case LangTypeScript:
-		files, err := (&ts.RequestGenerator{Spec: catalogue, Requests: requests, Properties: props}).Generate()
-		if err != nil {
-			return nil, err
-		}
-		types, err := (&ts.TypeGenerator{
-			Spec: catalogue,
-			// PatchObject is written by hand in the runtime, being a shape
-			// rather than a record.
-			Skip: map[string]bool{"PatchObject": true},
-		}).Generate()
-		if err != nil {
-			return nil, err
-		}
-		client, err := (&ts.ClientGenerator{}).Generate()
-		if err != nil {
-			return nil, err
-		}
-		files["types.ts"] = types
-		files["client.ts"] = client
-		return files, nil
-	}
-	return (&gen.RequestGenerator{
-		Spec:       catalogue,
+	return (&target.Client{
+		Lang:       cfg.Lang,
 		Package:    cfg.Package,
-		Qualifier:  "jmapc.",
+		Spec:       catalogue,
 		Requests:   requests,
 		Properties: props,
 	}).Generate()
-}
-
-// generateRust produces the Rust module directory: one file per request, the data
-// model, the runtime, and the mod.rs that declares them all.
-func generateRust(catalogue *spec.Spec, requests []*request.Request, props *request.PropertySets) (map[string][]byte, error) {
-	files, err := (&rust.RequestGenerator{Spec: catalogue, Requests: requests, Properties: props}).Generate()
-	if err != nil {
-		return nil, err
-	}
-	types, err := (&rust.TypeGenerator{
-		Spec: catalogue,
-		// PatchObject is written by hand in the runtime, being a shape rather
-		// than a record.
-		Skip: map[string]bool{"PatchObject": true},
-	}).Generate()
-	if err != nil {
-		return nil, err
-	}
-	client, err := (&rust.ClientGenerator{}).Generate()
-	if err != nil {
-		return nil, err
-	}
-	files["types.rs"] = types
-	files["client.rs"] = client
-	return files, nil
 }
 
 // loadConfig reads the settings file, treating a missing default file as an
@@ -704,9 +652,9 @@ func (c *Config) resolve(path string) string {
 
 // Languages jmapc can generate.
 const (
-	LangGo         = "go"
-	LangTypeScript = "typescript"
-	LangRust       = "rust"
+	LangGo         = target.Go
+	LangTypeScript = target.TypeScript
+	LangRust       = target.Rust
 )
 
 // applyDefaults fills in the settings that were not given.
