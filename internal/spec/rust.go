@@ -279,6 +279,3 @@ var rustKeywords = map[string]bool{
 
 // rustNonRaw are the keywords that may not be written as raw identifiers.
 var rustNonRaw = map[string]bool{"crate": true, "self": true, "super": true, "_": true}
-
-// RustKeyword reports whether a name is one Rust reserves.
-func RustKeyword(s string) bool { return rustKeywords[s] }

@@ -29,6 +29,7 @@ package jmaptest
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -456,7 +457,7 @@ func (s *Server) ServeAPI(w http.ResponseWriter, r *http.Request) {
 		value, err := handler(call)
 		if err != nil {
 			var refused *refusal
-			if !as(err, &refused) {
+			if !errors.As(err, &refused) {
 				s.t.Errorf("jmaptest: the handler for %s failed: %v", call.Method, err)
 				refused = &refusal{Type: "serverFail", Description: err.Error()}
 			}
@@ -607,23 +608,6 @@ func Refuse(errType string, description ...string) error {
 		r.Description = strings.Join(description, " ")
 	}
 	return r
-}
-
-// as is errors.As for the one type this package unwraps to, kept here so that
-// the reader does not have to look up what is being matched.
-func as(err error, target **refusal) bool {
-	for err != nil {
-		if r, ok := err.(*refusal); ok {
-			*target = r
-			return true
-		}
-		unwrapper, ok := err.(interface{ Unwrap() error })
-		if !ok {
-			return false
-		}
-		err = unwrapper.Unwrap()
-	}
-	return false
 }
 
 // methodNames lists what was called, for a message about what was not.
