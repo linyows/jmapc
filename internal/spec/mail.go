@@ -29,12 +29,13 @@ func registerEmailImport(s *Spec) {
 			},
 		},
 	})
-	args := s.AddObject(&Object{
-		Name:       "EmailImportArguments",
+	s.defineMethod(&Method{
+		Name:       "Email/import",
 		Capability: CapabilityMail,
-		Kind:       KindArguments,
-		Doc:        "EmailImportArguments holds the arguments of the Email/import method.",
-		Fields: []*Field{
+		Doc:        "Creates emails from blobs that already hold a complete RFC 5322 message, which is how mail is moved in from another system.",
+		DataType:   "Email",
+	},
+		[]*Field{
 			accountIDField(),
 			{
 				Name: "ifInState",
@@ -48,13 +49,7 @@ func registerEmailImport(s *Spec) {
 				Doc:         "The messages to import, keyed by creation id.",
 			},
 		},
-	})
-	resp := s.AddObject(&Object{
-		Name:       "EmailImportResponse",
-		Capability: CapabilityMail,
-		Kind:       KindResponse,
-		Doc:        "EmailImportResponse holds the response to the Email/import method.",
-		Fields: []*Field{
+		[]*Field{
 			accountIDField(),
 			{Name: "oldState", Type: "String|null", Doc: "The state before the import."},
 			{Name: "newState", Type: "String", Doc: "The state after the import."},
@@ -69,27 +64,23 @@ func registerEmailImport(s *Spec) {
 				Doc:  "A map of creation id to the reason the message could not be imported.",
 			},
 		},
-	})
-	s.AddMethod(&Method{
-		Name:       "Email/import",
-		Capability: CapabilityMail,
-		Doc:        "Creates emails from blobs that already hold a complete RFC 5322 message, which is how mail is moved in from another system.",
-		Arguments:  args.Name,
-		Response:   resp.Name,
-		DataType:   "Email",
-	})
+	)
 }
 
 // registerEmailParse adds Email/parse, RFC 8621, Section 4.9. It reads a blob
 // as a message without filing it anywhere, which is how an attached message is
 // shown.
 func registerEmailParse(s *Spec) {
-	args := s.AddObject(&Object{
-		Name:       "EmailParseArguments",
-		Capability: CapabilityMail,
-		Kind:       KindArguments,
-		Doc:        "EmailParseArguments holds the arguments of the Email/parse method.",
-		Fields: append([]*Field{
+	s.defineMethod(&Method{
+		Name:                     "Email/parse",
+		Capability:               CapabilityMail,
+		Doc:                      "Reads blobs as RFC 5322 messages without filing them in the account, which is how a message sent as an attachment is displayed.",
+		DataType:                 "Email",
+		PropertiesArgument:       "properties",
+		NestedPropertiesArgument: "bodyProperties",
+		NestedType:               "EmailBodyPart",
+	},
+		append([]*Field{
 			accountIDField(),
 			{Name: "blobIds", Type: "Id[]", Doc: "The ids of the blobs to parse as messages."},
 			{
@@ -98,13 +89,7 @@ func registerEmailParse(s *Spec) {
 				Doc:  "The properties to include in each parsed email, or null for the default set.",
 			},
 		}, bodyFetchArguments()...),
-	})
-	resp := s.AddObject(&Object{
-		Name:       "EmailParseResponse",
-		Capability: CapabilityMail,
-		Kind:       KindResponse,
-		Doc:        "EmailParseResponse holds the response to the Email/parse method.",
-		Fields: []*Field{
+		[]*Field{
 			accountIDField(),
 			{
 				Name: "parsed",
@@ -118,18 +103,7 @@ func registerEmailParse(s *Spec) {
 			},
 			{Name: "notFound", Type: "Id[]|null", Doc: "The ids of the blobs that do not exist."},
 		},
-	})
-	s.AddMethod(&Method{
-		Name:                     "Email/parse",
-		Capability:               CapabilityMail,
-		Doc:                      "Reads blobs as RFC 5322 messages without filing them in the account, which is how a message sent as an attachment is displayed.",
-		Arguments:                args.Name,
-		Response:                 resp.Name,
-		DataType:                 "Email",
-		PropertiesArgument:       "properties",
-		NestedPropertiesArgument: "bodyProperties",
-		NestedType:               "EmailBodyPart",
-	})
+	)
 }
 
 // registerSearchSnippet adds SearchSnippet/get, RFC 8621, Section 5. It takes a
@@ -154,12 +128,14 @@ func registerSearchSnippet(s *Spec) {
 			},
 		},
 	})
-	args := s.AddObject(&Object{
-		Name:       "SearchSnippetGetArguments",
-		Capability: CapabilityMail,
-		Kind:       KindArguments,
-		Doc:        "SearchSnippetGetArguments holds the arguments of the SearchSnippet/get method.",
-		Fields: []*Field{
+	s.defineMethod(&Method{
+		Name:           "SearchSnippet/get",
+		Capability:     CapabilityMail,
+		Doc:            "Returns the parts of the given emails that matched a search, marked up for display.",
+		DataType:       "SearchSnippet",
+		ResultProperty: "list",
+	},
+		[]*Field{
 			accountIDField(),
 			{
 				Name: "filter",
@@ -168,27 +144,12 @@ func registerSearchSnippet(s *Spec) {
 			},
 			{Name: "emailIds", Type: "Id[]", Doc: "The ids of the emails to return snippets for."},
 		},
-	})
-	resp := s.AddObject(&Object{
-		Name:       "SearchSnippetGetResponse",
-		Capability: CapabilityMail,
-		Kind:       KindResponse,
-		Doc:        "SearchSnippetGetResponse holds the response to the SearchSnippet/get method.",
-		Fields: []*Field{
+		[]*Field{
 			accountIDField(),
 			{Name: "list", Type: "SearchSnippet[]", Doc: "The snippets that were generated, one per email that was found."},
 			{Name: "notFound", Type: "Id[]|null", Doc: "The ids that were requested but do not exist."},
 		},
-	})
-	s.AddMethod(&Method{
-		Name:           "SearchSnippet/get",
-		Capability:     CapabilityMail,
-		Doc:            "Returns the parts of the given emails that matched a search, marked up for display.",
-		Arguments:      args.Name,
-		Response:       resp.Name,
-		DataType:       "SearchSnippet",
-		ResultProperty: "list",
-	})
+	)
 }
 
 func registerMailbox(s *Spec) {

@@ -389,12 +389,14 @@ func registerCalendarEvent(s *Spec) {
 
 	// CalendarEvent/parse reads events out of an iCalendar file, which is how
 	// an invitation arriving as a mail attachment is shown.
-	parseArgs := s.AddObject(&Object{
-		Name:       "CalendarEventParseArguments",
-		Capability: CapabilityCalendarsParse,
-		Kind:       KindArguments,
-		Doc:        "CalendarEventParseArguments holds the arguments of the CalendarEvent/parse method.",
-		Fields: []*Field{
+	s.defineMethod(&Method{
+		Name:               "CalendarEvent/parse",
+		Capability:         CapabilityCalendarsParse,
+		Doc:                "Reads blobs as iCalendar files without filing the events in a calendar, which is how an invitation received as an attachment is displayed.",
+		DataType:           "CalendarEvent",
+		PropertiesArgument: "properties",
+	},
+		[]*Field{
 			accountIDField(),
 			{Name: "blobIds", Type: "Id[]", Doc: "The ids of the blobs to parse as iCalendar files."},
 			{
@@ -403,13 +405,7 @@ func registerCalendarEvent(s *Spec) {
 				Doc:  "The properties to include in each parsed event, or null for all of them.",
 			},
 		},
-	})
-	parseResp := s.AddObject(&Object{
-		Name:       "CalendarEventParseResponse",
-		Capability: CapabilityCalendarsParse,
-		Kind:       KindResponse,
-		Doc:        "CalendarEventParseResponse holds the response to the CalendarEvent/parse method.",
-		Fields: []*Field{
+		[]*Field{
 			accountIDField(),
 			{
 				Name: "parsed",
@@ -419,16 +415,7 @@ func registerCalendarEvent(s *Spec) {
 			{Name: "notParsable", Type: "Id[]|null", Doc: "The ids of the blobs that do not hold an iCalendar file the server could read."},
 			{Name: "notFound", Type: "Id[]|null", Doc: "The ids of the blobs that do not exist."},
 		},
-	})
-	s.AddMethod(&Method{
-		Name:               "CalendarEvent/parse",
-		Capability:         CapabilityCalendarsParse,
-		Doc:                "Reads blobs as iCalendar files without filing the events in a calendar, which is how an invitation received as an attachment is displayed.",
-		Arguments:          parseArgs.Name,
-		Response:           parseResp.Name,
-		DataType:           "CalendarEvent",
-		PropertiesArgument: "properties",
-	})
+	)
 }
 
 func registerCalendarEventNotification(s *Spec) {
@@ -546,12 +533,14 @@ func registerAvailability(s *Spec) {
 		},
 	})
 
-	args := s.AddObject(&Object{
-		Name:       "PrincipalGetAvailabilityArguments",
-		Capability: CapabilityAvailability,
-		Kind:       KindArguments,
-		Doc:        "PrincipalGetAvailabilityArguments holds the arguments of the Principal/getAvailability method.",
-		Fields: []*Field{
+	s.defineMethod(&Method{
+		Name:           "Principal/getAvailability",
+		Capability:     CapabilityAvailability,
+		DataType:       "Principal",
+		Doc:            "Reports when a principal is busy over a period, which is what a client needs to find a time everyone can meet.",
+		ResultProperty: "list",
+	},
+		[]*Field{
 			accountIDField(),
 			{Name: "id", Type: "Id", Doc: "The id of the principal whose availability is wanted."},
 			{Name: "utcStart", Type: "UTCDate", Doc: "The start of the period to report on."},
@@ -568,27 +557,12 @@ func registerAvailability(s *Spec) {
 				Doc:  "The properties to include in each event returned, or null for all of them.",
 			},
 		},
-	})
-	resp := s.AddObject(&Object{
-		Name:       "PrincipalGetAvailabilityResponse",
-		Capability: CapabilityAvailability,
-		Kind:       KindResponse,
-		Doc:        "PrincipalGetAvailabilityResponse holds the response to the Principal/getAvailability method.",
-		Fields: []*Field{
+		[]*Field{
 			{
 				Name: "list",
 				Type: "BusyPeriod[]",
 				Doc:  "The periods the principal is busy in, merged and in no particular order.",
 			},
 		},
-	})
-	s.AddMethod(&Method{
-		Name:           "Principal/getAvailability",
-		Capability:     CapabilityAvailability,
-		DataType:       "Principal",
-		Doc:            "Reports when a principal is busy over a period, which is what a client needs to find a time everyone can meet.",
-		Arguments:      args.Name,
-		Response:       resp.Name,
-		ResultProperty: "list",
-	})
+	)
 }
