@@ -381,6 +381,9 @@ func (s *Spec) addSchemaMethod(sc *Schema, m *SchemaMethod) error {
 	if m.Properties != "" && !hasField(args, m.Properties) {
 		return fmt.Errorf("%s selects properties through %q, which is not one of its arguments", m.Name, m.Properties)
 	}
+	if m.Properties != "" && m.ResultProperty == "" {
+		return fmt.Errorf("%s selects properties through %q, and names no resultProperty for the records they narrow", m.Name, m.Properties)
+	}
 	if m.ResultProperty != "" && !hasField(resp, m.ResultProperty) {
 		return fmt.Errorf("%s returns its records in %q, which its response does not have", m.Name, m.ResultProperty)
 	}
@@ -581,4 +584,3 @@ func holdsRecords(t *Type, dataType string) bool {
 	}
 	return false
 }
-
