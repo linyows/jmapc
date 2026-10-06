@@ -142,3 +142,41 @@ func TestAUnionAlternativeThatFailedNeedsNoCapability(t *testing.T) {
 		t.Errorf("a string, which the alternative needing urn:example:text takes: %v, want it reported", err)
 	}
 }
+
+// TestAnArgumentByReferenceNeedsItsCapability checks an argument another
+// capability adds, given by a back reference rather than written out: it needs
+// the capability either way.
+func TestAnArgumentByReferenceNeedsItsCapability(t *testing.T) {
+	s := spec.Standard()
+	if err := s.Extend(&spec.Schema{
+		Capability: "urn:example:tags",
+		Methods: []*spec.SchemaMethod{{
+			Name:      "Tag/apply",
+			Arguments: []*spec.SchemaField{{Name: "emailIds", Type: "Id[]", Capability: "urn:example:extra"}},
+			Response:  []*spec.SchemaField{{Name: "ok", Type: "Boolean"}},
+		}},
+	}); err != nil {
+		t.Fatalf("Extend: %v", err)
+	}
+	for _, tt := range []struct {
+		using []string
+		ok    bool
+	}{
+		{[]string{"urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail", "urn:example:tags"}, false},
+		{[]string{"urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail", "urn:example:tags", "urn:example:extra"}, true},
+	} {
+		for _, args := range []string{
+			`{"emailIds": ["e1"]}`,
+			`{"#emailIds": {"resultOf": "q", "name": "Email/query", "path": "/ids"}}`,
+		} {
+			check := NewRequestCheck(s, tt.using)
+			if err := check.Call(json.RawMessage(`["Email/query", {}, "q"]`), 0); err != nil {
+				t.Fatalf("Email/query: %v", err)
+			}
+			err := check.Call(json.RawMessage(`["Tag/apply", `+args+`, "t"]`), 1)
+			if tt.ok != (err == nil) {
+				t.Errorf("%s with urn:example:extra declared %v: %v", args, tt.ok, err)
+			}
+		}
+	}
+}

@@ -702,6 +702,10 @@ func (c *checker) arguments(call *Call, argsType *spec.Object, raw json.RawMessa
 			// there is no declared type to check the value against.
 			field = &spec.Field{Name: name, Type: spec.Any}
 		}
+		// An argument another specification adds needs its capability
+		// however its value is given, by a back reference as well as written
+		// out.
+		c.useCapability(field)
 		if key != name {
 			ref := c.resultRef(call, field, members[key], where+"."+key)
 			if ref != nil {
@@ -724,7 +728,6 @@ func (c *checker) arguments(call *Call, argsType *spec.Object, raw json.RawMessa
 		}
 		c.enum = field.Enum
 		c.creationIDs = field.CreationIDs
-		c.useCapability(field)
 		c.argumentValue = true
 		savedProperty := c.property
 		c.property = key
