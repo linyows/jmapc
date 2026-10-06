@@ -380,6 +380,29 @@ func (c *checker) anyValue(raw json.RawMessage) Node {
 	return &Literal{JSON: raw}
 }
 
+// Format is what a string of one of the primitive types that carry a format
+// has to look like: whether a string is one, and how one is written.
+type Format struct {
+	Valid func(string) bool
+	Doc   string
+}
+
+// Formats are the primitive types that are strings written in a format, which
+// a value in a request and a parameter given on a command line are both held
+// to.
+var Formats = map[string]Format{
+	spec.UTCDateType: {syntax.ValidUTCDate,
+		"a UTCDate is written as 2006-01-02T15:04:05Z, or 2006-01-02T15:04:05.5Z with a fraction of a second"},
+	spec.DateType: {syntax.ValidDate,
+		"a Date is written as 2006-01-02T15:04:05Z07:00, or 2006-01-02T15:04:05.5Z07:00 with a fraction of a second"},
+	spec.LocalDateTimeType: {func(s string) bool { return jmapc.LocalDateTime(s).Valid() },
+		"a LocalDateTime is written as 2006-01-02T15:04:05, with no time zone"},
+	spec.DurationType: {func(s string) bool { return jmapc.Duration(s).Valid() },
+		"a Duration is written as PT1H30M or P1D, with no years or months"},
+	spec.SignedDurationType: {func(s string) bool { return jmapc.SignedDuration(s).Valid() },
+		"a SignedDuration is a Duration, optionally prefixed with - or +"},
+}
+
 // primitive checks a value against one of the primitive JMAP types.
 func (c *checker) primitive(t *spec.Type, raw json.RawMessage, where string) Node {
 	kind := jsonKind(raw)
@@ -435,48 +458,13 @@ func (c *checker) primitive(t *spec.Type, raw json.RawMessage, where string) Nod
 			c.errorf(where, "an id is 1 to 255 characters from A-Z, a-z, 0-9, _ and -, and a creation id is written as \"#\" followed by such a name",
 				"%q is not a valid id", s)
 		}
-	case spec.UTCDateType:
+	case spec.UTCDateType, spec.DateType, spec.LocalDateTimeType, spec.DurationType, spec.SignedDurationType:
 		s, ok := stringValue(raw)
 		if !ok {
 			return fail()
 		}
-		if !syntax.ValidUTCDate(s) {
-			c.errorf(where, "a UTCDate is written as 2006-01-02T15:04:05Z, or 2006-01-02T15:04:05.5Z with a fraction of a second", "%q is not a UTCDate", s)
-		}
-	case spec.DateType:
-		s, ok := stringValue(raw)
-		if !ok {
-			return fail()
-		}
-		if !syntax.ValidDate(s) {
-			c.errorf(where, "a Date is written as 2006-01-02T15:04:05Z07:00, or 2006-01-02T15:04:05.5Z07:00 with a fraction of a second", "%q is not a Date", s)
-		}
-	case spec.LocalDateTimeType:
-		s, ok := stringValue(raw)
-		if !ok {
-			return fail()
-		}
-		if !jmapc.LocalDateTime(s).Valid() {
-			c.errorf(where, "a LocalDateTime is written as 2006-01-02T15:04:05, with no time zone",
-				"%q is not a LocalDateTime", s)
-		}
-	case spec.DurationType:
-		s, ok := stringValue(raw)
-		if !ok {
-			return fail()
-		}
-		if !jmapc.Duration(s).Valid() {
-			c.errorf(where, "a Duration is written as PT1H30M or P1D, with no years or months",
-				"%q is not a Duration", s)
-		}
-	case spec.SignedDurationType:
-		s, ok := stringValue(raw)
-		if !ok {
-			return fail()
-		}
-		if !jmapc.SignedDuration(s).Valid() {
-			c.errorf(where, "a SignedDuration is a Duration, optionally prefixed with - or +",
-				"%q is not a SignedDuration", s)
+		if f := Formats[t.Name]; !f.Valid(s) {
+			c.errorf(where, f.Doc, "%q is not a %s", s, t.Name)
 		}
 	case spec.TimeZoneIDType:
 		if _, ok := stringValue(raw); !ok {

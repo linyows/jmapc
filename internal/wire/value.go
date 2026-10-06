@@ -9,7 +9,6 @@ import (
 	"github.com/linyows/jmapc"
 	"github.com/linyows/jmapc/internal/request"
 	"github.com/linyows/jmapc/internal/spec"
-	"github.com/linyows/jmapc/internal/syntax"
 )
 
 // ParseValue turns the text a caller wrote for a parameter into the JSON value
@@ -62,33 +61,9 @@ func parseAs(t *spec.Type, text string) (json.RawMessage, error) {
 		}
 		return json.RawMessage(strconv.FormatInt(n, 10)), nil
 
-	case spec.UTCDateType:
-		if !syntax.ValidUTCDate(text) {
-			return nil, fmt.Errorf("%q is not a UTCDate\n\ta UTCDate is written as 2006-01-02T15:04:05Z, or 2006-01-02T15:04:05.5Z with a fraction of a second", text)
-		}
-		return quote(text), nil
-
-	case spec.DateType:
-		if !syntax.ValidDate(text) {
-			return nil, fmt.Errorf("%q is not a Date\n\ta Date is written as 2006-01-02T15:04:05Z07:00, or 2006-01-02T15:04:05.5Z07:00 with a fraction of a second", text)
-		}
-		return quote(text), nil
-
-	case spec.LocalDateTimeType:
-		if !jmapc.LocalDateTime(text).Valid() {
-			return nil, fmt.Errorf("%q is not a LocalDateTime\n\ta LocalDateTime is written as 2006-01-02T15:04:05, with no time zone", text)
-		}
-		return quote(text), nil
-
-	case spec.DurationType:
-		if !jmapc.Duration(text).Valid() {
-			return nil, fmt.Errorf("%q is not a Duration\n\ta Duration is written as PT1H30M or P1D, with no years or months", text)
-		}
-		return quote(text), nil
-
-	case spec.SignedDurationType:
-		if !jmapc.SignedDuration(text).Valid() {
-			return nil, fmt.Errorf("%q is not a SignedDuration\n\ta SignedDuration is a Duration, optionally prefixed with - or +", text)
+	case spec.UTCDateType, spec.DateType, spec.LocalDateTimeType, spec.DurationType, spec.SignedDurationType:
+		if f := request.Formats[t.Name]; !f.Valid(text) {
+			return nil, fmt.Errorf("%q is not a %s\n\t%s", text, t.Name, f.Doc)
 		}
 		return quote(text), nil
 
