@@ -299,6 +299,7 @@ func (c *checker) object(t *spec.Type, raw json.RawMessage, where string) Node {
 	if len(o.Fields) == 0 {
 		return c.patchObject(members, keys, raw, where)
 	}
+	c.checkHeaderClashes(o, keys, where)
 
 	out := &Object{Raw: raw}
 	for _, key := range keys {
@@ -981,4 +982,48 @@ func comparatorNames(base *spec.Object, extra map[string]*spec.Field) []string {
 		names = append(names, name)
 	}
 	return names
+}
+
+// convenienceHeaders are the properties of a message and of a part of one that
+// stand for a header field, which RFC 8621, Section 4.6 does not let a record
+// be given as well as the header field itself.
+var convenienceHeaders = map[string]map[string]string{
+	"Email": {
+		"subject": "subject", "from": "from", "to": "to", "cc": "cc", "bcc": "bcc",
+		"replyTo": "reply-to", "sender": "sender", "sentAt": "date",
+		"messageId": "message-id", "inReplyTo": "in-reply-to", "references": "references",
+	},
+	"EmailBodyPart": {
+		"type": "content-type", "disposition": "content-disposition", "cid": "content-id",
+		"language": "content-language", "location": "content-location",
+	},
+}
+
+// checkHeaderClashes reports a header field a record written out is given
+// twice: in two forms, or in two spellings, or as a header field and as the
+// property that stands for it. The server could not tell which was meant.
+func (c *checker) checkHeaderClashes(o *spec.Object, keys []string, where string) {
+	convenience, ok := convenienceHeaders[o.Name]
+	if !ok {
+		return
+	}
+	given := map[string]string{}
+	for _, key := range keys {
+		if header, ok := convenience[key]; ok {
+			given[header] = key
+		}
+	}
+	for _, key := range keys {
+		h, _ := spec.ParseHeaderProperty(key)
+		if h == nil {
+			continue
+		}
+		name := strings.ToLower(h.Name)
+		if earlier, twice := given[name]; twice {
+			c.errorf(where+"."+key, "give the header field once",
+				"%s gives the %s header field that %s gives already", key, h.Name, earlier)
+			continue
+		}
+		given[name] = key
+	}
 }

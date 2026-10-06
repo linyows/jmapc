@@ -2230,3 +2230,22 @@ func TestADynamicPropertyIsReadOnlyWhereItWasAskedFor(t *testing.T) {
 		}
 	}
 }
+
+// TestAHeaderFieldIsGivenOnce checks a record created with a header field it is
+// also given another way: in another form or spelling, or as the property that
+// stands for it. RFC 8621, Section 4.6 leaves the server no way to tell which
+// was meant.
+func TestAHeaderFieldIsGivenOnce(t *testing.T) {
+	for draft, ok := range map[string]bool{
+		`"subject": "a", "header:Subject:asText": "b"`:                                 false,
+		`"header:X-Foo": " a", "header:x-foo:asText": "b"`:                             false,
+		`"bodyStructure": {"type": "text/plain", "header:Content-Type": " text/html"}`: false,
+		`"subject": "a", "header:X-Foo:asText": "b"`:                                   true,
+	} {
+		_, err := NewParser(spec.Standard()).Parse("Draft"+Extension, []byte(`{"methodCalls": [["Email/set",
+		  {"create": {"d": {"mailboxIds": {"m1": true}, `+draft+`}}}, "c0"]]}`))
+		if ok != (err == nil) {
+			t.Errorf("%s: %v, want it accepted %v", draft, err, ok)
+		}
+	}
+}
