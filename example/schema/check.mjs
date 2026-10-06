@@ -88,6 +88,9 @@ refuses("an argument left out from inside another value", {
 accepts("a Duration in weeks", {
   methodCalls: [["CalendarEvent/set", { create: { e: { duration: "P1W" } } }, "c0"]],
 })
+accepts("a LocalDateTime with a fraction of a second", {
+  methodCalls: [["CalendarEvent/set", { create: { e: { start: "2026-09-04T09:00:00.5" } } }, "c0"]],
+})
 accepts("a UTCDate with a fraction of a second", {
   methodCalls: [["Email/query", { filter: { before: "2026-09-04T09:00:00.5Z" } }, "c0"]],
 })
