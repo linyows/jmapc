@@ -92,14 +92,19 @@ func (p RetryPolicy) wait(attempt int, retryAfter time.Duration) time.Duration {
 	if retryAfter > 0 {
 		return retryAfter
 	}
-	d := minRetryWait
-	for i := 2; i < attempt && d < maxRetryWait; i++ {
+	// The first attempt is sent without asking how long to wait; the second
+	// waits the least, and so does the first if it is asked about.
+	return doubled(minRetryWait, maxRetryWait, attempt-2)
+}
+
+// doubled returns least doubled n times, and no more than most: the wait of a
+// backoff whose nth retry waits twice as long as the one before.
+func doubled(least, most time.Duration, n int) time.Duration {
+	d := least
+	for i := 0; i < n && d < most; i++ {
 		d *= 2
 	}
-	if d > maxRetryWait {
-		return maxRetryWait
-	}
-	return d
+	return min(d, most)
 }
 
 // retryAfter reads the delay the server requested in Retry-After, which RFC
