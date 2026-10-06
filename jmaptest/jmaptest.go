@@ -33,9 +33,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/linyows/jmapc"
 	"github.com/linyows/jmapc/internal/request"
@@ -64,8 +66,26 @@ type Server struct {
 	session  *jmapc.Session
 	fail     *jmapc.RequestError
 	checks   bool
-	watchers map[chan string]bool
+	watchers map[*watcher]bool
 	sent     int
+	// events counts the events pushed, which name each one with an id of its
+	// own, as a server's event ids do. pushing holds one push from numbering
+	// its event until it has been sent to every client, so that pushes made
+	// together reach a client in the order of their ids.
+	events  int
+	pushing sync.Mutex
+}
+
+// watcher is one connection to the push endpoint, with what it asked for: the
+// types it follows, where nil follows every type, and whether the stream ends
+// after the first change it is sent.
+type watcher struct {
+	events     chan string
+	types      map[string]bool
+	closeAfter bool
+	// done is closed once the connection has ended, so that a push sent
+	// after it does not wait for a reader that is gone.
+	done chan struct{}
 }
 
 // Option configures the server before it answers anything.
@@ -92,7 +112,7 @@ func New(t testing.TB, opts ...Option) *Server {
 		t:        t,
 		handlers: map[string]Handler{},
 		checks:   true,
-		watchers: map[chan string]bool{},
+		watchers: map[*watcher]bool{},
 	}
 	s.mux = http.NewServeMux()
 	s.mux.HandleFunc("/.well-known/jmap", s.ServeSession)
@@ -215,28 +235,47 @@ func (s *Server) Requests() int {
 // Push sends a state change to every client watching the push endpoint, as a
 // server does when something in an account has changed. It is what a watch
 // waits for.
+//
+// Each client is sent the types it subscribed to and no others, as RFC 8620,
+// Section 7.3 has a server do, and one following none of the types that
+// changed is sent nothing.
 func (s *Server) Push(accountID jmapc.ID, states map[string]string) {
-	change := jmapc.StateChange{
-		Type:    "StateChange",
-		Changed: map[jmapc.ID]map[string]string{accountID: states},
-	}
-	body, err := json.Marshal(change)
-	if err != nil {
-		s.t.Errorf("jmaptest: encoding the event: %v", err)
-		return
-	}
+	s.pushing.Lock()
+	defer s.pushing.Unlock()
 	s.mu.Lock()
-	watchers := make([]chan string, 0, len(s.watchers))
+	watchers := make([]*watcher, 0, len(s.watchers))
 	for w := range s.watchers {
 		watchers = append(watchers, w)
 	}
+	s.events++
+	id := s.events
 	s.mu.Unlock()
 	if len(watchers) == 0 {
 		s.t.Error("jmaptest: nothing is watching the push endpoint")
 		return
 	}
 	for _, w := range watchers {
-		w <- fmt.Sprintf("id: e%d\nevent: state\ndata: %s\n\n", s.Requests()+1, body)
+		followed := make(map[string]string, len(states))
+		for typeName, state := range states {
+			if w.types == nil || w.types[typeName] {
+				followed[typeName] = state
+			}
+		}
+		if len(followed) == 0 {
+			continue
+		}
+		body, err := json.Marshal(jmapc.StateChange{
+			Type:    "StateChange",
+			Changed: map[jmapc.ID]map[string]string{accountID: followed},
+		})
+		if err != nil {
+			s.t.Errorf("jmaptest: encoding the event: %v", err)
+			return
+		}
+		select {
+		case w.events <- fmt.Sprintf("id: e%d\nevent: state\ndata: %s\n\n", id, body):
+		case <-w.done:
+		}
 	}
 }
 
@@ -257,16 +296,48 @@ func (s *Server) ServeSession(w http.ResponseWriter, r *http.Request) {
 
 // ServeEvents is the push endpoint, mounted at /events. Mount it where a
 // client of your own listens. It holds the connection open and writes what
-// Push sends it.
+// Push sends it, honouring the types, closeafter and ping the client asked for
+// as RFC 8620, Section 7.3 defines them.
 func (s *Server) ServeEvents(w http.ResponseWriter, r *http.Request) {
-	events := make(chan string, 8)
+	query := r.URL.Query()
+	watch := &watcher{
+		events:     make(chan string, 8),
+		closeAfter: query.Get("closeafter") == "state",
+		done:       make(chan struct{}),
+	}
+	if types := query.Get("types"); types != "" && types != "*" {
+		watch.types = make(map[string]bool)
+		for _, typeName := range strings.Split(types, ",") {
+			watch.types[typeName] = true
+		}
+	}
+	// RFC 8620 lets a server ping less often than asked, and an interval past
+	// what a Duration holds is pinged at the most this one does.
+	const maxPing = 24 * 60 * 60
+	// The interval is read as 64 bits whatever int is, so that one too large
+	// for an int is clamped as any other too long, rather than dropped.
+	// A ping is due once the interval passes with nothing sent, so the timer
+	// starts again after every event written, a state as well as a ping.
+	var ping <-chan time.Time
+	var idle *time.Timer
+	var seconds int64
+	if asked, err := strconv.ParseUint(query.Get("ping"), 10, 64); err == nil && asked > 0 {
+		seconds = maxPing
+		if asked < maxPing {
+			seconds = int64(asked)
+		}
+		idle = time.NewTimer(time.Duration(seconds) * time.Second)
+		defer idle.Stop()
+		ping = idle.C
+	}
 	s.mu.Lock()
-	s.watchers[events] = true
+	s.watchers[watch] = true
 	s.mu.Unlock()
 	defer func() {
 		s.mu.Lock()
-		delete(s.watchers, events)
+		delete(s.watchers, watch)
 		s.mu.Unlock()
+		close(watch.done)
 	}()
 
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -276,16 +347,25 @@ func (s *Server) ServeEvents(w http.ResponseWriter, r *http.Request) {
 		flush.Flush()
 	}
 	for {
+		var event string
 		select {
 		case <-r.Context().Done():
 			return
-		case event := <-events:
-			if _, err := fmt.Fprint(w, event); err != nil {
-				return
-			}
-			if flush != nil {
-				flush.Flush()
-			}
+		case <-ping:
+			event = fmt.Sprintf("event: ping\ndata: {\"interval\":%d}\n\n", seconds)
+		case event = <-watch.events:
+		}
+		if _, err := fmt.Fprint(w, event); err != nil {
+			return
+		}
+		if flush != nil {
+			flush.Flush()
+		}
+		if watch.closeAfter && strings.Contains(event, "event: state") {
+			return
+		}
+		if idle != nil {
+			idle.Reset(time.Duration(seconds) * time.Second)
 		}
 	}
 }
