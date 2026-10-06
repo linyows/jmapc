@@ -307,3 +307,31 @@ func TestASetIsForAMethodThatReturnsTheID(t *testing.T) {
 		t.Errorf("Email/get: %v", err)
 	}
 }
+
+// TestASetOfATypeWithNoIDIsForAnyMethod checks a set whose type has no id: it
+// holds none, so a method that does not return the id may ask for it.
+func TestASetOfATypeWithNoIDIsForAnyMethod(t *testing.T) {
+	s := spec.Standard()
+	if err := s.Extend(&spec.Schema{
+		Capability: "urn:example:tags",
+		Types: []*spec.SchemaType{{Name: "Tag", Properties: []*spec.SchemaField{
+			{Name: "label", Type: "String"}, {Name: "colour", Type: "String"},
+		}}},
+		Methods: []*spec.SchemaMethod{{
+			Name: "Tag/list", DataType: "Tag", Properties: "fields", ResultProperty: "list",
+			Arguments: []*spec.SchemaField{{Name: "fields", Type: "String[]"}},
+			Response:  []*spec.SchemaField{{Name: "list", Type: "Tag[]"}},
+		}},
+	}); err != nil {
+		t.Fatalf("Extend: %v", err)
+	}
+	props, err := ParsePropertySets(PropertiesName, []byte(`{"TagLabel": {"type": "Tag", "properties": ["label"]}}`), s)
+	if err != nil {
+		t.Fatalf("parsing the sets:\n%v", err)
+	}
+	p := NewParser(s)
+	p.Properties = props
+	if _, err := p.Parse("Labels"+Extension, []byte(`{"methodCalls": [["Tag/list", {"fields": "@TagLabel"}, "c0"]]}`)); err != nil {
+		t.Errorf("a set of a type with no id was refused:\n%v", err)
+	}
+}

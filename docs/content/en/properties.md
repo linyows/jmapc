@@ -65,9 +65,11 @@ A set's name is the name of a type a caller writes, so a request cannot take it:
 a request file named `EmailSummary.jmap.json` beside a set of that name is
 reported rather than quietly renamed.
 
-A set's type holds the id, which a /get returns whatever it is asked for. A
-method that does not, as Email/parse, whose emails have no id, does not, cannot
-ask for a set; write the properties out there instead.
+The type of a set holds the id where its data type has one, since a /get
+returns the id whatever it is asked for. Such a set cannot be asked of a method
+that makes no such promise, as Email/parse, whose emails have no id, does not;
+write the properties out there instead. A set of a type with no id, such as
+`EmailBodyPart`, holds none, and any method may ask for it.
 
 A call that asks for a set narrows nothing else about the records it reads, so a
 set and `bodyProperties` in one call is reported. Narrowing the body parts

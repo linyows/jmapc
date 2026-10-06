@@ -150,8 +150,9 @@ func SameNarrowing(calls []*request.Call) map[*request.Call]*request.Call {
 }
 
 // propertyList writes a list of properties into a narrowing key, keeping apart
-// the list that is not there, which fetches everything, from the empty list,
-// which fetches the id alone.
+// the list that is not given, which fetches every property, from the list given
+// empty, which fetches none: the id alone of a /get's records, and nothing of
+// a body part.
 func propertyList(props []string) string {
 	if props == nil {
 		return "*"
