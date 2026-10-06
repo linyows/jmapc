@@ -792,6 +792,12 @@ func (c *checker) checkFetched(from *Call, selected []spec.Selection, path, wher
 		default:
 			continue
 		}
+		if sel.Type == from.Method.DataType && slices.Contains(from.Method.NullProperties, sel.Property) {
+			c.errorf(where, "",
+				"%s selects %s from the %s call, which returns it as null whatever it is asked for",
+				path, sel.Property, from.Method.Name)
+			continue
+		}
 		if fetched == nil {
 			// The call fetches every property of the type, or a list the
 			// caller gives, which cannot be known here. Neither is a dynamic
@@ -868,7 +874,16 @@ func fetchedHint(from *Call, property, argument string, fetched []string) string
 // properties extracts the property names a /get call selects, when the request
 // states them literally, and checks each one against the data type.
 func (c *checker) properties(call *Call, where string) []string {
-	if call.Method.PropertiesArgument == "" || call.Args == nil {
+	if call.Method.PropertiesArgument == "" {
+		return nil
+	}
+	// A call that leaves the properties out or null is answered with the
+	// method's default set, which is every property for a /get and a list of
+	// its own for Email/parse.
+	if call.Method.DefaultProperties != nil && c.listedLiterally(call, call.Method.PropertiesArgument) {
+		return slices.Clone(call.Method.DefaultProperties)
+	}
+	if call.Args == nil {
 		return nil
 	}
 	node, ok := call.Args.Find(call.Method.PropertiesArgument)
@@ -902,6 +917,13 @@ func (c *checker) properties(call *Call, where string) []string {
 		selected, hint, err := checkProperty(dataType, name)
 		if err != nil {
 			c.errorf(fmt.Sprintf("%s.%s[%d]", where, call.Method.PropertiesArgument, i), hint, "%v", err)
+			continue
+		}
+		if slices.Contains(call.Method.NullProperties, name) {
+			c.errorf(fmt.Sprintf("%s.%s[%d]", where, call.Method.PropertiesArgument, i),
+				fmt.Sprintf("leave %s out", name),
+				"%s returns %s as null whatever it is asked for, so asking for it fetches nothing",
+				call.Method.Name, name)
 			continue
 		}
 		c.useCapability(selected)

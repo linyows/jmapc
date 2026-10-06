@@ -150,6 +150,18 @@ func (f *Field) ParsedType() *Type {
 	return f.parsed
 }
 
+// AsNullable returns f, or a copy of it whose value may also be null where its
+// type does not say so already.
+func (f *Field) AsNullable() *Field {
+	if f.ParsedType().Nullable {
+		return f
+	}
+	out := *f
+	out.Type += "|null"
+	out.parsed = nil
+	return &out
+}
+
 // Field returns the property with the given name.
 func (o *Object) Field(name string) (*Field, bool) {
 	for _, f := range o.Fields {
@@ -254,6 +266,18 @@ type Method struct {
 	NestedPropertiesArgument string
 	// NestedType names the type that argument narrows.
 	NestedType string
+	// DefaultProperties lists the properties the method returns where the call
+	// leaves its properties argument out or null. It is nil where the method
+	// then returns every property, as a /get does.
+	DefaultProperties []string
+	// NullProperties lists the properties the method returns as null whatever
+	// it is asked for, as Email/parse returns the id of a message that is not
+	// a record in the account.
+	NullProperties []string
+	// NullableProperties lists the properties the method may return as null
+	// though their type does not say so, as Email/parse returns a threadId only
+	// where the server can tell which thread the message would join.
+	NullableProperties []string
 	// ReturnsID says the method returns the id of every record it returns,
 	// whatever properties it is asked for, as RFC 8620, Section 5.1 has a
 	// standard /get do. It is stated rather than read from the name: a

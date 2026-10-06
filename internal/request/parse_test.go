@@ -252,9 +252,31 @@ func TestParseErrors(t *testing.T) {
 		name: "back reference reads the id of a parse that fetches none",
 		src: `{"methodCalls": [
 			["Email/parse", {"blobIds": ["b1"], "properties": []}, "parsed"],
+			["Thread/get", {"#ids": {"resultOf": "parsed", "name": "Email/parse", "path": "/parsed/b1/threadId"}}, "fetch"]
+		]}`,
+		want: `selects threadId from the Email/parse call, which does not fetch it`,
+	}, {
+		// A parse left to its default properties fetches those, which RFC
+		// 8621, Section 4.9 lists, and not every property of an Email.
+		name: "back reference reads what a parse does not fetch by default",
+		src: `{"methodCalls": [
+			["Email/parse", {"blobIds": ["b1"]}, "parsed"],
+			["Thread/get", {"#ids": {"resultOf": "parsed", "name": "Email/parse", "path": "/parsed/b1/threadId"}}, "fetch"]
+		]}`,
+		want: `selects threadId from the Email/parse call, which does not fetch it`,
+	}, {
+		// A parsed message is no record in the account, so its id is null
+		// whatever the call asks for, a list given by a parameter included.
+		name: "back reference reads the id of a parsed message",
+		src: `{"methodCalls": [
+			["Email/parse", {"blobIds": ["b1"], "properties": "{{fields}}"}, "parsed"],
 			["Email/get", {"#ids": {"resultOf": "parsed", "name": "Email/parse", "path": "/parsed/b1/id"}}, "fetch"]
 		]}`,
-		want: `selects id from the Email/parse call, which does not fetch it`,
+		want: `selects id from the Email/parse call, which returns it as null whatever it is asked for`,
+	}, {
+		name: "parse asks for a property it returns as null",
+		src:  `{"methodCalls": [["Email/parse", {"blobIds": ["b1"], "properties": ["subject", "mailboxIds"]}, "parsed"]]}`,
+		want: `Email/parse returns mailboxIds as null whatever it is asked for, so asking for it fetches nothing`,
 	}, {
 		// The same holds for the body parts: an empty bodyProperties fetches
 		// none of their properties.
