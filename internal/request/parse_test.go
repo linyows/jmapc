@@ -1271,6 +1271,19 @@ func TestQuotaChangesReportsUpdatedProperties(t *testing.T) {
 	]}`)
 }
 
+// TestMailboxChangesReportsUpdatedProperties checks the response property RFC
+// 8621 gives Mailbox/changes, which a client reads to fetch the counts of the
+// mailboxes alone where those are all that moved.
+func TestMailboxChangesReportsUpdatedProperties(t *testing.T) {
+	parse(t, "MailboxCountsSince"+Extension, `{"methodCalls": [
+	  ["Mailbox/changes", {"sinceState": "{{state}}"}, "c0"],
+	  ["Mailbox/get", {
+	    "#ids": {"resultOf": "c0", "name": "Mailbox/changes", "path": "/updated"},
+	    "#properties": {"resultOf": "c0", "name": "Mailbox/changes", "path": "/updatedProperties"}
+	  }, "c1"]
+	]}`)
+}
+
 // TestCommentArgumentIsNotSent checks the member a request uses to explain a
 // call. It has to be recognised and set aside: RFC 8620 requires a server to
 // reject an argument it does not know, so leaving it among the arguments would

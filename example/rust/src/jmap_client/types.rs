@@ -6459,6 +6459,13 @@ pub struct MailboxChangesResponse {
     /// The ids of records destroyed since oldState.
     #[serde(default)]
     pub destroyed: Vec<Id>,
+
+    /// The properties that may have changed on the mailboxes in the updated
+    /// list, where only totalEmails, unreadEmails, totalThreads and
+    /// unreadThreads have, or null if the server cannot tell that only the
+    /// counts changed.
+    #[serde(default)]
+    pub updated_properties: Option<Vec<String>>,
 }
 
 /// MailboxFilterCondition is a condition a mailbox must satisfy to match a
