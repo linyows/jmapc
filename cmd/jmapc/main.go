@@ -59,6 +59,12 @@ type Config struct {
 	// Schemas are files describing the types and methods a server offers
 	// beyond the specifications jmapc knows, which requests may then use.
 	Schemas []string `json:"schemas"`
+
+	// dir is the directory of the settings file, which the paths it gives and
+	// the default paths are relative to, so that a settings file means the
+	// same wherever jmapc is run from. A path given as a flag is relative to
+	// where jmapc runs, as a path on a command line is.
+	dir string
 }
 
 func main() {
@@ -678,7 +684,21 @@ func loadConfig(path string) (*Config, error) {
 	if err := dec.Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("reading %s: %w", path, err)
 	}
+	cfg.dir = filepath.Dir(path)
+	cfg.Requests = cfg.resolve(cfg.Requests)
+	cfg.Out = cfg.resolve(cfg.Out)
+	for i, schema := range cfg.Schemas {
+		cfg.Schemas[i] = cfg.resolve(schema)
+	}
 	return &cfg, nil
+}
+
+// resolve returns a path the settings file gives, relative to the file.
+func (c *Config) resolve(path string) string {
+	if path == "" || filepath.IsAbs(path) {
+		return path
+	}
+	return filepath.Join(c.dir, path)
 }
 
 // Languages jmapc can generate.
@@ -691,10 +711,10 @@ const (
 // applyDefaults fills in the settings that were not given.
 func (c *Config) applyDefaults() {
 	if c.Requests == "" {
-		c.Requests = "requests"
+		c.Requests = c.resolve("requests")
 	}
 	if c.Out == "" {
-		c.Out = "client"
+		c.Out = c.resolve("client")
 	}
 	if c.Lang == "" {
 		c.Lang = LangGo
