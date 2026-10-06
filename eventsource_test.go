@@ -259,6 +259,36 @@ func TestEventSourceResumesFromTheLastEventRead(t *testing.T) {
 	}
 }
 
+// TestEventSourceTakesAnIDWithoutAnEvent checks a block that gives an id and no
+// data. It dispatches no event, and still moves the point to resume from, as
+// an EventSource's does: the server has said where the stream stands.
+func TestEventSourceTakesAnIDWithoutAnEvent(t *testing.T) {
+	es := newEventServer(t)
+	es.stream = "" +
+		"event: state\n" +
+		"id: s1\n" +
+		`data: {"@type":"StateChange","changed":{"a1":{"Email":"e2"}}}` + "\n" +
+		"\n" +
+		"id: s2\n" +
+		"\n"
+
+	stream, err := es.client().EventSource(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("EventSource: %v", err)
+	}
+	defer stream.Close()
+
+	if _, err := stream.Next(); err != nil {
+		t.Fatalf("Next: %v", err)
+	}
+	if _, err := stream.Next(); !errors.Is(err, io.EOF) {
+		t.Fatalf("Next: %v, want io.EOF", err)
+	}
+	if got := stream.LastEventID(); got != "s2" {
+		t.Errorf("LastEventID = %q, want s2, which the server gave as where the stream stands", got)
+	}
+}
+
 // TestEventSourceUnavailable checks the error when the server has no push
 // endpoint at all, which is allowed: push is optional.
 func TestEventSourceUnavailable(t *testing.T) {

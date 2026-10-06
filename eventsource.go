@@ -301,7 +301,10 @@ func (s *EventStream) Next() (*StateChange, error) {
 
 		// A blank line ends an event, and with it the id the event gave is
 		// one the stream has delivered. An event carrying no data is a
-		// comment or a keep-alive, and there is nothing to return.
+		// comment or a keep-alive, and there is nothing to return. An id given
+		// by one is still the point to resume from, as an EventSource takes
+		// it before it looks for data: it is how a server moves that point on
+		// without an event to send, and no event is lost by resuming after it.
 		if line == "" {
 			s.lastEventID = s.pendingID
 			if data.Len() == 0 {
