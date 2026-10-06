@@ -387,6 +387,13 @@ func (s *Spec) addSchemaMethod(sc *Schema, m *SchemaMethod) error {
 	if m.ReturnsID && (m.Properties == "" || m.ResultProperty == "") {
 		return fmt.Errorf("%s says it returns the id of every record, and needs properties and resultProperty to say which argument narrows the records and where they are", m.Name)
 	}
+	if m.ReturnsID {
+		// Properties needs a dataType, which is known to be defined by now.
+		o, _ := s.Object(m.DataType)
+		if _, hasID := o.Field("id"); !hasID {
+			return fmt.Errorf("%s says it returns the id of every record, and %s has no id", m.Name, m.DataType)
+		}
+	}
 	capability := capabilityOr(m.Capability, sc.Capability)
 	argsType := s.AddObject(&Object{
 		Name:       prefix + "Arguments",

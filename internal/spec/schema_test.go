@@ -297,6 +297,14 @@ func TestExtendErrors(t *testing.T) {
 			"methods": [{"name": "Note/summarise", "dataType": "Note", "returnsId": true}]}`,
 		want: `Note/summarise says it returns the id of every record, and needs properties and resultProperty`,
 	}, {
+		name: "method returning the id of records that have none",
+		src: `{"capability": "urn:x:y", "types": [{"name": "Note", "properties": [{"name": "title", "type": "String"}]}],
+			"methods": [{"name": "Note/summarise", "dataType": "Note", "returnsId": true,
+			             "properties": "properties", "resultProperty": "list",
+			             "arguments": [{"name": "properties", "type": "String[]"}],
+			             "response": [{"name": "list", "type": "Note[]"}]}]}`,
+		want: `Note/summarise says it returns the id of every record, and Note has no id`,
+	}, {
 		name: "unknown member in the schema",
 		src:  `{"capability": "urn:x:y", "typs": []}`,
 		want: `unknown field "typs"`,
