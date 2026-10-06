@@ -35,6 +35,7 @@ export default {
   '-- reference': { type: 'separator', title: 'リファレンス' },
   cli: 'jmapcコマンド',
   extensions: 'ベンダ拡張',
+  'how-it-works': 'jmapcの仕組み',
   coverage: '対応範囲',
   contributing: 'jmapcの開発'
 }
