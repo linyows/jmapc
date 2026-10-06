@@ -122,13 +122,21 @@ func (g *RequestGenerator) plan() ([]*plan, error) {
 		}
 		p := &plan{
 			q:        q,
-			funcName: spec.TSFunctionName(lowerFirst(q.Name)),
+			funcName: spec.TSBindingName(lowerFirst(q.Name)),
 			calls:    make(map[*request.Call]*call, len(q.Calls)),
 		}
 		if len(q.Params) > 0 {
 			p.paramsType = shared.Unique(taken, q.Name+"Params")
 		}
+		// The constants of the creation ids share the module with the
+		// function, and are no more able than it is to take a reserved word.
+		taken[p.funcName] = true
 		p.creations = shared.Creations(taken, lowerFirst(q.Name), q.Creations, spec.ExportedName)
+		for i, c := range p.creations {
+			if escaped := spec.TSBindingName(c.Name); escaped != c.Name {
+				p.creations[i].Name = shared.Unique(taken, escaped)
+			}
+		}
 		same := shared.SameNarrowing(q.Calls)
 		for _, c := range q.Calls {
 			info := &call{}

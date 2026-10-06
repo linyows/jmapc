@@ -320,7 +320,7 @@ func TestACallIDThatIsARustKeyword(t *testing.T) {
 // underscore where it has none, with the file named as rustc looks for it.
 func TestARequestNamedAfterAKeyword(t *testing.T) {
 	var requests []*request.Request
-	for _, name := range []string{"Type", "Self"} {
+	for _, name := range []string{"Type", "Self", "Gen"} {
 		q, err := request.NewParser(spec.Standard()).Parse(name+request.Extension,
 			[]byte(`{"methodCalls": [["Mailbox/get", {"ids": null}, "c0"]]}`))
 		if err != nil {
@@ -335,6 +335,7 @@ func TestARequestNamedAfterAKeyword(t *testing.T) {
 	for file, want := range map[string]string{
 		"type.rs":  "pub async fn r#type<T: Transport>(",
 		"self_.rs": "pub async fn self_<T: Transport>(",
+		"gen.rs":   "pub async fn r#gen<T: Transport>(",
 		"mod.rs":   "pub mod r#type;",
 	} {
 		if !strings.Contains(string(files[file]), want) {
