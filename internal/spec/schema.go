@@ -355,6 +355,9 @@ func (s *Spec) addSchemaMethod(sc *Schema, m *SchemaMethod) error {
 			return fmt.Errorf("%s works on the type %q, which nothing defines", m.Name, m.DataType)
 		}
 	}
+	if m.Properties != "" && m.DataType == "" {
+		return fmt.Errorf("%s selects properties through %q, and names no dataType for them to be properties of", m.Name, m.Properties)
+	}
 	if m.Properties != "" && !hasField(args, m.Properties) {
 		return fmt.Errorf("%s selects properties through %q, which is not one of its arguments", m.Name, m.Properties)
 	}

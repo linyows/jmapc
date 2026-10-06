@@ -273,6 +273,12 @@ func TestExtendErrors(t *testing.T) {
 			"methods": [{"name": "Note/summarise", "dataType": "Note", "properties": "fields"}]}`,
 		want: `Note/summarise selects properties through "fields", which is not one of its arguments`,
 	}, {
+		name: "method selecting properties of no type",
+		src: `{"capability": "urn:x:y", "types": [],
+			"methods": [{"name": "Note/summarise", "properties": "fields",
+			             "arguments": [{"name": "fields", "type": "String[]"}]}]}`,
+		want: `names no dataType for them to be properties of`,
+	}, {
 		name: "method returning records in a property its response does not have",
 		src: `{"capability": "urn:x:y", "types": [{"name": "Note", "properties": []}],
 			"methods": [{"name": "Note/summarise", "dataType": "Note", "resultProperty": "list"}]}`,
