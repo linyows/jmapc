@@ -732,3 +732,16 @@ func TestAnEmptyListOfPropertiesFetchesTheIDAlone(t *testing.T) {
 		t.Errorf("the request does not send the empty list:\n%s", src)
 	}
 }
+
+// TestAnEmptyListOfPropertiesOfAParseIsNoIDOfItsOwn checks an empty list given
+// to a method other than a /get. RFC 8620 promises the id of a /get alone, and
+// a parsed email has none, so the record is not made the id alone.
+func TestAnEmptyListOfPropertiesOfAParseIsNoIDOfItsOwn(t *testing.T) {
+	src := generateOne(t, "ParseNothing", `{
+	  "methodCalls": [["Email/parse", {"blobIds": ["{{blobId}}"], "properties": []}, "parse"]],
+	  "_returns": "parse"
+	}`)
+	if strings.Contains(src, "type ParseNothingParseEmail struct") {
+		t.Errorf("an id-only record was made for a parsed email:\n%s", src)
+	}
+}

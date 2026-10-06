@@ -824,9 +824,15 @@ func (c *checker) properties(call *Call, where string) []string {
 	if !ok {
 		return nil
 	}
-	// An empty list fetches the id alone, which a /get returns whatever it is
-	// asked for. It is kept as an empty slice rather than nil, since nil is
-	// what says the call fetches everything.
+	// An empty list asks a /get for the id alone, which RFC 8620, Section 5.1
+	// has it return whatever it is asked for. It is kept as an empty slice
+	// rather than nil, since nil is what says the call fetches everything.
+	// Another method selecting properties, as Email/parse does, makes no such
+	// promise of the id, which a parsed email does not have, so an empty list
+	// there is left as it was, the shape of the whole type.
+	if len(arr.Items) == 0 && !strings.HasSuffix(call.Method.Name, "/get") {
+		return nil
+	}
 	props := []string{}
 	for i, item := range arr.Items {
 		lit, ok := item.(*Literal)
