@@ -341,9 +341,11 @@ func TestASettingsFileResolvesItsPathsAgainstItself(t *testing.T) {
 // way out, rather than failing to format with the whole source printed.
 func TestAPackageNameGoCannotTakeIsRefused(t *testing.T) {
 	dir := workspace(t, map[string]string{"requests/ListMailboxes.jmap.json": listMailboxes})
-	for _, out := range []string{"out-go", "go", ".", "_"} {
-		_, _, err := capture(t, []string{"validate", "-requests", filepath.Join(dir, "requests"),
-			"-out", filepath.Join(dir, out)})
+	// Validating generates in memory, so the output directories are given as
+	// they are, "." among them, rather than joined to a path that would clean
+	// it away.
+	for _, out := range []string{"out-go", "x/go", ".", "_"} {
+		_, _, err := capture(t, []string{"validate", "-requests", filepath.Join(dir, "requests"), "-out", out})
 		if err == nil || !strings.Contains(err.Error(), "-package") {
 			t.Errorf("-out %s: %v, want the package name refused", out, err)
 		}
