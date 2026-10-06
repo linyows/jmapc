@@ -254,8 +254,9 @@ fn a_capability_the_session_does_not_have_never_leaves_the_client() {
 }
 
 /// One window of a search, and the emails in it, as the two calls of
-/// SearchEmails ask for them. The server leaves the total out where it was not
-/// asked for, and the limit out where it did not lower it, as here.
+/// SearchEmails ask for them. The limit is left out, as a server that did not
+/// lower it leaves it out. SearchEmails asks for the total, so a window without
+/// one is a server not giving it, which the client reads rather than rejects.
 fn window(position: u64, total: Option<u64>, ids: &[&str]) -> serde_json::Value {
     let list: Vec<serde_json::Value> = ids
         .iter()
@@ -323,7 +324,9 @@ fn a_walk_asks_for_each_window_in_turn() {
     assert_eq!(second["methodCalls"][0][1]["position"], 2);
 }
 
-/// Without a total, the end of the list is the window that comes back empty.
+/// Without a total, the end of the list is the window that comes back empty. The
+/// request asked for the total, which RFC 8620 has the server return; one that
+/// does not is read as if it had not been asked.
 #[test]
 fn a_walk_without_a_total_ends_at_an_empty_window() {
     let stub = Stub::new(vec![
