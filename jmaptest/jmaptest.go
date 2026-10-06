@@ -69,8 +69,11 @@ type Server struct {
 	watchers map[*watcher]bool
 	sent     int
 	// events counts the events pushed, which name each one with an id of its
-	// own, as a server's event ids do.
-	events int
+	// own, as a server's event ids do. pushing holds one push from numbering
+	// its event until it has been sent to every client, so that pushes made
+	// together reach a client in the order of their ids.
+	events  int
+	pushing sync.Mutex
 }
 
 // watcher is one connection to the push endpoint, with what it asked for: the
@@ -237,6 +240,8 @@ func (s *Server) Requests() int {
 // Section 7.3 has a server do, and one following none of the types that
 // changed is sent nothing.
 func (s *Server) Push(accountID jmapc.ID, states map[string]string) {
+	s.pushing.Lock()
+	defer s.pushing.Unlock()
 	s.mu.Lock()
 	watchers := make([]*watcher, 0, len(s.watchers))
 	for w := range s.watchers {

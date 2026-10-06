@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -537,4 +538,43 @@ func TestAPingIsSentOnlyAfterAnIdleInterval(t *testing.T) {
 		}
 	}
 	t.Errorf("the stream ended without a ping: %v", scan.Err())
+}
+
+// TestPushesMadeTogetherArriveInTheOrderOfTheirIDs checks pushes made at once
+// from several goroutines: a client reads them in the order of their ids, so
+// that resuming after one never skips another it has not read.
+func TestPushesMadeTogetherArriveInTheOrderOfTheirIDs(t *testing.T) {
+	srv := New(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	stream, err := srv.Client().EventSource(ctx, nil)
+	if err != nil {
+		t.Fatalf("EventSource: %v", err)
+	}
+	defer stream.Close()
+
+	const pushes = 50
+	var wg sync.WaitGroup
+	for i := range pushes {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			srv.Push(AccountID, map[string]string{"Email": fmt.Sprintf("e%d", i)})
+		}()
+	}
+	last := 0
+	for range pushes {
+		if _, err := stream.Next(); err != nil {
+			t.Fatalf("Next: %v", err)
+		}
+		var n int
+		if _, err := fmt.Sscanf(stream.LastEventID(), "e%d", &n); err != nil {
+			t.Fatalf("event id %q: %v", stream.LastEventID(), err)
+		}
+		if n <= last {
+			t.Fatalf("event e%d came after e%d", n, last)
+		}
+		last = n
+	}
+	wg.Wait()
 }
