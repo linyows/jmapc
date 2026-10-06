@@ -570,11 +570,8 @@ func (s *Spec) ResolvePatch(dataType string, segments []string, unknown []bool) 
 						TypeName: o.Name, Property: seg, Known: o.PropertyNames(),
 					}
 				}
-				// What a record is written with is its fields and, of a
-				// message and its parts, its header fields; the other dynamic
-				// properties are there to be read.
-				if header, _ := ParseHeaderProperty(seg); header == nil || (o.Name != "Email" && o.Name != "EmailBodyPart") {
-					return nil, nil, nil, nil, fmt.Errorf("%s is a property to ask %s for, not one to write", seg, o.Name)
+				if err := o.CheckWritable(seg); err != nil {
+					return nil, nil, nil, nil, err
 				}
 				f = dynamic
 			}
@@ -587,6 +584,39 @@ func (s *Spec) ResolvePatch(dataType string, segments []string, unknown []bool) 
 		}
 	}
 	return keyTypes, properties, cur, target, nil
+}
+
+// UnwritableError reports a property beyond a type's fields that a record of
+// the type cannot be written with, whether written out whole or patched.
+type UnwritableError struct {
+	// Problem says why the property cannot be written.
+	Problem string
+	// Hint says what to do instead, where there is something to say.
+	Hint string
+}
+
+func (e *UnwritableError) Error() string { return e.Problem }
+
+// CheckWritable reports whether a record of o may be written with name, a
+// property beyond its fields. What a record is written with is its fields and,
+// of a message and its parts, the header fields RFC 8621, Section 4.6 lets an
+// email be created with; the other dynamic properties, a digest or a vendor's,
+// are there to be read. A vendor's type may name header: among what a /get
+// takes, and that says nothing of writing one.
+func (o *Object) CheckWritable(name string) error {
+	header, _ := ParseHeaderProperty(name)
+	if header == nil || (o.Name != "Email" && o.Name != "EmailBodyPart") {
+		return &UnwritableError{Problem: fmt.Sprintf("%s is a property to ask %s for, not one to write", name, o.Name)}
+	}
+	// A Content-* header field belongs to a body part, which says what it
+	// holds; the message as a whole is not given one.
+	if o.Name == "Email" && strings.HasPrefix(strings.ToLower(header.Name), "content-") {
+		return &UnwritableError{
+			Problem: fmt.Sprintf("%s is a header field of a body part, which RFC 8621 does not let an Email be given", header.Name),
+			Hint:    "set it on the body part it describes",
+		}
+	}
+	return nil
 }
 
 // SetErrorTypeName is the type a /set response uses to report why it could not

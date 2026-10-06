@@ -323,6 +323,12 @@ func TestParseErrors(t *testing.T) {
 			"mailboxIds": {"m1": true}, "header:Content-Type:asRaw": "text/plain"}}}, "c0"]]}`,
 		want: `Content-Type is a header field of a body part`,
 	}, {
+		// A patch is held to the same rule as a record written out whole.
+		name: "Content-Type patched onto the email as a whole",
+		src: `{"methodCalls": [["Email/set", {"update": {"e1": {
+			"header:Content-Type:asRaw": "text/plain"}}}, "c0"]]}`,
+		want: `Content-Type is a header field of a body part`,
+	}, {
 		name: "header field created in a form the specification does not define",
 		src: `{"methodCalls": [["Email/set", {"create": {"draft": {
 			"mailboxIds": {"m1": true}, "header:X-Foo:asBogus": "bar"}}}, "c0"]]}`,
@@ -2240,6 +2246,8 @@ func TestAHeaderFieldIsGivenOnce(t *testing.T) {
 		`"subject": "a", "header:Subject:asText": "b"`:                                 false,
 		`"header:X-Foo": " a", "header:x-foo:asText": "b"`:                             false,
 		`"bodyStructure": {"type": "text/plain", "header:Content-Type": " text/html"}`: false,
+		`"bodyStructure": {"name": "a.txt", "header:Content-Disposition": " inline"}`:  false,
+		`"bodyStructure": {"name": "a.txt", "header:Content-Type": " text/plain"}`:     false,
 		`"subject": "a", "header:X-Foo:asText": "b"`:                                   true,
 	} {
 		_, err := NewParser(spec.Standard()).Parse("Draft"+Extension, []byte(`{"methodCalls": [["Email/set",
@@ -2258,7 +2266,9 @@ func TestTheContentOfABlobIsReadAsItWasAskedFor(t *testing.T) {
 	for get, ok := range map[string]bool{
 		`["Blob/get", {"ids": ["b1"], "properties": ["data"]}, "g"]`:        true,
 		`["Blob/get", {"ids": ["b1"], "properties": ["data:asText"]}, "g"]`: true,
-		`["Blob/get", {"ids": ["b1"], "properties": ["size"]}, "g"]`:        false,
+		// RFC 9404, Section 4.2: properties left out are data and size.
+		`["Blob/get", {"ids": ["b1"]}, "g"]`:                         true,
+		`["Blob/get", {"ids": ["b1"], "properties": ["size"]}, "g"]`: false,
 	} {
 		_, err := NewParser(spec.Standard()).Parse("Text"+Extension, []byte(`{"methodCalls": [`+get+`, `+ref+`]}`))
 		if ok != (err == nil) {

@@ -175,8 +175,13 @@ func (c *checker) checkEnum(value, where string) {
 		value, strings.Join(c.enum, ", "))
 }
 
-// propertyHint suggests what an unknown property in a path may have meant.
+// propertyHint suggests what an unknown property in a path may have meant, or
+// what to write in place of one a record cannot be written with.
 func propertyHint(err error) string {
+	var unwritable *spec.UnwritableError
+	if errors.As(err, &unwritable) {
+		return unwritable.Hint
+	}
 	var unknown *spec.UnknownPropertyError
 	if !errors.As(err, &unknown) {
 		return ""
@@ -314,22 +319,8 @@ func (c *checker) object(t *spec.Type, raw json.RawMessage, where string) Node {
 				c.errorf(where+"."+key, hintFor(key, o.PropertyNames()), "%s has no property %q", o.Name, key)
 				continue
 			}
-			// A record written out takes the header fields of a message, which
-			// RFC 8621, Section 4.6 lets an email be created with; the other
-			// dynamic properties, a digest or a vendor's, are there to be read.
-			// A vendor's type may name header: among what a /get takes, and
-			// that says nothing of writing one, which RFC 8621 lets a message
-			// and its parts do.
-			header, _ := spec.ParseHeaderProperty(key)
-			if header == nil || (o.Name != "Email" && o.Name != "EmailBodyPart") {
-				c.errorf(where+"."+key, "", "%s is a property to ask %s for, not one to write", key, o.Name)
-				continue
-			}
-			// A Content-* header field belongs to a body part, which says what
-			// it holds; the message as a whole is not given one.
-			if o.Name == "Email" && strings.HasPrefix(strings.ToLower(header.Name), "content-") {
-				c.errorf(where+"."+key, "set it on the body part it describes",
-					"%s is a header field of a body part, which RFC 8621 does not let an Email be given", header.Name)
+			if err := o.CheckWritable(key); err != nil {
+				c.errorf(where+"."+key, propertyHint(err), "%v", err)
 				continue
 			}
 			field = dynamic
@@ -986,16 +977,19 @@ func comparatorNames(base *spec.Object, extra map[string]*spec.Field) []string {
 
 // convenienceHeaders are the properties of a message and of a part of one that
 // stand for a header field, which RFC 8621, Section 4.6 does not let a record
-// be given as well as the header field itself.
-var convenienceHeaders = map[string]map[string]string{
+// be given as well as the header field itself. A part's name stands for two:
+// RFC 8621, Section 4.1.4 has it the filename of Content-Disposition or, where
+// that has none, the name of Content-Type.
+var convenienceHeaders = map[string]map[string][]string{
 	"Email": {
-		"subject": "subject", "from": "from", "to": "to", "cc": "cc", "bcc": "bcc",
-		"replyTo": "reply-to", "sender": "sender", "sentAt": "date",
-		"messageId": "message-id", "inReplyTo": "in-reply-to", "references": "references",
+		"subject": {"subject"}, "from": {"from"}, "to": {"to"}, "cc": {"cc"}, "bcc": {"bcc"},
+		"replyTo": {"reply-to"}, "sender": {"sender"}, "sentAt": {"date"},
+		"messageId": {"message-id"}, "inReplyTo": {"in-reply-to"}, "references": {"references"},
 	},
 	"EmailBodyPart": {
-		"type": "content-type", "charset": "content-type", "disposition": "content-disposition", "cid": "content-id",
-		"language": "content-language", "location": "content-location",
+		"type": {"content-type"}, "charset": {"content-type"}, "name": {"content-disposition", "content-type"},
+		"disposition": {"content-disposition"}, "cid": {"content-id"},
+		"language": {"content-language"}, "location": {"content-location"},
 	},
 }
 
@@ -1009,7 +1003,7 @@ func (c *checker) checkHeaderClashes(o *spec.Object, keys []string, where string
 	}
 	given := map[string]string{}
 	for _, key := range keys {
-		if header, ok := convenience[key]; ok {
+		for _, header := range convenience[key] {
 			given[header] = key
 		}
 	}
