@@ -220,6 +220,45 @@ func TestEventSourceRejected(t *testing.T) {
 	}
 }
 
+// TestEventSourceResumesFromTheLastEventRead checks that an id becomes the one
+// to resume from only once its event has been read to the end. A stream that
+// drops in the middle of an event has not delivered it, and resuming after it
+// would lose it.
+func TestEventSourceResumesFromTheLastEventRead(t *testing.T) {
+	es := newEventServer(t)
+	es.stream = "" +
+		"event: state\n" +
+		"id: s1\n" +
+		`data: {"@type":"StateChange","changed":{"a1":{"Email":"e2"}}}` + "\n" +
+		"\n" +
+		// A keep-alive leaves the point to resume from where it was.
+		": still here\n" +
+		"\n" +
+		// The stream drops before the blank line that would end this event.
+		"event: state\n" +
+		"id: s2\n" +
+		`data: {"@type":"StateChange","changed":{"a1":{"Email":"e3"}}}` + "\n"
+
+	stream, err := es.client().EventSource(context.Background(), &EventSourceOptions{LastEventID: "s0"})
+	if err != nil {
+		t.Fatalf("EventSource: %v", err)
+	}
+	defer stream.Close()
+
+	if _, err := stream.Next(); err != nil {
+		t.Fatalf("Next: %v", err)
+	}
+	if got := stream.LastEventID(); got != "s1" {
+		t.Errorf("LastEventID after the first event = %q, want s1", got)
+	}
+	if _, err := stream.Next(); !errors.Is(err, io.EOF) {
+		t.Fatalf("Next: %v, want io.EOF for the stream that dropped", err)
+	}
+	if got := stream.LastEventID(); got != "s1" {
+		t.Errorf("LastEventID = %q, want s1: s2 was never delivered", got)
+	}
+}
+
 // TestEventSourceUnavailable checks the error when the server has no push
 // endpoint at all, which is allowed: push is optional.
 func TestEventSourceUnavailable(t *testing.T) {

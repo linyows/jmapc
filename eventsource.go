@@ -81,8 +81,13 @@ type EventStream struct {
 	body io.ReadCloser
 	scan *bufio.Scanner
 	// lastEventID is the id of the most recent event, which a reconnection
-	// resumes from.
+	// resumes from. pendingID is the id the stream last gave, which becomes
+	// lastEventID once the event it was given in has been read to its end: a
+	// stream that drops in the middle of an event has not delivered it, and
+	// resuming after it would lose it. The pending id carries over to the
+	// events after it, as an EventSource's last event ID buffer does.
 	lastEventID string
+	pendingID   string
 
 	// The watch for a stream that stops carrying anything. It runs only
 	// where pings were asked for, and only while Next waits: a caller busy
@@ -181,6 +186,10 @@ func (c *Client) EventSource(ctx context.Context, opts *EventSourceOptions) (*Ev
 		body:        resp.Body,
 		scan:        scan,
 		lastEventID: opts.LastEventID,
+		// The stream starts from the point it resumes from, rather than from
+		// nothing as an EventSource does, so that a keep-alive arriving before
+		// any id leaves that point where it was.
+		pendingID: opts.LastEventID,
 	}
 	if ping > 0 {
 		stream.interval = ping
@@ -272,7 +281,6 @@ const maxEventBytes = 1 << 20
 // pings sent then wait in the stream to be read.
 func (s *EventStream) Next() (*StateChange, error) {
 	var event, data strings.Builder
-	flushable := false
 	defer s.wait()()
 
 	for {
@@ -291,20 +299,19 @@ func (s *EventStream) Next() (*StateChange, error) {
 		s.heard()
 		line := strings.TrimSuffix(s.scan.Text(), "\r")
 
-		// A blank line ends an event. An event carrying no data is a comment
-		// or a keep-alive, and there is nothing to return.
+		// A blank line ends an event, and with it the id the event gave is
+		// one the stream has delivered. An event carrying no data is a
+		// comment or a keep-alive, and there is nothing to return.
 		if line == "" {
-			if !flushable || data.Len() == 0 {
+			s.lastEventID = s.pendingID
+			if data.Len() == 0 {
 				event.Reset()
-				data.Reset()
-				flushable = false
 				continue
 			}
 			name := event.String()
 			payload := data.String()
 			event.Reset()
 			data.Reset()
-			flushable = false
 			if name == "ping" {
 				s.pinged(payload)
 				continue
@@ -331,7 +338,6 @@ func (s *EventStream) Next() (*StateChange, error) {
 			field, value = line, ""
 		}
 		value = strings.TrimPrefix(value, " ")
-		flushable = true
 		switch field {
 		case "event":
 			event.Reset()
@@ -342,7 +348,10 @@ func (s *EventStream) Next() (*StateChange, error) {
 			}
 			data.WriteString(value)
 		case "id":
-			s.lastEventID = value
+			// An id holding a NUL is ignored, as an EventSource ignores it.
+			if !strings.ContainsRune(value, 0) {
+				s.pendingID = value
+			}
 		}
 	}
 }
