@@ -631,7 +631,7 @@ func (c *checker) checkPropertySetUse(call *Call, where string) {
 	// ask for it.
 	if call.PropertySet != nil && !call.Method.ReturnsID && c.hasID(call.PropertySet.Type) {
 		c.errorf(fmt.Sprintf("%s.%s", where, call.Method.PropertiesArgument),
-			"write the properties out in this call",
+			"write the properties out in this call, leaving out the id, which it does not promise to return",
 			"%s does not return the id of every record whatever it is asked for, as a /get does, so the set %s, which holds it, cannot describe what it returns",
 			call.Method.Name, call.PropertySet.Name)
 		return
