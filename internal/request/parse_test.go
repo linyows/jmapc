@@ -2191,7 +2191,7 @@ func TestAVendorDynamicPropertyIsReadNotWritten(t *testing.T) {
 	s := spec.Standard()
 	if err := s.Extend(&spec.Schema{
 		Capability: "urn:example:notes",
-		Types: []*spec.SchemaType{{Name: "Note", Methods: []string{"get", "set"}, Dynamic: []string{"meta:"},
+		Types: []*spec.SchemaType{{Name: "Note", Methods: []string{"get", "set"}, Dynamic: []string{"meta:", "header:"},
 			Properties: []*spec.SchemaField{{Name: "id", Type: "Id", ServerSet: true}}}},
 	}); err != nil {
 		t.Fatalf("Extend: %v", err)
@@ -2200,8 +2200,10 @@ func TestAVendorDynamicPropertyIsReadNotWritten(t *testing.T) {
 	if _, err := p.Parse("ReadMeta"+Extension, []byte(`{"methodCalls": [["Note/get", {"ids": ["n1"], "properties": ["meta:colour"]}, "c0"]]}`)); err != nil {
 		t.Errorf("asking for meta:colour: %v", err)
 	}
-	_, err := p.Parse("WriteMeta"+Extension, []byte(`{"methodCalls": [["Note/set", {"create": {"n": {"meta:colour": "red"}}}, "c0"]]}`))
-	if err == nil || !strings.Contains(err.Error(), "not one to write") {
-		t.Errorf("writing meta:colour: %v, want it refused", err)
+	for _, member := range []string{`"meta:colour": "red"`, `"header:X-Foo:asText": "bar"`} {
+		_, err := p.Parse("WriteMeta"+Extension, []byte(`{"methodCalls": [["Note/set", {"create": {"n": {`+member+`}}}, "c0"]]}`))
+		if err == nil || !strings.Contains(err.Error(), "not one to write") {
+			t.Errorf("writing %s: %v, want it refused", member, err)
+		}
 	}
 }

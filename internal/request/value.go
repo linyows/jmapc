@@ -316,8 +316,11 @@ func (c *checker) object(t *spec.Type, raw json.RawMessage, where string) Node {
 			// A record written out takes the header fields of a message, which
 			// RFC 8621, Section 4.6 lets an email be created with; the other
 			// dynamic properties, a digest or a vendor's, are there to be read.
+			// A vendor's type may name header: among what a /get takes, and
+			// that says nothing of writing one, which RFC 8621 lets a message
+			// and its parts do.
 			header, _ := spec.ParseHeaderProperty(key)
-			if header == nil {
+			if header == nil || (o.Name != "Email" && o.Name != "EmailBodyPart") {
 				c.errorf(where+"."+key, "", "%s is a property to ask %s for, not one to write", key, o.Name)
 				continue
 			}
