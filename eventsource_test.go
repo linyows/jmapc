@@ -270,6 +270,9 @@ func TestEventSourceTakesAnIDWithoutAnEvent(t *testing.T) {
 		`data: {"@type":"StateChange","changed":{"a1":{"Email":"e2"}}}` + "\n" +
 		"\n" +
 		"id: s2\n" +
+		"\n" +
+		// An id holding a NUL is ignored, as an EventSource ignores it.
+		"id: s\x003\n" +
 		"\n"
 
 	stream, err := es.client().EventSource(context.Background(), nil)
