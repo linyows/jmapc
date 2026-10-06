@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -533,6 +534,51 @@ func TestGenerateRemovesWhatADeletedRequestLeftBehind(t *testing.T) {
 		t.Errorf("generate removed a file it did not write: %v", err)
 	}
 
+	if _, errOut, err := capture(t, append(args, "-check")); err != nil {
+		t.Errorf("generate -check rejects what generate just wrote: %v\n%s", err, errOut)
+	}
+}
+
+// TestGenerateKeepsARequestRenamedByCase covers a request whose name changes
+// only in case, on a file system that ignores case. The file it was generated
+// into is the file it is now generated into, and generating must leave it
+// there, under the name it now has, rather than take it for what a deleted
+// request left behind.
+func TestGenerateKeepsARequestRenamedByCase(t *testing.T) {
+	dir := workspace(t, map[string]string{"requests/AttachNote.jmap.json": listMailboxes})
+	if _, err := os.Stat(filepath.Join(dir, "requests", "attachnote.jmap.json")); err != nil {
+		t.Skip("the file system tells names apart by case, where the two are two files")
+	}
+	args := []string{"generate", "-requests", filepath.Join(dir, "requests"),
+		"-out", filepath.Join(dir, "ts"), "-lang", "typescript"}
+	if _, errOut, err := capture(t, args); err != nil {
+		t.Fatalf("generate: %v\n%s", err, errOut)
+	}
+	if err := os.Rename(filepath.Join(dir, "requests", "AttachNote.jmap.json"),
+		filepath.Join(dir, "requests", "Attachnote.jmap.json")); err != nil {
+		t.Fatalf("renaming the request: %v", err)
+	}
+
+	_, errOut, err := capture(t, append(args, "-check"))
+	if err == nil || !strings.Contains(errOut, "named attachNote.ts on disk") {
+		t.Errorf("generate -check: %v, want the name on disk reported:\n%s", err, errOut)
+	}
+	if _, errOut, err := capture(t, args); err != nil {
+		t.Fatalf("generate: %v\n%s", err, errOut)
+	} else if strings.Contains(errOut, "removed") {
+		t.Errorf("generate removed a file it had just written:\n%s", errOut)
+	}
+	entries, err := os.ReadDir(filepath.Join(dir, "ts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	if !slices.Contains(names, "attachnote.ts") {
+		t.Errorf("the files are %v, want attachnote.ts among them", names)
+	}
 	if _, errOut, err := capture(t, append(args, "-check")); err != nil {
 		t.Errorf("generate -check rejects what generate just wrote: %v\n%s", err, errOut)
 	}
