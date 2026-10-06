@@ -3,6 +3,9 @@ package shared
 import (
 	"strings"
 	"testing"
+
+	"github.com/linyows/jmapc/internal/request"
+	"github.com/linyows/jmapc/internal/spec"
 )
 
 // TestWriteComment checks the wrapping both generators depend on: a comment
@@ -175,5 +178,23 @@ func TestPrimaryAccountPhrase(t *testing.T) {
 				t.Errorf("PrimaryAccountPhrase() =\n%q\nwant\n%q", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestSameNarrowingTellsNoListFromAnEmptyOne checks two calls that read the
+// same records in different shapes: one asks for no properties of the email,
+// which is its id alone, and the other for every property of it and none of
+// its body parts. Neither list being given is not the same as one being empty.
+func TestSameNarrowingTellsNoListFromAnEmptyOne(t *testing.T) {
+	q, err := request.NewParser(spec.Standard()).Parse("Shapes"+request.Extension, []byte(`{"methodCalls": [
+	  ["Email/get", {"ids": ["e1"], "properties": []}, "ids"],
+	  ["Email/get", {"ids": ["e1"], "bodyProperties": []}, "bodies"]
+	]}`))
+	if err != nil {
+		t.Fatalf("checking the request:\n%v", err)
+	}
+	same := SameNarrowing(q.Calls)
+	if same[q.Calls[1]] == q.Calls[0] {
+		t.Error("a call fetching every property was given the shape of one fetching the id alone")
 	}
 }

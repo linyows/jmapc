@@ -130,10 +130,10 @@ func SameNarrowing(calls []*request.Call) map[*request.Call]*request.Call {
 			c.Method.Name,
 			c.Method.DataType,
 			setName(c.PropertySet),
-			strings.Join(c.Properties, "\x00"),
+			propertyList(c.Properties),
 			c.Method.NestedType,
 			setName(c.NestedPropertySet),
-			strings.Join(c.NestedProperties, "\x00"),
+			propertyList(c.NestedProperties),
 		}, "\x01")
 		if seen, dup := first[key]; dup {
 			out[c] = seen
@@ -143,6 +143,16 @@ func SameNarrowing(calls []*request.Call) map[*request.Call]*request.Call {
 		out[c] = c
 	}
 	return out
+}
+
+// propertyList writes a list of properties into a narrowing key, keeping apart
+// the list that is not there, which fetches everything, from the empty list,
+// which fetches the id alone.
+func propertyList(props []string) string {
+	if props == nil {
+		return "*"
+	}
+	return "=" + strings.Join(props, "\x00")
 }
 
 // setName returns the name of a property set, and an empty string where a call

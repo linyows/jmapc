@@ -824,8 +824,9 @@ func (c *checker) properties(call *Call, where string) []string {
 	if !ok {
 		return nil
 	}
-	// Not nil, which says the call fetches everything: an empty list fetches
-	// the id alone, which a /get returns whatever it is asked for.
+	// An empty list fetches the id alone, which a /get returns whatever it is
+	// asked for. It is kept as an empty slice rather than nil, since nil is
+	// what says the call fetches everything.
 	props := []string{}
 	for i, item := range arr.Items {
 		lit, ok := item.(*Literal)

@@ -725,8 +725,8 @@ func TestAnEmptyListOfPropertiesFetchesTheIDAlone(t *testing.T) {
 	if !strings.Contains(record, "ID jmapc.ID `json:\"id\"`") {
 		t.Errorf("the record does not hold the id:\n%s", record)
 	}
-	if strings.Contains(record, "Name") || strings.Contains(record, "Role") {
-		t.Errorf("the record holds properties the call did not fetch:\n%s", record)
+	if n := strings.Count(record, "`json:"); n != 1 {
+		t.Errorf("the record holds %d properties, want the id alone:\n%s", n, record)
 	}
 	if !strings.Contains(src, "\"properties\": json.RawMessage(`[]`)") {
 		t.Errorf("the request does not send the empty list:\n%s", src)
