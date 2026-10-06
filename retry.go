@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -152,7 +153,11 @@ func (c *Client) sendWithRetry(req *http.Request, kind RequestKind) (*http.Respo
 		switch {
 		case tokensLeft > 0 && c.refusedToken(resp):
 			tokensLeft--
-			c.tokens.discard()
+			var refused string
+			if resp.Request != nil {
+				refused, _ = strings.CutPrefix(resp.Request.Header.Get("Authorization"), "Bearer ")
+			}
+			c.tokens.discard(refused)
 		case attempt < c.retry.Attempts && c.retry.worthRetrying(resp, err):
 			after := retryAfter(resp, time.Now())
 			if after > maxRetryAfter {
