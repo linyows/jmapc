@@ -1675,6 +1675,21 @@ func TestHeaderFieldProperties(t *testing.T) {
 	}, {
 		`{"methodCalls": [["Email/get", {"properties": ["header:Subject:asText:all:more"]}, "c0"]]}`,
 		"more suffixes than the form and :all",
+	}, {
+		// A form the field does not take is refused wherever the field is
+		// named: in properties, a path, a patch and a created record.
+		`{"methodCalls": [["Email/get", {"properties": ["header:Subject:asDate"]}, "c0"]]}`,
+		"which RFC 8621 does not allow for the Subject header field\n\tthe Subject header field takes asRaw, asText",
+	}, {
+		`{"methodCalls": [["Email/get", {"properties": ["subject"]}, "g"],
+		  ["Thread/get", {"#ids": {"resultOf": "g", "name": "Email/get", "path": "/list/*/header:Subject:asDate"}}, "t"]]}`,
+		"which RFC 8621 does not allow for the Subject header field",
+	}, {
+		`{"methodCalls": [["Email/set", {"update": {"e1": {"bodyStructure/header:Received:asText": null}}}, "s"]]}`,
+		"which RFC 8621 does not allow for the Received header field",
+	}, {
+		`{"methodCalls": [["Email/set", {"create": {"k": {"mailboxIds": {"m": true}, "header:From:asText": "a"}}}, "s"]]}`,
+		"which RFC 8621 does not allow for the From header field",
 	}}
 	for _, tt := range tests {
 		if got := parseErr(t, tt.src); !strings.Contains(got, tt.want) {

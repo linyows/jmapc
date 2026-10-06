@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"slices"
 	"sort"
 	"strings"
 )
@@ -25,6 +26,56 @@ var headerForms = map[string]string{
 	"asMessageIds":       "String[]|null",
 	"asDate":             "Date|null",
 	"asURLs":             "String[]|null",
+}
+
+// headerFieldForms maps a header field RFC 5322 or RFC 2369 defines, written in
+// lower case, to the parsed forms RFC 8621, Section 4.1.2 lets it be asked for
+// in besides the raw one. A field neither defines may be asked for in any form;
+// one they define takes only the forms the section lists it under, so a field
+// they define that it lists under none, such as Received, takes only the raw
+// form. List-Id is defined by RFC 2919, and Resent-Reply-To by neither, so both
+// take any form.
+var headerFieldForms = map[string][]string{
+	"date":              {"asDate"},
+	"from":              {"asAddresses", "asGroupedAddresses"},
+	"sender":            {"asAddresses", "asGroupedAddresses"},
+	"reply-to":          {"asAddresses", "asGroupedAddresses"},
+	"to":                {"asAddresses", "asGroupedAddresses"},
+	"cc":                {"asAddresses", "asGroupedAddresses"},
+	"bcc":               {"asAddresses", "asGroupedAddresses"},
+	"message-id":        {"asMessageIds"},
+	"in-reply-to":       {"asMessageIds"},
+	"references":        {"asMessageIds"},
+	"subject":           {"asText"},
+	"comments":          {"asText"},
+	"keywords":          {"asText"},
+	"resent-date":       {"asDate"},
+	"resent-from":       {"asAddresses", "asGroupedAddresses"},
+	"resent-sender":     {"asAddresses", "asGroupedAddresses"},
+	"resent-to":         {"asAddresses", "asGroupedAddresses"},
+	"resent-cc":         {"asAddresses", "asGroupedAddresses"},
+	"resent-bcc":        {"asAddresses", "asGroupedAddresses"},
+	"resent-message-id": {"asMessageIds"},
+	"return-path":       nil,
+	"received":          nil,
+	"list-help":         {"asURLs"},
+	"list-unsubscribe":  {"asURLs"},
+	"list-subscribe":    {"asURLs"},
+	"list-post":         {"asURLs"},
+	"list-owner":        {"asURLs"},
+	"list-archive":      {"asURLs"},
+}
+
+// HeaderFieldForms returns the parsed forms a header field may be asked for
+// in, sorted, the raw form among them.
+func HeaderFieldForms(field string) []string {
+	forms, defined := headerFieldForms[strings.ToLower(field)]
+	if !defined {
+		return HeaderFormNames()
+	}
+	out := append([]string{"asRaw"}, forms...)
+	sort.Strings(out)
+	return out
 }
 
 // HeaderProperty is a property naming one header field of a message.
@@ -84,6 +135,15 @@ func ParseHeaderProperty(property string) (*HeaderProperty, error) {
 				Forms:    HeaderFormNames(),
 			}
 		}
+		if allowed := HeaderFieldForms(h.Name); !slices.Contains(allowed, h.Form) {
+			return nil, &HeaderPropertyError{
+				Property: property,
+				Problem: "asks for the " + h.Form + " form, which RFC 8621 does not allow for the " +
+					h.Name + " header field",
+				Field: h.Name,
+				Forms: allowed,
+			}
+		}
 	default:
 		return nil, &HeaderPropertyError{
 			Property: property,
@@ -136,8 +196,11 @@ type HeaderPropertyError struct {
 	Property string
 	// Problem describes what is wrong with it.
 	Problem string
+	// Field is the header field, where the form is one the specification
+	// defines but not for this field.
+	Field string
 	// Forms lists the parsed forms, where naming an unknown one is the
-	// problem.
+	// problem, or the forms Field takes, where naming one it does not take is.
 	Forms []string
 }
 

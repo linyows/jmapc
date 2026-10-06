@@ -380,6 +380,9 @@ func TestHeaderProperties(t *testing.T) {
 		{"header:Received:all", "Received", "", true, "String[]"},
 		{"header:Resent-To:asAddresses:all", "Resent-To", "asAddresses", true, "EmailAddress[][]"},
 		{"header:Date:asDate:all", "Date", "asDate", true, "(Date|null)[]"},
+		{"header:Subject:asRaw", "Subject", "asRaw", false, "String|null"},
+		{"header:X-Spam-Date:asDate", "X-Spam-Date", "asDate", false, "Date|null"},
+		{"header:resent-reply-to:asText", "resent-reply-to", "asText", false, "String|null"},
 	}
 	for _, tt := range tests {
 		h, err := ParseHeaderProperty(tt.property)
@@ -406,7 +409,13 @@ func TestHeaderProperties(t *testing.T) {
 		t.Errorf("ParseHeaderProperty(\"subject\") = %v, %v, want nil, nil", h, err)
 	}
 
-	for _, bad := range []string{"header:", "header:Subject:asWords", "header:Subject:asText:all:extra"} {
+	for _, bad := range []string{
+		"header:", "header:Subject:asWords", "header:Subject:asText:all:extra",
+		// Forms RFC 8621, Section 4.1.2 does not allow for the field, which
+		// is matched whatever its case.
+		"header:Subject:asDate", "header:subject:asAddresses", "header:Received:asText",
+		"header:From:asText:all", "header:List-Post:asMessageIds",
+	} {
 		if _, err := ParseHeaderProperty(bad); err == nil {
 			t.Errorf("ParseHeaderProperty(%q) succeeded, want an error", bad)
 		}
