@@ -122,13 +122,13 @@ func (g *RequestGenerator) plan() ([]*plan, error) {
 		}
 		p := &plan{
 			q:        q,
-			funcName: lowerFirst(q.Name),
+			funcName: spec.TSFunctionName(lowerFirst(q.Name)),
 			calls:    make(map[*request.Call]*call, len(q.Calls)),
 		}
 		if len(q.Params) > 0 {
 			p.paramsType = shared.Unique(taken, q.Name+"Params")
 		}
-		p.creations = shared.Creations(taken, p.funcName, q.Creations, spec.ExportedName)
+		p.creations = shared.Creations(taken, lowerFirst(q.Name), q.Creations, spec.ExportedName)
 		same := shared.SameNarrowing(q.Calls)
 		for _, c := range q.Calls {
 			info := &call{}

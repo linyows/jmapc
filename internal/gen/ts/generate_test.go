@@ -221,3 +221,31 @@ func TestACreationIDGetsAName(t *testing.T) {
 		t.Errorf("the module does not bring in the type of the constant:\n%s", src)
 	}
 }
+
+// TestARequestNamedAfterAReservedWord checks the function a request named after
+// a word JavaScript reserves gets, which takes an underscore since the word
+// itself cannot be written as a name. The file keeps the name.
+func TestARequestNamedAfterAReservedWord(t *testing.T) {
+	q, err := request.NewParser(spec.Standard()).Parse("Delete"+request.Extension, []byte(`{
+	  "methodCalls": [["Mailbox/set", {"destroy": ["{{mailboxId}}"]}, "c0"]]
+	}`))
+	if err != nil {
+		t.Fatalf("checking the request:\n%v", err)
+	}
+	files, err := (&RequestGenerator{Spec: spec.Standard(), Requests: []*request.Request{q}}).Generate()
+	if err != nil {
+		t.Fatalf("generating: %v", err)
+	}
+	src := string(files["delete.ts"])
+	if !strings.Contains(src, "export async function delete_(") {
+		t.Errorf("the function is not named delete_:\n%s", src)
+	}
+}
+
+// TestStringsAreWrittenAsJavaScriptWritesThem checks the strings a request
+// states. Go's quoting writes \a, which JavaScript reads as the letter a.
+func TestStringsAreWrittenAsJavaScriptWritesThem(t *testing.T) {
+	if got, want := quote("bell\a<tag>"), `"bell\u0007<tag>"`; got != want {
+		t.Errorf("quote = %s, want %s", got, want)
+	}
+}

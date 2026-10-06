@@ -98,7 +98,9 @@ func (g *RequestGenerator) Generate() (map[string][]byte, error) {
 		modules = append(modules, VerifyModule)
 	}
 	for _, p := range plans {
-		if err := add(p.module, "the request "+p.q.Name, g.file(p)); err != nil {
+		// A module named after a keyword is declared as a raw identifier, and
+		// its file is named without the r#, as rustc looks for it.
+		if err := add(strings.TrimPrefix(p.module, "r#"), "the request "+p.q.Name, g.file(p)); err != nil {
 			return nil, err
 		}
 		modules = append(modules, p.module)
@@ -106,12 +108,6 @@ func (g *RequestGenerator) Generate() (map[string][]byte, error) {
 	sort.Strings(modules)
 	out["mod.rs"] = writeMod(modules, properties)
 	return out, nil
-}
-
-// FileName returns the file a request is generated into. Rust names a file after
-// the module it holds, and a module name is snake_case.
-func FileName(queryName string) string {
-	return spec.RustName(queryName) + ".rs"
 }
 
 // plan settles every generated name up front.
@@ -132,8 +128,8 @@ func (g *RequestGenerator) plan() ([]*plan, error) {
 		prefix := spec.RustTypeName(q.Name)
 		p := &plan{
 			q:        q,
-			module:   spec.RustName(q.Name),
-			funcName: spec.RustName(q.Name),
+			module:   spec.RustFieldName(q.Name),
+			funcName: spec.RustFieldName(q.Name),
 			calls:    make(map[*request.Call]*call, len(q.Calls)),
 		}
 		if len(q.Params) > 0 {

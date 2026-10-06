@@ -3,7 +3,6 @@ package ts
 import (
 	"bytes"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/linyows/jmapc/internal/gen/shared"
@@ -37,7 +36,7 @@ func (g *RequestGenerator) verifyFile(plans []*plan) []byte {
 	buf.WriteString("  await client.verify([\n")
 	for _, p := range plans {
 		buf.WriteString("    {\n")
-		fmt.Fprintf(&buf, "      name: %s,\n", strconv.Quote(p.q.Name))
+		fmt.Fprintf(&buf, "      name: %s,\n", quote(p.q.Name))
 		fmt.Fprintf(&buf, "      using: [%s],\n", quoteAll(p.q.Using))
 		fmt.Fprintf(&buf, "      calls: %d,\n", len(p.q.Calls))
 		fmt.Fprintf(&buf, "      primaryAccounts: [%s],\n", quoteAll(p.sessionCapabilities))
@@ -51,7 +50,7 @@ func (g *RequestGenerator) verifyFile(plans []*plan) []byte {
 func quoteAll(values []string) string {
 	quoted := make([]string, len(values))
 	for i, v := range values {
-		quoted[i] = strconv.Quote(v)
+		quoted[i] = quote(v)
 	}
 	return strings.Join(quoted, ", ")
 }
