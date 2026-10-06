@@ -490,8 +490,8 @@ func receive(ctx context.Context, c *jmapc.Client, url, listen, cert, key string
 		return nil
 	}
 	// Run returns only with an error, and the context's where it was told to
-	// stop, which here means the deadline passed with nothing pushed.
-	if errors.Is(err, context.Canceled) {
+	// stop: cancelled, or past its deadline with nothing pushed.
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		err = errors.New("the receiver stopped before a change to the email was pushed")
 	}
 	return err
