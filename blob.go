@@ -189,28 +189,30 @@ func (c *Client) checkUploadSize(ctx context.Context, size int64) error {
 }
 
 // rangeIgnoredError is the failure of a download whose range the server
-// ignored, answering with the whole blob or with a part other than the one
-// asked for.
+// ignored, answering with the whole blob, or with a part whose bounds do not
+// fit the one asked for, or that it does not say the bounds of.
 type rangeIgnoredError struct {
 	// wanted is the Range header that was sent.
 	wanted string
-	// answered is the Content-Range the server answered with, and empty where
-	// it answered with the whole blob.
+	// partial says the server answered with part of the blob, and answered
+	// is the Content-Range it gave the part, empty where it gave none.
+	partial  bool
 	answered string
 }
 
 func (e *rangeIgnoredError) Error() string {
-	if e.answered != "" {
-		return fmt.Sprintf("jmapc: the server answered the range %q with %q", e.wanted, e.answered)
+	if e.partial {
+		return fmt.Sprintf("jmapc: the server answered the range %q with a part whose Content-Range is %q", e.wanted, e.answered)
 	}
 	return fmt.Sprintf("jmapc: the server ignored the range %q and answered with the whole blob", e.wanted)
 }
 
 // IsRangeIgnored reports whether err is a download that asked for part of a
 // blob from a server that answered with the whole of it, or with a part that
-// does not start where the download asked it to. JMAP does not define ranges
-// on the download endpoint, so a server that does not offer them is not at
-// fault, and asking again will not change its answer: a caller resuming a
+// does not fit what was asked: one that starts elsewhere, ends past where it
+// was asked to, or whose bounds the server did not state. JMAP does not define
+// ranges on the download endpoint, so a server that does not offer them is not
+// at fault, and asking again will not change its answer: a caller resuming a
 // download downloads the whole blob instead.
 func IsRangeIgnored(err error) bool {
 	var ignored *rangeIgnoredError
@@ -292,18 +294,16 @@ func (c *Client) Download(ctx context.Context, accountID, blobID ID, opts *Downl
 	}
 	if wanted != "" {
 		answered := resp.Header.Get("Content-Range")
-		part, err := parseContentRange(answered)
-		if err != nil {
-			resp.Body.Close()
-			return nil, err
-		}
 		// The part has to start where it was asked to, or the caller writes
-		// it at the wrong offset. It may end sooner, where the blob does, but
-		// not later.
-		if part.From != opts.From || part.To < part.From ||
-			(opts.Length > 0 && part.To > opts.From+opts.Length-1) {
+		// it at the wrong offset. It may end sooner, which Range reports, but
+		// not later than asked, and not past the end of the blob. A part
+		// whose bounds cannot be read cannot be placed at all.
+		part, err := parseContentRange(answered)
+		if err != nil || part.From != opts.From || part.To < part.From ||
+			(opts.Length > 0 && part.To > opts.From+opts.Length-1) ||
+			(part.Total >= 0 && part.To >= part.Total) {
 			resp.Body.Close()
-			return nil, &rangeIgnoredError{wanted: wanted, answered: answered}
+			return nil, &rangeIgnoredError{wanted: wanted, partial: true, answered: answered}
 		}
 		blob.Range = part
 	}
