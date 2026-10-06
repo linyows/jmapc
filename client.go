@@ -358,16 +358,20 @@ func (c *Client) Do(ctx context.Context, r *Request) (*Response, error) {
 		}
 	}
 
+	// What joining the parts failed at is returned to the caller, and the
+	// observer is told so: the request was answered, and the answer is not
+	// whole.
+	var splitErr error
+	if len(split) > 0 {
+		splitErr = errors.Join(split...)
+	}
 	errs := resp.Errors()
 	if len(errs) > 0 {
-		answered(resp, nil, errs)
+		answered(resp, splitErr, errs)
 		return resp, errors.Join(append(split, errs)...)
 	}
-	answered(resp, nil, nil)
-	if len(split) > 0 {
-		return resp, errors.Join(split...)
-	}
-	return resp, nil
+	answered(resp, splitErr, nil)
+	return resp, splitErr
 }
 
 // post sends one request and decodes what comes back. It is one round trip:
