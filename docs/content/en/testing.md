@@ -37,7 +37,9 @@ What it removes from the test:
   which is how to check that calls were sent in one request rather than one at
   a time.
 - **The push.** `srv.Push` sends a state change to a watching client, which is
-  what a watching request's loop waits for.
+  what a watching request's loop waits for. The push endpoint honours the
+  `types`, `closeafter` and `ping` a client asks for, as RFC 8620 has a server
+  do, so a client is sent only the types it subscribed to.
 
 What it does not do is store anything. It is a server to test a client against
 rather than an implementation of JMAP: nothing a `/set` creates comes back from

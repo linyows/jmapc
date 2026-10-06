@@ -1,10 +1,12 @@
 package jmaptest
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -235,6 +237,119 @@ func TestPushReachesAWatcher(t *testing.T) {
 	if state, ok := change.StateOf(AccountID, "Email"); !ok || state != "s2" {
 		t.Errorf("the event said %q (present %v), want s2", state, ok)
 	}
+}
+
+// TestPushFollowsTheTypesSubscribedTo checks that a client is pushed the types
+// it asked for and no others, as RFC 8620, Section 7.3 has a server do. A
+// client that forgot to filter would otherwise pass against the stub and fail
+// against a server.
+func TestPushFollowsTheTypesSubscribedTo(t *testing.T) {
+	srv := New(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	stream, err := srv.Client().EventSource(ctx, &jmapc.EventSourceOptions{Types: []string{"Email"}})
+	if err != nil {
+		t.Fatalf("EventSource: %v", err)
+	}
+	defer stream.Close()
+
+	go func() {
+		srv.Push(AccountID, map[string]string{"Mailbox": "m2"})
+		srv.Push(AccountID, map[string]string{"Email": "e2", "Mailbox": "m3"})
+	}()
+
+	change, err := stream.Next()
+	if err != nil {
+		t.Fatalf("Next: %v", err)
+	}
+	if state, ok := change.StateOf(AccountID, "Email"); !ok || state != "e2" {
+		t.Errorf("the event said %q (present %v) for Email, want e2", state, ok)
+	}
+	if state, ok := change.StateOf(AccountID, "Mailbox"); ok {
+		t.Errorf("the event carried Mailbox at %q, which the client did not subscribe to", state)
+	}
+	// The push of Mailbox alone was sent nothing, so this event is the second
+	// push, under an id of its own.
+	if id := stream.LastEventID(); id != "e2" {
+		t.Errorf("LastEventID = %q, want e2", id)
+	}
+}
+
+// TestEachPushHasAnIDOfItsOwn checks the ids a client resumes from: two pushes
+// between two requests are two events, and resuming after the first must not
+// name the second.
+func TestEachPushHasAnIDOfItsOwn(t *testing.T) {
+	srv := New(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	stream, err := srv.Client().EventSource(ctx, nil)
+	if err != nil {
+		t.Fatalf("EventSource: %v", err)
+	}
+	defer stream.Close()
+
+	go func() {
+		srv.Push(AccountID, map[string]string{"Email": "e2"})
+		srv.Push(AccountID, map[string]string{"Email": "e3"})
+	}()
+	var ids []string
+	for range 2 {
+		if _, err := stream.Next(); err != nil {
+			t.Fatalf("Next: %v", err)
+		}
+		ids = append(ids, stream.LastEventID())
+	}
+	if ids[0] == ids[1] {
+		t.Errorf("both events have the id %q", ids[0])
+	}
+}
+
+// TestAStreamClosesAfterAStateWhereAsked checks closeafter=state, with which a
+// server ends the stream once it has pushed a change.
+func TestAStreamClosesAfterAStateWhereAsked(t *testing.T) {
+	srv := New(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	stream, err := srv.Client().EventSource(ctx, &jmapc.EventSourceOptions{CloseAfterState: true})
+	if err != nil {
+		t.Fatalf("EventSource: %v", err)
+	}
+	defer stream.Close()
+
+	go srv.Push(AccountID, map[string]string{"Email": "e2"})
+	if _, err := stream.Next(); err != nil {
+		t.Fatalf("Next: %v", err)
+	}
+	if _, err := stream.Next(); !errors.Is(err, io.EOF) {
+		t.Errorf("Next after the change: %v, want io.EOF", err)
+	}
+}
+
+// TestAStreamIsPingedWhereAsked checks ping, with which a server writes an
+// event at the interval asked for, so that a client can tell a quiet stream
+// from a dropped one.
+func TestAStreamIsPingedWhereAsked(t *testing.T) {
+	srv := New(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		srv.BaseURL()+"/events?types=*&closeafter=no&ping=1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET /events: %v", err)
+	}
+	defer resp.Body.Close()
+	scan := bufio.NewScanner(resp.Body)
+	for scan.Scan() {
+		if scan.Text() == "event: ping" {
+			return
+		}
+	}
+	t.Errorf("the stream ended without a ping: %v", scan.Err())
 }
 
 // TestPathsOfYourOwnBesideThePathsItServes covers a client half converted to
