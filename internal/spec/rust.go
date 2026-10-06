@@ -44,29 +44,7 @@ func (t *Type) RustType() string {
 // from the members, so that the same union written in two places names one
 // type: a filter that may be an operator or a condition is a
 // FilterOperatorOrEmailFilterCondition wherever it appears.
-func RustUnionName(t *Type) string {
-	parts := make([]string, len(t.Union))
-	for i, m := range t.Union {
-		parts[i] = rustVariantName(m)
-	}
-	return strings.Join(parts, "Or")
-}
-
-// rustVariantName names one alternative of a union, both as the variant itself
-// and as its part of the enum's name.
-func rustVariantName(t *Type) string {
-	switch {
-	case t.IsArray():
-		return rustVariantName(t.Elem) + "List"
-	case t.IsMap():
-		return rustVariantName(t.Value) + "Map"
-	case t.IsUnion():
-		return RustUnionName(t)
-	}
-	// A primitive names its variant after the JMAP type rather than after the
-	// Rust one, so that a variant is Number rather than F64.
-	return RustTypeName(t.Name)
-}
+func RustUnionName(t *Type) string { return unionName(t, RustTypeName) }
 
 // RustTypeName converts a JMAP name to a Rust type name. Rust writes a type in
 // UpperCamelCase with no run of capitals, so an initialism becomes one word:
