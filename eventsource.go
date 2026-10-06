@@ -136,7 +136,7 @@ func (c *Client) EventSource(ctx context.Context, opts *EventSourceOptions) (*Ev
 		return nil, err
 	}
 	if s.EventSourceURL == "" {
-		return nil, fmt.Errorf("jmapc: the session advertises no eventSourceUrl")
+		return nil, &sessionError{msg: "jmapc: the session advertises no eventSourceUrl"}
 	}
 
 	types := "*"
@@ -154,12 +154,12 @@ func (c *Client) EventSource(ctx context.Context, opts *EventSourceOptions) (*Ev
 		"ping":       strconv.Itoa(int(ping / time.Second)),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("jmapc: expanding eventSourceUrl: %w", err)
+		return nil, &sessionError{msg: "jmapc: expanding eventSourceUrl", err: err}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("jmapc: building event source request: %w", err)
+		return nil, &sessionError{msg: "jmapc: building event source request", err: err}
 	}
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("Cache-Control", "no-cache")

@@ -319,9 +319,11 @@ var concurrencyLimits = map[string]bool{
 // A failure jmapc cannot classify is temporary, since nothing about it says the
 // next attempt will fail as well. A nil error is not a failure and is false.
 // Neither is a range the server ignored, which IsRangeIgnored reports: the
-// server answers the same range the same way however often it is asked.
+// server answers the same range the same way however often it is asked. Nor is
+// something the session shows the server does not offer, such as a push
+// endpoint, which stays missing until the server is set up otherwise.
 func IsTemporary(err error) bool {
-	if err == nil || IsRangeIgnored(err) {
+	if err == nil || IsRangeIgnored(err) || isSessionError(err) {
 		return false
 	}
 	classified, temporary := false, true
@@ -342,6 +344,29 @@ func IsTemporary(err error) bool {
 		return true
 	}
 	return temporary
+}
+
+// sessionError is a failure the session shows before anything is sent: the
+// server does not offer what was asked of it, or offers it in a form that cannot
+// be used. Asking again reads the same session and fails the same way.
+type sessionError struct {
+	msg string
+	err error
+}
+
+func (e *sessionError) Error() string {
+	if e.err == nil {
+		return e.msg
+	}
+	return e.msg + ": " + e.err.Error()
+}
+
+func (e *sessionError) Unwrap() error { return e.err }
+
+// isSessionError reports whether err is, or wraps, a sessionError.
+func isSessionError(err error) bool {
+	var s *sessionError
+	return errors.As(err, &s)
 }
 
 // IsRateLimited reports whether err is the server asking for fewer requests: a
