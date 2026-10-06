@@ -304,8 +304,16 @@ func (c *checker) object(t *spec.Type, raw json.RawMessage, where string) Node {
 	for _, key := range keys {
 		field, isKnown := o.Field(key)
 		if !isKnown {
-			c.errorf(where+"."+key, hintFor(key, o.PropertyNames()), "%s has no property %q", o.Name, key)
-			continue
+			dynamic, err := o.DynamicField(key)
+			if err != nil {
+				c.errorf(where+"."+key, headerFormHint(err), "%v", err)
+				continue
+			}
+			if dynamic == nil {
+				c.errorf(where+"."+key, hintFor(key, o.PropertyNames()), "%s has no property %q", o.Name, key)
+				continue
+			}
+			field = dynamic
 		}
 		elemType := field.ParsedType()
 		if o.Name == "FilterOperator" && key == "conditions" && c.filterUnion != nil {

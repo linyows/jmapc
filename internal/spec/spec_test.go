@@ -110,6 +110,9 @@ func TestResolvePath(t *testing.T) {
 		{"Email/set", "/created", "Id[Email|null]|null"},
 		{"Email/get", "/list/*/mailboxIds", "Id[Boolean][]"},
 		{"Mailbox/changes", "/updatedProperties", "String[]|null"},
+		{"Email/get", "/list/0/header:List-Id:asText", "String|null"},
+		{"Email/get", "/list/0/bodyStructure/header:Content-Type:asRaw", "String|null"},
+		{"Blob/get", "/list/0/digest:sha", "String"},
 	}
 	for _, tt := range tests {
 		got, err := s.ResolvePath(tt.method, tt.path)
@@ -547,5 +550,22 @@ func TestReturnsIDIsStatedNotNamed(t *testing.T) {
 		if m.ReturnsID != want {
 			t.Errorf("%s.ReturnsID = %v, want %v", name, m.ReturnsID, want)
 		}
+	}
+}
+
+// TestResolvePatchReachesAHeaderField checks a header field as the last segment
+// of a patch, typed by the form it names. Whether a server lets one be changed
+// once the email exists is the server's to say; the data model has the field.
+func TestResolvePatchReachesAHeaderField(t *testing.T) {
+	s := Standard()
+	_, _, value, _, err := s.ResolvePatch("Email", []string{"header:X-Foo:asText"}, []bool{false})
+	if err != nil {
+		t.Fatalf("ResolvePatch: %v", err)
+	}
+	if got := value.String(); got != "String|null" {
+		t.Errorf("value = %q, want String|null", got)
+	}
+	if _, _, _, _, err := s.ResolvePatch("Mailbox", []string{"header:X-Foo:asText"}, []bool{false}); err == nil {
+		t.Error("a header field of a mailbox was resolved")
 	}
 }

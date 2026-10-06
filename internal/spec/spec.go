@@ -175,6 +175,24 @@ func (o *Object) AcceptsDynamic(name string) bool {
 	return false
 }
 
+// DynamicField returns a field for a property Dynamic says this type has, typed
+// as the name says: a header field in the form it asks for, and a digest or the
+// content of a blob as a string. It returns nil where the type has no such
+// property, and an error where the name is one but the form it asks for is not.
+func (o *Object) DynamicField(name string) (*Field, error) {
+	if !o.AcceptsDynamic(name) {
+		return nil, nil
+	}
+	header, err := ParseHeaderProperty(name)
+	if err != nil {
+		return nil, err
+	}
+	if header != nil {
+		return &Field{Name: name, Type: header.Type}, nil
+	}
+	return &Field{Name: name, Type: String}, nil
+}
+
 // PropertyNames returns the names of every property, sorted, for use in
 // diagnostics that suggest what the caller may have meant.
 func (o *Object) PropertyNames() []string {
@@ -451,7 +469,14 @@ func (w *pathWalk) walk(t *Type, tokens []string, path string) (*Type, error) {
 	}
 	f, ok := o.Field(token)
 	if !ok {
-		return nil, &UnknownPropertyError{TypeName: o.Name, Property: token, Known: o.PropertyNames()}
+		dynamic, err := o.DynamicField(token)
+		if err != nil {
+			return nil, fmt.Errorf("path %q: %w", path, err)
+		}
+		if dynamic == nil {
+			return nil, &UnknownPropertyError{TypeName: o.Name, Property: token, Known: o.PropertyNames()}
+		}
+		f = dynamic
 	}
 	w.selections = append(w.selections, Selection{Type: o.Name, Property: token})
 	return w.walk(f.ParsedType(), rest, path)
@@ -527,9 +552,16 @@ func (s *Spec) ResolvePatch(dataType string, segments []string, unknown []bool) 
 			}
 			f, known := o.Field(seg)
 			if !known {
-				return nil, nil, nil, nil, &UnknownPropertyError{
-					TypeName: o.Name, Property: seg, Known: o.PropertyNames(),
+				dynamic, err := o.DynamicField(seg)
+				if err != nil {
+					return nil, nil, nil, nil, err
 				}
+				if dynamic == nil {
+					return nil, nil, nil, nil, &UnknownPropertyError{
+						TypeName: o.Name, Property: seg, Known: o.PropertyNames(),
+					}
+				}
+				f = dynamic
 			}
 			cur = f.ParsedType()
 			target = f

@@ -303,6 +303,19 @@ func objectNames(catalogue *spec.Spec) []string {
 	return out
 }
 
+// headerFormHint suggests the parsed form a header property meant, where err
+// is a form the specification does not define.
+func headerFormHint(err error) string {
+	var badForm *spec.HeaderPropertyError
+	if !errors.As(err, &badForm) || len(badForm.Forms) == 0 {
+		return ""
+	}
+	if hint := hintFor(badForm.Property, badForm.Forms); hint != "" {
+		return hint
+	}
+	return "the parsed forms are " + strings.Join(badForm.Forms, ", ")
+}
+
 // checkProperty reports what is wrong with selecting a property of a data
 // type, and returns the field the data model has for it. A property the server
 // gives meaning to rather than the data model — a header field, a digest — is
@@ -319,15 +332,7 @@ func checkProperty(dataType *spec.Object, name string) (*spec.Field, string, err
 	header, err := spec.ParseHeaderProperty(name)
 	switch {
 	case err != nil:
-		var badForm *spec.HeaderPropertyError
-		hint := ""
-		if errors.As(err, &badForm) && len(badForm.Forms) > 0 {
-			hint = hintFor(badForm.Property, badForm.Forms)
-			if hint == "" {
-				hint = "the parsed forms are " + strings.Join(badForm.Forms, ", ")
-			}
-		}
-		return nil, hint, err
+		return nil, headerFormHint(err), err
 	case header != nil:
 		// A property naming one header field of the message. Its type comes
 		// from the form asked for, so it is not a member of the data type and

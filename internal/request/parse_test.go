@@ -317,6 +317,11 @@ func TestParseErrors(t *testing.T) {
 		src:  `{"methodCalls": [["Email/get", {"ids": ["e1"], "properties": ["data"]}, "c0"]]}`,
 		want: `Email has no property "data"`,
 	}, {
+		name: "header field created in a form the specification does not define",
+		src: `{"methodCalls": [["Email/set", {"create": {"draft": {
+			"mailboxIds": {"m1": true}, "header:X-Foo:asBogus": "bar"}}}, "c0"]]}`,
+		want: `asks for the asBogus form`,
+	}, {
 		name: "patch key with a leading slash and a parameter in it",
 		src: `{"methodCalls": [
 			["Email/set", {"update": {"e1": {"/keywords/{{keyword}}": true}}}, "c0"]
@@ -1327,6 +1332,19 @@ func TestAPatchSetsAnEnumeratedKey(t *testing.T) {
 	  "participants/{{participantId}}/roles/chair": true,
 	  "participants/{{participantId}}/roles/{{role}}": true
 	}}}, "c0"]]}`)
+}
+
+// TestAnEmailIsCreatedWithAHeaderField checks a header field set when an email
+// is created, which RFC 8621, Section 4.6 allows in any form that can be
+// written, and a back reference reading one back.
+func TestAnEmailIsCreatedWithAHeaderField(t *testing.T) {
+	parse(t, "DraftWithHeader"+Extension, `{"methodCalls": [
+	  ["Email/set", {"create": {"draft": {
+	    "mailboxIds": {"{{mailboxId}}": true},
+	    "header:X-Foo:asText": "{{foo}}"}}}, "c0"],
+	  ["Email/get", {"ids": ["e1"], "properties": ["header:List-Id:asText"]}, "c1"],
+	  ["Core/echo", {"#listId": {"resultOf": "c1", "name": "Email/get", "path": "/list/0/header:List-Id:asText"}}, "c2"]
+	]}`)
 }
 
 // TestCommentArgumentIsNotSent checks the member a request uses to explain a
