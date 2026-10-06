@@ -245,7 +245,7 @@ func importEmail(ctx context.Context, c *jmapc.Client, subject string) error {
 	if err != nil {
 		return err
 	}
-	imported, ok := resp.Import.Created["imported"]
+	imported, ok := resp.Import.Created[client.ImportEmailImported]
 	if !ok {
 		return fmt.Errorf("the import reported no email created: %+v", resp.Import.NotCreated)
 	}

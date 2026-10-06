@@ -506,6 +506,19 @@ func TestACreationIDGetsAName(t *testing.T) {
 	}
 }
 
+// TestAnImportedEmailGetsAName checks that Email/import names the emails it
+// creates as a /set does: they are keyed by creation id, and the response
+// reports each one under it.
+func TestAnImportedEmailGetsAName(t *testing.T) {
+	src := generateOne(t, "ImportMessage", `{
+	  "methodCalls": [["Email/import", {"emails": {"message": {
+	    "blobId": "{{blobId}}", "mailboxIds": {"{{mailboxId}}": true}}}}, "import"]]
+	}`)
+	if want := `const ImportMessageMessage jmapc.ID = "message"`; !strings.Contains(src, want) {
+		t.Errorf("the generated request does not contain %q:\n%s", want, src)
+	}
+}
+
 // TestARecordIDIsNotACreationID checks that the keys of an update are left
 // alone: they are record ids the caller already has, not names the request
 // invents.
