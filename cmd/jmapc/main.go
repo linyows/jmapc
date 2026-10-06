@@ -136,15 +136,12 @@ func run(args []string) error {
 	}
 
 	fs := flag.NewFlagSet("jmapc "+command, flag.ContinueOnError)
+	project := addProjectFlags(fs, true)
 	var (
-		configPath = fs.String("config", "", "settings file to read")
-		requests   = fs.String("requests", "", "directory holding the request files")
-		out        = fs.String("out", "", "directory to write the generated client to")
-		lang       = fs.String("lang", "", "language to generate: go, rust or typescript")
-		pkg        = fs.String("package", "", "name of the generated package")
-		schemas    stringList
+		out  = fs.String("out", "", "directory to write the generated client to")
+		lang = fs.String("lang", "", "language to generate: go, rust or typescript")
+		pkg  = fs.String("package", "", "name of the generated package")
 	)
-	fs.Var(&schemas, "schema", "schema file describing a vendor extension; repeatable")
 	// Comparing what is on disk with what would be written is generation
 	// without the writing, and it is offered where the writing is.
 	var compare *bool
@@ -180,12 +177,9 @@ func run(args []string) error {
 		}
 	}
 
-	cfg, err := loadConfig(*configPath)
+	cfg, err := project.settings()
 	if err != nil {
 		return err
-	}
-	if *requests != "" {
-		cfg.Requests = *requests
 	}
 	if *out != "" {
 		cfg.Out = *out
@@ -195,9 +189,6 @@ func run(args []string) error {
 	}
 	if *pkg != "" {
 		cfg.Package = *pkg
-	}
-	if len(schemas) > 0 {
-		cfg.Schemas = append(cfg.Schemas, schemas...)
 	}
 	cfg.applyDefaults()
 	if err := cfg.check(); err != nil {
