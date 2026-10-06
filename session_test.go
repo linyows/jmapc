@@ -295,3 +295,61 @@ func TestASessionWithoutAStateIsNotFetchedAgain(t *testing.T) {
 		t.Errorf("the session was fetched %d times, want 1", got)
 	}
 }
+
+// TestAWaitingCallerOutlivesTheOneThatFetchedTheSession checks that a caller
+// waiting on a fetch of the session another caller started is not failed by
+// that caller giving up. The fetch ends with the context it was made under,
+// and the caller still waiting makes its own.
+func TestAWaitingCallerOutlivesTheOneThatFetchedTheSession(t *testing.T) {
+	var hits atomic.Int64
+	arrived := make(chan struct{}, 2)
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	mux.HandleFunc("/session", func(w http.ResponseWriter, r *http.Request) {
+		arrived <- struct{}{}
+		if hits.Add(1) == 1 {
+			// The first fetch is held until the caller that made it gives up.
+			<-r.Context().Done()
+			return
+		}
+		fmt.Fprintf(w, `{"capabilities": {"urn:ietf:params:jmap:core": {}}, "accounts": {},
+		  "primaryAccounts": {}, "username": "someone", "apiUrl": %q, "state": "s1"}`, srv.URL+"/api")
+	})
+	c := New(srv.URL + "/session")
+
+	first, cancel := context.WithCancel(context.Background())
+	firstDone := make(chan error, 1)
+	go func() {
+		_, err := c.Session(first)
+		firstDone <- err
+	}()
+	<-arrived
+
+	second := make(chan *Session, 1)
+	go func() {
+		s, err := c.Session(context.Background())
+		if err != nil {
+			t.Errorf("the waiting caller: %v", err)
+		}
+		second <- s
+	}()
+	// Give the second caller time to start waiting on the first one's fetch.
+	time.Sleep(20 * time.Millisecond)
+	cancel()
+
+	if err := <-firstDone; err == nil {
+		t.Error("the caller that gave up got a session")
+	}
+	select {
+	case s := <-second:
+		if s == nil || s.State != "s1" {
+			t.Errorf("the waiting caller got %+v, want the session", s)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the waiting caller never finished")
+	}
+	if n := hits.Load(); n != 2 {
+		t.Errorf("the session was fetched %d times, want 2", n)
+	}
+}

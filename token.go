@@ -82,14 +82,28 @@ func (t *tokenHolder) token(ctx context.Context) (string, error) {
 		t.mu.Unlock()
 		return value, nil
 	}
-	if wait := t.fetching; wait != nil {
+	for t.fetching != nil {
+		wait := t.fetching
 		t.mu.Unlock()
 		select {
 		case <-wait:
 		case <-ctx.Done():
 			return "", ctx.Err()
 		}
-		return t.fetched()
+		t.mu.Lock()
+		if t.valid() || !abandoned(ctx, t.err) {
+			t.mu.Unlock()
+			return t.fetched()
+		}
+		// The request that called the source gave up on it, and this one
+		// has not: it goes round again rather than failing with an error
+		// that was never its own.
+	}
+	// Another request going round may have called the source already.
+	if t.valid() {
+		value := t.held.Value
+		t.mu.Unlock()
+		return value, nil
 	}
 
 	wait := make(chan struct{})

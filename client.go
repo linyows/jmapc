@@ -184,7 +184,8 @@ func (c *Client) RefreshSession(ctx context.Context) (*Session, error) {
 // change therefore cost one request to the session resource between them.
 func (c *Client) fetchSession(ctx context.Context) (*Session, error) {
 	c.mu.Lock()
-	if wait := c.fetching; wait != nil {
+	for c.fetching != nil {
+		wait := c.fetching
 		c.mu.Unlock()
 		select {
 		case <-wait:
@@ -193,11 +194,17 @@ func (c *Client) fetchSession(ctx context.Context) (*Session, error) {
 		}
 		c.mu.Lock()
 		s, err := c.session, c.fetchErr
-		c.mu.Unlock()
-		if err != nil {
+		if err == nil {
+			c.mu.Unlock()
+			return s, nil
+		}
+		if !abandoned(ctx, err) {
+			c.mu.Unlock()
 			return nil, err
 		}
-		return s, nil
+		// The caller that made the fetch gave up on it. This one has not,
+		// so it goes round again, and makes the fetch itself where no other
+		// caller has started one in the meantime.
 	}
 	wait := make(chan struct{})
 	c.fetching = wait
@@ -213,6 +220,14 @@ func (c *Client) fetchSession(ctx context.Context) (*Session, error) {
 	c.mu.Unlock()
 	close(wait)
 	return s, err
+}
+
+// abandoned reports whether err is a call another caller made and gave up on,
+// ending with its own context, where ctx, the context of the caller sharing the
+// call, has not ended. Such a caller has not failed; it has only been waiting
+// on a call that is no longer being made.
+func abandoned(ctx context.Context, err error) bool {
+	return ctx.Err() == nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded))
 }
 
 // noteSessionState records that a response reported a session other than the
