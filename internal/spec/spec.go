@@ -175,6 +175,18 @@ func (o *Object) AcceptsDynamic(name string) bool {
 	return false
 }
 
+// AnsweredAs returns the fields a property asked for comes back as, where that
+// is not the property itself: the content of a blob is asked for as data, and
+// comes back as data:asText or data:asBase64, whichever the server picks for
+// what the octets hold, RFC 9404, Section 4.2. It is nil for every other
+// property.
+func (o *Object) AnsweredAs(name string) []string {
+	if o.Name == "BlobData" && name == "data" {
+		return []string{"data:asText", "data:asBase64"}
+	}
+	return nil
+}
+
 // DynamicField returns a field for a property Dynamic says this type has, typed
 // as far as the specifications say: a header field in the form it asks for, a
 // digest of a blob as a string, and anything else, such as the properties a

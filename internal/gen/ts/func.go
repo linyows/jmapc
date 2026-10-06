@@ -105,7 +105,7 @@ func (g *RequestGenerator) collectRecordTypeNames(c *request.Call, info *call, n
 		if properties == nil {
 			properties = dataType.PropertyNames()
 		}
-		add(dataType, shared.RecordProperties(properties, c.Method.ReturnsID))
+		add(dataType, shared.RecordProperties(dataType, properties, c.Method.ReturnsID))
 	}
 	if info.NestedType != "" && !info.SharedNested {
 		if nested, ok := g.Spec.Object(c.Method.NestedType); ok {
@@ -208,7 +208,7 @@ func (g *RequestGenerator) writeNestedTypes(buf *bytes.Buffer, p *plan) {
 			if i > 0 {
 				buf.WriteString("\n")
 			}
-			g.writeRecordField(buf, nested, name, info.NestedType, c.Method.NestedType)
+			g.writeRecordField(buf, nested, c.NestedProperties, name, info.NestedType, c.Method.NestedType)
 		}
 		buf.WriteString("}\n\n")
 	}
@@ -232,18 +232,18 @@ func (g *RequestGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 		if properties == nil {
 			properties = dataType.PropertyNames()
 		}
-		for i, name := range shared.RecordProperties(properties, c.Method.ReturnsID) {
+		for i, name := range shared.RecordProperties(dataType, properties, c.Method.ReturnsID) {
 			if i > 0 {
 				buf.WriteString("\n")
 			}
-			g.writeRecordField(buf, dataType, name, info.NestedType, c.Method.NestedType)
+			g.writeRecordField(buf, dataType, properties, name, info.NestedType, c.Method.NestedType)
 		}
 		buf.WriteString("}\n\n")
 	}
 }
 
 // writeRecordField writes one member of a generated record type.
-func (g *RequestGenerator) writeRecordField(buf *bytes.Buffer, dataType *spec.Object, name, nestedTo, nestedFrom string) {
+func (g *RequestGenerator) writeRecordField(buf *bytes.Buffer, dataType *spec.Object, asked []string, name, nestedTo, nestedFrom string) {
 	memberName := name
 	if spec.TSNeedsQuoting(memberName) {
 		memberName = quote(memberName)
@@ -260,7 +260,10 @@ func (g *RequestGenerator) writeRecordField(buf *bytes.Buffer, dataType *spec.Ob
 		fmt.Fprintf(buf, "  %s: unknown\n", memberName)
 		return
 	}
-	shared.WriteComment(buf, "  ", field.Doc)
+	shared.WriteComment(buf, "  ", shared.RecordFieldDoc(dataType, asked, field))
+	if shared.PickedByServer(dataType, asked, name) {
+		memberName += "?"
+	}
 	fmt.Fprintf(buf, "  %s: %s\n", memberName, g.nestedTSType(field.ParsedType(), nestedTo, nestedFrom))
 }
 

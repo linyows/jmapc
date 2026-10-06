@@ -66,10 +66,6 @@ func DynamicPropertyDoc(name string) string {
 	case strings.HasPrefix(name, "digest:"):
 		return "The digest of the blob under the " + strings.TrimPrefix(name, "digest:") +
 			" algorithm, as base64."
-	case name == "data":
-		return "The blob's octets. The server returns them under data:asText or " +
-			"data:asBase64, whichever suits what they hold, so this property " +
-			"itself does not come back."
 	}
 	return "The " + name + " property, whose meaning the server decides."
 }

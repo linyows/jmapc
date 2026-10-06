@@ -13,13 +13,11 @@ import (
 // an id, since a /get returns the id whatever it is asked for. A set extending
 // another holds the id through the one it extends.
 func SetProperties(set *request.PropertySet, dataType *spec.Object) []string {
-	if set.Extends != nil {
-		return set.Own
+	_, hasID := dataType.Field("id")
+	if set.Extends != nil || !hasID {
+		return RecordProperties(dataType, set.Own, false)
 	}
-	if _, hasID := dataType.Field("id"); !hasID {
-		return set.Own
-	}
-	return RecordProperties(set.Own, true)
+	return RecordProperties(dataType, set.Own, true)
 }
 
 // SetDoc returns the documentation of a set's type, named as the language names

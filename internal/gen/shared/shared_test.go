@@ -117,9 +117,10 @@ func TestRecordProperties(t *testing.T) {
 		{"id asked for last stays where it is", []string{"subject", "id"}, []string{"subject", "id"}},
 		{"nothing asked for", nil, []string{"id"}},
 	}
+	email, _ := spec.Standard().Object("Email")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := RecordProperties(tt.in, true)
+			got := RecordProperties(email, tt.in, true)
 			if strings.Join(got, ",") != strings.Join(tt.want, ",") {
 				t.Errorf("RecordProperties(%v) = %v, want %v", tt.in, got, tt.want)
 			}
@@ -132,7 +133,8 @@ func TestRecordProperties(t *testing.T) {
 // TypeScript pass.
 func TestRecordPropertiesLeavesItsInputAlone(t *testing.T) {
 	props := []string{"subject", "from"}
-	RecordProperties(props, true)
+	email, _ := spec.Standard().Object("Email")
+	RecordProperties(email, props, true)
 	if strings.Join(props, ",") != "subject,from" {
 		t.Errorf("the input became %v", props)
 	}
@@ -202,7 +204,44 @@ func TestSameNarrowingTellsNoListFromAnEmptyOne(t *testing.T) {
 // TestRecordPropertiesWithoutAnID checks a method that does not return the id
 // whatever it is asked for: the record holds what was asked for and no more.
 func TestRecordPropertiesWithoutAnID(t *testing.T) {
-	if got := RecordProperties([]string{"subject"}, false); strings.Join(got, ",") != "subject" {
+	email, _ := spec.Standard().Object("Email")
+	if got := RecordProperties(email, []string{"subject"}, false); strings.Join(got, ",") != "subject" {
 		t.Errorf("RecordProperties = %v, want subject alone", got)
+	}
+}
+
+// TestRecordPropertiesHoldTheFieldsDataComesBackAs checks a blob asked for its
+// data: the server answers under data:asText or data:asBase64, so the record
+// holds both, each picked by the server, and a field also asked for by its own
+// name is held once and comes back whatever the server would pick.
+func TestRecordPropertiesHoldTheFieldsDataComesBackAs(t *testing.T) {
+	blob, _ := spec.Standard().Object("BlobData")
+	tests := []struct {
+		in, want, picked string
+	}{
+		{"data,size", "id,data:asText,data:asBase64,size", "data:asText,data:asBase64"},
+		{"data:asText,data", "id,data:asText,data:asBase64", "data:asBase64"},
+		{"data:asBase64", "id,data:asBase64", ""},
+	}
+	for _, tt := range tests {
+		props := strings.Split(tt.in, ",")
+		got := RecordProperties(blob, props, true)
+		if strings.Join(got, ",") != tt.want {
+			t.Errorf("RecordProperties(%v) = %v, want %s", props, got, tt.want)
+		}
+		var picked []string
+		for _, name := range got {
+			if PickedByServer(blob, props, name) {
+				picked = append(picked, name)
+			}
+		}
+		if strings.Join(picked, ",") != tt.picked {
+			t.Errorf("asked for %v, the server picks %v, want %s", props, picked, tt.picked)
+		}
+	}
+	field, _ := blob.Field("data:asText")
+	if got := RecordFieldDoc(blob, []string{"data"}, field); !strings.HasSuffix(got,
+		"The server sends this or data:asBase64, whichever suits the value, so it may be absent.") {
+		t.Errorf("the doc of data:asText was %q", got)
 	}
 }
