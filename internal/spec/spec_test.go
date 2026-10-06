@@ -569,3 +569,28 @@ func TestResolvePatchReachesAHeaderField(t *testing.T) {
 		t.Error("a header field of a mailbox was resolved")
 	}
 }
+
+// TestDynamicFieldsAreTypedAsFarAsTheSpecificationsSay checks the type a
+// dynamic property resolves to: a digest of a blob is a string, the content of
+// one is asked for as data and held as data:asText or data:asBase64, so data
+// itself resolves to nothing, and a property a vendor's type names is a value of
+// any shape.
+func TestDynamicFieldsAreTypedAsFarAsTheSpecificationsSay(t *testing.T) {
+	s := Standard()
+	if got, err := s.ResolvePath("Blob/get", "/list/0/digest:sha"); err != nil || got.String() != "String" {
+		t.Errorf("digest:sha resolved to %v, %v, want String", got, err)
+	}
+	if _, err := s.ResolvePath("Blob/get", "/list/0/data"); err == nil {
+		t.Error("data resolved, though the record holds data:asText or data:asBase64 in its place")
+	}
+	if err := s.Extend(&Schema{
+		Capability: "urn:example:notes",
+		Types: []*SchemaType{{Name: "Note", Methods: []string{"get"}, Dynamic: []string{"meta:"},
+			Properties: []*SchemaField{{Name: "id", Type: "Id"}}}},
+	}); err != nil {
+		t.Fatalf("Extend: %v", err)
+	}
+	if got, err := s.ResolvePath("Note/get", "/list/0/meta:colour"); err != nil || got.String() != Any {
+		t.Errorf("meta:colour resolved to %v, %v, want Any", got, err)
+	}
+}

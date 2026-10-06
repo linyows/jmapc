@@ -176,9 +176,13 @@ func (o *Object) AcceptsDynamic(name string) bool {
 }
 
 // DynamicField returns a field for a property Dynamic says this type has, typed
-// as the name says: a header field in the form it asks for, and a digest or the
-// content of a blob as a string. It returns nil where the type has no such
-// property, and an error where the name is one but the form it asks for is not.
+// as far as the specifications say: a header field in the form it asks for, a
+// digest of a blob as a string, and anything else, such as the properties a
+// vendor's type names, as a value of any shape. The content of a blob is asked
+// for as data and comes back as data:asText or data:asBase64, which are fields
+// of their own, so data names nothing a record holds and has no field. It
+// returns nil where the type has no such property, and an error where the name
+// is one but the form it asks for is not.
 func (o *Object) DynamicField(name string) (*Field, error) {
 	if !o.AcceptsDynamic(name) {
 		return nil, nil
@@ -187,10 +191,15 @@ func (o *Object) DynamicField(name string) (*Field, error) {
 	if err != nil {
 		return nil, err
 	}
-	if header != nil {
+	switch {
+	case header != nil:
 		return &Field{Name: name, Type: header.Type}, nil
+	case o.Name == "BlobData" && strings.HasPrefix(name, "digest:"):
+		return &Field{Name: name, Type: String}, nil
+	case o.Name == "BlobData" && name == "data":
+		return nil, nil
 	}
-	return &Field{Name: name, Type: String}, nil
+	return &Field{Name: name, Type: Any}, nil
 }
 
 // PropertyNames returns the names of every property, sorted, for use in
