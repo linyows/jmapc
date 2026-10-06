@@ -24,21 +24,9 @@ type RequestGenerator struct {
 	Properties *request.PropertySets
 }
 
-// call holds the names settled for one method call.
+// call is what the Rust generator writes for one method call.
 type call struct {
-	responseType string
-	recordType   string
-	nestedType   string
-	accountIDVar string
-	// writesTypes says this call is the one that writes the types it names. A
-	// call reading the same records in the same shape as an earlier one shares
-	// its types rather than declaring them again.
-	writesTypes bool
-	// sharedRecord says the record type is one of the named sets, which the
-	// properties module declares rather than this one.
-	sharedRecord bool
-	// sharedNested says the same of the nested type.
-	sharedNested bool
+	shared.CallPlan
 }
 
 // plan is the naming decided for one request before any code is written.
@@ -136,70 +124,31 @@ func (g *RequestGenerator) plan() ([]*plan, error) {
 			p.paramsType = shared.Unique(taken, prefix+"Params")
 		}
 		p.creations = shared.Creations(taken, spec.RustConstName(q.Name)+"_", q.Creations, spec.RustConstName)
-		same := shared.SameNarrowing(q.Calls)
+		calls, capabilities := shared.PlanCalls(g.Spec, q, taken, shared.Namer{
+			Prefix:    prefix,
+			Field:     spec.RustTypeName,
+			Part:      spec.RustTypeName,
+			Set:       spec.RustTypeName,
+			Runtime:   spec.RustTypeName,
+			AccountID: accountIDVar,
+		})
 		for _, c := range q.Calls {
-			info := &call{}
-			switch {
-			case same[c] != nil && same[c] != c:
-				// Another call of this request reads the same records in the
-				// same shape, and one shape is one type.
-				*info = *p.calls[same[c]]
-				info.writesTypes = false
-			case c.PropertySet != nil:
-				// The set names the type, so every call asking for it answers
-				// with the one the properties module declares.
-				info.recordType = spec.RustTypeName(c.PropertySet.Name)
-				info.responseType = shared.Unique(taken, prefix+spec.RustTypeName(c.Field)+"Response")
-				info.writesTypes = true
-				info.sharedRecord = true
-			case c.Properties != nil || c.NestedProperties != nil:
-				info.recordType = shared.Unique(taken, prefix+spec.RustTypeName(c.Field)+spec.RustTypeName(c.Method.DataType))
-				info.responseType = shared.Unique(taken, prefix+spec.RustTypeName(c.Field)+"Response")
-				info.writesTypes = true
-			default:
-				info.responseType = spec.RustTypeName(c.Method.Response)
-			}
-			switch {
-			case c.NestedPropertySet != nil:
-				info.nestedType = spec.RustTypeName(c.NestedPropertySet.Name)
-				info.sharedNested = true
-			case c.NestedProperties != nil && info.writesTypes:
-				info.nestedType = shared.Unique(taken, prefix+spec.RustTypeName(c.Field)+spec.RustTypeName(c.Method.NestedType))
-			}
-			p.calls[c] = info
+			p.calls[c] = &call{CallPlan: *calls[c]}
 		}
+		p.sessionCapabilities = capabilities
 		if q.Pages != nil {
 			p.pagesType = shared.Unique(taken, prefix+"Pages")
 			p.pagesFunc = spec.RustName(p.pagesType)
 		}
 		if q.Returns != nil {
-			p.returnType = p.calls[q.Returns].responseType
+			p.returnType = p.calls[q.Returns].ResponseType
 		} else {
 			p.resultType = shared.Unique(taken, prefix+"Result")
 			p.returnType = p.resultType
 		}
-		g.planAccountIDs(p)
 		plans = append(plans, p)
 	}
 	return plans, nil
-}
-
-// planAccountIDs works out which calls need an accountId filling in, and from
-// which capability's primary account.
-func (g *RequestGenerator) planAccountIDs(p *plan) {
-	seen := make(map[string]bool)
-	for _, c := range p.q.Calls {
-		capability, needed := c.AccountIDCapability(g.Spec)
-		if !needed {
-			continue
-		}
-		if !seen[capability] {
-			seen[capability] = true
-			p.sessionCapabilities = append(p.sessionCapabilities, capability)
-		}
-		p.calls[c].accountIDVar = accountIDVar(capability)
-	}
-	sort.Strings(p.sessionCapabilities)
 }
 
 // accountIDVar names the local holding the primary account id for a capability.

@@ -63,7 +63,7 @@ func (g *RequestGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
 		fmt.Fprintf(buf, "  const out = {\n")
 		for _, c := range p.q.Calls {
 			fmt.Fprintf(buf, "    ...(answered(res, %[1]s) ? { %[2]s: decode<%[3]s>(req, res, %[1]s) } : {}),\n",
-				quote(c.ID), tsMemberName(c.Field), p.calls[c].responseType)
+				quote(c.ID), tsMemberName(c.Field), p.calls[c].ResponseType)
 		}
 		if p.q.CreatedIDs {
 			buf.WriteString("    createdIds: res.createdIds ?? {},\n")
@@ -105,7 +105,7 @@ func (g *RequestGenerator) setErrorChecks(p *plan) []setErrorCheck {
 			ch.object = "out." + tsMemberName(c.Field)
 		case c != p.q.Returns:
 			ch.object = fmt.Sprintf("refused%d", i)
-			ch.decode = p.calls[c].responseType
+			ch.decode = p.calls[c].ResponseType
 		}
 		checks = append(checks, ch)
 	}
@@ -188,7 +188,7 @@ func (g *RequestGenerator) writeInvocation(buf *bytes.Buffer, p *plan, c *reques
 		shared.WriteComment(buf, "      ", c.Comment)
 	}
 	fmt.Fprintf(buf, "      [%s, {\n", quote(c.Method.Name))
-	if v := p.calls[c].accountIDVar; v != "" {
+	if v := p.calls[c].AccountIDVar; v != "" {
 		fmt.Fprintf(buf, "        %s: %s,\n", quote(request.AccountIDArgument), v)
 	}
 	for _, field := range c.Args.Fields {

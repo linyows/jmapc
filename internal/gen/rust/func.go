@@ -49,7 +49,7 @@ func (g *RequestGenerator) writeUses(buf *bytes.Buffer, p *plan, body string) {
 	}
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
-		if info.recordType == "" {
+		if info.RecordType == "" {
 			// The shared response type comes from types.rs.
 			imports.types[spec.RustTypeName(c.Method.Response)] = true
 			continue
@@ -251,15 +251,15 @@ func (g *RequestGenerator) collectRecordTypes(c *request.Call, info *call, impor
 			imports.collect(f.ParsedType())
 		}
 	}
-	if dataType, ok := g.Spec.Object(c.Method.DataType); ok && !info.sharedRecord {
+	if dataType, ok := g.Spec.Object(c.Method.DataType); ok && !info.SharedRecord {
 		properties := c.Properties
 		if properties == nil {
 			properties = dataType.PropertyNames()
 		}
 		add(dataType, shared.RecordProperties(properties, c.Method.ReturnsID))
 	}
-	if info.nestedType != "" {
-		if nested, ok := g.Spec.Object(c.Method.NestedType); ok && !info.sharedNested {
+	if info.NestedType != "" {
+		if nested, ok := g.Spec.Object(c.Method.NestedType); ok && !info.SharedNested {
 			add(nested, c.NestedProperties)
 		}
 		// A narrowed type replaces the shared one, so that name is not brought
@@ -315,7 +315,7 @@ func (g *RequestGenerator) writeParams(buf *bytes.Buffer, p *plan) {
 func (g *RequestGenerator) writeNestedTypes(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
-		if info.nestedType == "" || info.sharedNested {
+		if info.NestedType == "" || info.SharedNested {
 			continue
 		}
 		nested, ok := g.Spec.Object(c.Method.NestedType)
@@ -323,15 +323,15 @@ func (g *RequestGenerator) writeNestedTypes(buf *bytes.Buffer, p *plan) {
 			continue
 		}
 		writeDoc(buf, "", fmt.Sprintf("%s holds the properties of %s that the %s call in %s asks for.",
-			info.nestedType, nested.Name, c.Method.Name, p.q.Name))
+			info.NestedType, nested.Name, c.Method.Name, p.q.Name))
 		writeDerive(buf)
 		buf.WriteString("#[serde(rename_all = \"camelCase\")]\n")
-		fmt.Fprintf(buf, "pub struct %s {\n", info.nestedType)
+		fmt.Fprintf(buf, "pub struct %s {\n", info.NestedType)
 		for i, name := range c.NestedProperties {
 			if i > 0 {
 				buf.WriteString("\n")
 			}
-			g.writeRecordField(buf, nested, name, info.nestedType, c.Method.NestedType)
+			g.writeRecordField(buf, nested, name, info.NestedType, c.Method.NestedType)
 		}
 		buf.WriteString("}\n\n")
 	}
@@ -341,7 +341,7 @@ func (g *RequestGenerator) writeNestedTypes(buf *bytes.Buffer, p *plan) {
 func (g *RequestGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
-		if info.recordType == "" || !info.writesTypes || info.sharedRecord {
+		if info.RecordType == "" || !info.WritesTypes || info.SharedRecord {
 			continue
 		}
 		dataType, ok := g.Spec.Object(c.Method.DataType)
@@ -349,10 +349,10 @@ func (g *RequestGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 			continue
 		}
 		writeDoc(buf, "", fmt.Sprintf("%s holds the properties of %s that the %s call in %s asks for.",
-			info.recordType, dataType.Name, c.Method.Name, p.q.Name))
+			info.RecordType, dataType.Name, c.Method.Name, p.q.Name))
 		writeDerive(buf)
 		buf.WriteString("#[serde(rename_all = \"camelCase\")]\n")
-		fmt.Fprintf(buf, "pub struct %s {\n", info.recordType)
+		fmt.Fprintf(buf, "pub struct %s {\n", info.RecordType)
 		properties := c.Properties
 		if properties == nil {
 			properties = dataType.PropertyNames()
@@ -361,7 +361,7 @@ func (g *RequestGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 			if i > 0 {
 				buf.WriteString("\n")
 			}
-			g.writeRecordField(buf, dataType, name, info.nestedType, c.Method.NestedType)
+			g.writeRecordField(buf, dataType, name, info.NestedType, c.Method.NestedType)
 		}
 		buf.WriteString("}\n\n")
 	}
@@ -420,7 +420,7 @@ func writeNestedMember(buf *bytes.Buffer, owner, wireName string, t *spec.Type, 
 func (g *RequestGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 	for _, c := range p.q.Calls {
 		info := p.calls[c]
-		if info.recordType == "" || !info.writesTypes {
+		if info.RecordType == "" || !info.WritesTypes {
 			continue
 		}
 		respType, err := g.Spec.ResponseOf(c.Method.Name)
@@ -428,10 +428,10 @@ func (g *RequestGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 			continue
 		}
 		writeDoc(buf, "", fmt.Sprintf("%s holds the response to the %s call in %s.",
-			info.responseType, c.Method.Name, p.q.Name))
+			info.ResponseType, c.Method.Name, p.q.Name))
 		writeDerive(buf)
 		buf.WriteString("#[serde(rename_all = \"camelCase\")]\n")
-		fmt.Fprintf(buf, "pub struct %s {\n", info.responseType)
+		fmt.Fprintf(buf, "pub struct %s {\n", info.ResponseType)
 		for i, field := range respType.Fields {
 			if i > 0 {
 				buf.WriteString("\n")
@@ -440,7 +440,7 @@ func (g *RequestGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 			if field.Name == c.Method.ResultProperty {
 				ident := spec.RustFieldName(field.Name)
 				writeSerdeAttr(buf, "    ", renameAndDefault(field.Name, ident))
-				fmt.Fprintf(buf, "    pub %s: Vec<%s>,\n", ident, info.recordType)
+				fmt.Fprintf(buf, "    pub %s: Vec<%s>,\n", ident, info.RecordType)
 				continue
 			}
 			writeMember(buf, respType.Name, field.Name, field.ParsedType(), false, true)
@@ -465,7 +465,7 @@ func (g *RequestGenerator) writeResultType(buf *bytes.Buffer, p *plan) {
 			buf.WriteString("\n")
 		}
 		writeDoc(buf, "    ", fmt.Sprintf("The response to the %s call, made as %q.", c.Method.Name, c.ID))
-		fmt.Fprintf(buf, "    pub %s: %s,\n", spec.RustFieldName(c.Field), p.calls[c].responseType)
+		fmt.Fprintf(buf, "    pub %s: %s,\n", spec.RustFieldName(c.Field), p.calls[c].ResponseType)
 	}
 	if p.q.CreatedIDs {
 		buf.WriteString("\n")

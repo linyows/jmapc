@@ -106,7 +106,7 @@ func (g *RequestGenerator) writeSetErrorChecks(buf *bytes.Buffer, p *plan) {
 		case p.q.Returns == nil:
 			ch.prefix = "out." + c.Field + "."
 		case c != p.q.Returns:
-			ch.decode = p.calls[c].responseType
+			ch.decode = p.calls[c].ResponseType
 			ch.prefix = "" // named below, once the variable exists
 		}
 		checks = append(checks, ch)
@@ -200,7 +200,7 @@ func (g *RequestGenerator) writeArgVars(buf *bytes.Buffer, p *plan) {
 		}
 		name := argsVar(c)
 		fmt.Fprintf(buf, "\t%s := map[string]any{\n", name)
-		if expr := p.calls[c].accountIDExpr; expr != "" {
+		if expr := p.calls[c].AccountIDVar; expr != "" {
 			fmt.Fprintf(buf, "\t\t%q: %s,\n", request.AccountIDArgument, expr)
 		}
 		for _, field := range c.Args.Fields {
@@ -265,7 +265,7 @@ func (g *RequestGenerator) writeInvocation(buf *bytes.Buffer, p *plan, c *reques
 		return
 	}
 	fmt.Fprintf(buf, "\t\t\t{Name: %q, CallID: %q, Args: map[string]any{\n", c.Method.Name, c.ID)
-	if expr := p.calls[c].accountIDExpr; expr != "" {
+	if expr := p.calls[c].AccountIDVar; expr != "" {
 		fmt.Fprintf(buf, "\t\t\t\t%q: %s,\n", request.AccountIDArgument, expr)
 	}
 	for _, field := range c.Args.Fields {
@@ -437,7 +437,7 @@ func (g *RequestGenerator) writeWatchDoc(buf *bytes.Buffer, p *plan) {
 // so a watch has to know which one before it makes any request at all.
 func (g *RequestGenerator) watchAccount(buf *bytes.Buffer, p *plan) string {
 	watched := p.q.Watches
-	if expr := p.calls[watched].accountIDExpr; expr != "" {
+	if expr := p.calls[watched].AccountIDVar; expr != "" {
 		capability := watched.Method.Capability
 		if capability == "" {
 			capability = spec.CapabilityCore
