@@ -100,9 +100,10 @@ type CallInfo struct {
 type ResponseInfo struct {
 	// Duration is the time the request took, including waits and retries.
 	Duration time.Duration
-	// Err is the error returned to the caller, and nil where the request was
-	// answered. Method-level errors are not reported here; Errors holds
-	// those.
+	// Err is the error returned to the caller, apart from the method-level
+	// errors, which Errors holds. It is nil where the request was answered
+	// whole, and holds what went wrong in joining the parts of a /get sent in
+	// several requests, where the answer came but could not be put together.
 	Err error
 	// Errors holds the method-level errors of an answered request. The other
 	// calls of the request may still have succeeded.

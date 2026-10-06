@@ -300,3 +300,27 @@ func TestAPartTheServerRefusedFailsTheCall(t *testing.T) {
 		t.Errorf("the error is reported under %q, want fetch", errs[0].CallID)
 	}
 }
+
+// TestTheObserverIsToldWhatDoReturns checks the report of a request whose parts
+// could not be put together: the observer is told the error Do returns, as
+// ResponseInfo.Err says it is, rather than that the request went well.
+func TestTheObserverIsToldWhatDoReturns(t *testing.T) {
+	ts := newSplitServer(t, 2, 16)
+	ts.state = func(request int) string { return fmt.Sprintf("s%d", request) }
+	rec := &recorder{}
+	c := ts.client(WithSplitGets(), WithObserver(rec.observer()))
+
+	_, err := c.Do(context.Background(), get("m1", "m2", "m3"))
+	var changed *StateChanged
+	if !errors.As(err, &changed) {
+		t.Fatalf("Do returned %v, want a *StateChanged", err)
+	}
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	if len(rec.responses) != 1 {
+		t.Fatalf("the observer was told of %d responses, want 1", len(rec.responses))
+	}
+	if got := rec.responses[0].Err; !errors.As(got, &changed) {
+		t.Errorf("the observer was told %v, want the *StateChanged Do returned", got)
+	}
+}
