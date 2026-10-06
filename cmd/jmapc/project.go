@@ -4,7 +4,8 @@ import "flag"
 
 // projectFlags are the flags the commands reading a project's settings take:
 // the settings file, the directory holding the requests, and the schemas of
-// vendor extensions. Each overrides what the settings file says.
+// vendor extensions. The directory replaces the one the settings file names,
+// and the schemas are read as well as the ones it names.
 type projectFlags struct {
 	config   *string
 	requests *string
@@ -22,7 +23,8 @@ func addProjectFlags(fs *flag.FlagSet, requests bool) *projectFlags {
 	return f
 }
 
-// settings reads the settings file and lays the flags over it. The defaults
+// settings reads the settings file and lays the flags over it: -requests in
+// place of what it says, and -schema after the schemas it lists. The defaults
 // are left to the caller, which may have flags of its own to lay over first.
 func (f *projectFlags) settings() (*Config, error) {
 	cfg, err := loadConfig(*f.config)
