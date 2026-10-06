@@ -313,6 +313,21 @@ func (c *checker) object(t *spec.Type, raw json.RawMessage, where string) Node {
 				c.errorf(where+"."+key, hintFor(key, o.PropertyNames()), "%s has no property %q", o.Name, key)
 				continue
 			}
+			// A record written out takes the header fields of a message, which
+			// RFC 8621, Section 4.6 lets an email be created with; the other
+			// dynamic properties, a digest or a vendor's, are there to be read.
+			header, _ := spec.ParseHeaderProperty(key)
+			if header == nil {
+				c.errorf(where+"."+key, "", "%s is a property to ask %s for, not one to write", key, o.Name)
+				continue
+			}
+			// A Content-* header field belongs to a body part, which says what
+			// it holds; the message as a whole is not given one.
+			if o.Name == "Email" && strings.HasPrefix(strings.ToLower(header.Name), "content-") {
+				c.errorf(where+"."+key, "set it on the body part it describes",
+					"%s is a header field of a body part, which RFC 8621 does not let an Email be given", header.Name)
+				continue
+			}
 			field = dynamic
 		}
 		elemType := field.ParsedType()

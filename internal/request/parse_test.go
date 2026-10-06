@@ -317,6 +317,12 @@ func TestParseErrors(t *testing.T) {
 		src:  `{"methodCalls": [["Email/get", {"ids": ["e1"], "properties": ["data"]}, "c0"]]}`,
 		want: `Email has no property "data"`,
 	}, {
+		// RFC 8621, Section 4.6: a Content-* header field belongs to a part.
+		name: "Content-Type given to the email as a whole",
+		src: `{"methodCalls": [["Email/set", {"create": {"draft": {
+			"mailboxIds": {"m1": true}, "header:Content-Type:asRaw": "text/plain"}}}, "c0"]]}`,
+		want: `Content-Type is a header field of a body part`,
+	}, {
 		name: "header field created in a form the specification does not define",
 		src: `{"methodCalls": [["Email/set", {"create": {"draft": {
 			"mailboxIds": {"m1": true}, "header:X-Foo:asBogus": "bar"}}}, "c0"]]}`,
@@ -1334,6 +1340,14 @@ func TestAPatchSetsAnEnumeratedKey(t *testing.T) {
 	}}}, "c0"]]}`)
 }
 
+// TestABodyPartIsCreatedWithAContentHeader checks that a Content-* header field
+// may be given to a body part, which is where RFC 8621 puts it.
+func TestABodyPartIsCreatedWithAContentHeader(t *testing.T) {
+	parse(t, "PartWithHeader"+Extension, `{"methodCalls": [["Email/set", {"create": {"draft": {
+	  "mailboxIds": {"m1": true},
+	  "bodyStructure": {"partId": "1", "header:Content-Language:asText": "en"}}}}, "c0"]]}`)
+}
+
 // TestAnEmailIsCreatedWithAHeaderField checks a header field set when an email
 // is created, which RFC 8621, Section 4.6 allows in any form that can be
 // written, and a back reference reading one back.
@@ -2167,5 +2181,27 @@ func TestAPatchKeyIsReadAsThePointerToken(t *testing.T) {
 	if _, err := p.Parse("Enable"+Extension, []byte(`{"methodCalls": [["Device/set",
 	  {"update": {"d1": {"features/audio": true}}}, "c0"]]}`)); err == nil {
 		t.Error("a key the values do not hold passed")
+	}
+}
+
+// TestAVendorDynamicPropertyIsReadNotWritten checks a dynamic property a vendor's
+// type names: a /get may ask for it, and a record written out may not set it,
+// since nothing says it is one to write.
+func TestAVendorDynamicPropertyIsReadNotWritten(t *testing.T) {
+	s := spec.Standard()
+	if err := s.Extend(&spec.Schema{
+		Capability: "urn:example:notes",
+		Types: []*spec.SchemaType{{Name: "Note", Methods: []string{"get", "set"}, Dynamic: []string{"meta:"},
+			Properties: []*spec.SchemaField{{Name: "id", Type: "Id", ServerSet: true}}}},
+	}); err != nil {
+		t.Fatalf("Extend: %v", err)
+	}
+	p := NewParser(s)
+	if _, err := p.Parse("ReadMeta"+Extension, []byte(`{"methodCalls": [["Note/get", {"ids": ["n1"], "properties": ["meta:colour"]}, "c0"]]}`)); err != nil {
+		t.Errorf("asking for meta:colour: %v", err)
+	}
+	_, err := p.Parse("WriteMeta"+Extension, []byte(`{"methodCalls": [["Note/set", {"create": {"n": {"meta:colour": "red"}}}, "c0"]]}`))
+	if err == nil || !strings.Contains(err.Error(), "not one to write") {
+		t.Errorf("writing meta:colour: %v, want it refused", err)
 	}
 }

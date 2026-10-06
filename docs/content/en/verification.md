@@ -16,7 +16,8 @@ Everything below is a compile-time failure rather than a server round trip:
 - a property naming a header field is asked of an `Email` or an
   `EmailBodyPart`, the types that have header fields, and asks for a parsed
   form the specification defines, so `header:List-Id:asText` is a string and
-  `header:To:asAddresses` a list of addresses
+  `header:To:asAddresses` a list of addresses; an email created with one is
+  given no `Content-*` field, which belongs to a body part
 - a `PatchObject` points at properties the record being patched actually has,
   and sets them to values of the right type, its keys written the way RFC 8620
   writes them: the leading `/` of the pointer is implicit, so a keyword is set
