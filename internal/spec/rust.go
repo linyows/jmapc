@@ -5,43 +5,10 @@ import (
 	"strings"
 )
 
-// rustPrimitives maps every primitive JMAP type to the Rust type it becomes.
-// The types that carry a format rather than a shape — an id, a date, a
-// duration — become named aliases of String, so that the format is visible in
-// a signature and a reader can see what a bare string is standing for.
-//
-// A date stays a string rather than becoming a chrono type: the generated code
-// takes on serde and nothing else, and a caller who wants a calendar type can
-// parse the string with whichever crate they already use.
-var rustPrimitives = map[string]string{
-	String:      "String",
-	Boolean:     "bool",
-	Number:      "f64",
-	Int:         "i64",
-	UnsignedInt: "u64",
-	IdType:      "Id",
-	DateType:    "Date",
-	UTCDateType: "UtcDate",
-	Any:         "serde_json::Value",
-
-	LocalDateTimeType:  "LocalDateTime",
-	DurationType:       "Duration",
-	SignedDurationType: "SignedDuration",
-	TimeZoneIDType:     "TimeZoneId",
-}
-
 // RustPrimitiveAliases returns the named string aliases the generated types
 // need, in a stable order, each with what it is an alias for.
 func RustPrimitiveAliases() []struct{ Name, Doc string } {
-	return []struct{ Name, Doc string }{
-		{"Id", "An id assigned by the server: 1 to 255 characters from A-Z, a-z, 0-9, _ and -, not beginning with - or #."},
-		{"UtcDate", "A date and time in UTC, written as 2006-01-02T15:04:05Z."},
-		{"Date", "A date and time with an offset, written as 2006-01-02T15:04:05Z07:00."},
-		{"LocalDateTime", "A date and time with no zone at all, written as 2006-01-02T15:04:05. What it means depends on the time zone the enclosing object gives."},
-		{"Duration", "A length of time in the ISO 8601 form, such as PT1H30M or P1D. Not a number of milliseconds: a day is not always 24 hours."},
-		{"SignedDuration", "A Duration that may be negative, which is how an alert says it fires before the event it belongs to."},
-		{"TimeZoneId", "A time zone from the IANA database, such as Europe/London, or a name beginning with / that refers to a zone the event itself defines."},
-	}
+	return primitiveAliases(func(p primitive) string { return p.rust })
 }
 
 // RustType renders t as a Rust type expression. Nullability is Option, a map
@@ -61,8 +28,8 @@ func (t *Type) RustType() string {
 	case t.IsUnion():
 		base = RustUnionName(t)
 	default:
-		if p, ok := rustPrimitives[t.Name]; ok {
-			base = p
+		if p, ok := primitives[t.Name]; ok {
+			base = p.rust
 		} else {
 			base = RustTypeName(t.Name)
 		}

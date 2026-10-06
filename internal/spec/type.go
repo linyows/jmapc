@@ -26,30 +26,58 @@ const (
 	TimeZoneIDType     = "TimeZoneId"
 )
 
-// primitive records how a primitive JMAP type is spelled in Go. Named types
-// live in the jmapc package and so need qualifying when the generated code
-// lives elsewhere; the builtins never do.
+// primitive records how a primitive JMAP type is spelled in each language a
+// client is generated in. In Go, named types live in the jmapc package and so
+// need qualifying when the generated code lives elsewhere; the builtins never
+// do. Rust and TypeScript declare a type of their own, an alias of a string,
+// for each primitive that is a string with a form of its own, and alias says
+// what that form is.
 type primitive struct {
 	goName    string
 	qualified bool
+	rust      string
+	ts        string
+	alias     string
 }
 
-// primitives maps every primitive type name to the Go type it becomes.
+// primitives maps every primitive type name to the types it becomes.
 var primitives = map[string]primitive{
-	String:      {goName: "string"},
-	Boolean:     {goName: "bool"},
-	Number:      {goName: "float64"},
-	Int:         {goName: "Int", qualified: true},
-	UnsignedInt: {goName: "UnsignedInt", qualified: true},
-	IdType:      {goName: "ID", qualified: true},
-	DateType:    {goName: "Date", qualified: true},
-	UTCDateType: {goName: "UTCDate", qualified: true},
-	Any:         {goName: "any"},
+	String:      {goName: "string", rust: "String", ts: "string"},
+	Boolean:     {goName: "bool", rust: "bool", ts: "boolean"},
+	Number:      {goName: "float64", rust: "f64", ts: "number"},
+	Int:         {goName: "Int", qualified: true, rust: "i64", ts: "number"},
+	UnsignedInt: {goName: "UnsignedInt", qualified: true, rust: "u64", ts: "number"},
+	IdType: {goName: "ID", qualified: true, rust: "Id", ts: "Id",
+		alias: "An id assigned by the server: 1 to 255 characters from A-Z, a-z, 0-9, _ and -, not beginning with - or #."},
+	DateType: {goName: "Date", qualified: true, rust: "Date", ts: "Date",
+		alias: "A date and time with an offset, written as 2006-01-02T15:04:05Z07:00."},
+	UTCDateType: {goName: "UTCDate", qualified: true, rust: "UtcDate", ts: "UTCDate",
+		alias: "A date and time in UTC, written as 2006-01-02T15:04:05Z."},
+	Any: {goName: "any", rust: "serde_json::Value", ts: "unknown"},
 
-	LocalDateTimeType:  {goName: "LocalDateTime", qualified: true},
-	DurationType:       {goName: "Duration", qualified: true},
-	SignedDurationType: {goName: "SignedDuration", qualified: true},
-	TimeZoneIDType:     {goName: "TimeZoneID", qualified: true},
+	LocalDateTimeType: {goName: "LocalDateTime", qualified: true, rust: "LocalDateTime", ts: "LocalDateTime",
+		alias: "A date and time with no zone at all, written as 2006-01-02T15:04:05. What it means depends on the time zone the enclosing object gives."},
+	DurationType: {goName: "Duration", qualified: true, rust: "Duration", ts: "Duration",
+		alias: "A length of time in the ISO 8601 form, such as PT1H30M or P1D. Not a number of milliseconds: a day is not always 24 hours."},
+	SignedDurationType: {goName: "SignedDuration", qualified: true, rust: "SignedDuration", ts: "SignedDuration",
+		alias: "A Duration that may be negative, which is how an alert says it fires before the event it belongs to."},
+	TimeZoneIDType: {goName: "TimeZoneID", qualified: true, rust: "TimeZoneId", ts: "TimeZoneId",
+		alias: "A time zone from the IANA database, such as Europe/London, or a name beginning with / that refers to a zone the event itself defines."},
+}
+
+// aliased lists the primitives Rust and TypeScript declare an alias for, in the
+// order the aliases are written.
+var aliased = []string{IdType, UTCDateType, DateType, LocalDateTimeType, DurationType, SignedDurationType, TimeZoneIDType}
+
+// primitiveAliases returns the aliases a language declares, named as name says
+// it names them, each with what it is an alias for.
+func primitiveAliases(name func(primitive) string) []struct{ Name, Doc string } {
+	out := make([]struct{ Name, Doc string }, len(aliased))
+	for i, t := range aliased {
+		p := primitives[t]
+		out[i] = struct{ Name, Doc string }{name(p), p.alias}
+	}
+	return out
 }
 
 // Type is a parsed JMAP type expression. The surface syntax follows the
