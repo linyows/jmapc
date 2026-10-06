@@ -43,6 +43,10 @@ type SchemaType struct {
 	// Arguments adds extra arguments to the type's standard methods, keyed by
 	// method name, such as "query".
 	Arguments map[string][]*SchemaField `json:"arguments"`
+	// Dynamic lists the properties beyond its fields a /get may ask the type
+	// for, as Object.Dynamic does: an entry ending in a colon stands for every
+	// name it begins, and any other for a name of its own.
+	Dynamic []string `json:"dynamic"`
 }
 
 // SchemaField is one property of a type, or one argument of a method.
@@ -271,11 +275,20 @@ func (s *Spec) addSchemaType(sc *Schema, t *SchemaType) error {
 	if doc == "" {
 		doc = t.Name + " is a type defined by " + capabilityOr(t.Capability, sc.Capability) + "."
 	}
+	for _, d := range t.Dynamic {
+		if d == "" || d == ":" {
+			return fmt.Errorf("%s names an empty dynamic property", t.Name)
+		}
+		if hasField(fields, d) {
+			return fmt.Errorf("%s names %q as a dynamic property, and has a property of that name", t.Name, d)
+		}
+	}
 	o := s.AddObject(&Object{
 		Name:       t.Name,
 		Doc:        doc,
 		Capability: capabilityOr(t.Capability, sc.Capability),
 		Fields:     fields,
+		Dynamic:    t.Dynamic,
 	})
 	for _, sp := range t.Sort {
 		if sp.Name == "" {

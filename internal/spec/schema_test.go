@@ -345,3 +345,25 @@ func TestExtendAddsArguments(t *testing.T) {
 		t.Errorf("Note/get has no includeArchived argument (has %v)", args.PropertyNames())
 	}
 }
+
+// TestExtendTakesDynamicProperties checks a vendor type naming properties a
+// /get may ask for beyond its fields, which the catalogue then accepts of it
+// as it does a header field of an Email.
+func TestExtendTakesDynamicProperties(t *testing.T) {
+	s, err := extend(t, `{"capability": "urn:x:y", "types": [
+		{"name": "Note", "properties": [{"name": "id", "type": "Id"}], "dynamic": ["meta:"]}
+	]}`)
+	if err != nil {
+		t.Fatalf("Extend: %v", err)
+	}
+	note, _ := s.Object("Note")
+	if !note.AcceptsDynamic("meta:colour") || note.AcceptsDynamic("header:Subject") {
+		t.Errorf("Note accepts meta:colour %v, header:Subject %v; want true and false",
+			note.AcceptsDynamic("meta:colour"), note.AcceptsDynamic("header:Subject"))
+	}
+	if _, err := extend(t, `{"capability": "urn:x:y", "types": [
+		{"name": "Note", "properties": [{"name": "id", "type": "Id"}], "dynamic": ["id"]}
+	]}`); err == nil || !strings.Contains(err.Error(), "has a property of that name") {
+		t.Errorf("a dynamic property named as a field: %v, want it refused", err)
+	}
+}
