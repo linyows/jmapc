@@ -203,3 +203,61 @@ func TestRunWithoutAServer(t *testing.T) {
 		t.Errorf("err = %v, want the missing server reported", err)
 	}
 }
+
+// TestRunKeepsCredentialsOutOfErrors checks that a malformed -user is reported
+// without its value: a value with no colon may be nothing but the password.
+func TestRunKeepsCredentialsOutOfErrors(t *testing.T) {
+	dir := workspace(t, map[string]string{"requests/SearchMailboxes.jmap.json": searchMailboxes})
+	t.Setenv("JMAP_TOKEN", "")
+	t.Setenv("JMAP_USER", "supersecret")
+	_, errOut, err := capture(t, []string{"run", "SearchMailboxes", "-requests", filepath.Join(dir, "requests"),
+		"-session", "http://127.0.0.1:1/.well-known/jmap", "-p", "name=Work", "-p", "limit=3"})
+	if err == nil || !strings.Contains(err.Error(), "user:password") {
+		t.Fatalf("err = %v, want the form of -user reported", err)
+	}
+	if strings.Contains(err.Error()+errOut, "supersecret") {
+		t.Errorf("the credentials were printed: %v\n%s", err, errOut)
+	}
+}
+
+// TestRunPrefersAFlagToTheEnvironment checks that credentials given on the
+// command line are the ones sent, where the environment holds the other kind.
+func TestRunPrefersAFlagToTheEnvironment(t *testing.T) {
+	dir := workspace(t, map[string]string{"requests/SearchMailboxes.jmap.json": searchMailboxes})
+	var auth string
+	srv := server(t, func(w http.ResponseWriter, body []byte) {
+		fmt.Fprint(w, `{"sessionState":"sess1","methodResponses":[
+			["Mailbox/query", {"accountId": "a1", "queryState": "q1", "canCalculateChanges": false,
+			                   "position": 0, "ids": []}, "search"]]}`)
+	})
+	// The session is fetched first, and with the same credentials as the rest.
+	inner := srv.Config.Handler
+	srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if auth == "" {
+			auth = r.Header.Get("Authorization")
+		}
+		inner.ServeHTTP(w, r)
+	})
+
+	t.Setenv("JMAP_TOKEN", "from-the-environment")
+	_, _, err := capture(t, []string{"run", "SearchMailboxes", "-requests", filepath.Join(dir, "requests"),
+		"-session", srv.URL + "/.well-known/jmap", "-user", "alice:pw", "-p", "name=Work", "-p", "limit=3"})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if !strings.HasPrefix(auth, "Basic ") {
+		t.Errorf("Authorization = %q, want the -user given on the command line", auth)
+	}
+}
+
+// TestRunRefusesTwoKindsOfCredentials checks that -token and -user given
+// together are refused rather than one of them dropped without a word.
+func TestRunRefusesTwoKindsOfCredentials(t *testing.T) {
+	dir := workspace(t, map[string]string{"requests/SearchMailboxes.jmap.json": searchMailboxes})
+	_, _, err := capture(t, []string{"run", "SearchMailboxes", "-requests", filepath.Join(dir, "requests"),
+		"-session", "http://127.0.0.1:1/.well-known/jmap", "-token", "t", "-user", "alice:pw",
+		"-p", "name=Work", "-p", "limit=3"})
+	if err == nil || !strings.Contains(err.Error(), "both given") {
+		t.Errorf("err = %v, want the two flags refused", err)
+	}
+}

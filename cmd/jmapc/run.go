@@ -77,6 +77,9 @@ func runRequest(args []string) error {
 		}
 		return err
 	}
+	if err := chooseCredentials(fs, token, user); err != nil {
+		return err
+	}
 	if name == "" {
 		name = fs.Arg(0)
 	}
@@ -267,6 +270,25 @@ func printRequest(catalogue *spec.Spec, q *request.Request, values map[string]wi
 	return nil
 }
 
+// chooseCredentials settles which credentials a command sends, once its flags
+// are parsed. Each flag falls back to its environment variable, and a flag given
+// on the command line is the more deliberate of the two: -user is what is sent
+// where JMAP_TOKEN is set as well. The two flags given together are refused
+// rather than one of them ignored.
+func chooseCredentials(fs *flag.FlagSet, token, user *string) error {
+	given := make(map[string]bool)
+	fs.Visit(func(f *flag.Flag) { given[f.Name] = true })
+	switch {
+	case given["token"] && given["user"]:
+		return errors.New("-token and -user were both given; pass one of them")
+	case given["user"]:
+		*token = ""
+	case given["token"]:
+		*user = ""
+	}
+	return nil
+}
+
 // newClient builds the client the run sends through.
 func newClient(session, token, user string) (*jmapc.Client, error) {
 	if session == "" {
@@ -282,7 +304,9 @@ func newClient(session, token, user string) (*jmapc.Client, error) {
 	case user != "":
 		name, password, ok := strings.Cut(user, ":")
 		if !ok {
-			return nil, fmt.Errorf("-user %s: credentials are given as user:password", user)
+			// The value is left out of the message: without its colon there
+			// is no telling which part of it is the password.
+			return nil, errors.New("-user takes credentials as user:password, and the value given has no colon")
 		}
 		opts = append(opts, jmapc.WithBasicAuth(name, password))
 	}

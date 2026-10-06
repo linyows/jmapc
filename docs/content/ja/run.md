@@ -18,6 +18,9 @@ jmapc: parameter limit: "soon" is not a whole number
 セッションのURLでも、それが置かれているホスト名でも構いません。
 資格情報は`-token`か`-user`です。
 いずれも環境変数`$JMAP_SESSION_URL`、`$JMAP_TOKEN`、`$JMAP_USER`にフォールバックするので、トークンをシェルの履歴に残さずに済みます。
+コマンドラインで渡したフラグは、もう一方の種類の環境変数より優先されます。
+`$JMAP_TOKEN`が設定されていても、`-user`を渡せば`-user`が送られます。
+`-token`と`-user`を両方渡すとエラーになります。
 リクエストが省いたaccount idは、生成された関数がそうするのと同じように、セッションから引かれます。
 `-account`を渡せばそちらが使われます。
 `_createdIds`を指定したリクエストには、先行するリクエストのcreation idを`-created-id name=id`の形で1つずつ渡します。
