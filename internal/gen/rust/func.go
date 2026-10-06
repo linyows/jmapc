@@ -96,7 +96,7 @@ func (g *RequestGenerator) writeUses(buf *bytes.Buffer, p *plan, body string) {
 	}
 	// The sets come before the data model, which is the order rustfmt sorts
 	// the paths of a block into.
-	if sets := g.setsUsed(p); len(sets) > 0 {
+	if sets := shared.SetsUsed(p.q, spec.RustTypeName); len(sets) > 0 {
 		writeUse(buf, "super::"+PropertiesModule, sets)
 	}
 	if len(used) > 0 {

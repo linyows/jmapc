@@ -42,7 +42,7 @@ func (g *RequestGenerator) writePropertyImports(buf *bytes.Buffer, body string) 
 		if !ok {
 			continue
 		}
-		for _, name := range setProperties(set, dataType) {
+		for _, name := range shared.SetProperties(set, dataType) {
 			field, known := dataType.Field(name)
 			if !known {
 				if header, err := spec.ParseHeaderProperty(name); err == nil && header != nil {
@@ -72,65 +72,17 @@ func (g *RequestGenerator) writePropertySet(buf *bytes.Buffer, set *request.Prop
 	if !ok {
 		return
 	}
-	shared.WriteComment(buf, "", propertySetDoc(set))
+	shared.WriteComment(buf, "", shared.SetDoc(set, set.Name))
 	if set.Extends != nil {
 		fmt.Fprintf(buf, "export interface %s extends %s {\n", set.Name, set.Extends.Name)
 	} else {
 		fmt.Fprintf(buf, "export interface %s {\n", set.Name)
 	}
-	for i, name := range setProperties(set, dataType) {
+	for i, name := range shared.SetProperties(set, dataType) {
 		if i > 0 {
 			buf.WriteString("\n")
 		}
 		g.writeRecordField(buf, dataType, name, "", "")
 	}
 	buf.WriteString("}\n\n")
-}
-
-// setsUsed returns the sets a request asks for, sorted, so that the module
-// brings in the ones it names and no others.
-func (g *RequestGenerator) setsUsed(p *plan) []string {
-	names := map[string]bool{}
-	for _, c := range p.q.Calls {
-		if c.PropertySet != nil {
-			names[c.PropertySet.Name] = true
-		}
-		if c.NestedPropertySet != nil {
-			names[c.NestedPropertySet.Name] = true
-		}
-	}
-	out := make([]string, 0, len(names))
-	for name := range names {
-		out = append(out, name)
-	}
-	sort.Strings(out)
-	return out
-}
-
-// setProperties returns the properties the type for a set declares itself: its
-// own, and the id a /get answers with whether or not it was asked for.
-//
-// The id belongs to the set that declares no base, since that is the one the
-// others extend, and only to a set narrowing a type that has one: a set
-// narrowing the body parts of an Email describes something a record holds
-// rather than a record.
-func setProperties(set *request.PropertySet, dataType *spec.Object) []string {
-	if set.Extends != nil {
-		return set.Own
-	}
-	if _, hasID := dataType.Field("id"); !hasID {
-		return set.Own
-	}
-	return shared.RecordProperties(set.Own, true)
-}
-
-// propertySetDoc is the comment the type for a set carries: what the author
-// said it is for, and what asking for it gets.
-func propertySetDoc(set *request.PropertySet) string {
-	asked := fmt.Sprintf("%s holds the properties of %s that a call asking for @%s receives.",
-		set.Name, set.Type, set.Name)
-	if set.Doc == "" {
-		return asked
-	}
-	return set.Doc + "\n\n" + asked
 }

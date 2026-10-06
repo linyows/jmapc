@@ -78,7 +78,7 @@ func (g *RequestGenerator) writeImports(buf *bytes.Buffer, p *plan) {
 		sort.Strings(sorted)
 		fmt.Fprintf(buf, "import type { %s } from \"./types.js\"\n", strings.Join(sorted, ", "))
 	}
-	if sets := g.setsUsed(p); len(sets) > 0 {
+	if sets := shared.SetsUsed(p.q, func(name string) string { return name }); len(sets) > 0 {
 		fmt.Fprintf(buf, "import type { %s } from \"./%s.js\"\n", strings.Join(sets, ", "), PropertiesModule)
 	}
 	buf.WriteString("\n")
