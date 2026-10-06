@@ -281,17 +281,9 @@ func (c *Client) getSession(ctx context.Context) (*Session, error) {
 		return nil, fmt.Errorf("jmapc: building session request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
-	resp, err := c.sendWithRetry(req, KindSession)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, c.requestError(resp)
-	}
 	var s Session
-	if err := json.NewDecoder(resp.Body).Decode(&s); err != nil {
-		return nil, fmt.Errorf("jmapc: decoding session: %w", err)
+	if err := c.exchangeJSON(req, KindSession, &s, "session", http.StatusOK); err != nil {
+		return nil, err
 	}
 	if s.APIURL == "" && c.apiURL == "" {
 		return nil, fmt.Errorf("jmapc: session from %s has no apiUrl", c.sessionURL)
@@ -401,17 +393,9 @@ func (c *Client) post(ctx context.Context, apiURL string, r *Request) (*Response
 	}
 	defer release()
 
-	httpResp, err := c.sendWithRetry(httpReq, KindAPI)
-	if err != nil {
-		return nil, err
-	}
-	defer httpResp.Body.Close()
-	if httpResp.StatusCode != http.StatusOK {
-		return nil, c.requestError(httpResp)
-	}
 	var resp Response
-	if err := json.NewDecoder(httpResp.Body).Decode(&resp); err != nil {
-		return nil, fmt.Errorf("jmapc: decoding response: %w", err)
+	if err := c.exchangeJSON(httpReq, KindAPI, &resp, "response", http.StatusOK); err != nil {
+		return nil, err
 	}
 	c.noteSessionState(resp.SessionState)
 	return &resp, nil
