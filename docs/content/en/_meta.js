@@ -35,6 +35,7 @@ export default {
   '-- reference': { type: 'separator', title: 'Reference' },
   cli: 'The jmapc command',
   extensions: 'Vendor extensions',
+  'how-it-works': 'How jmapc works',
   coverage: 'Coverage',
   contributing: 'Working on jmapc'
 }
