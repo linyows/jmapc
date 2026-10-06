@@ -56,7 +56,7 @@ func (c *checker) value(t *spec.Type, raw json.RawMessage, where, doc string) No
 	mayBeOptional := c.argumentValue
 	c.argumentValue = false
 
-	if s, isString := stringValue(raw); isString {
+	if s, isString := stringValue(raw); isString && !c.sent {
 		if m := paramPattern.FindStringSubmatch(s); m != nil {
 			return &ParamRef{Param: c.params.use(c, m[1], t, where, doc, false)}
 		}
@@ -529,6 +529,9 @@ func elemDoc(elemType *spec.Type, context string) string {
 // is, so it is recorded weakly: another use of the same parameter, somewhere
 // that does say, settles its type.
 func (c *checker) keySegments(key string, keyType *spec.Type, property, where, doc string) []KeySegment {
+	if c.sent {
+		return nil
+	}
 	matches := embeddedParamPattern.FindAllStringSubmatchIndex(key, -1)
 	if len(matches) == 0 {
 		return nil
@@ -704,7 +707,7 @@ func (c *checker) patchObject(members map[string]json.RawMessage, keys []string,
 		segments := strings.Split(key, "/")
 		unknown := make([]bool, len(segments))
 		for i, seg := range segments {
-			unknown[i] = embeddedParamPattern.MatchString(seg)
+			unknown[i] = !c.sent && embeddedParamPattern.MatchString(seg)
 		}
 
 		valueType := &spec.Type{Name: spec.Any}
@@ -753,6 +756,9 @@ func (c *checker) patchObject(members map[string]json.RawMessage, keys []string,
 // depth, so a parameter naming a mailbox in "mailboxIds/{{id}}" is an Id, the
 // same as it would be anywhere else.
 func (c *checker) patchKeySegments(segments []string, keyTypes []*spec.Type, properties []bool, where string) []KeySegment {
+	if c.sent {
+		return nil
+	}
 	var out []KeySegment
 	var found bool
 	for i, seg := range segments {
@@ -879,7 +885,7 @@ func (c *checker) sortProperty(dataType *spec.Object, members map[string]json.Ra
 		return nil, extra
 	}
 	name, isString := stringValue(raw)
-	if !isString || paramPattern.MatchString(name) {
+	if !isString || (!c.sent && paramPattern.MatchString(name)) {
 		// The property is left to the caller, so which members the comparator
 		// needs cannot be known here. Allow the extras of every sortable
 		// property rather than rejecting a request that may well be right.

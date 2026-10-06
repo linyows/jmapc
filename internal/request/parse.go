@@ -414,6 +414,12 @@ type checker struct {
 	byID   map[string]*Call
 	order  []string
 
+	// sent marks a request that has been sent, which RequestCheck holds to
+	// the data model as it arrives. Its values are values: "{{x}}" in one is a
+	// string like any other, and "@Summary" a string where a list of
+	// properties belongs, rather than a parameter and a set of properties.
+	sent bool
+
 	// props are the named sets of properties a call may ask for instead of
 	// listing them, and is nil where the project names none.
 	props *PropertySets
@@ -545,6 +551,9 @@ func (c *checker) methodCall(raw json.RawMessage, where string) *Call {
 // else a string beginning with "@" is a value in its own right, and is checked
 // as one.
 func (c *checker) propertySet(call *Call, name string, raw json.RawMessage, where string) (Node, bool) {
+	if c.sent {
+		return nil, false
+	}
 	nested := name == call.Method.NestedPropertiesArgument
 	if name != call.Method.PropertiesArgument && !nested {
 		return nil, false

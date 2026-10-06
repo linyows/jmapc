@@ -18,6 +18,9 @@ import (
 type RequestCheck struct {
 	c     *checker
 	using map[string]bool
+	// reported records the capabilities already reported as missing, so that
+	// a property used in several calls is reported once.
+	reported map[string]bool
 }
 
 // NewRequestCheck returns a check over one request, against the given
@@ -34,11 +37,13 @@ func NewRequestCheck(s *spec.Spec, using []string) *RequestCheck {
 		c: &checker{
 			spec:   s,
 			file:   "the request",
+			sent:   true,
 			params: newParamSet(),
 			byID:   make(map[string]*Call),
 			used:   make(map[string]bool),
 		},
-		using: declared,
+		using:    declared,
+		reported: make(map[string]bool),
 	}
 }
 
@@ -59,13 +64,23 @@ func (r *RequestCheck) Call(raw json.RawMessage, index int) error {
 
 // capability checks that the request declared what the call needs. RFC 8620,
 // Section 3.2 has a server refuse a method whose capability the request did not
-// declare, however well the server supports it.
+// declare, however well the server supports it. That holds for a property a
+// specification other than the method's own adds, such as the S/MIME
+// properties of an Email, as it does for the method.
 func (r *RequestCheck) capability(call *Call, index int) {
 	capability := call.Method.Capability
-	if capability == "" || capability == spec.CapabilityCore || r.using[capability] {
-		return
+	if capability != "" && capability != spec.CapabilityCore && !r.using[capability] {
+		r.c.errorf(fmt.Sprintf("methodCalls[%d][0]", index),
+			"a request has to declare the capabilities of the methods it calls",
+			"%s needs %s, which the request does not declare", call.Method.Name, capability)
 	}
-	r.c.errorf(fmt.Sprintf("methodCalls[%d][0]", index),
-		"a request has to declare the capabilities of the methods it calls",
-		"%s needs %s, which the request does not declare", call.Method.Name, capability)
+	for _, uri := range sortedKeys(r.c.used) {
+		if r.using[uri] || r.reported[uri] {
+			continue
+		}
+		r.reported[uri] = true
+		r.c.errorf(fmt.Sprintf("methodCalls[%d][1]", index),
+			"a request has to declare the capabilities of the properties it uses",
+			"the request uses properties from %s, which it does not declare", uri)
+	}
 }
