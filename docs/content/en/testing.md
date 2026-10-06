@@ -32,6 +32,11 @@ What it removes from the test:
 - **The failures.** `srv.Fail` for a method-level error, `srv.FailRequest` for a
   request rejected as a whole, and a `/set` response listing what it refused for
   the failure that answers 200.
+- **The limits.** A request making more calls than the session's
+  `maxCallsInRequest` is refused whole, and a `/get` or `/set` naming more
+  records than `maxObjectsInGet` or `maxObjectsInSet` is refused as
+  `requestTooLarge`, as a server does, so a client that splits its requests is
+  tested against limits that hold.
 - **What was requested.** `srv.Call("Email/query")` is the last call to a method,
   `srv.Calls()` all of them, and `srv.Requests()` how many requests they took —
   which is how to check that calls were sent in one request rather than one at
