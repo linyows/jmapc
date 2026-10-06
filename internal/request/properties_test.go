@@ -131,6 +131,11 @@ func TestPropertySetErrors(t *testing.T) {
 		       "B": {"extends": "A", "properties": ["subject"]}}`,
 		want: `"subject" is selected twice`,
 	}, {
+		name: "field the extended set holds as one the server picks",
+		src: `{"A": {"type": "BlobData", "properties": ["data"]},
+		       "B": {"extends": "A", "properties": ["data:asText"]}}`,
+		want: `A already holds data:asText, which data comes back as where the server picks it`,
+	}, {
 		name: "name is not a type name",
 		src:  `{"email summary": {"type": "Email", "properties": ["id"]}}`,
 		want: `"email summary" is not a name a generated type can take`,

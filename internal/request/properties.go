@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/linyows/jmapc/internal/spec"
@@ -249,9 +250,28 @@ func (p *PropertySets) resolve(set *PropertySet, s *setSyntax, catalogue *spec.S
 			fail(where, hint, "%v", err)
 			continue
 		}
+		if by := answeredBy(dataType, inherited(set.Extends), name); by != "" {
+			// The extended set holds the field already, as one the server
+			// may leave out, and a field the derived set held as well would
+			// be two places for one value.
+			fail(where, fmt.Sprintf("ask for %s by name in %s, or leave it out", name, set.Extends.Name),
+				"%s already holds %s, which %s comes back as where the server picks it", set.Extends.Name, name, by)
+			continue
+		}
 		held[name] = true
 		set.Own = append(set.Own, name)
 	}
+}
+
+// answeredBy returns the property among props that comes back as name, as data
+// comes back as data:asText, and nothing where none does.
+func answeredBy(dataType *spec.Object, props []string, name string) string {
+	for _, p := range props {
+		if slices.Contains(dataType.AnsweredAs(p), name) {
+			return p
+		}
+	}
+	return ""
 }
 
 // inherited returns every property the extended set holds, and nothing where
