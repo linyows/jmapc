@@ -163,6 +163,11 @@ func run(args []string) error {
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
+	if command == "validate" {
+		if err := chooseCredentials(fs, token, user); err != nil {
+			return err
+		}
+	}
 
 	cfg, err := loadConfig(*configPath)
 	if err != nil {
