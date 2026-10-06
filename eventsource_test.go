@@ -258,6 +258,25 @@ func TestEventSourceTemplateThatDoesNotExpand(t *testing.T) {
 	}
 }
 
+// TestEventSourceURLThatCannotBeRequested checks a push endpoint that expands
+// into something that is not a URL. Like a template that does not expand, it is
+// what the session says, and connecting again does not change it.
+func TestEventSourceURLThatCannotBeRequested(t *testing.T) {
+	ts := newTestServer(t)
+	ts.sessionHandler = fmt.Sprintf(`{
+	  "capabilities": {"urn:ietf:params:jmap:core": {}},
+	  "accounts": {}, "primaryAccounts": {}, "username": "someone",
+	  "apiUrl": %q, "eventSourceUrl": %q, "state": "sess1"
+	}`, ts.URL+"/api", ts.URL+"/ev%zz?types={types}")
+	_, err := ts.client().EventSource(context.Background(), nil)
+	if err == nil || !strings.Contains(err.Error(), "building event source request") {
+		t.Fatalf("EventSource: %v, want the URL reported", err)
+	}
+	if IsTemporary(err) {
+		t.Errorf("IsTemporary(%v) = true, want a URL that cannot be requested to be permanent", err)
+	}
+}
+
 // slowEventServer serves a session advertising a push endpoint, and hands the
 // push endpoint to events, so that a test controls when each part of the
 // stream is written.
