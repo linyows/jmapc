@@ -80,6 +80,9 @@ type watcher struct {
 	events     chan string
 	types      map[string]bool
 	closeAfter bool
+	// done is closed once the connection has ended, so that a push sent
+	// after it does not wait for a reader that is gone.
+	done chan struct{}
 }
 
 // Option configures the server before it answers anything.
@@ -264,7 +267,10 @@ func (s *Server) Push(accountID jmapc.ID, states map[string]string) {
 			s.t.Errorf("jmaptest: encoding the event: %v", err)
 			return
 		}
-		w.events <- fmt.Sprintf("id: e%d\nevent: state\ndata: %s\n\n", id, body)
+		select {
+		case w.events <- fmt.Sprintf("id: e%d\nevent: state\ndata: %s\n\n", id, body):
+		case <-w.done:
+		}
 	}
 }
 
@@ -289,15 +295,24 @@ func (s *Server) ServeSession(w http.ResponseWriter, r *http.Request) {
 // as RFC 8620, Section 7.3 defines them.
 func (s *Server) ServeEvents(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
-	watch := &watcher{events: make(chan string, 8), closeAfter: query.Get("closeafter") == "state"}
+	watch := &watcher{
+		events:     make(chan string, 8),
+		closeAfter: query.Get("closeafter") == "state",
+		done:       make(chan struct{}),
+	}
 	if types := query.Get("types"); types != "" && types != "*" {
 		watch.types = make(map[string]bool)
 		for _, typeName := range strings.Split(types, ",") {
 			watch.types[typeName] = true
 		}
 	}
+	// RFC 8620 lets a server ping less often than asked, and an interval past
+	// what a Duration holds is pinged at the most this one does.
+	const maxPing = 24 * 60 * 60
 	var ping <-chan time.Time
-	if seconds, err := strconv.Atoi(query.Get("ping")); err == nil && seconds > 0 {
+	seconds, err := strconv.Atoi(query.Get("ping"))
+	if err == nil && seconds > 0 {
+		seconds = min(seconds, maxPing)
 		ticker := time.NewTicker(time.Duration(seconds) * time.Second)
 		defer ticker.Stop()
 		ping = ticker.C
@@ -309,6 +324,7 @@ func (s *Server) ServeEvents(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		delete(s.watchers, watch)
 		s.mu.Unlock()
+		close(watch.done)
 	}()
 
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -323,7 +339,7 @@ func (s *Server) ServeEvents(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		case <-ping:
-			event = fmt.Sprintf("event: ping\ndata: {\"interval\":%s}\n\n", query.Get("ping"))
+			event = fmt.Sprintf("event: ping\ndata: {\"interval\":%d}\n\n", seconds)
 		case event = <-watch.events:
 		}
 		if _, err := fmt.Fprint(w, event); err != nil {

@@ -435,3 +435,64 @@ func TestServedWhereAClientLooks(t *testing.T) {
 		t.Errorf("the server answered %d requests, want 2", got)
 	}
 }
+
+// TestAPushToAConnectionThatEndedReturns checks a push that finds a client
+// whose connection has ended since it was taken from the list, as one closed
+// after a state is: the push is dropped rather than waiting for a reader that
+// is gone.
+func TestAPushToAConnectionThatEndedReturns(t *testing.T) {
+	srv := New(t)
+	ended := &watcher{events: make(chan string), done: make(chan struct{})}
+	close(ended.done)
+	srv.mu.Lock()
+	srv.watchers[ended] = true
+	srv.mu.Unlock()
+
+	pushed := make(chan struct{})
+	go func() {
+		srv.Push(AccountID, map[string]string{"Email": "e2"})
+		close(pushed)
+	}()
+	select {
+	case <-pushed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the push waited on a connection that had ended")
+	}
+}
+
+// TestAPingIsSentAsTheJSONItSays checks the interval a ping reports, which is
+// the number the server pings at rather than the text the client asked with:
+// "01" is a number to ask with and not one JSON writes, and an interval past
+// what a Duration holds is pinged at the most the server does, rather than
+// taking the handler down.
+func TestAPingIsSentAsTheJSONItSays(t *testing.T) {
+	srv := New(t)
+	for _, tt := range []struct{ ping, want string }{
+		{"01", `{"interval":1}`},
+		{"9223372037", `{"interval":86400}`},
+	} {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+			srv.BaseURL()+"/events?types=*&closeafter=no&ping="+tt.ping, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			cancel()
+			t.Fatalf("ping=%s: GET /events: %v", tt.ping, err)
+		}
+		if tt.ping == "01" {
+			scan := bufio.NewScanner(resp.Body)
+			for scan.Scan() && scan.Text() != "event: ping" {
+			}
+			if scan.Scan(); scan.Text() != "data: "+tt.want {
+				t.Errorf("ping=%s: the ping said %q, want data: %s", tt.ping, scan.Text(), tt.want)
+			}
+		} else if resp.StatusCode != http.StatusOK {
+			t.Errorf("ping=%s: answered %d, want the stream", tt.ping, resp.StatusCode)
+		}
+		resp.Body.Close()
+		cancel()
+	}
+}
