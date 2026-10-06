@@ -99,8 +99,10 @@ func (g *RequestGenerator) Generate() (map[string][]byte, error) {
 	return out, nil
 }
 
-// FileName returns the file a request is generated into. TypeScript names a file
-// after what it exports, so this is the function's own name.
+// FileName returns the file a request is generated into: the request's name
+// with a lower-case first letter, which is the function's name too, but for a
+// name a reserved word takes, where the function takes an underscore and the
+// file keeps the name.
 func FileName(queryName string) string {
 	return lowerFirst(queryName) + ".ts"
 }
