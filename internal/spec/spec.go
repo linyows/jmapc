@@ -90,6 +90,11 @@ type Field struct {
 	// type at all. It is what tells one member of a union from another when a
 	// value would otherwise fit either.
 	Required bool
+	// Optional marks a property of a response that the server leaves out where
+	// it does not apply, as the total of a /query is left out unless the
+	// request asked for it. Every other property of a response is one the
+	// server always sends, and is decoded as such.
+	Optional bool
 	// Capability is the URI a request must declare in order to use this
 	// property, for one that a specification other than its type's own adds.
 	// The S/MIME properties of an Email are the case this exists for: the type

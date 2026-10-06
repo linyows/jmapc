@@ -480,8 +480,9 @@ func (g *RequestGenerator) writePages(buf *bytes.Buffer, p *plan) {
 		fmt.Fprintf(buf, "        self.start = window.%s as %s + window.%s.len() as %s;\n",
 			spec.RustFieldName(spec.ExportedName(request.PositionArgument)), startType, ids, startType)
 		// Where the call asked for the total, the end is known without asking
-		// for a part that is not there.
-		fmt.Fprintf(buf, "        if window.%[1]s > 0 && self.start as u64 >= window.%[1]s {\n            self.done = true;\n        }\n",
+		// for a part that is not there. The server leaves the total out
+		// otherwise.
+		fmt.Fprintf(buf, "        if matches!(window.%s, Some(total) if self.start as u64 >= total) {\n            self.done = true;\n        }\n",
 			spec.RustFieldName(spec.ExportedName(request.TotalProperty)))
 
 	case request.PageChanges:
