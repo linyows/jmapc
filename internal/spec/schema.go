@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -148,19 +149,32 @@ func (s *Spec) Extend(sc *Schema) error {
 // catalogue and panics, but a schema is a file someone wrote, so a clash there
 // has to come back as a message.
 func (s *Spec) reserveNames(sc *Schema) error {
+	// Names are compared without case. A generator writes a type's name with
+	// a capital, Email and email alike, and a file system may not tell them
+	// apart either, so two names differing only in case are one name.
+	existing := map[string]string{}
+	for _, o := range s.Objects() {
+		existing[strings.ToLower(o.Name)] = o.Name
+	}
 	claimed := map[string]string{}
 	claim := func(name, by string) error {
-		if _, dup := s.Object(name); dup {
-			return fmt.Errorf("%s would define the type %q, which already exists", by, name)
+		if have, dup := existing[strings.ToLower(name)]; dup {
+			if have == name {
+				return fmt.Errorf("%s would define the type %q, which already exists", by, name)
+			}
+			return fmt.Errorf("%s would define the type %q, which is the type %q but for case", by, name, have)
 		}
-		if prev, dup := claimed[name]; dup {
+		if prev, dup := claimed[strings.ToLower(name)]; dup {
 			return fmt.Errorf("%s and %s both define the type %q", prev, by, name)
 		}
-		claimed[name] = by
+		claimed[strings.ToLower(name)] = by
 		return nil
 	}
 
 	for _, t := range sc.Types {
+		if err := checkTypeName(t.Name); err != nil {
+			return err
+		}
 		if err := claim(t.Name, "the type "+t.Name); err != nil {
 			return err
 		}
@@ -186,6 +200,9 @@ func (s *Spec) reserveNames(sc *Schema) error {
 		if m.Name == "" {
 			return fmt.Errorf("a method in the schema has no name")
 		}
+		if !methodNamePattern.MatchString(m.Name) {
+			return fmt.Errorf("%q is not a method name: a method is named as Type/method, each part letters and digits starting with a letter", m.Name)
+		}
 		if _, dup := s.Method(m.Name); dup {
 			return fmt.Errorf("the method %q already exists", m.Name)
 		}
@@ -198,6 +215,44 @@ func (s *Spec) reserveNames(sc *Schema) error {
 		}
 	}
 	return nil
+}
+
+// typeNamePattern is what a type name a schema defines looks like: a name the
+// type expressions can refer to, and every generator can write as one. It
+// begins with a capital, as the types of the specifications do, which is the
+// spelling every generator writes it in.
+var typeNamePattern = regexp.MustCompile(`^[A-Z][A-Za-z0-9]*$`)
+
+// methodNamePattern is what a method name looks like: one slash between two
+// names, each letters and digits starting with a letter.
+var methodNamePattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]*/[A-Za-z][A-Za-z0-9]*$`)
+
+// checkTypeName reports a name a schema cannot give a type of its own.
+func checkTypeName(name string) error {
+	switch {
+	case name == "":
+		return fmt.Errorf("a type in the schema has no name")
+	case !typeNamePattern.MatchString(name):
+		return fmt.Errorf("%q is not a type name: a type is named with letters and digits, starting with a capital", name)
+	}
+	for _, primitive := range append(primitiveNames(), Any) {
+		// A type expression naming it would mean the one JMAP has, and the
+		// type the schema defines could never be referred to; one differing
+		// only in case is written as that one by a generator.
+		if strings.EqualFold(name, primitive) {
+			return fmt.Errorf("%q is the name of a type JMAP already has", name)
+		}
+	}
+	return nil
+}
+
+// primitiveNames returns the names of the primitive types.
+func primitiveNames() []string {
+	names := make([]string, 0, len(primitives))
+	for name := range primitives {
+		names = append(names, name)
+	}
+	return names
 }
 
 // addSchemaType registers one object type from a schema.
@@ -267,6 +322,16 @@ func (s *Spec) addSchemaMethods(sc *Schema, t *SchemaType) error {
 		if err != nil {
 			return err
 		}
+		args, err := s.ArgumentsOf(method)
+		if err != nil {
+			return err
+		}
+		for _, f := range fields {
+			if other := clashingField(args.Fields, f.Name); other != nil {
+				return fmt.Errorf("%s already has the argument %q, and a schema adds arguments rather than redefining them",
+					method, other.Name)
+			}
+		}
 		s.AppendArguments(method, fields...)
 	}
 	return nil
@@ -288,6 +353,20 @@ func (s *Spec) addSchemaMethod(sc *Schema, m *SchemaMethod) error {
 	resp, err := schemaFields(m.Name, m.Response)
 	if err != nil {
 		return err
+	}
+	if m.DataType != "" {
+		if _, ok := s.Object(m.DataType); !ok {
+			return fmt.Errorf("%s works on the type %q, which nothing defines", m.Name, m.DataType)
+		}
+	}
+	if m.Properties != "" && m.DataType == "" {
+		return fmt.Errorf("%s selects properties through %q, and names no dataType for them to be properties of", m.Name, m.Properties)
+	}
+	if m.Properties != "" && !hasField(args, m.Properties) {
+		return fmt.Errorf("%s selects properties through %q, which is not one of its arguments", m.Name, m.Properties)
+	}
+	if m.ResultProperty != "" && !hasField(resp, m.ResultProperty) {
+		return fmt.Errorf("%s returns its records in %q, which its response does not have", m.Name, m.ResultProperty)
 	}
 	capability := capabilityOr(m.Capability, sc.Capability)
 	argsType := s.AddObject(&Object{
@@ -329,6 +408,12 @@ func schemaFields(where string, in []*SchemaField) ([]*Field, error) {
 		if f.Name == "" {
 			return nil, fmt.Errorf("a property of %s has no name", where)
 		}
+		if other := clashingField(out, f.Name); other != nil {
+			if other.Name == f.Name {
+				return nil, fmt.Errorf("%s defines %q twice", where, f.Name)
+			}
+			return nil, fmt.Errorf("%s defines %q and %q, which a generator writes as one name", where, other.Name, f.Name)
+		}
 		if f.Type == "" {
 			return nil, fmt.Errorf("%s.%s has no type", where, f.Name)
 		}
@@ -352,14 +437,43 @@ func schemaFields(where string, in []*SchemaField) ([]*Field, error) {
 	return out, nil
 }
 
+// clashingField returns the field of fields that name would be generated as:
+// one of that name, or one a generator writes as the same identifier, as Go
+// writes accountId and AccountId as AccountID and Rust both as account_id.
+func clashingField(fields []*Field, name string) *Field {
+	for _, f := range fields {
+		if f.Name == name || exportedName(f.Name) == exportedName(name) || RustName(f.Name) == RustName(name) {
+			return f
+		}
+	}
+	return nil
+}
+
+// hasField reports whether fields holds one named name.
+func hasField(fields []*Field, name string) bool {
+	for _, f := range fields {
+		if f.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 // checkReferences reports any type expression naming a type nothing defines,
-// which is how a typo in a schema surfaces as a message about the schema rather
-// than as a puzzling failure later.
+// and any patch or sort aimed at one, which is how a typo in a schema surfaces
+// as a message about the schema rather than as a puzzling failure later.
 func (s *Spec) checkReferences() error {
 	for _, o := range s.Objects() {
 		for _, f := range o.Fields {
-			if err := s.checkTypeNames(MustParseType(f.Type), o.Name+"."+f.Name); err != nil {
+			where := o.Name + "." + f.Name
+			if err := s.checkTypeNames(MustParseType(f.Type), where); err != nil {
 				return err
+			}
+			if _, ok := s.Object(f.PatchTarget); f.PatchTarget != "" && !ok {
+				return fmt.Errorf("%s patches the type %q, which nothing defines", where, f.PatchTarget)
+			}
+			if _, ok := s.Object(f.SortTarget); f.SortTarget != "" && !ok {
+				return fmt.Errorf("%s sorts the type %q, which nothing defines", where, f.SortTarget)
 			}
 		}
 	}
