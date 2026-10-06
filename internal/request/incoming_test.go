@@ -108,3 +108,37 @@ func TestASentPatchNeedsTheCapabilityOfWhatItPassesThrough(t *testing.T) {
 		t.Errorf("a patch through extra: %v, want urn:example:extras reported", err)
 	}
 }
+
+// TestAUnionAlternativeThatFailedNeedsNoCapability checks a value of a union
+// whose first alternative uses a property another capability adds and does not
+// fit, and whose second fits and needs nothing: the capability of the
+// alternative the value is not is not one the request needs.
+func TestAUnionAlternativeThatFailedNeedsNoCapability(t *testing.T) {
+	s := spec.Standard()
+	if err := s.Extend(&spec.Schema{
+		Capability: "urn:example:picks",
+		Types: []*spec.SchemaType{
+			{Name: "TextChoice", Properties: []*spec.SchemaField{
+				{Name: "value", Type: "String", Required: true, Capability: "urn:example:text"},
+			}},
+			{Name: "NumberChoice", Properties: []*spec.SchemaField{
+				{Name: "value", Type: "UnsignedInt", Required: true},
+			}},
+		},
+		Methods: []*spec.SchemaMethod{{
+			Name:      "Choice/pick",
+			Arguments: []*spec.SchemaField{{Name: "choice", Type: "TextChoice|NumberChoice"}},
+			Response:  []*spec.SchemaField{{Name: "ok", Type: "Boolean"}},
+		}},
+	}); err != nil {
+		t.Fatalf("Extend: %v", err)
+	}
+	check := NewRequestCheck(s, []string{"urn:ietf:params:jmap:core", "urn:example:picks"})
+	if err := check.Call(json.RawMessage(`["Choice/pick", {"choice": {"value": 1}}, "c0"]`), 0); err != nil {
+		t.Errorf("a number, which the alternative needing nothing takes: %v", err)
+	}
+	if err := check.Call(json.RawMessage(`["Choice/pick", {"choice": {"value": "a"}}, "c1"]`), 1); err == nil ||
+		!strings.Contains(err.Error(), "urn:example:text") {
+		t.Errorf("a string, which the alternative needing urn:example:text takes: %v, want it reported", err)
+	}
+}

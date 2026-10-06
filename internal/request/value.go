@@ -200,11 +200,18 @@ func missingRequired(o *spec.Object, present map[string]bool) bool {
 // leaving the parameters or errors of a failed attempt behind.
 func (c *checker) try(f func() Node) (Node, ErrorList) {
 	errMark, paramMark := len(c.errs), c.params.mark()
+	// The capabilities an alternative uses are the request's only where the
+	// alternative is the one the value is, so they are kept aside until then.
+	used := make(map[string]bool, len(c.used))
+	for uri := range c.used {
+		used[uri] = true
+	}
 	node := f()
 	if len(c.errs) > errMark {
 		errs := append(ErrorList(nil), c.errs[errMark:]...)
 		c.errs = c.errs[:errMark]
 		c.params.rollback(paramMark)
+		c.used = used
 		return node, errs
 	}
 	return node, nil
