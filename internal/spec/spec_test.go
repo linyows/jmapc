@@ -109,6 +109,7 @@ func TestResolvePath(t *testing.T) {
 		{"Email/changes", "/created", "Id[]"},
 		{"Email/set", "/created", "Id[Email|null]|null"},
 		{"Email/get", "/list/*/mailboxIds", "Id[Boolean][]"},
+		{"Mailbox/changes", "/updatedProperties", "String[]|null"},
 	}
 	for _, tt := range tests {
 		got, err := s.ResolvePath(tt.method, tt.path)

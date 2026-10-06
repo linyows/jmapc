@@ -287,6 +287,16 @@ func registerMailbox(s *Spec) {
 	s.RegisterStandard("Mailbox", CapabilityMail, StandardMethods{
 		Get: true, Changes: true, Set: true, Query: true, QueryChanges: true,
 	})
+	// A mailbox's counts move with every email delivered to it, while the rest
+	// of it rarely changes, so the server may say that only the counts did and
+	// spare the client fetching the whole record. RFC 8621, Section 2.2.
+	s.AppendResponse("Mailbox/changes", &Field{
+		Name: "updatedProperties",
+		Type: "String[]|null",
+		Doc: "The properties that may have changed on the mailboxes in the updated list, " +
+			"where only totalEmails, unreadEmails, totalThreads and unreadThreads have, " +
+			"or null if the server cannot tell that only the counts changed.",
+	})
 	s.AppendArguments("Mailbox/set", &Field{
 		Name:    "onDestroyRemoveEmails",
 		Type:    "Boolean",
