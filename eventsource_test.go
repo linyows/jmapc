@@ -233,6 +233,31 @@ func TestEventSourceUnavailable(t *testing.T) {
 	}
 }
 
+// TestEventSourceTemplateThatDoesNotExpand checks a push endpoint the session
+// advertises in a form that cannot be used. Connecting again reads the same
+// session, so the failure is as permanent as an endpoint that is missing.
+func TestEventSourceTemplateThatDoesNotExpand(t *testing.T) {
+	for _, template := range []string{
+		"/events?types={types&ping={ping}",
+		"/events?types={types}&since={since}",
+	} {
+		ts := newTestServer(t)
+		ts.sessionHandler = fmt.Sprintf(`{
+		  "capabilities": {"urn:ietf:params:jmap:core": {}},
+		  "accounts": {}, "primaryAccounts": {}, "username": "someone",
+		  "apiUrl": %q, "eventSourceUrl": %q, "state": "sess1"
+		}`, ts.URL+"/api", ts.URL+template)
+		_, err := ts.client().EventSource(context.Background(), nil)
+		if err == nil || !strings.Contains(err.Error(), "expanding eventSourceUrl") {
+			t.Errorf("%s: EventSource: %v, want the template reported", template, err)
+			continue
+		}
+		if IsTemporary(err) {
+			t.Errorf("%s: IsTemporary(%v) = true, want a template that does not expand to be permanent", template, err)
+		}
+	}
+}
+
 // slowEventServer serves a session advertising a push endpoint, and hands the
 // push endpoint to events, so that a test controls when each part of the
 // stream is written.

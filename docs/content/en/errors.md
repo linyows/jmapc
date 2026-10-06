@@ -124,8 +124,9 @@ classified, such as a request that never reached the server, is temporary, since
 nothing about it says the next attempt will fail as well, except a download
 whose range the server ignored, which `IsRangeIgnored` reports and which the
 server answers the same way every time, and a push endpoint the session does
-not advertise, which `EventSource` and `Watch` report and which stays missing
-until the server is set up otherwise. Where a request failed
+not advertise, or advertises as a template that does not expand into a URL,
+which `EventSource` and `Watch` report and which stays that way until the
+server is set up otherwise. Where a request failed
 for several reasons at once, one reason that will not pass with time makes the
 whole of it permanent.
 
