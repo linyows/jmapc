@@ -2,39 +2,10 @@ package spec
 
 import "strings"
 
-// tsPrimitives maps every primitive JMAP type to the TypeScript type it
-// becomes. The types that carry a format rather than a shape — an id, a date, a
-// duration — become named aliases of string, so that the format is visible in a
-// signature and two of them cannot be swapped by accident.
-var tsPrimitives = map[string]string{
-	String:      "string",
-	Boolean:     "boolean",
-	Number:      "number",
-	Int:         "number",
-	UnsignedInt: "number",
-	IdType:      "Id",
-	DateType:    "Date",
-	UTCDateType: "UTCDate",
-	Any:         "unknown",
-
-	LocalDateTimeType:  "LocalDateTime",
-	DurationType:       "Duration",
-	SignedDurationType: "SignedDuration",
-	TimeZoneIDType:     "TimeZoneId",
-}
-
 // TSPrimitiveAliases returns the named string aliases the generated types need,
 // in a stable order, each with what it is an alias for.
 func TSPrimitiveAliases() []struct{ Name, Doc string } {
-	return []struct{ Name, Doc string }{
-		{"Id", "An id assigned by the server: 1 to 255 characters from A-Z, a-z, 0-9, _ and -, not beginning with - or #."},
-		{"UTCDate", "A date and time in UTC, written as 2006-01-02T15:04:05Z."},
-		{"Date", "A date and time with an offset, written as 2006-01-02T15:04:05Z07:00."},
-		{"LocalDateTime", "A date and time with no zone at all, written as 2006-01-02T15:04:05. What it means depends on the time zone the enclosing object gives."},
-		{"Duration", "A length of time in the ISO 8601 form, such as PT1H30M or P1D. Not a number of milliseconds: a day is not always 24 hours."},
-		{"SignedDuration", "A Duration that may be negative, which is how an alert says it fires before the event it belongs to."},
-		{"TimeZoneId", "A time zone from the IANA database, such as Europe/London, or a name beginning with / that refers to a zone the event itself defines."},
-	}
+	return primitiveAliases(func(p primitive) string { return p.ts })
 }
 
 // TSType renders t as a TypeScript type. Nullability is a union with null, as
@@ -59,8 +30,8 @@ func (t *Type) TSType() string {
 		}
 		base = strings.Join(parts, " | ")
 	default:
-		if p, ok := tsPrimitives[t.Name]; ok {
-			base = p
+		if p, ok := primitives[t.Name]; ok {
+			base = p.ts
 		} else {
 			base = ExportedName(t.Name)
 		}
