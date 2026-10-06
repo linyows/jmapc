@@ -64,13 +64,13 @@ func parseAs(t *spec.Type, text string) (json.RawMessage, error) {
 
 	case spec.UTCDateType:
 		if !syntax.ValidUTCDate(text) {
-			return nil, fmt.Errorf("%q is not a UTCDate\n\ta UTCDate is written as 2006-01-02T15:04:05Z", text)
+			return nil, fmt.Errorf("%q is not a UTCDate\n\ta UTCDate is written as 2006-01-02T15:04:05Z, or 2006-01-02T15:04:05.5Z with a fraction of a second", text)
 		}
 		return quote(text), nil
 
 	case spec.DateType:
 		if !syntax.ValidDate(text) {
-			return nil, fmt.Errorf("%q is not a Date\n\ta Date is written as 2006-01-02T15:04:05Z07:00", text)
+			return nil, fmt.Errorf("%q is not a Date\n\ta Date is written as 2006-01-02T15:04:05Z07:00, or 2006-01-02T15:04:05.5Z07:00 with a fraction of a second", text)
 		}
 		return quote(text), nil
 

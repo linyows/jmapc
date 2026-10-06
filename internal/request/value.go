@@ -412,7 +412,7 @@ func (c *checker) primitive(t *spec.Type, raw json.RawMessage, where string) Nod
 			return fail()
 		}
 		if !syntax.ValidUTCDate(s) {
-			c.errorf(where, "a UTCDate is written as 2006-01-02T15:04:05Z", "%q is not a UTCDate", s)
+			c.errorf(where, "a UTCDate is written as 2006-01-02T15:04:05Z, or 2006-01-02T15:04:05.5Z with a fraction of a second", "%q is not a UTCDate", s)
 		}
 	case spec.DateType:
 		s, ok := stringValue(raw)
@@ -420,7 +420,7 @@ func (c *checker) primitive(t *spec.Type, raw json.RawMessage, where string) Nod
 			return fail()
 		}
 		if !syntax.ValidDate(s) {
-			c.errorf(where, "a Date is written as 2006-01-02T15:04:05Z07:00", "%q is not a Date", s)
+			c.errorf(where, "a Date is written as 2006-01-02T15:04:05Z07:00, or 2006-01-02T15:04:05.5Z07:00 with a fraction of a second", "%q is not a Date", s)
 		}
 	case spec.LocalDateTimeType:
 		s, ok := stringValue(raw)
