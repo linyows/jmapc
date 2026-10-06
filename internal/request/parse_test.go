@@ -308,6 +308,15 @@ func TestParseErrors(t *testing.T) {
 		]}`,
 		want: `a patch cannot reach inside EmailAddress[]|null, a list, to "0"`,
 	}, {
+		// A header field is a property of a message, and of a part of one.
+		name: "header field asked of a mailbox",
+		src:  `{"methodCalls": [["Mailbox/get", {"ids": null, "properties": ["header:Subject"]}, "c0"]]}`,
+		want: `Mailbox has no property "header:Subject"`,
+	}, {
+		name: "content of a blob asked of an email",
+		src:  `{"methodCalls": [["Email/get", {"ids": ["e1"], "properties": ["data"]}, "c0"]]}`,
+		want: `Email has no property "data"`,
+	}, {
 		name: "patch key with a leading slash and a parameter in it",
 		src: `{"methodCalls": [
 			["Email/set", {"update": {"e1": {"/keywords/{{keyword}}": true}}}, "c0"]
@@ -1288,6 +1297,20 @@ func TestMailboxChangesReportsUpdatedProperties(t *testing.T) {
 	    "#properties": {"resultOf": "c0", "name": "Mailbox/changes", "path": "/updatedProperties"}
 	  }, "c1"]
 	]}`)
+}
+
+// TestDynamicPropertiesOfTheTypesThatHaveThem checks the properties a server
+// gives meaning to, asked of the types that have them: the header fields of a
+// message and of a part of one, and the digest and content of a blob.
+func TestDynamicPropertiesOfTheTypesThatHaveThem(t *testing.T) {
+	q := parse(t, "Headers"+Extension, `{"methodCalls": [
+	  ["Email/get", {"ids": ["e1"], "properties": ["header:List-Id:asText", "bodyStructure"],
+	                 "bodyProperties": ["partId", "header:Content-Type:asRaw"]}, "c0"],
+	  ["Blob/get", {"ids": ["b1"], "properties": ["digest:sha", "data", "size"]}, "c1"]
+	]}`)
+	if got := strings.Join(q.Calls[0].NestedProperties, ","); got != "partId,header:Content-Type:asRaw" {
+		t.Errorf("bodyProperties = %q", got)
+	}
 }
 
 // TestCommentArgumentIsNotSent checks the member a request uses to explain a

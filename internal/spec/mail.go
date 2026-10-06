@@ -400,6 +400,9 @@ func registerEmail(s *Spec) {
 		Name:       "EmailBodyPart",
 		Capability: CapabilityMail,
 		Doc:        "EmailBodyPart is one part of an email's MIME structure.",
+		// The header fields of the part, in the forms RFC 8621, Section 4.1.4
+		// allows a body part as it allows the message.
+		Dynamic: []string{"header:"},
 		Fields: []*Field{
 			{
 				Name: "partId",
@@ -428,6 +431,8 @@ func registerEmail(s *Spec) {
 		Name:       "Email",
 		Capability: CapabilityMail,
 		Doc:        "Email is a single message, presented as structured data rather than as raw RFC 5322 text.",
+		// The header fields of the message, RFC 8621, Section 4.1.3.
+		Dynamic: []string{"header:"},
 		Fields: []*Field{
 			{Name: "id", Type: "Id", ServerSet: true, Immutable: true, Doc: "The id of the email."},
 			{Name: "blobId", Type: "Id", ServerSet: true, Immutable: true, Doc: "The id of the blob holding the raw message."},

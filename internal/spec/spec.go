@@ -43,6 +43,12 @@ type Object struct {
 	// need not support sorting on everything it stores, and the specifications
 	// say which properties it must.
 	Sort []*SortProperty
+	// Dynamic lists the properties beyond its fields that a /get may ask this
+	// type for, whose names are made up as the request is written. An entry
+	// ending in a colon stands for every name it begins: "header:" is a header
+	// field of a message (RFC 8621, Section 4.1.3) and "digest:" a digest of a
+	// blob (RFC 9404, Section 4.2). Any other entry is a name of its own.
+	Dynamic []string
 }
 
 // SortProperty is one property a /query may sort by, together with any extra
@@ -152,6 +158,21 @@ func (o *Object) Field(name string) (*Field, bool) {
 		}
 	}
 	return nil, false
+}
+
+// AcceptsDynamic reports whether name is one of the properties Dynamic says a
+// /get may ask this type for.
+func (o *Object) AcceptsDynamic(name string) bool {
+	for _, d := range o.Dynamic {
+		if prefix, ok := strings.CutSuffix(d, ":"); ok {
+			if strings.HasPrefix(name, prefix+":") {
+				return true
+			}
+		} else if name == d {
+			return true
+		}
+	}
+	return false
 }
 
 // PropertyNames returns the names of every property, sorted, for use in

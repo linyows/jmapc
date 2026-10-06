@@ -901,34 +901,15 @@ func (c *checker) nestedProperties(call *Call, where string) []string {
 		if err := json.Unmarshal(lit.JSON, &name); err != nil {
 			return nil
 		}
-		if _, known := nested.Field(name); !known {
-			c.errorf(fmt.Sprintf("%s.%s[%d]", where, call.Method.NestedPropertiesArgument, i),
-				hintFor(name, nested.PropertyNames()),
-				"%s has no property %q", nested.Name, name)
+		selected, hint, err := checkProperty(nested, name)
+		if err != nil {
+			c.errorf(fmt.Sprintf("%s.%s[%d]", where, call.Method.NestedPropertiesArgument, i), hint, "%v", err)
 			continue
 		}
+		c.useCapability(selected)
 		props = append(props, name)
 	}
 	return props
-}
-
-// isDynamicProperty reports whether a property name is one the server gives
-// meaning to rather than one the data model fixes.
-func isDynamicProperty(name string) bool {
-	switch {
-	case strings.HasPrefix(name, "header:"):
-		// The header field forms of RFC 8621, Section 4.1.3.
-		return true
-	case strings.HasPrefix(name, "digest:"):
-		// A digest in whatever algorithm the session says it supports,
-		// RFC 9404, Section 4.2.
-		return true
-	case name == "data":
-		// RFC 9404 asks the server to return the octets as text or as base64,
-		// whichever fits, so what comes back is one of those two properties.
-		return true
-	}
-	return false
 }
 
 // resolveUsing returns the capability URIs the request should declare, either
