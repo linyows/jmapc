@@ -471,7 +471,7 @@ func TestADownloadAnsweredWithAnotherRangeFails(t *testing.T) {
 // same way every time, as one answering with the whole blob is.
 func TestADownloadAnsweredWithAPartThatDoesNotFitFails(t *testing.T) {
 	for _, header := range []string{"bytes 5-9/24", "bytes 5-4/24", "bytes 5-8/8", "none", "bytes five-8/24",
-		"bytes 5-8/-1", "bytes +5-8/24", "bytes 5-6/24"} {
+		"bytes 5-8/-1", "bytes +5-8/24", "bytes 5-6/24", "bytes 5-6/*"} {
 		bs := newBlobServer(t)
 		bs.contentRange = header
 		_, err := bs.client().Download(context.Background(), "a1", "blob9", &DownloadOptions{From: 5, Length: 4})

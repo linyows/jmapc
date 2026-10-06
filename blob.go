@@ -210,7 +210,8 @@ func (e *rangeIgnoredError) Error() string {
 // IsRangeIgnored reports whether err is a download that asked for part of a
 // blob from a server that answered with the whole of it, or with a part that
 // does not fit what was asked: one that starts elsewhere, ends past where it
-// was asked to, or whose bounds the server did not state. JMAP does not define
+// was asked to, ends sooner without the blob ending there, or whose bounds the
+// server did not state. JMAP does not define
 // ranges on the download endpoint, so a server that does not offer them is not
 // at fault, and asking again will not change its answer: a caller resuming a
 // download downloads the whole blob instead.
@@ -311,24 +312,25 @@ func (c *Client) Download(ctx context.Context, accountID, blobID ID, opts *Downl
 }
 
 // endsWhereAsked reports whether a part ends where a download asked it to: at
-// the end of the range asked for, or sooner where the blob ends first. Where
-// the server does not say how long the blob is, a part ending sooner is taken
-// at its word, since nothing says the blob goes on.
+// the end of the range asked for, or sooner where the server says the blob ends
+// first. A part ending sooner where the server does not say how long the blob
+// is proves nothing about where the blob ends, and is taken at its word only
+// where the download asked for the rest of the blob, however long that is.
 func endsWhereAsked(part *BlobRange, opts *DownloadOptions) bool {
 	if part.Total >= 0 && part.To >= part.Total {
 		return false
 	}
-	last := int64(-1)
 	if opts.Length > 0 {
-		last = opts.From + opts.Length - 1
-		if part.To > last {
+		last := opts.From + opts.Length - 1
+		switch {
+		case part.To > last:
 			return false
+		case part.To == last:
+			return true
 		}
+		return part.Total >= 0 && part.To == part.Total-1
 	}
-	if part.Total < 0 || part.To == last {
-		return true
-	}
-	return part.To == part.Total-1
+	return part.Total < 0 || part.To == part.Total-1
 }
 
 // parseContentRange reads the part of a blob a server reported returning,
