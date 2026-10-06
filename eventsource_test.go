@@ -259,6 +259,33 @@ func TestEventSourceResumesFromTheLastEventRead(t *testing.T) {
 	}
 }
 
+// TestEventSourceKeepsWhereItResumedFrom checks a stream that resumed from an id
+// and drops before it delivers anything. A keep-alive comes first, and then an
+// event the stream drops in the middle of, so the point to resume from is
+// still the one it was opened with.
+func TestEventSourceKeepsWhereItResumedFrom(t *testing.T) {
+	es := newEventServer(t)
+	es.stream = "" +
+		": still here\n" +
+		"\n" +
+		"event: state\n" +
+		"id: s1\n" +
+		`data: {"@type":"StateChange","changed":{"a1":{"Email":"e2"}}}` + "\n"
+
+	stream, err := es.client().EventSource(context.Background(), &EventSourceOptions{LastEventID: "s0"})
+	if err != nil {
+		t.Fatalf("EventSource: %v", err)
+	}
+	defer stream.Close()
+
+	if _, err := stream.Next(); !errors.Is(err, io.EOF) {
+		t.Fatalf("Next: %v, want io.EOF for the stream that dropped", err)
+	}
+	if got := stream.LastEventID(); got != "s0" {
+		t.Errorf("LastEventID = %q, want s0, where the stream resumed from", got)
+	}
+}
+
 // TestEventSourceTakesAnIDWithoutAnEvent checks a block that gives an id and no
 // data. It dispatches no event, and still moves the point to resume from, as
 // an EventSource's does: the server has said where the stream stands.
