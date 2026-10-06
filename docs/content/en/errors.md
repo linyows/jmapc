@@ -123,7 +123,9 @@ that is not a 429, and a method or record error such as `invalidArguments` or
 classified, such as a request that never reached the server, is temporary, since
 nothing about it says the next attempt will fail as well, except a download
 whose range the server ignored, which `IsRangeIgnored` reports and which the
-server answers the same way every time. Where a request failed
+server answers the same way every time, and a push endpoint the session does
+not advertise, which `EventSource` and `Watch` report and which stays missing
+until the server is set up otherwise. Where a request failed
 for several reasons at once, one reason that will not pass with time makes the
 whole of it permanent.
 
