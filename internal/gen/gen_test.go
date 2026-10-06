@@ -711,3 +711,24 @@ func TestVerifyNamesTheDirectoryHoldingEveryRequest(t *testing.T) {
 		}
 	}
 }
+
+// TestAnEmptyListOfPropertiesFetchesTheIDAlone checks the record a call asking
+// for no properties decodes into. The server answers with the id and nothing
+// else, so the record holds the id rather than every property of the type.
+func TestAnEmptyListOfPropertiesFetchesTheIDAlone(t *testing.T) {
+	src := generateOne(t, "MailboxIDs", `{
+	  "methodCalls": [["Mailbox/get", {"ids": null, "properties": []}, "ids"]],
+	  "_returns": "ids"
+	}`)
+	record := src[strings.Index(src, "type MailboxIDsIDsMailbox struct {"):]
+	record = record[:strings.Index(record, "\n}\n")]
+	if !strings.Contains(record, "ID jmapc.ID `json:\"id\"`") {
+		t.Errorf("the record does not hold the id:\n%s", record)
+	}
+	if strings.Contains(record, "Name") || strings.Contains(record, "Role") {
+		t.Errorf("the record holds properties the call did not fetch:\n%s", record)
+	}
+	if !strings.Contains(src, "\"properties\": json.RawMessage(`[]`)") {
+		t.Errorf("the request does not send the empty list:\n%s", src)
+	}
+}

@@ -824,7 +824,9 @@ func (c *checker) properties(call *Call, where string) []string {
 	if !ok {
 		return nil
 	}
-	var props []string
+	// Not nil, which says the call fetches everything: an empty list fetches
+	// the id alone, which a /get returns whatever it is asked for.
+	props := []string{}
 	for i, item := range arr.Items {
 		lit, ok := item.(*Literal)
 		if !ok {
@@ -865,7 +867,7 @@ func (c *checker) nestedProperties(call *Call, where string) []string {
 	if !ok {
 		return nil
 	}
-	var props []string
+	props := []string{}
 	for i, item := range arr.Items {
 		lit, ok := item.(*Literal)
 		if !ok {

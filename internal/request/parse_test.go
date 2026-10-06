@@ -238,6 +238,15 @@ func TestParseErrors(t *testing.T) {
 		]}`,
 		want: `/list/*/threadId selects threadId from the Email/get call, which does not fetch it`,
 	}, {
+		// An empty list asks for the id alone, which the server returns
+		// whatever is asked for. It narrows as much as a list of names does.
+		name: "back reference reads a property of a call that fetches none",
+		src: `{"methodCalls": [
+			["Email/get", {"ids": ["a"], "properties": []}, "matched"],
+			["Thread/get", {"#ids": {"resultOf": "matched", "name": "Email/get", "path": "/list/*/threadId"}}, "threads"]
+		]}`,
+		want: `/list/*/threadId selects threadId from the Email/get call, which does not fetch it`,
+	}, {
 		name: "back reference reads a nested property the call did not fetch",
 		src: `{"methodCalls": [
 			["Email/get", {"ids": ["a"], "properties": ["id", "textBody"],
