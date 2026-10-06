@@ -323,6 +323,18 @@ func write(cfg *Config, catalogue *spec.Spec, requests []*request.Request, props
 	if err := os.MkdirAll(cfg.Out, 0o755); err != nil {
 		return err
 	}
+	// A file named as one about to be written but for case is that file on a
+	// file system that ignores case. Writing it would keep the old name on
+	// disk, so it is renamed first.
+	renamed, err := caseOnly(cfg.Out, files)
+	if err != nil {
+		return err
+	}
+	for _, old := range sortedKeys(renamed) {
+		if err := os.Rename(filepath.Join(cfg.Out, old), filepath.Join(cfg.Out, renamed[old])); err != nil {
+			return err
+		}
+	}
 	names := make([]string, 0, len(files))
 	for name := range files {
 		names = append(names, name)
@@ -386,6 +398,14 @@ func verify(cfg *Config, catalogue *spec.Spec, requests []*request.Request, prop
 			differences++
 		}
 	}
+	renamed, err := caseOnly(cfg.Out, files)
+	if err != nil {
+		return err
+	}
+	for _, old := range sortedKeys(renamed) {
+		fmt.Fprintf(stderr, "%s: named %s on disk\n", filepath.Join(cfg.Out, renamed[old]), old)
+		differences++
+	}
 	left, err := leftBehind(cfg.Out, files)
 	if err != nil {
 		return err
@@ -413,12 +433,19 @@ func leftBehind(dir string, files map[string][]byte) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	renamed, err := caseOnly(dir, files)
+	if err != nil {
+		return nil, err
+	}
 	var left []string
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
 		}
 		if _, generated := files[entry.Name()]; generated {
+			continue
+		}
+		if _, same := renamed[entry.Name()]; same {
 			continue
 		}
 		written, err := writtenByJmapc(filepath.Join(dir, entry.Name()))
@@ -431,6 +458,54 @@ func leftBehind(dir string, files map[string][]byte) ([]string, error) {
 	}
 	sort.Strings(left)
 	return left, nil
+}
+
+// caseOnly returns the files in dir whose names differ from a file about to be
+// generated only in case, and which the file system takes to be that file, as
+// one that ignores case does. They are keyed by the name on disk, and map to
+// the name they are generated under. On a file system that tells the two names
+// apart, the file is a different one, and nothing is returned for it.
+func caseOnly(dir string, files map[string][]byte) (map[string]string, error) {
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	lower := make(map[string]string, len(files))
+	for name := range files {
+		lower[strings.ToLower(name)] = name
+	}
+	// A name already on disk as it is spelled is its own file, whatever the
+	// file system makes of the other: a link to it is not the file renamed.
+	present := make(map[string]bool, len(entries))
+	for _, entry := range entries {
+		present[entry.Name()] = true
+	}
+	renamed := map[string]string{}
+	for _, entry := range entries {
+		name := entry.Name()
+		want, ok := lower[strings.ToLower(name)]
+		if entry.IsDir() || !ok || want == name || present[want] {
+			continue
+		}
+		have, err := os.Stat(filepath.Join(dir, name))
+		if err != nil {
+			return nil, err
+		}
+		same, err := os.Stat(filepath.Join(dir, want))
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if os.SameFile(have, same) {
+			renamed[name] = want
+		}
+	}
+	return renamed, nil
 }
 
 // writtenByJmapc reports whether a file starts with the banner jmapc puts at
@@ -659,4 +734,15 @@ func plural(n int, one, many string) string {
 		return fmt.Sprintf("%d %s", n, one)
 	}
 	return fmt.Sprintf("%d %s", n, many)
+}
+
+// sortedKeys returns the keys of m in order, so that what is done or reported
+// for each is done in the same order every run.
+func sortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
