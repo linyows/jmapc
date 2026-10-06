@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/linyows/jmapc/internal/request"
 	"github.com/linyows/jmapc/internal/spec"
 )
 
@@ -97,4 +98,31 @@ func joinURIs(uris []string) string {
 		return uris[0] + " and " + uris[1]
 	}
 	return strings.Join(uris[:len(uris)-1], ", ") + ", and " + uris[len(uris)-1]
+}
+
+// FuncDoc returns the documentation of the function a request is generated as,
+// named as the language names it: what the request's author wrote of it, what
+// calls it makes, what it returns, and the session lookups and creation ids it
+// involves. capabilities are those whose primary account it looks up.
+func FuncDoc(q *request.Request, name string, capabilities []string) string {
+	doc := strings.TrimSpace(q.Doc)
+	if doc == "" {
+		doc = fmt.Sprintf("%s sends the JMAP request in %s.", name, q.Path)
+	}
+	methods := make([]string, len(q.Calls))
+	for i, c := range q.Calls {
+		methods[i] = c.Method.Name
+	}
+	doc += fmt.Sprintf("\n\nIt makes %s in a single request, so that %s.",
+		JoinMethods(methods), RoundTripPhrase(len(q.Calls)))
+	if q.Returns != nil {
+		doc += fmt.Sprintf(" It returns the response to the %s call.", q.Returns.Method.Name)
+	}
+	if len(capabilities) > 0 {
+		doc += "\n\n" + PrimaryAccountPhrase(capabilities)
+	}
+	if q.CreatedIDs {
+		doc += "\n\nIt takes the creation ids of an earlier request and reports its own, so that a reference to something created there still resolves here."
+	}
+	return doc
 }
