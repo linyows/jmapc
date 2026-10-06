@@ -309,10 +309,12 @@ func (s *Server) ServeEvents(w http.ResponseWriter, r *http.Request) {
 	// RFC 8620 lets a server ping less often than asked, and an interval past
 	// what a Duration holds is pinged at the most this one does.
 	const maxPing = 24 * 60 * 60
+	// The interval is read as 64 bits whatever int is, so that one too large
+	// for an int is clamped as any other too long, rather than dropped.
 	var ping <-chan time.Time
-	seconds, err := strconv.Atoi(query.Get("ping"))
-	if err == nil && seconds > 0 {
-		seconds = min(seconds, maxPing)
+	var seconds uint64
+	if asked, err := strconv.ParseUint(query.Get("ping"), 10, 64); err == nil && asked > 0 {
+		seconds = min(asked, maxPing)
 		ticker := time.NewTicker(time.Duration(seconds) * time.Second)
 		defer ticker.Stop()
 		ping = ticker.C
