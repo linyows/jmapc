@@ -52,8 +52,14 @@ type Client struct {
 	// fetch of the session resource.
 	fetching chan struct{}
 	// fetchErr is what the last fetch returned, for the callers that waited on
-	// it rather than making one of their own.
-	fetchErr error
+	// it rather than making one of their own. fetchAbandoned says the fetch
+	// ended because the caller making it gave up, its own context ending,
+	// which is no failure of the callers waiting on it.
+	fetchErr       error
+	fetchAbandoned bool
+	// sharing, where set, is called as a caller starts waiting on a fetch
+	// another caller is making. Tests use it to know a caller is waiting.
+	sharing func()
 }
 
 // Option configures a Client.
@@ -187,6 +193,9 @@ func (c *Client) fetchSession(ctx context.Context) (*Session, error) {
 	for c.fetching != nil {
 		wait := c.fetching
 		c.mu.Unlock()
+		if c.sharing != nil {
+			c.sharing()
+		}
 		select {
 		case <-wait:
 		case <-ctx.Done():
@@ -198,7 +207,7 @@ func (c *Client) fetchSession(ctx context.Context) (*Session, error) {
 			c.mu.Unlock()
 			return s, nil
 		}
-		if !abandoned(ctx, err) {
+		if !c.fetchAbandoned {
 			c.mu.Unlock()
 			return nil, err
 		}
@@ -214,20 +223,15 @@ func (c *Client) fetchSession(ctx context.Context) (*Session, error) {
 
 	c.mu.Lock()
 	c.fetching, c.fetchErr = nil, err
+	// A timeout of the HTTP client's own is not the caller giving up, though
+	// it is a deadline too: what decides it is whether ctx itself ended.
+	c.fetchAbandoned = err != nil && ctx.Err() != nil
 	if err == nil {
 		c.session, c.stale = s, false
 	}
 	c.mu.Unlock()
 	close(wait)
 	return s, err
-}
-
-// abandoned reports whether err is a call another caller made and gave up on,
-// ending with its own context, where ctx, the context of the caller sharing the
-// call, has not ended. Such a caller has not failed; it has only been waiting
-// on a call that is no longer being made.
-func abandoned(ctx context.Context, err error) bool {
-	return ctx.Err() == nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded))
 }
 
 // noteSessionState records that a response reported a session other than the

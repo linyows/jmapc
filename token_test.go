@@ -237,6 +237,9 @@ func TestAWaitingRequestOutlivesTheOneThatCalledTheSource(t *testing.T) {
 		}
 		return Token{Value: "t2"}, nil
 	}}
+	waiting := make(chan struct{})
+	var once sync.Once
+	h.sharing = func() { once.Do(func() { close(waiting) }) }
 
 	first, cancel := context.WithCancel(context.Background())
 	firstDone := make(chan error, 1)
@@ -254,8 +257,7 @@ func TestAWaitingRequestOutlivesTheOneThatCalledTheSource(t *testing.T) {
 		}
 		second <- value
 	}()
-	// Give the second request time to start waiting on the first one's call.
-	time.Sleep(20 * time.Millisecond)
+	<-waiting
 	cancel()
 
 	if err := <-firstDone; !errors.Is(err, context.Canceled) {

@@ -317,6 +317,9 @@ func TestAWaitingCallerOutlivesTheOneThatFetchedTheSession(t *testing.T) {
 		  "primaryAccounts": {}, "username": "someone", "apiUrl": %q, "state": "s1"}`, srv.URL+"/api")
 	})
 	c := New(srv.URL + "/session")
+	waiting := make(chan struct{})
+	var once sync.Once
+	c.sharing = func() { once.Do(func() { close(waiting) }) }
 
 	first, cancel := context.WithCancel(context.Background())
 	firstDone := make(chan error, 1)
@@ -334,8 +337,7 @@ func TestAWaitingCallerOutlivesTheOneThatFetchedTheSession(t *testing.T) {
 		}
 		second <- s
 	}()
-	// Give the second caller time to start waiting on the first one's fetch.
-	time.Sleep(20 * time.Millisecond)
+	<-waiting
 	cancel()
 
 	if err := <-firstDone; err == nil {
@@ -351,5 +353,46 @@ func TestAWaitingCallerOutlivesTheOneThatFetchedTheSession(t *testing.T) {
 	}
 	if n := hits.Load(); n != 2 {
 		t.Errorf("the session was fetched %d times, want 2", n)
+	}
+}
+
+// TestATimeoutOfTheHTTPClientIsShared checks a fetch that fails because the
+// HTTP client's own timeout passed, while the caller making it waited on. That
+// is the fetch failing rather than the caller giving up, so the callers
+// waiting on it share the failure instead of each making a fetch of their own.
+func TestATimeoutOfTheHTTPClientIsShared(t *testing.T) {
+	var hits atomic.Int64
+	arrived := make(chan struct{}, 4)
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	mux.HandleFunc("/session", func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		arrived <- struct{}{}
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+	})
+	c := New(srv.URL+"/session", WithHTTPClient(&http.Client{Timeout: 200 * time.Millisecond}),
+		WithRetryPolicy(RetryPolicy{Attempts: 1}))
+	waiting := make(chan struct{})
+	var once sync.Once
+	c.sharing = func() { once.Do(func() { close(waiting) }) }
+
+	errs := make(chan error, 2)
+	go func() { _, err := c.Session(context.Background()); errs <- err }()
+	<-arrived
+	go func() { _, err := c.Session(context.Background()); errs <- err }()
+	<-waiting
+	for range 2 {
+		if err := <-errs; err == nil {
+			t.Error("a caller got a session from a fetch that timed out")
+		}
+	}
+	if n := hits.Load(); n != 1 {
+		t.Errorf("the session was fetched %d times, want the one fetch shared", n)
 	}
 }
