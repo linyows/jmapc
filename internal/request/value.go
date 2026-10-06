@@ -722,8 +722,15 @@ func (c *checker) patchObject(members map[string]json.RawMessage, keys []string,
 			}
 			keyTypes, properties, valueType, target = resolved, named, value, resolvedField
 			// A property another specification adds needs its capability
-			// however it is reached, by a patch as well as by name.
-			c.useCapability(target)
+			// however it is reached, by a patch as well as by name, and so
+			// does every property the pointer passes through on the way.
+			for i := range segments {
+				if i < len(named) && named[i] && !unknown[i] {
+					if _, _, _, through, err := c.spec.ResolvePatch(c.patchTarget, segments[:i+1], unknown[:i+1]); err == nil {
+						c.useCapability(through)
+					}
+				}
+			}
 			// A sent request has its ids written out: each segment the
 			// pointer takes as an id has to be one.
 			if c.sent {

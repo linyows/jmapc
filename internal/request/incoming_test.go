@@ -83,3 +83,28 @@ func TestASentPatchIsHeldToWhatItReaches(t *testing.T) {
 		t.Errorf("a patch keyed by an id: %v", errs[2])
 	}
 }
+
+// TestASentPatchNeedsTheCapabilityOfWhatItPassesThrough checks a patch reaching
+// into a property another specification adds: the property's capability is
+// needed as it would be to replace the property whole, though the property
+// inside it needs none of its own.
+func TestASentPatchNeedsTheCapabilityOfWhatItPassesThrough(t *testing.T) {
+	s := spec.Standard()
+	if err := s.Extend(&spec.Schema{
+		Capability: "urn:example:notes",
+		Types: []*spec.SchemaType{
+			{Name: "Extra", Capability: "urn:example:notes", Properties: []*spec.SchemaField{{Name: "label", Type: "String"}}},
+			{Name: "Note", Methods: []string{"set"}, Properties: []*spec.SchemaField{
+				{Name: "id", Type: "Id", ServerSet: true},
+				{Name: "extra", Type: "Extra", Capability: "urn:example:extras"},
+			}},
+		},
+	}); err != nil {
+		t.Fatalf("Extend: %v", err)
+	}
+	check := NewRequestCheck(s, []string{"urn:ietf:params:jmap:core", "urn:example:notes"})
+	err := check.Call(json.RawMessage(`["Note/set", {"update": {"n1": {"extra/label": "x"}}}, "c0"]`), 0)
+	if err == nil || !strings.Contains(err.Error(), "urn:example:extras") {
+		t.Errorf("a patch through extra: %v, want urn:example:extras reported", err)
+	}
+}
