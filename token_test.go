@@ -275,3 +275,29 @@ func TestAWaitingRequestOutlivesTheOneThatCalledTheSource(t *testing.T) {
 		t.Errorf("the source was called %d times, want 2", n)
 	}
 }
+
+// TestRequestsRefusedTogetherReplaceTheTokenOnce checks two requests the server
+// refused the same token for. The first replaces it; the second finds the
+// replacement in place and sends it, rather than dropping it and asking the
+// source again.
+func TestRequestsRefusedTogetherReplaceTheTokenOnce(t *testing.T) {
+	var calls atomic.Int64
+	h := &tokenHolder{src: func(context.Context) (Token, error) {
+		return Token{Value: fmt.Sprintf("t%d", calls.Add(1)+1)}, nil
+	}}
+	h.held = Token{Value: "t1"}
+
+	h.discard("t1")
+	first, err := h.token(context.Background())
+	if err != nil || first != "t2" {
+		t.Fatalf("the first request got %q, %v, want t2", first, err)
+	}
+	h.discard("t1")
+	second, err := h.token(context.Background())
+	if err != nil || second != "t2" {
+		t.Errorf("the second request got %q, %v, want the t2 the first one fetched", second, err)
+	}
+	if n := calls.Load(); n != 1 {
+		t.Errorf("the source was called %d times, want 1", n)
+	}
+}

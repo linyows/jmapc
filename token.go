@@ -155,14 +155,23 @@ func (t *tokenHolder) fetched() (string, error) {
 	if t.err != nil {
 		return "", fmt.Errorf("jmapc: fetching a token: %w", t.err)
 	}
+	if t.held.Value == "" {
+		return "", fmt.Errorf("jmapc: the token source returned an empty token")
+	}
 	return "", fmt.Errorf("jmapc: the token source returned a token that is already expired")
 }
 
 // discard drops the token held, so that the next request fetches another. It
-// is called where a server has refused the one that was sent.
-func (t *tokenHolder) discard() {
+// is called where a server has refused refused, the one that was sent. A token
+// another request has put in its place since is left alone: requests refused
+// together would otherwise each drop the replacement the first one fetched,
+// and call the source once apiece. Where the refused token is not known, the
+// one held is dropped.
+func (t *tokenHolder) discard(refused string) {
 	t.mu.Lock()
-	t.held = Token{}
+	if refused == "" || t.held.Value == refused {
+		t.held = Token{}
+	}
 	t.mu.Unlock()
 }
 
