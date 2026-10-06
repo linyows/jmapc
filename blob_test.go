@@ -77,6 +77,10 @@ type blobServer struct {
 	// where part of it was asked for, as a server that does not implement
 	// ranges does.
 	ignoreRange bool
+	// rangeFrom, where it is not -1, is where the part the download endpoint
+	// answers with starts, whatever was asked for, as a server that gets
+	// ranges wrong does.
+	rangeFrom int
 	// maxSizeUpload is advertised by the session.
 	maxSizeUpload int
 }
@@ -86,7 +90,7 @@ const blobBody = "%PDF-1.4 pretend"
 
 func newBlobServer(t *testing.T) *blobServer {
 	t.Helper()
-	bs := &blobServer{maxSizeUpload: 1 << 20}
+	bs := &blobServer{maxSizeUpload: 1 << 20, rangeFrom: -1}
 	ts := newTestServer(t)
 	bs.testServer = ts
 
@@ -127,6 +131,9 @@ func newBlobServer(t *testing.T) *blobServer {
 			return
 		}
 		from, to := parseTestRange(t, bs.downloadRange, len(blobBody))
+		if bs.rangeFrom >= 0 {
+			from = bs.rangeFrom
+		}
 		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", from, to, len(blobBody)))
 		w.WriteHeader(http.StatusPartialContent)
 		fmt.Fprint(w, blobBody[from:to+1])
@@ -423,6 +430,25 @@ func TestADownloadWhoseRangeWasIgnoredFails(t *testing.T) {
 	// consults IsTemporary must not keep asking.
 	if IsTemporary(err) {
 		t.Errorf("IsTemporary(%v) = true, want false", err)
+	}
+}
+
+// A server that answers with part of the blob, but not the part asked for,
+// ignored the range as much as one answering with the whole: the caller would
+// write the part at the offset it asked to continue from.
+func TestADownloadAnsweredWithAnotherRangeFails(t *testing.T) {
+	bs := newBlobServer(t)
+	bs.rangeFrom = 0
+	_, err := bs.client().Download(context.Background(), "a1", "blob9", &DownloadOptions{From: 5})
+	if err == nil {
+		t.Fatal("Download succeeded where the server answered with another part")
+	}
+	if !strings.Contains(err.Error(), `"bytes=5-"`) || !strings.Contains(err.Error(), "bytes 0-") {
+		t.Errorf("error = %v, want it to name the range asked for and the one answered", err)
+	}
+	if !IsRangeIgnored(err) || IsTemporary(err) {
+		t.Errorf("IsRangeIgnored = %v, IsTemporary = %v, want true and false",
+			IsRangeIgnored(err), IsTemporary(err))
 	}
 }
 

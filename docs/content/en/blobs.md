@@ -31,9 +31,9 @@ blob.Range // the part that came back: 4096-8191 of 8192
 ```
 
 They are sent as an HTTP `Range` header. JMAP defines none for the download
-endpoint, so a server is free to ignore it and answer with the whole blob;
-where that happens the download fails rather than returning content the caller
-would write at the wrong offset. `IsRangeIgnored` reports that failure, which
+endpoint, so a server is free to ignore it and answer with the whole blob, or
+with a part that starts somewhere else; where that happens the download fails
+rather than returning content the caller would write at the wrong offset. `IsRangeIgnored` reports that failure, which
 asking again does not change, so a download that cannot be resumed starts over:
 
 ```go
