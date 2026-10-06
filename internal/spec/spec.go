@@ -570,6 +570,12 @@ func (s *Spec) ResolvePatch(dataType string, segments []string, unknown []bool) 
 						TypeName: o.Name, Property: seg, Known: o.PropertyNames(),
 					}
 				}
+				// What a record is written with is its fields and, of a
+				// message and its parts, its header fields; the other dynamic
+				// properties are there to be read.
+				if header, _ := ParseHeaderProperty(seg); header == nil || (o.Name != "Email" && o.Name != "EmailBodyPart") {
+					return nil, nil, nil, nil, fmt.Errorf("%s is a property to ask %s for, not one to write", seg, o.Name)
+				}
 				f = dynamic
 			}
 			cur = f.ParsedType()
