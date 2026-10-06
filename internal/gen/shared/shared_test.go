@@ -245,3 +245,20 @@ func TestRecordPropertiesHoldTheFieldsDataComesBackAs(t *testing.T) {
 		t.Errorf("the doc of data:asText was %q", got)
 	}
 }
+
+// TestAnExtendingSetDoesNotRedeclareWhatItInherits checks a set adding data to
+// one that holds data:asText: the base already has that member, asked for by
+// name and so required, and the derived set holds only data:asBase64, which the
+// server picks.
+func TestAnExtendingSetDoesNotRedeclareWhatItInherits(t *testing.T) {
+	blob, _ := spec.Standard().Object("BlobData")
+	base := &request.PropertySet{Name: "BlobText", Type: "BlobData", Own: []string{"data:asText"}}
+	derived := &request.PropertySet{Name: "BlobContent", Type: "BlobData", Extends: base, Own: []string{"data"}}
+	if got := strings.Join(SetProperties(base, blob), ","); got != "id,data:asText" {
+		t.Errorf("the base holds %s, want id,data:asText", got)
+	}
+	if got := strings.Join(SetProperties(derived, blob), ","); got != "data:asBase64" {
+		t.Errorf("the derived set holds %s, want data:asBase64", got)
+	}
+}
+
