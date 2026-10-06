@@ -81,7 +81,7 @@ func (g *RequestGenerator) writePropertySet(buf *bytes.Buffer, set *request.Prop
 		if i > 0 || set.Extends != nil {
 			buf.WriteString("\n")
 		}
-		g.writeRecordField(buf, dataType, name, "", "")
+		g.writeRecordField(buf, dataType, set.Own, name, "", "")
 	}
 	buf.WriteString("}\n\n")
 }

@@ -871,3 +871,22 @@ func TestAVendorMethodThatReturnsTheIDGivesItsRecordsOne(t *testing.T) {
 		}
 	}
 }
+
+// TestABlobAskedForItsDataHoldsBothEncodings checks a Blob/get asking for data:
+// the server answers under data:asText or data:asBase64, so the record holds
+// both and no member named data, which never comes back.
+func TestABlobAskedForItsDataHoldsBothEncodings(t *testing.T) {
+	src := generateOne(t, "ReadBlob", `{"methodCalls": [["Blob/get", {"ids": ["b1"], "properties": ["data", "size"]}, "b"]]}`)
+	for _, want := range []string{
+		"DataAsText *string `json:\"data:asText\"`",
+		"DataAsBase64 string `json:\"data:asBase64\"`",
+		"whichever suits the value, so it may be absent.",
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("the generated code does not hold %s:\n%s", want, src)
+		}
+	}
+	if strings.Contains(src, "`json:\"data\"`") {
+		t.Errorf("the generated code holds a member named data:\n%s", src)
+	}
+}

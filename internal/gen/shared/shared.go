@@ -7,10 +7,12 @@ package shared
 import (
 	"io"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/linyows/jmapc/internal/request"
+	"github.com/linyows/jmapc/internal/spec"
 )
 
 // GeneratedBanner is the first line of every file jmapc writes. It marks the
@@ -90,19 +92,66 @@ func Unique(taken map[string]bool, name string) string {
 	return candidate
 }
 
-// RecordProperties returns the properties a record type holds. Where withID
-// says the method returns the id whatever it is asked for, as a /get does, the
-// id is among them whether or not the request asked for it.
-func RecordProperties(props []string, withID bool) []string {
-	if !withID {
-		return props
+// RecordProperties returns the properties a record type of dataType holds.
+// Where withID says the method returns the id whatever it is asked for, as a
+// /get does, the id is among them whether or not the request asked for it. A
+// property that comes back as fields of other names, as the data of a blob
+// does, is held as those fields, each once.
+func RecordProperties(dataType *spec.Object, props []string, withID bool) []string {
+	out := make([]string, 0, len(props)+1)
+	if withID && !slices.Contains(props, "id") {
+		out = append(out, "id")
 	}
 	for _, p := range props {
-		if p == "id" {
-			return props
+		answered := dataType.AnsweredAs(p)
+		if answered == nil {
+			answered = []string{p}
+		}
+		for _, name := range answered {
+			if !slices.Contains(out, name) && (name == p || !slices.Contains(props, name)) {
+				out = append(out, name)
+			}
 		}
 	}
-	return append([]string{"id"}, props...)
+	return out
+}
+
+// PickedByServer reports whether a record of dataType asked for props holds
+// name only where the server picks it: a field one of props comes back as, one
+// of several, as data:asText is where data was asked for. A field asked for by
+// its own name comes back whatever the server would pick.
+func PickedByServer(dataType *spec.Object, props []string, name string) bool {
+	if slices.Contains(props, name) {
+		return false
+	}
+	for _, p := range props {
+		if slices.Contains(dataType.AnsweredAs(p), name) {
+			return true
+		}
+	}
+	return false
+}
+
+// RecordFieldDoc returns the documentation of a field of a record type of
+// dataType asked for props, saying where the server picks whether to send it.
+func RecordFieldDoc(dataType *spec.Object, props []string, field *spec.Field) string {
+	if !PickedByServer(dataType, props, field.Name) {
+		return field.Doc
+	}
+	var others []string
+	for _, p := range props {
+		answered := dataType.AnsweredAs(p)
+		if slices.Contains(answered, field.Name) {
+			for _, name := range answered {
+				if name != field.Name {
+					others = append(others, name)
+				}
+			}
+			break
+		}
+	}
+	return field.Doc + " The server sends this or " + strings.Join(others, " or ") +
+		", whichever suits the value, so it may be absent."
 }
 
 // SameNarrowing maps each call that narrows what it fetches to the first call

@@ -124,11 +124,6 @@ func TestDynamicPropertyDoc(t *testing.T) {
 			want: "The digest of the blob under the sha-256 algorithm, as base64.",
 		},
 		{
-			name: "the blob's octets",
-			in:   "data",
-			want: "The blob's octets. The server returns them under data:asText or data:asBase64, whichever suits what they hold, so this property itself does not come back.",
-		},
-		{
 			name: "anything else",
 			in:   "myExtension",
 			want: "The myExtension property, whose meaning the server decides.",

@@ -2,6 +2,7 @@ package shared
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/linyows/jmapc/internal/request"
@@ -11,15 +12,23 @@ import (
 // SetProperties returns the properties the record type of a set holds: its own,
 // with the id first where it is the set its type starts from and the type has
 // an id, since a /get returns the id whatever it is asked for. A set extending
-// another holds the id through the one it extends.
+// another holds the id through the one it extends, and holds no field the one
+// it extends does: a set adding data to one holding data:asText already has
+// that member, required. The other way round, a set adding data:asText to one
+// holding data, is refused where the sets are read.
 func SetProperties(set *request.PropertySet, dataType *spec.Object) []string {
-	if set.Extends != nil {
-		return set.Own
+	_, hasID := dataType.Field("id")
+	if set.Extends == nil {
+		return RecordProperties(dataType, set.Own, hasID)
 	}
-	if _, hasID := dataType.Field("id"); !hasID {
-		return set.Own
+	inherited := RecordProperties(dataType, set.Extends.Properties(), hasID)
+	var out []string
+	for _, name := range RecordProperties(dataType, set.Own, false) {
+		if !slices.Contains(inherited, name) {
+			out = append(out, name)
+		}
 	}
-	return RecordProperties(set.Own, true)
+	return out
 }
 
 // SetDoc returns the documentation of a set's type, named as the language names

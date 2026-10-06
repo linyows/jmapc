@@ -256,7 +256,7 @@ func (g *RequestGenerator) collectRecordTypes(c *request.Call, info *call, impor
 		if properties == nil {
 			properties = dataType.PropertyNames()
 		}
-		add(dataType, shared.RecordProperties(properties, c.Method.ReturnsID))
+		add(dataType, shared.RecordProperties(dataType, properties, c.Method.ReturnsID))
 	}
 	if info.NestedType != "" {
 		if nested, ok := g.Spec.Object(c.Method.NestedType); ok && !info.SharedNested {
@@ -331,7 +331,7 @@ func (g *RequestGenerator) writeNestedTypes(buf *bytes.Buffer, p *plan) {
 			if i > 0 {
 				buf.WriteString("\n")
 			}
-			g.writeRecordField(buf, nested, name, info.NestedType, c.Method.NestedType)
+			g.writeRecordField(buf, nested, c.NestedProperties, name, info.NestedType, c.Method.NestedType)
 		}
 		buf.WriteString("}\n\n")
 	}
@@ -357,11 +357,11 @@ func (g *RequestGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 		if properties == nil {
 			properties = dataType.PropertyNames()
 		}
-		for i, name := range shared.RecordProperties(properties, c.Method.ReturnsID) {
+		for i, name := range shared.RecordProperties(dataType, properties, c.Method.ReturnsID) {
 			if i > 0 {
 				buf.WriteString("\n")
 			}
-			g.writeRecordField(buf, dataType, name, info.NestedType, c.Method.NestedType)
+			g.writeRecordField(buf, dataType, properties, name, info.NestedType, c.Method.NestedType)
 		}
 		buf.WriteString("}\n\n")
 	}
@@ -370,7 +370,7 @@ func (g *RequestGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 // writeRecordField writes one field of a generated record struct. A record
 // comes back from the server, so a property it asked for is there: what the
 // request narrowed to is not optional, only nullable where the type says so.
-func (g *RequestGenerator) writeRecordField(buf *bytes.Buffer, dataType *spec.Object, name, nestedTo, nestedFrom string) {
+func (g *RequestGenerator) writeRecordField(buf *bytes.Buffer, dataType *spec.Object, asked []string, name, nestedTo, nestedFrom string) {
 	field, known := dataType.Field(name)
 	if !known {
 		if header, err := spec.ParseHeaderProperty(name); err == nil && header != nil {
@@ -382,7 +382,11 @@ func (g *RequestGenerator) writeRecordField(buf *bytes.Buffer, dataType *spec.Ob
 		writeDynamicMember(buf, name)
 		return
 	}
-	writeDoc(buf, "    ", field.Doc)
+	writeDoc(buf, "    ", shared.RecordFieldDoc(dataType, asked, field))
+	if shared.PickedByServer(dataType, asked, name) {
+		writeMember(buf, dataType.Name, name, field.ParsedType(), true, true)
+		return
+	}
 	writeNestedMember(buf, dataType.Name, name, field.ParsedType(), nestedTo, nestedFrom)
 }
 

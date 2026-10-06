@@ -330,11 +330,11 @@ func (g *RequestGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 			// type change.
 			properties = dataType.PropertyNames()
 		}
-		for i, name := range shared.RecordProperties(properties, c.Method.ReturnsID) {
+		for i, name := range shared.RecordProperties(dataType, properties, c.Method.ReturnsID) {
 			if i > 0 {
 				buf.WriteString("\n")
 			}
-			g.writeRecordField(buf, dataType, name, info.NestedType, c.Method.NestedType)
+			g.writeRecordField(buf, dataType, properties, name, info.NestedType, c.Method.NestedType)
 		}
 		buf.WriteString("}\n\n")
 	}
@@ -356,7 +356,7 @@ func (g *RequestGenerator) writeNestedType(buf *bytes.Buffer, p *plan, c *reques
 		if i > 0 {
 			buf.WriteString("\n")
 		}
-		g.writeRecordField(buf, nested, name, info.NestedType, c.Method.NestedType)
+		g.writeRecordField(buf, nested, c.NestedProperties, name, info.NestedType, c.Method.NestedType)
 	}
 	buf.WriteString("}\n\n")
 }
@@ -364,7 +364,7 @@ func (g *RequestGenerator) writeNestedType(buf *bytes.Buffer, p *plan, c *reques
 // writeRecordField writes one field of a generated record type. Where nestedTo
 // is set, a reference to the type named by nestedFrom becomes a reference to
 // the generated one instead.
-func (g *RequestGenerator) writeRecordField(buf *bytes.Buffer, dataType *spec.Object, name, nestedTo, nestedFrom string) {
+func (g *RequestGenerator) writeRecordField(buf *bytes.Buffer, dataType *spec.Object, asked []string, name, nestedTo, nestedFrom string) {
 	field, known := dataType.Field(name)
 	if !known {
 		// A property naming one header field of the message has a type after
@@ -381,7 +381,7 @@ func (g *RequestGenerator) writeRecordField(buf *bytes.Buffer, dataType *spec.Ob
 		fmt.Fprintf(buf, "\t%s json.RawMessage `json:%q`\n", spec.ExportedName(name), name)
 		return
 	}
-	shared.WriteComment(buf, "\t", field.Doc)
+	shared.WriteComment(buf, "\t", shared.RecordFieldDoc(dataType, asked, field))
 	fmt.Fprintf(buf, "\t%s %s `json:%q`\n",
 		spec.ExportedName(name), g.nestedGoType(field.ParsedType(), nestedTo, nestedFrom), name)
 }
