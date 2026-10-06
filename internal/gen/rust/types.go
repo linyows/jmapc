@@ -200,7 +200,6 @@ func omittable(o *spec.Object, f *spec.Field) bool {
 // writeMember writes one field, with the serde attributes its name and its
 // optionality call for.
 func writeMember(buf *bytes.Buffer, owner, wireName string, t *spec.Type, optional, lenient bool) {
-	ident := spec.RustFieldName(wireName)
 	rendered := t.RustType()
 	// A property whose type is the type it belongs to would make the struct
 	// infinitely large, so it is held behind a Box. Going through a Vec or a
@@ -208,6 +207,13 @@ func writeMember(buf *bytes.Buffer, owner, wireName string, t *spec.Type, option
 	if t.Name == owner {
 		rendered = boxed(rendered)
 	}
+	writeRenderedMember(buf, wireName, rendered, optional, lenient)
+}
+
+// writeRenderedMember writes a struct field whose type is already written, as
+// rendered.
+func writeRenderedMember(buf *bytes.Buffer, wireName, rendered string, optional, lenient bool) {
+	ident := spec.RustFieldName(wireName)
 	if optional && !strings.HasPrefix(rendered, "Option<") {
 		rendered = "Option<" + rendered + ">"
 	}

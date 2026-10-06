@@ -419,7 +419,7 @@ func (g *RequestGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 			goType := field.ParsedType().GoType(g.Qualifier)
 			if field.Name == c.Method.ResultProperty {
 				goType = shared.ResultType(field.ParsedType(), c.Method.DataType, info.RecordType,
-					func(t *spec.Type) string { return t.GoType(g.Qualifier) })
+					func(t *spec.Type) string { return t.GoType(g.Qualifier) }, goShape(g.Qualifier))
 			}
 			fmt.Fprintf(buf, "\t%s %s `json:%q`\n", spec.ExportedName(field.Name), goType, field.Name)
 		}
@@ -449,4 +449,19 @@ func (g *RequestGenerator) writeResultType(buf *bytes.Buffer, p *plan) {
 		fmt.Fprintf(buf, "\tCreatedIDs map[%[1]sID]%[1]sID\n", g.Qualifier)
 	}
 	buf.WriteString("}\n\n")
+}
+
+// goShape writes the containers around a call's records as Go writes them: a
+// nil slice or map is already null, and a record that may be null is a pointer.
+func goShape(qualifier string) shared.Shape {
+	return shared.Shape{
+		List: func(_ *spec.Type, s string) string { return "[]" + s },
+		Map:  func(key *spec.Type, s string) string { return "map[" + key.GoType(qualifier) + "]" + s },
+		Null: func(t *spec.Type, s string) string {
+			if t.IsArray() || t.IsMap() {
+				return s
+			}
+			return "*" + s
+		},
+	}
 }

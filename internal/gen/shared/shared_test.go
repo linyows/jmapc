@@ -276,7 +276,12 @@ func TestResultTypeNamesTheRecordsWhereverTheyAre(t *testing.T) {
 	}
 	for _, tt := range tests {
 		typ := spec.MustParseType(tt.typ)
-		got := ResultType(typ, tt.dataType, "Record", func(t *spec.Type) string { return t.GoType("jmapc.") })
+		shape := Shape{
+			List: func(_ *spec.Type, s string) string { return "[]" + s },
+			Map:  func(key *spec.Type, s string) string { return "map[" + key.GoType("jmapc.") + "]" + s },
+			Null: func(_ *spec.Type, s string) string { return s },
+		}
+		got := ResultType(typ, tt.dataType, "Record", func(t *spec.Type) string { return t.GoType("jmapc.") }, shape)
 		if got != tt.want {
 			t.Errorf("ResultType(%s) = %s, want %s", tt.typ, got, tt.want)
 		}

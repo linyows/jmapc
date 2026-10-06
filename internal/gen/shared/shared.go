@@ -263,40 +263,57 @@ func RequestsDir(paths []string) string {
 	return strings.Join(common, "/")
 }
 
-// RecordSlot stands for a generated record type inside the type of the
-// property holding a call's records, until that type is written in a language
-// and the slot replaced by the record type's name. It is no name a type of
-// JMAP or a schema would take.
-const RecordSlot = "JmapcRecordSlot"
+// Shape writes the containers around a call's records in one language, so
+// that the records inside can be written as the type generated for them.
+type Shape struct {
+	// List writes a list of elem, written as s.
+	List func(elem *spec.Type, s string) string
+	// Map writes a map from key to values written as s.
+	Map func(key *spec.Type, s string) string
+	// Null writes t, written as s, where it may also be null.
+	Null func(t *spec.Type, s string) string
+}
 
 // ResultType writes t, the type of the property holding a call's records, with
 // each record of dataType in it written as recordType: a list of records is a
 // list of recordType, and the map of Email/parse a map to recordType. render
-// writes a type in the language at hand.
-func ResultType(t *spec.Type, dataType, recordType string, render func(*spec.Type) string) string {
-	return strings.ReplaceAll(render(WithRecordSlot(t, dataType)), render(&spec.Type{Name: RecordSlot}), recordType)
+// writes a type that holds no records, and shape the containers around them.
+func ResultType(t *spec.Type, dataType, recordType string, render func(*spec.Type) string, shape Shape) string {
+	if !holdsRecords(t, dataType) {
+		return render(t)
+	}
+	var out string
+	switch {
+	case t.Name == dataType:
+		out = recordType
+	case t.IsArray():
+		out = shape.List(t.Elem, ResultType(t.Elem, dataType, recordType, render, shape))
+	case t.IsMap():
+		out = shape.Map(t.Key, ResultType(t.Value, dataType, recordType, render, shape))
+	default:
+		// A union of records is no shape a method answers with.
+		return render(t)
+	}
+	if t.Nullable {
+		return shape.Null(t, out)
+	}
+	return out
 }
 
-// WithRecordSlot returns a copy of t with each dataType in it replaced by
-// RecordSlot.
-func WithRecordSlot(t *spec.Type, dataType string) *spec.Type {
-	if t == nil {
-		return nil
+// holdsRecords reports whether t is a record of dataType or a list or map of
+// them, at any depth.
+func holdsRecords(t *spec.Type, dataType string) bool {
+	switch {
+	case t == nil:
+		return false
+	case t.Name == dataType:
+		return true
+	case t.IsArray():
+		return holdsRecords(t.Elem, dataType)
+	case t.IsMap():
+		return holdsRecords(t.Value, dataType)
 	}
-	if t.Name == dataType {
-		return &spec.Type{Name: RecordSlot, Nullable: t.Nullable}
-	}
-	out := *t
-	out.Elem = WithRecordSlot(t.Elem, dataType)
-	out.Key = WithRecordSlot(t.Key, dataType)
-	out.Value = WithRecordSlot(t.Value, dataType)
-	if t.Union != nil {
-		out.Union = make([]*spec.Type, len(t.Union))
-		for i, m := range t.Union {
-			out.Union[i] = WithRecordSlot(m, dataType)
-		}
-	}
-	return &out
+	return false
 }
 
 // AroundRecords returns the types inside t, the type of the property holding a

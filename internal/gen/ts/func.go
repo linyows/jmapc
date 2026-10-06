@@ -303,7 +303,7 @@ func (g *RequestGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 			shared.WriteComment(buf, "  ", field.Doc)
 			tsType := field.ParsedType().TSType()
 			if field.Name == c.Method.ResultProperty {
-				tsType = shared.ResultType(field.ParsedType(), c.Method.DataType, info.RecordType, (*spec.Type).TSType)
+				tsType = shared.ResultType(field.ParsedType(), c.Method.DataType, info.RecordType, (*spec.Type).TSType, tsShape)
 			}
 			name := field.Name
 			if spec.TSNeedsQuoting(name) {
@@ -337,4 +337,17 @@ func (g *RequestGenerator) writeResultType(buf *bytes.Buffer, p *plan) {
 		buf.WriteString("  createdIds: { [creationId: Id]: Id }\n")
 	}
 	buf.WriteString("}\n\n")
+}
+
+// tsShape writes the containers around a call's records as TypeScript writes
+// them, an element that may be null in parentheses.
+var tsShape = shared.Shape{
+	List: func(elem *spec.Type, s string) string {
+		if elem.Nullable || elem.IsUnion() {
+			return "(" + s + ")[]"
+		}
+		return s + "[]"
+	},
+	Map:  func(key *spec.Type, s string) string { return "{ [key: " + key.TSType() + "]: " + s + " }" },
+	Null: func(_ *spec.Type, s string) string { return s + " | null" },
 }
