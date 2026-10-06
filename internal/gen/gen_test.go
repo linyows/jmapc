@@ -745,3 +745,21 @@ func TestAnEmptyListOfPropertiesOfAParseIsNoIDOfItsOwn(t *testing.T) {
 		t.Errorf("an id-only record was made for a parsed email:\n%s", src)
 	}
 }
+
+// TestAnEmptyListOfBodyPropertiesFetchesNothingOfAPart checks the body parts of
+// a call asking for none of their properties. A part has no id to be returned
+// whatever is asked for, so its record holds nothing.
+func TestAnEmptyListOfBodyPropertiesFetchesNothingOfAPart(t *testing.T) {
+	src := generateOne(t, "Parts", `{
+	  "methodCalls": [["Email/get", {"ids": ["{{id}}"], "properties": ["textBody"], "bodyProperties": []}, "g"]],
+	  "_returns": "g"
+	}`)
+	part := src[strings.Index(src, "type PartsGEmailBodyPart struct {"):]
+	part = part[:strings.Index(part, "}\n")]
+	if n := strings.Count(part, "`json:"); n != 0 {
+		t.Errorf("the part holds %d properties, want none:\n%s", n, part)
+	}
+	if !strings.Contains(src, "TextBody []PartsGEmailBodyPart") {
+		t.Errorf("the email does not hold its parts in the narrowed record:\n%s", src)
+	}
+}
