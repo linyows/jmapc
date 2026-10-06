@@ -286,6 +286,20 @@ func TestUnknownCommand(t *testing.T) {
 	}
 }
 
+// TestEveryCommandAnswersHelp checks -h on each command that takes flags. It
+// asks for the usage, which is printed to stderr, and is not a failure.
+func TestEveryCommandAnswersHelp(t *testing.T) {
+	for _, command := range []string{"generate", "validate", "run", "schema", "guide"} {
+		_, errOut, err := capture(t, []string{command, "-h"})
+		if err != nil {
+			t.Errorf("%s -h: %v", command, err)
+		}
+		if errOut == "" {
+			t.Errorf("%s -h printed no usage", command)
+		}
+	}
+}
+
 // TestSameRequestUnderTwoNames covers two request files holding one request. They
 // differ only in what they call their parameters and their calls, so they make
 // the same request, and each brings a set of generated types along with it.

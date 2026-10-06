@@ -159,8 +159,14 @@ func run(args []string) error {
 		user = fs.String("user", os.Getenv("JMAP_USER"), "user:password to authenticate with instead")
 		timeout = fs.Duration("timeout", 30*time.Second, "how long to wait for the server")
 	}
+	fs.SetOutput(stderr)
 	fs.Usage = func() { printUsage(stderr) }
 	if err := fs.Parse(args[1:]); err != nil {
+		// -h asks for the usage, which is printed; that is not a failure,
+		// as it is not for run, schema and guide.
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
 		return err
 	}
 	if command == "validate" {
