@@ -246,10 +246,8 @@ func (c *checker) watch(q *Request, f fileSyntax) {
 	if f.Watches == "" {
 		return
 	}
-	call, ok := c.byID[f.Watches]
-	if !ok {
-		c.errorf(WatchesMember, "", "no method call has the id %q", f.Watches).
-			hint(hintFor(f.Watches, c.callIDs()))
+	call := c.loopedCall(WatchesMember, f.Watches)
+	if call == nil {
 		return
 	}
 	if !c.reportsChanges(call) {
@@ -257,29 +255,12 @@ func (c *checker) watch(q *Request, f fileSyntax) {
 			"%s cannot be watched", call.Method.Name)
 		return
 	}
-	if f.CreatedIDs {
-		c.errorf(WatchesMember, "",
-			"a watching request cannot carry creation ids: they belong to one request, and a watch makes many")
-	}
-	if f.Returns != "" && f.Returns != f.Watches {
-		c.errorf(ReturnsMember, "leave "+ReturnsMember+" out, or name the watched call",
-			"a watching request cannot return only %q, since the loop reads the state it goes on from out of the %q response",
-			f.Returns, f.Watches)
-	}
-
-	since, given := call.Args.Find(SinceStateArgument)
-	switch value := since.(type) {
-	case *ParamRef:
-		q.WatchState = value.Param
-	default:
-		_ = value
-		where := fmt.Sprintf("%s.arguments.%s", callPath(q, call), SinceStateArgument)
-		if !given {
-			where = WatchesMember
-		}
-		c.errorf(where, `write "`+SinceStateArgument+`": "{{sinceState}}"`,
-			"the %s of a watched call is the state the loop has reached, so it has to be a parameter", SinceStateArgument)
-	}
+	c.checkLooping(f, loop{
+		member: WatchesMember, request: "watching", call: "watched", maker: "a watch",
+		reads: "the state it goes on from", id: f.Watches,
+	})
+	q.WatchState = c.loopParameter(q, call, WatchesMember, SinceStateArgument,
+		"the "+SinceStateArgument+" of a watched call is the state the loop has reached")
 	if _, referenced := call.Args.Find("#" + AccountIDArgument); referenced {
 		c.errorf(WatchesMember, "",
 			"the account of a watched call comes from an earlier call, and a watch has to know whose events to listen for before it makes any")
@@ -299,10 +280,8 @@ func (c *checker) pages(q *Request, f fileSyntax) {
 	if f.Pages == "" {
 		return
 	}
-	call, ok := c.byID[f.Pages]
-	if !ok {
-		c.errorf(PagesMember, "", "no method call has the id %q", f.Pages).
-			hint(hintFor(f.Pages, c.callIDs()))
+	call := c.loopedCall(PagesMember, f.Pages)
+	if call == nil {
 		return
 	}
 
@@ -322,28 +301,64 @@ func (c *checker) pages(q *Request, f fileSyntax) {
 		c.errorf(PagesMember, "",
 			"a watching request already asks again while the server says there is more, so it does not also take %s", PagesMember)
 	}
-	if f.CreatedIDs {
-		c.errorf(PagesMember, "",
-			"a paged request cannot carry creation ids: they belong to one request, and a pager makes many")
-	}
-	if f.Returns != "" && f.Returns != f.Pages {
-		c.errorf(ReturnsMember, "leave "+ReturnsMember+" out, or name the paged call",
-			"a paged request cannot return only %q, since the loop reads where the next request starts out of the %q response",
-			f.Returns, f.Pages)
-	}
-
-	value, given := call.Args.Find(start)
-	if param, ok := value.(*ParamRef); ok {
-		q.PageStart = param.Param
-	} else {
-		where := fmt.Sprintf("%s.arguments.%s", callPath(q, call), start)
-		if !given {
-			where = PagesMember
-		}
-		c.errorf(where, `write "`+start+`": "{{`+start+`}}"`,
-			"the %s of a paged call is where the next request starts, so it has to be a parameter", start)
-	}
+	c.checkLooping(f, loop{
+		member: PagesMember, request: "paged", call: "paged", maker: "a pager",
+		reads: "where the next request starts", id: f.Pages,
+	})
+	q.PageStart = c.loopParameter(q, call, PagesMember, start,
+		"the "+start+" of a paged call is where the next request starts")
 	q.Pages = call
+}
+
+// loopedCall finds the call a request that is sent again and again names
+// under member, reporting an id no call has.
+func (c *checker) loopedCall(member, id string) *Call {
+	call, ok := c.byID[id]
+	if !ok {
+		c.errorf(member, "", "no method call has the id %q", id).
+			hint(hintFor(id, c.callIDs()))
+		return nil
+	}
+	return call
+}
+
+// loop describes a request that is sent again and again, in the words its
+// errors use: the member naming the call it follows, what such a request and
+// such a call are called, what makes the many requests, and what each one
+// reads from the response to the call to go on.
+type loop struct {
+	member, request, call, maker, reads, id string
+}
+
+// checkLooping reports what a request sent again and again cannot carry:
+// creation ids, which belong to one request, and a response to return other
+// than that of the call it follows, which is where it reads how to go on.
+func (c *checker) checkLooping(f fileSyntax, l loop) {
+	if f.CreatedIDs {
+		c.errorf(l.member, "",
+			"a %s request cannot carry creation ids: they belong to one request, and %s makes many", l.request, l.maker)
+	}
+	if f.Returns != "" && f.Returns != l.id {
+		c.errorf(ReturnsMember, "leave "+ReturnsMember+" out, or name the "+l.call+" call",
+			"a %s request cannot return only %q, since the loop reads %s out of the %q response",
+			l.request, f.Returns, l.reads, l.id)
+	}
+}
+
+// loopParameter returns the parameter an argument of the call a loop follows
+// is given, which is where each request of the loop goes on from, and reports
+// an argument left out or written as a value. why says what the argument is.
+func (c *checker) loopParameter(q *Request, call *Call, member, argument, why string) *Param {
+	value, given := call.Args.Find(argument)
+	if param, ok := value.(*ParamRef); ok {
+		return param.Param
+	}
+	where := fmt.Sprintf("%s.arguments.%s", callPath(q, call), argument)
+	if !given {
+		where = member
+	}
+	c.errorf(where, `write "`+argument+`": "{{`+argument+`}}"`, "%s, so it has to be a parameter", why)
+	return nil
 }
 
 // returnsWindow reports whether a call answers with one window of a longer
