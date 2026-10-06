@@ -196,6 +196,57 @@ func TestExtendErrors(t *testing.T) {
 		]}`,
 		want: "adds arguments to Note/query, which it does not define",
 	}, {
+		name: "type named after a type JMAP already has",
+		src:  `{"capability": "urn:x:y", "types": [{"name": "String", "properties": []}]}`,
+		want: `"String" is the name of a type JMAP already has`,
+	}, {
+		name: "type name that is not a name",
+		src:  `{"capability": "urn:x:y", "types": [{"name": "a b/c", "properties": []}]}`,
+		want: `"a b/c" is not a type name`,
+	}, {
+		name: "property defined twice",
+		src: `{"capability": "urn:x:y", "types": [{"name": "Note", "properties": [
+			{"name": "title", "type": "String"}, {"name": "title", "type": "String"}
+		]}]}`,
+		want: `Note defines "title" twice`,
+	}, {
+		name: "argument a standard method already has",
+		src: `{"capability": "urn:x:y", "types": [
+			{"name": "Note", "properties": [], "methods": ["get"],
+			 "arguments": {"get": [{"name": "accountId", "type": "Id"}]}}
+		]}`,
+		want: `Note/get already has the argument "accountId"`,
+	}, {
+		name: "patches to a type nothing defines",
+		src: `{"capability": "urn:x:y", "types": [{"name": "Note", "properties": [
+			{"name": "edits", "type": "PatchObject", "patchTarget": "Nonesuch"}
+		]}]}`,
+		want: `Note.edits patches the type "Nonesuch", which nothing defines`,
+	}, {
+		name: "sorts a type nothing defines",
+		src: `{"capability": "urn:x:y", "types": [{"name": "Note", "properties": [
+			{"name": "order", "type": "Comparator[]", "sortTarget": "Nonesuch"}
+		]}]}`,
+		want: `Note.order sorts the type "Nonesuch", which nothing defines`,
+	}, {
+		name: "method name without a type",
+		src:  `{"capability": "urn:x:y", "types": [], "methods": [{"name": "summarise"}]}`,
+		want: `"summarise" is not a method name`,
+	}, {
+		name: "method over a type nothing defines",
+		src:  `{"capability": "urn:x:y", "types": [], "methods": [{"name": "Note/summarise", "dataType": "Note"}]}`,
+		want: `Note/summarise works on the type "Note", which nothing defines`,
+	}, {
+		name: "method selecting properties through an argument it does not have",
+		src: `{"capability": "urn:x:y", "types": [{"name": "Note", "properties": []}],
+			"methods": [{"name": "Note/summarise", "dataType": "Note", "properties": "fields"}]}`,
+		want: `Note/summarise selects properties through "fields", which is not one of its arguments`,
+	}, {
+		name: "method returning records in a property its response does not have",
+		src: `{"capability": "urn:x:y", "types": [{"name": "Note", "properties": []}],
+			"methods": [{"name": "Note/summarise", "dataType": "Note", "resultProperty": "list"}]}`,
+		want: `Note/summarise returns its records in "list", which its response does not have`,
+	}, {
 		name: "unknown member in the schema",
 		src:  `{"capability": "urn:x:y", "typs": []}`,
 		want: `unknown field "typs"`,

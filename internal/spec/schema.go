@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -161,6 +162,9 @@ func (s *Spec) reserveNames(sc *Schema) error {
 	}
 
 	for _, t := range sc.Types {
+		if err := checkTypeName(t.Name); err != nil {
+			return err
+		}
 		if err := claim(t.Name, "the type "+t.Name); err != nil {
 			return err
 		}
@@ -186,6 +190,9 @@ func (s *Spec) reserveNames(sc *Schema) error {
 		if m.Name == "" {
 			return fmt.Errorf("a method in the schema has no name")
 		}
+		if typeName, method, ok := strings.Cut(m.Name, "/"); !ok || typeName == "" || method == "" {
+			return fmt.Errorf("%q is not a method name: a method is named as Type/method", m.Name)
+		}
 		if _, dup := s.Method(m.Name); dup {
 			return fmt.Errorf("the method %q already exists", m.Name)
 		}
@@ -196,6 +203,25 @@ func (s *Spec) reserveNames(sc *Schema) error {
 		if err := claim(prefix+"Response", "the method "+m.Name); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// typeNamePattern is what a type name a schema defines looks like: a name the
+// type expressions can refer to, and every generator can write as one.
+var typeNamePattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]*$`)
+
+// checkTypeName reports a name a schema cannot give a type of its own.
+func checkTypeName(name string) error {
+	switch {
+	case name == "":
+		return fmt.Errorf("a type in the schema has no name")
+	case !typeNamePattern.MatchString(name):
+		return fmt.Errorf("%q is not a type name: a type is named with letters and digits, starting with a letter", name)
+	case name == Any || (&Type{Name: name}).IsPrimitive():
+		// A type expression naming it would mean the one JMAP has, and the
+		// type the schema defines could never be referred to.
+		return fmt.Errorf("%q is the name of a type JMAP already has", name)
 	}
 	return nil
 }
@@ -267,6 +293,16 @@ func (s *Spec) addSchemaMethods(sc *Schema, t *SchemaType) error {
 		if err != nil {
 			return err
 		}
+		args, err := s.ArgumentsOf(method)
+		if err != nil {
+			return err
+		}
+		for _, f := range fields {
+			if _, has := args.Field(f.Name); has {
+				return fmt.Errorf("%s already has the argument %q, and a schema adds arguments rather than redefining them",
+					method, f.Name)
+			}
+		}
 		s.AppendArguments(method, fields...)
 	}
 	return nil
@@ -288,6 +324,17 @@ func (s *Spec) addSchemaMethod(sc *Schema, m *SchemaMethod) error {
 	resp, err := schemaFields(m.Name, m.Response)
 	if err != nil {
 		return err
+	}
+	if m.DataType != "" {
+		if _, ok := s.Object(m.DataType); !ok {
+			return fmt.Errorf("%s works on the type %q, which nothing defines", m.Name, m.DataType)
+		}
+	}
+	if m.Properties != "" && !hasField(args, m.Properties) {
+		return fmt.Errorf("%s selects properties through %q, which is not one of its arguments", m.Name, m.Properties)
+	}
+	if m.ResultProperty != "" && !hasField(resp, m.ResultProperty) {
+		return fmt.Errorf("%s returns its records in %q, which its response does not have", m.Name, m.ResultProperty)
 	}
 	capability := capabilityOr(m.Capability, sc.Capability)
 	argsType := s.AddObject(&Object{
@@ -329,6 +376,9 @@ func schemaFields(where string, in []*SchemaField) ([]*Field, error) {
 		if f.Name == "" {
 			return nil, fmt.Errorf("a property of %s has no name", where)
 		}
+		if hasField(out, f.Name) {
+			return nil, fmt.Errorf("%s defines %q twice", where, f.Name)
+		}
 		if f.Type == "" {
 			return nil, fmt.Errorf("%s.%s has no type", where, f.Name)
 		}
@@ -352,14 +402,31 @@ func schemaFields(where string, in []*SchemaField) ([]*Field, error) {
 	return out, nil
 }
 
+// hasField reports whether fields holds one named name.
+func hasField(fields []*Field, name string) bool {
+	for _, f := range fields {
+		if f.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 // checkReferences reports any type expression naming a type nothing defines,
-// which is how a typo in a schema surfaces as a message about the schema rather
-// than as a puzzling failure later.
+// and any patch or sort aimed at one, which is how a typo in a schema surfaces
+// as a message about the schema rather than as a puzzling failure later.
 func (s *Spec) checkReferences() error {
 	for _, o := range s.Objects() {
 		for _, f := range o.Fields {
-			if err := s.checkTypeNames(MustParseType(f.Type), o.Name+"."+f.Name); err != nil {
+			where := o.Name + "." + f.Name
+			if err := s.checkTypeNames(MustParseType(f.Type), where); err != nil {
 				return err
+			}
+			if _, ok := s.Object(f.PatchTarget); f.PatchTarget != "" && !ok {
+				return fmt.Errorf("%s patches the type %q, which nothing defines", where, f.PatchTarget)
+			}
+			if _, ok := s.Object(f.SortTarget); f.SortTarget != "" && !ok {
+				return fmt.Errorf("%s sorts the type %q, which nothing defines", where, f.SortTarget)
 			}
 		}
 	}
