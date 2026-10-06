@@ -14,7 +14,8 @@ import (
 
 // Duration is the JSCalendar Duration of RFC 8984, Section 1.4.6: weeks, or
 // days with an optional time, with no years or months. Each part names at
-// least one amount, so "P", "PT" and "P1DT" denote nothing and do not match.
+// least one amount: "P" and "PT" name none and do not match, and nor does
+// "P1DT", whose day is an amount but whose T begins a time part with none.
 const Duration = `^` + duration + `$`
 
 // SignedDuration is a Duration with at most one sign before it, RFC 8984,
