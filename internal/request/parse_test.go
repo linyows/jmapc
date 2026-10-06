@@ -2191,6 +2191,51 @@ func TestAKeyOfAMapInAMapNamesNoProperty(t *testing.T) {
 	}
 }
 
+// TestASchemaMethodReturnsTheIDAsItSays checks a back reference to the ids a
+// vendor method returns when the call narrows its properties: it holds where
+// the schema says the method returns the id whatever it is asked for, and is
+// refused where the schema says nothing, as the method promises only what it
+// states.
+func TestASchemaMethodReturnsTheIDAsItSays(t *testing.T) {
+	for _, returnsID := range []bool{true, false} {
+		s := spec.Standard()
+		if err := s.Extend(&spec.Schema{
+			Capability: "urn:example:notes",
+			Types: []*spec.SchemaType{{Name: "Note", Methods: []string{"get"}, Properties: []*spec.SchemaField{
+				{Name: "id", Type: "Id", ServerSet: true},
+				{Name: "title", Type: "String"},
+			}}},
+			Methods: []*spec.SchemaMethod{{
+				Name:     "Note/recent",
+				DataType: "Note",
+				Arguments: []*spec.SchemaField{
+					{Name: "accountId", Type: "Id"},
+					{Name: "properties", Type: "String[]"},
+				},
+				Response: []*spec.SchemaField{
+					{Name: "accountId", Type: "Id"},
+					{Name: "list", Type: "Note[]"},
+				},
+				Properties:     "properties",
+				ResultProperty: "list",
+				ReturnsID:      returnsID,
+			}},
+		}); err != nil {
+			t.Fatalf("Extend: %v", err)
+		}
+		_, err := NewParser(s).Parse("Recent"+Extension, []byte(`{"methodCalls": [
+		  ["Note/recent", {"properties": ["title"]}, "r"],
+		  ["Note/get", {"#ids": {"resultOf": "r", "name": "Note/recent", "path": "/list/*/id"}}, "g"]
+		]}`))
+		if returnsID && err != nil {
+			t.Errorf("a reference to the id a method says it returns was refused:\n%v", err)
+		}
+		if !returnsID && err == nil {
+			t.Error("a reference to an id the method does not promise passed")
+		}
+	}
+}
+
 // TestAPatchKeyIsReadAsThePointerToken checks an enumerated key reached by a
 // patch that holds a slash, which a pointer writes as ~1: the key the token
 // names is what is held to the values, as it is in the set written whole.

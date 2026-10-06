@@ -828,3 +828,46 @@ func TestASetDocumentedWithPackageNamesImportsNeither(t *testing.T) {
 		}
 	}
 }
+
+// TestAVendorMethodThatReturnsTheIDGivesItsRecordsOne checks the record type
+// generated for a vendor method that narrows its properties: where the schema
+// says the method returns the id whatever it is asked for, the record holds the
+// id the call did not ask for, and where it says nothing, the record holds only
+// what was asked for.
+func TestAVendorMethodThatReturnsTheIDGivesItsRecordsOne(t *testing.T) {
+	for _, returnsID := range []bool{true, false} {
+		s := spec.Standard()
+		if err := s.Extend(&spec.Schema{
+			Capability: "urn:example:notes",
+			Types: []*spec.SchemaType{{Name: "Note", Methods: []string{"get"}, Properties: []*spec.SchemaField{
+				{Name: "id", Type: "Id", ServerSet: true},
+				{Name: "title", Type: "String"},
+			}}},
+			Methods: []*spec.SchemaMethod{{
+				Name:           "Note/recent",
+				DataType:       "Note",
+				Arguments:      []*spec.SchemaField{{Name: "accountId", Type: "Id"}, {Name: "properties", Type: "String[]"}},
+				Response:       []*spec.SchemaField{{Name: "accountId", Type: "Id"}, {Name: "list", Type: "Note[]"}},
+				Properties:     "properties",
+				ResultProperty: "list",
+				ReturnsID:      returnsID,
+			}},
+		}); err != nil {
+			t.Fatalf("Extend: %v", err)
+		}
+		q, err := request.NewParser(s).Parse("RecentNotes"+request.Extension,
+			[]byte(`{"methodCalls": [["Note/recent", {"properties": ["title"]}, "r"]]}`))
+		if err != nil {
+			t.Fatalf("checking: %v", err)
+		}
+		g := &RequestGenerator{Spec: s, Package: "client", Qualifier: "jmapc.", Requests: []*request.Request{q}}
+		files, err := g.Generate()
+		if err != nil {
+			t.Fatalf("generating: %v", err)
+		}
+		src := string(files[fileName("RecentNotes")])
+		if has := strings.Contains(src, "ID jmapc.ID `json:\"id\"`"); has != returnsID {
+			t.Errorf("returnsId %v: the record holds the id: %v\n%s", returnsID, has, src)
+		}
+	}
+}

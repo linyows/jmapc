@@ -32,6 +32,14 @@ Naming the six standard methods is enough to get them: their arguments and
 responses follow the shapes RFC 8620 fixes. A method that does not follow one is
 declared outright, with its arguments and response spelled out.
 
+A method declared outright that narrows the properties of the records it
+returns, as a /get does, names the argument that narrows them in `"properties"`
+and the response property holding them in `"resultProperty"`. If it returns the
+id of every record whatever it is asked for, `"returnsId": true` says so, and a
+back reference to the ids under that property, `/list/*/id` where it is `list`,
+holds without asking for the id. Left out, jmapc assumes the id comes back only
+where the call asks for it. A data type with no id cannot take `"returnsId"`.
+
 A type is named as the specifications name theirs, with a capital and letters
 and digits after it, and not as a type JMAP already has, however it is
 capitalised: a generator writes `email` and `Email` as one name. A schema that

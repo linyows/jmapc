@@ -85,6 +85,9 @@ type SchemaMethod struct {
 	Properties string `json:"properties"`
 	// ResultProperty names the response property holding the records.
 	ResultProperty string `json:"resultProperty"`
+	// ReturnsID says the method returns the id of every record it returns,
+	// whatever properties it is asked for, as a standard /get does.
+	ReturnsID bool `json:"returnsId"`
 }
 
 // LoadSchema reads a schema from a file.
@@ -381,6 +384,16 @@ func (s *Spec) addSchemaMethod(sc *Schema, m *SchemaMethod) error {
 	if m.ResultProperty != "" && !hasField(resp, m.ResultProperty) {
 		return fmt.Errorf("%s returns its records in %q, which its response does not have", m.Name, m.ResultProperty)
 	}
+	if m.ReturnsID && (m.Properties == "" || m.ResultProperty == "") {
+		return fmt.Errorf("%s says it returns the id of every record, and needs properties and resultProperty to say which argument narrows the records and where they are", m.Name)
+	}
+	if m.ReturnsID {
+		// Properties needs a dataType, which is known to be defined by now.
+		o, _ := s.Object(m.DataType)
+		if _, hasID := o.Field("id"); !hasID {
+			return fmt.Errorf("%s says it returns the id of every record, and %s has no id", m.Name, m.DataType)
+		}
+	}
 	capability := capabilityOr(m.Capability, sc.Capability)
 	argsType := s.AddObject(&Object{
 		Name:       prefix + "Arguments",
@@ -409,6 +422,7 @@ func (s *Spec) addSchemaMethod(sc *Schema, m *SchemaMethod) error {
 		DataType:           m.DataType,
 		PropertiesArgument: m.Properties,
 		ResultProperty:     m.ResultProperty,
+		ReturnsID:          m.ReturnsID,
 	})
 	return nil
 }
