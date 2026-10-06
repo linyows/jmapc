@@ -149,15 +149,25 @@ func (s *Spec) Extend(sc *Schema) error {
 // catalogue and panics, but a schema is a file someone wrote, so a clash there
 // has to come back as a message.
 func (s *Spec) reserveNames(sc *Schema) error {
+	// Names are compared without case. A generator writes a type's name with
+	// a capital, Email and email alike, and a file system may not tell them
+	// apart either, so two names differing only in case are one name.
+	existing := map[string]string{}
+	for _, o := range s.Objects() {
+		existing[strings.ToLower(o.Name)] = o.Name
+	}
 	claimed := map[string]string{}
 	claim := func(name, by string) error {
-		if _, dup := s.Object(name); dup {
-			return fmt.Errorf("%s would define the type %q, which already exists", by, name)
+		if have, dup := existing[strings.ToLower(name)]; dup {
+			if have == name {
+				return fmt.Errorf("%s would define the type %q, which already exists", by, name)
+			}
+			return fmt.Errorf("%s would define the type %q, which is the type %q but for case", by, name, have)
 		}
-		if prev, dup := claimed[name]; dup {
+		if prev, dup := claimed[strings.ToLower(name)]; dup {
 			return fmt.Errorf("%s and %s both define the type %q", prev, by, name)
 		}
-		claimed[name] = by
+		claimed[strings.ToLower(name)] = by
 		return nil
 	}
 
@@ -208,8 +218,10 @@ func (s *Spec) reserveNames(sc *Schema) error {
 }
 
 // typeNamePattern is what a type name a schema defines looks like: a name the
-// type expressions can refer to, and every generator can write as one.
-var typeNamePattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]*$`)
+// type expressions can refer to, and every generator can write as one. It
+// begins with a capital, as the types of the specifications do, which is the
+// spelling every generator writes it in.
+var typeNamePattern = regexp.MustCompile(`^[A-Z][A-Za-z0-9]*$`)
 
 // checkTypeName reports a name a schema cannot give a type of its own.
 func checkTypeName(name string) error {
@@ -217,13 +229,26 @@ func checkTypeName(name string) error {
 	case name == "":
 		return fmt.Errorf("a type in the schema has no name")
 	case !typeNamePattern.MatchString(name):
-		return fmt.Errorf("%q is not a type name: a type is named with letters and digits, starting with a letter", name)
-	case name == Any || (&Type{Name: name}).IsPrimitive():
+		return fmt.Errorf("%q is not a type name: a type is named with letters and digits, starting with a capital", name)
+	}
+	for _, primitive := range append(primitiveNames(), Any) {
 		// A type expression naming it would mean the one JMAP has, and the
-		// type the schema defines could never be referred to.
-		return fmt.Errorf("%q is the name of a type JMAP already has", name)
+		// type the schema defines could never be referred to; one differing
+		// only in case is written as that one by a generator.
+		if strings.EqualFold(name, primitive) {
+			return fmt.Errorf("%q is the name of a type JMAP already has", name)
+		}
 	}
 	return nil
+}
+
+// primitiveNames returns the names of the primitive types.
+func primitiveNames() []string {
+	names := make([]string, 0, len(primitives))
+	for name := range primitives {
+		names = append(names, name)
+	}
+	return names
 }
 
 // addSchemaType registers one object type from a schema.

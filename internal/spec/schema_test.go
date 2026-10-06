@@ -204,6 +204,24 @@ func TestExtendErrors(t *testing.T) {
 		src:  `{"capability": "urn:x:y", "types": [{"name": "a b/c", "properties": []}]}`,
 		want: `"a b/c" is not a type name`,
 	}, {
+		name: "type name that does not begin with a capital",
+		src:  `{"capability": "urn:x:y", "types": [{"name": "email", "properties": []}]}`,
+		want: `"email" is not a type name`,
+	}, {
+		name: "type that is a type JMAP already has but for case",
+		src:  `{"capability": "urn:x:y", "types": [{"name": "EMAIL", "properties": []}]}`,
+		want: `which is the type "Email" but for case`,
+	}, {
+		name: "type that is a primitive but for case",
+		src:  `{"capability": "urn:x:y", "types": [{"name": "UtcDate", "properties": []}]}`,
+		want: `"UtcDate" is the name of a type JMAP already has`,
+	}, {
+		name: "two types differing only in case",
+		src: `{"capability": "urn:x:y", "types": [
+			{"name": "Note", "properties": []}, {"name": "NOTE", "properties": []}
+		]}`,
+		want: `both define the type "NOTE"`,
+	}, {
 		name: "property defined twice",
 		src: `{"capability": "urn:x:y", "types": [{"name": "Note", "properties": [
 			{"name": "title", "type": "String"}, {"name": "title", "type": "String"}
