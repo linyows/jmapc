@@ -143,25 +143,9 @@ func (g *RequestGenerator) writeSetErrorChecks(buf *bytes.Buffer, p *plan) {
 // writeFuncDoc writes the generated function's documentation, using what the
 // request says about itself and filling in what it does not.
 func (g *RequestGenerator) writeFuncDoc(buf *bytes.Buffer, p *plan) {
-	doc := strings.TrimSpace(p.q.Doc)
-	if doc == "" {
-		doc = fmt.Sprintf("%s sends the JMAP request in %s.", p.q.Name, p.q.Path)
-	}
-	methods := make([]string, len(p.q.Calls))
-	for i, c := range p.q.Calls {
-		methods[i] = c.Method.Name
-	}
-	doc += fmt.Sprintf("\n\nIt makes %s in a single request, so that %s.",
-		shared.JoinMethods(methods), shared.RoundTripPhrase(len(p.q.Calls)))
-	if p.q.Returns != nil {
-		doc += fmt.Sprintf(" It returns the response to the %s call.", p.q.Returns.Method.Name)
-	}
-	if len(p.sessionCapabilities) > 0 {
-		doc += "\n\n" + shared.PrimaryAccountPhrase(p.sessionCapabilities)
-	}
+	doc := shared.FuncDoc(p.q, p.q.Name, p.sessionCapabilities)
 	if p.q.CreatedIDs {
-		doc += "\n\nIt takes the creation ids of an earlier request and reports its own, so that a reference to something created there still resolves here. " +
-			"Pass nil where there is no earlier request."
+		doc += " Pass nil where there is no earlier request."
 	}
 	shared.WriteComment(buf, "", doc)
 }
