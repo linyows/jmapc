@@ -471,7 +471,7 @@ func TestADownloadAnsweredWithAnotherRangeFails(t *testing.T) {
 // same way every time, as one answering with the whole blob is.
 func TestADownloadAnsweredWithAPartThatDoesNotFitFails(t *testing.T) {
 	for _, header := range []string{"bytes 5-9/24", "bytes 5-4/24", "bytes 5-8/8", "none", "bytes five-8/24",
-		"bytes 5-8/-1", "bytes +5-8/24"} {
+		"bytes 5-8/-1", "bytes +5-8/24", "bytes 5-6/24"} {
 		bs := newBlobServer(t)
 		bs.contentRange = header
 		_, err := bs.client().Download(context.Background(), "a1", "blob9", &DownloadOptions{From: 5, Length: 4})
@@ -487,11 +487,11 @@ func TestADownloadAnsweredWithAPartThatDoesNotFitFails(t *testing.T) {
 }
 
 // TestADownloadAnsweredWithLessThanAskedIsRead checks a part that starts where
-// it was asked to and ends sooner. It is written where the caller asked, and
-// Range says how much of it came back.
+// it was asked to and ends sooner because the blob does. Range says how much of
+// it came back.
 func TestADownloadAnsweredWithLessThanAskedIsRead(t *testing.T) {
 	bs := newBlobServer(t)
-	bs.contentRange = "bytes 5-6/24"
+	bs.contentRange = "bytes 5-6/7"
 	blob, err := bs.client().Download(context.Background(), "a1", "blob9", &DownloadOptions{From: 5, Length: 4})
 	if err != nil {
 		t.Fatalf("Download: %v", err)
@@ -568,5 +568,17 @@ func TestParseContentRange(t *testing.T) {
 		if _, err := parseContentRange(header); err == nil {
 			t.Errorf("parseContentRange(%q) succeeded, want an error", header)
 		}
+	}
+}
+
+// TestADownloadToTheEndAnsweredShortFails checks a download asking for the rest
+// of a blob, answered with less than the rest where the server says how long
+// the blob is: the caller would take what came back for the whole of it.
+func TestADownloadToTheEndAnsweredShortFails(t *testing.T) {
+	bs := newBlobServer(t)
+	bs.contentRange = "bytes 5-6/24"
+	_, err := bs.client().Download(context.Background(), "a1", "blob9", &DownloadOptions{From: 5})
+	if !IsRangeIgnored(err) {
+		t.Errorf("Download: %v, want the short part refused", err)
 	}
 }

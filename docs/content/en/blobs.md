@@ -34,10 +34,10 @@ They are sent as an HTTP `Range` header. JMAP defines none for the download
 endpoint, so a server is free to ignore it and answer with the whole blob.
 HTTP does not let a server that answers with part of it answer with a part that
 does not fit what was asked, but one that gets ranges wrong may: a part that
-starts somewhere else, ends past where it was asked to, or does not say where
-it lies. Either way the download fails rather than returning content the
-caller would write at the wrong offset. A part that starts where it was asked
-to and ends sooner is returned, since it is written where it belongs, and
+starts somewhere else, ends past where it was asked to, ends sooner while the
+blob goes on, or does not say where it lies. Either way the download fails rather than returning content the
+caller would write at the wrong offset, or hand the caller less than it asked
+for. A part that ends sooner because the blob ends first is returned, and
 `blob.Range` says how much came back. `IsRangeIgnored` reports the failure,
 which asking again does not change, so a download that cannot be resumed starts
 over:

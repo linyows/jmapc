@@ -295,19 +295,40 @@ func (c *Client) Download(ctx context.Context, accountID, blobID ID, opts *Downl
 	if wanted != "" {
 		answered := resp.Header.Get("Content-Range")
 		// The part has to start where it was asked to, or the caller writes
-		// it at the wrong offset. It may end sooner, which Range reports, but
-		// not later than asked, and not past the end of the blob. A part
-		// whose bounds cannot be read cannot be placed at all.
+		// it at the wrong offset, and end where it was asked to, or the
+		// caller is handed less than it asked for. It ends sooner only where
+		// the blob does, and never past the end of the blob. A part whose
+		// bounds cannot be read cannot be placed at all.
 		part, err := parseContentRange(answered)
 		if err != nil || part.From != opts.From || part.To < part.From ||
-			(opts.Length > 0 && part.To > opts.From+opts.Length-1) ||
-			(part.Total >= 0 && part.To >= part.Total) {
+			!endsWhereAsked(part, opts) {
 			resp.Body.Close()
 			return nil, &rangeIgnoredError{wanted: wanted, partial: true, answered: answered}
 		}
 		blob.Range = part
 	}
 	return blob, nil
+}
+
+// endsWhereAsked reports whether a part ends where a download asked it to: at
+// the end of the range asked for, or sooner where the blob ends first. Where
+// the server does not say how long the blob is, a part ending sooner is taken
+// at its word, since nothing says the blob goes on.
+func endsWhereAsked(part *BlobRange, opts *DownloadOptions) bool {
+	if part.Total >= 0 && part.To >= part.Total {
+		return false
+	}
+	last := int64(-1)
+	if opts.Length > 0 {
+		last = opts.From + opts.Length - 1
+		if part.To > last {
+			return false
+		}
+	}
+	if part.Total < 0 || part.To == last {
+		return true
+	}
+	return part.To == part.Total-1
 }
 
 // parseContentRange reads the part of a blob a server reported returning,
