@@ -18,9 +18,6 @@ import (
 type RequestCheck struct {
 	c     *checker
 	using map[string]bool
-	// reported records the capabilities already reported as missing, so that
-	// a property used in several calls is reported once.
-	reported map[string]bool
 }
 
 // NewRequestCheck returns a check over one request, against the given
@@ -42,8 +39,7 @@ func NewRequestCheck(s *spec.Spec, using []string) *RequestCheck {
 			byID:   make(map[string]*Call),
 			used:   make(map[string]bool),
 		},
-		using:    declared,
-		reported: make(map[string]bool),
+		using: declared,
 	}
 }
 
@@ -55,6 +51,10 @@ func NewRequestCheck(s *spec.Spec, using []string) *RequestCheck {
 // call can be resolved against it.
 func (r *RequestCheck) Call(raw json.RawMessage, index int) error {
 	before := len(r.c.errs)
+	// The capabilities are those of this call, so that each call using a
+	// property the request did not declare is refused, as the server
+	// refuses each.
+	r.c.used = make(map[string]bool)
 	call := r.c.methodCall(raw, fmt.Sprintf("methodCalls[%d]", index))
 	if call != nil {
 		r.capability(call, index)
@@ -75,10 +75,9 @@ func (r *RequestCheck) capability(call *Call, index int) {
 			"%s needs %s, which the request does not declare", call.Method.Name, capability)
 	}
 	for _, uri := range sortedKeys(r.c.used) {
-		if r.using[uri] || r.reported[uri] {
+		if r.using[uri] {
 			continue
 		}
-		r.reported[uri] = true
 		r.c.errorf(fmt.Sprintf("methodCalls[%d][1]", index),
 			"a request has to declare the capabilities of the properties it uses",
 			"the request uses properties from %s, which it does not declare", uri)

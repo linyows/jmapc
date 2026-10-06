@@ -721,6 +721,20 @@ func (c *checker) patchObject(members map[string]json.RawMessage, keys []string,
 				continue
 			}
 			keyTypes, properties, valueType, target = resolved, named, value, resolvedField
+			// A property another specification adds needs its capability
+			// however it is reached, by a patch as well as by name.
+			c.useCapability(target)
+			// A sent request has its ids written out: each segment the
+			// pointer takes as an id has to be one.
+			if c.sent {
+				for i, seg := range segments {
+					seg = strings.NewReplacer("~1", "/", "~0", "~").Replace(seg)
+					if i < len(keyTypes) && keyTypes[i] != nil && keyTypes[i].Name == spec.IdType &&
+						!isCreationID(seg) && !jmapc.ID(seg).Valid() {
+						c.errorf(where+"."+key, "", "%q is not a valid id", seg)
+					}
+				}
+			}
 		}
 
 		field.KeySegments = c.patchKeySegments(segments, keyTypes, properties, where+"."+key)

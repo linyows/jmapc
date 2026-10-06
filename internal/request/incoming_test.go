@@ -53,11 +53,33 @@ func TestASentRequestDeclaresTheCapabilitiesOfItsProperties(t *testing.T) {
 	if errs[0] == nil || !strings.Contains(errs[0].Error(), "smimeverify") {
 		t.Errorf("Email/get of smimeStatus: %v, want the undeclared capability reported", errs[0])
 	}
-	if errs[1] != nil {
-		t.Errorf("the second call: %v, want the capability reported once", errs[1])
+	// Each call is refused, as the server refuses each, rather than the first
+	// alone: a stub answering the second would let the client think it went.
+	if errs[1] == nil {
+		t.Error("the second call passed, want it refused as the first was")
 	}
 	declared := append(append([]string{}, mailUsing...), "urn:ietf:params:jmap:smimeverify")
 	if errs := sent(t, declared, `["Email/get", {"ids": ["e1"], "properties": ["smimeStatus"]}, "c0"]`); errs[0] != nil {
 		t.Errorf("with the capability declared: %v", errs[0])
+	}
+}
+
+// TestASentPatchIsHeldToWhatItReaches checks a patch in a request that has
+// been sent: a property it reaches needs its capability as one selected by
+// name does, and an id it takes as a key has to be one.
+func TestASentPatchIsHeldToWhatItReaches(t *testing.T) {
+	errs := sent(t, mailUsing,
+		`["Email/set", {"update": {"e1": {"smimeStatus": "signed"}}}, "c0"]`,
+		`["Email/set", {"update": {"e1": {"mailboxIds/{{mailboxId}}": true}}}, "c1"]`,
+		`["Email/set", {"update": {"e1": {"mailboxIds/m1": true}}}, "c2"]`,
+	)
+	if errs[0] == nil || !strings.Contains(errs[0].Error(), "smimeverify") {
+		t.Errorf("a patch to smimeStatus: %v, want the undeclared capability reported", errs[0])
+	}
+	if errs[1] == nil || !strings.Contains(errs[1].Error(), "is not a valid id") {
+		t.Errorf("a patch keyed by braces: %v, want the id refused", errs[1])
+	}
+	if errs[2] != nil {
+		t.Errorf("a patch keyed by an id: %v", errs[2])
 	}
 }
