@@ -382,9 +382,6 @@ func rawExpr(raw json.RawMessage) string {
 	return "json.RawMessage(" + strconv.Quote(s) + ")"
 }
 
-// nodeHasParam reports whether a node depends on a parameter.
-func nodeHasParam(n request.Node) bool { return n.HasParam() }
-
 // writeWatch writes the function that follows the changes to the type the
 // request watches. The server pushes only that a type has changed, not what
 // changed, so the loop calls the request; the runtime holds the connection open,

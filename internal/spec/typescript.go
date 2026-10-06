@@ -81,18 +81,6 @@ func tsElement(t *Type) string {
 	return s
 }
 
-// TSName converts a JMAP name to a TypeScript identifier. TypeScript names its
-// members as JMAP does, in lowerCamelCase, so a name that is already an
-// identifier is left exactly as it is.
-func TSName(name string) string {
-	if isTSIdentifier(name) {
-		return name
-	}
-	// A property such as "header:List-Id:asText" or "@type" is not an
-	// identifier, and is written as a quoted key instead.
-	return name
-}
-
 // TSBindingName returns name as the name of a function or a constant, which a
 // word JavaScript reserves cannot be. Such a name has an underscore added, as
 // there is no way to write the word itself as a name.

@@ -37,7 +37,7 @@ func Build(s *spec.Spec, q *request.Request, values map[string]Value, accounts A
 	if err := CheckValues(q, values); err != nil {
 		return nil, err
 	}
-	b := &builder{spec: s, values: values, accounts: accounts, resolved: map[string]jmapc.ID{}}
+	b := &builder{values: values, accounts: accounts, resolved: map[string]jmapc.ID{}}
 	req := &jmapc.Request{Using: q.Using, CreatedIDs: createdIDs}
 	for _, c := range q.Calls {
 		args := make(map[string]any, len(c.Args.Fields)+1)
@@ -56,15 +56,11 @@ func Build(s *spec.Spec, q *request.Request, values map[string]Value, accounts A
 					continue
 				}
 			}
-			key, err := b.key(f)
-			if err != nil {
-				return nil, err
-			}
 			value, err := b.node(f.Value)
 			if err != nil {
 				return nil, err
 			}
-			args[key] = value
+			args[b.key(f)] = value
 		}
 		req.MethodCalls = append(req.MethodCalls, jmapc.Invocation{
 			Name:   c.Method.Name,
@@ -130,7 +126,6 @@ func noun(n int, one, many string) string {
 
 // builder holds what filling in one request needs.
 type builder struct {
-	spec     *spec.Spec
 	values   map[string]Value
 	accounts Accounts
 	resolved map[string]jmapc.ID
@@ -171,15 +166,11 @@ func (b *builder) node(n request.Node) (any, error) {
 		}
 		out := make(map[string]any, len(v.Fields))
 		for _, f := range v.Fields {
-			key, err := b.key(f)
-			if err != nil {
-				return nil, err
-			}
 			value, err := b.node(f.Value)
 			if err != nil {
 				return nil, err
 			}
-			out[key] = value
+			out[b.key(f)] = value
 		}
 		return out, nil
 
@@ -203,9 +194,9 @@ func (b *builder) node(n request.Node) (any, error) {
 // key renders an object member name. Most names are constants, but a request may
 // build one from parameters, as a patch does when it points at a property keyed
 // by an id the caller chooses.
-func (b *builder) key(f request.ObjectField) (string, error) {
+func (b *builder) key(f request.ObjectField) string {
 	if len(f.KeySegments) == 0 {
-		return f.Key, nil
+		return f.Key
 	}
 	var name strings.Builder
 	for _, seg := range f.KeySegments {
@@ -215,5 +206,5 @@ func (b *builder) key(f request.ObjectField) (string, error) {
 		}
 		name.WriteString(b.values[seg.Param.Name].Text)
 	}
-	return name.String(), nil
+	return name.String()
 }

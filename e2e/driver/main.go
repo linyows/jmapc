@@ -413,7 +413,7 @@ func verify(ctx context.Context, c *jmapc.Client) error {
 		for _, e := range joined.Unwrap() {
 			var v *jmapc.VerifyError
 			if !errors.As(e, &v) {
-				return fmt.Errorf("Verify reported %T: %w", e, e)
+				return fmt.Errorf("the generated Verify reported %T: %w", e, e)
 			}
 			problems = append(problems, map[string]string{"request": v.Request, "error": v.Error()})
 		}
@@ -489,7 +489,9 @@ func receive(ctx context.Context, c *jmapc.Client, url, listen, cert, key string
 	if pushed && errors.Is(err, context.Canceled) {
 		return nil
 	}
-	if err == nil || errors.Is(err, context.Canceled) {
+	// Run returns only with an error, and the context's where it was told to
+	// stop, which here means the deadline passed with nothing pushed.
+	if errors.Is(err, context.Canceled) {
 		err = errors.New("the receiver stopped before a change to the email was pushed")
 	}
 	return err
