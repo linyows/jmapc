@@ -64,6 +64,13 @@ refuses("a sort by something unsortable", {
 refuses("a UTCDate that is only a date", {
   methodCalls: [["Email/query", { filter: { before: "2026-09-04" } }, "c0"]],
 })
+refuses("a Duration that names no amount", {
+  methodCalls: [["CalendarEvent/set", { create: { e: { duration: "PT" } } }, "c0"]],
+})
+refuses("a SignedDuration with two signs", {
+  methodCalls: [["CalendarEvent/set", { create: { e: { alerts: { a: { trigger: {
+    "@type": "OffsetTrigger", offset: "-+PT15M" } } } } } }, "c0"]],
+})
 refuses("a member of jmapc's own that is misspelled", {
   methodCalls: [["Core/echo", {}, "c0"]],
   _retruns: "c0",
@@ -78,6 +85,12 @@ refuses("an argument left out from inside another value", {
 })
 
 // And the things that look like mistakes and are not.
+accepts("a Duration in weeks", {
+  methodCalls: [["CalendarEvent/set", { create: { e: { duration: "P1W" } } }, "c0"]],
+})
+accepts("a UTCDate with a fraction of a second", {
+  methodCalls: [["Email/query", { filter: { before: "2026-09-04T09:00:00.5Z" } }, "c0"]],
+})
 accepts("a parameter anywhere a value goes", {
   methodCalls: [["Email/query", { limit: "{{limit}}", filter: { inMailbox: "{{mailboxId}}" } }, "c0"]],
 })
