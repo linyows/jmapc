@@ -300,9 +300,12 @@ func (c *Client) Download(ctx context.Context, accountID, blobID ID, opts *Downl
 		// caller is handed less than it asked for. It ends sooner only where
 		// the blob does, and never past the end of the blob. A part whose
 		// bounds cannot be read cannot be placed at all.
+		// Where the server says how long the body is, it has to be as long as
+		// the part it says the body is.
 		part, err := parseContentRange(answered)
 		if err != nil || part.From != opts.From || part.To < part.From ||
-			!endsWhereAsked(part, opts) {
+			!endsWhereAsked(part, opts) ||
+			(resp.ContentLength >= 0 && resp.ContentLength != part.To-part.From+1) {
 			resp.Body.Close()
 			return nil, &rangeIgnoredError{wanted: wanted, partial: true, answered: answered}
 		}

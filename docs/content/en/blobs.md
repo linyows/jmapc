@@ -35,7 +35,7 @@ endpoint, so a server is free to ignore it and answer with the whole blob.
 HTTP does not let a server that answers with part of it answer with a part that
 does not fit what was asked, but one that gets ranges wrong may: a part that
 starts somewhere else, ends past where it was asked to, ends sooner while the
-blob goes on, or does not say where it lies. Either way the download fails rather than returning content the
+blob goes on, is not as long as it says, or does not say where it lies. Either way the download fails rather than returning content the
 caller would write at the wrong offset, or handing the caller less than it
 asked for. A part that ends sooner because the blob ends first is returned, and
 `blob.Range` says how much came back. `IsRangeIgnored` reports the failure,
