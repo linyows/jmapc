@@ -77,6 +77,17 @@ type blobServer struct {
 	// where part of it was asked for, as a server that does not implement
 	// ranges does.
 	ignoreRange bool
+	// rangeFrom, where it is not -1, is where the part the download endpoint
+	// answers with starts, whatever was asked for, as a server that gets
+	// ranges wrong does.
+	rangeFrom int
+	// contentRange, where it is not empty, is the Content-Range the download
+	// endpoint answers a range with, whatever was asked for; "none" sends a
+	// part with no Content-Range at all.
+	contentRange string
+	// chunked, where set with contentRange, is the body the part is answered
+	// with, sent in chunks so that its length is not stated beforehand.
+	chunked string
 	// maxSizeUpload is advertised by the session.
 	maxSizeUpload int
 }
@@ -86,7 +97,7 @@ const blobBody = "%PDF-1.4 pretend"
 
 func newBlobServer(t *testing.T) *blobServer {
 	t.Helper()
-	bs := &blobServer{maxSizeUpload: 1 << 20}
+	bs := &blobServer{maxSizeUpload: 1 << 20, rangeFrom: -1}
 	ts := newTestServer(t)
 	bs.testServer = ts
 
@@ -126,7 +137,25 @@ func newBlobServer(t *testing.T) *blobServer {
 			fmt.Fprint(w, blobBody)
 			return
 		}
+		if bs.contentRange != "" {
+			if bs.contentRange != "none" {
+				w.Header().Set("Content-Range", bs.contentRange)
+			}
+			w.WriteHeader(http.StatusPartialContent)
+			if bs.chunked != "" {
+				// Flushed before it is written, so the body goes in chunks
+				// with no Content-Length.
+				w.(http.Flusher).Flush()
+				fmt.Fprint(w, bs.chunked)
+				return
+			}
+			fmt.Fprint(w, blobBody[:2])
+			return
+		}
 		from, to := parseTestRange(t, bs.downloadRange, len(blobBody))
+		if bs.rangeFrom >= 0 {
+			from = bs.rangeFrom
+		}
 		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", from, to, len(blobBody)))
 		w.WriteHeader(http.StatusPartialContent)
 		fmt.Fprint(w, blobBody[from:to+1])
@@ -426,6 +455,65 @@ func TestADownloadWhoseRangeWasIgnoredFails(t *testing.T) {
 	}
 }
 
+// A server that answers with part of the blob, but not the part asked for,
+// ignored the range as much as one answering with the whole: the caller would
+// write the part at the offset it asked to continue from.
+func TestADownloadAnsweredWithAnotherRangeFails(t *testing.T) {
+	bs := newBlobServer(t)
+	bs.rangeFrom = 0
+	_, err := bs.client().Download(context.Background(), "a1", "blob9", &DownloadOptions{From: 5})
+	if err == nil {
+		t.Fatal("Download succeeded where the server answered with another part")
+	}
+	if !strings.Contains(err.Error(), `"bytes=5-"`) || !strings.Contains(err.Error(), "bytes 0-") {
+		t.Errorf("error = %v, want it to name the range asked for and the one answered", err)
+	}
+	if !IsRangeIgnored(err) || IsTemporary(err) {
+		t.Errorf("IsRangeIgnored = %v, IsTemporary = %v, want true and false",
+			IsRangeIgnored(err), IsTemporary(err))
+	}
+}
+
+// TestADownloadAnsweredWithAPartThatDoesNotFitFails checks the parts a server
+// may answer bytes=5-8 with that cannot be placed where the caller writes them:
+// past the end asked for, the wrong way round, past the end of the blob, or
+// with bounds it does not state. Each is the server answering the range the
+// same way every time, as one answering with the whole blob is.
+func TestADownloadAnsweredWithAPartThatDoesNotFitFails(t *testing.T) {
+	for _, header := range []string{"bytes 5-9/24", "bytes 5-4/24", "bytes 5-8/8", "none", "bytes five-8/24",
+		"bytes 5-8/-1", "bytes +5-8/24", "bytes 5-6/24", "bytes 5-6/*",
+		// The server answers with two octets, which is not the part it says.
+		"bytes 5-8/24"} {
+		bs := newBlobServer(t)
+		bs.contentRange = header
+		_, err := bs.client().Download(context.Background(), "a1", "blob9", &DownloadOptions{From: 5, Length: 4})
+		if err == nil {
+			t.Errorf("%s: Download succeeded", header)
+			continue
+		}
+		if !IsRangeIgnored(err) || IsTemporary(err) {
+			t.Errorf("%s: %v: IsRangeIgnored = %v, IsTemporary = %v, want true and false",
+				header, err, IsRangeIgnored(err), IsTemporary(err))
+		}
+	}
+}
+
+// TestADownloadAnsweredWithLessThanAskedIsRead checks a part that starts where
+// it was asked to and ends sooner because the blob does. Range says how much of
+// it came back.
+func TestADownloadAnsweredWithLessThanAskedIsRead(t *testing.T) {
+	bs := newBlobServer(t)
+	bs.contentRange = "bytes 5-6/7"
+	blob, err := bs.client().Download(context.Background(), "a1", "blob9", &DownloadOptions{From: 5, Length: 4})
+	if err != nil {
+		t.Fatalf("Download: %v", err)
+	}
+	defer blob.Close()
+	if blob.Range == nil || blob.Range.From != 5 || blob.Range.To != 6 {
+		t.Errorf("Range = %+v, want 5-6", blob.Range)
+	}
+}
+
 // TestIsRangeIgnoredOnlyForAnIgnoredRange checks that IsRangeIgnored picks out
 // the one failure, through wrapping, and not the others a download can have.
 func TestIsRangeIgnoredOnlyForAnIgnoredRange(t *testing.T) {
@@ -491,6 +579,53 @@ func TestParseContentRange(t *testing.T) {
 	for _, header := range []string{"", "items 0-99/1234", "bytes 0-99", "bytes x-99/1234", "bytes 0-99/many"} {
 		if _, err := parseContentRange(header); err == nil {
 			t.Errorf("parseContentRange(%q) succeeded, want an error", header)
+		}
+	}
+}
+
+// TestADownloadToTheEndAnsweredShortFails checks a download asking for the rest
+// of a blob, answered with less than the rest where the server says how long
+// the blob is: the caller would take what came back for the whole of it.
+func TestADownloadToTheEndAnsweredShortFails(t *testing.T) {
+	bs := newBlobServer(t)
+	bs.contentRange = "bytes 5-6/24"
+	_, err := bs.client().Download(context.Background(), "a1", "blob9", &DownloadOptions{From: 5})
+	if !IsRangeIgnored(err) {
+		t.Errorf("Download: %v, want the short part refused", err)
+	}
+}
+
+// TestAChunkedPartIsHeldToItsLength checks a part sent in chunks, whose length
+// the server states only by ending: one ending short of the part it says it is
+// fails as it is read, and so does one going on past it, while one as long as
+// it says reads as it is.
+func TestAChunkedPartIsHeldToItsLength(t *testing.T) {
+	for _, tt := range []struct {
+		body string
+		ok   bool
+	}{{"56", false}, {"5678", true}, {"567890", false}} {
+		bs := newBlobServer(t)
+		bs.contentRange = "bytes 5-8/24"
+		bs.chunked = tt.body
+		blob, err := bs.client().Download(context.Background(), "a1", "blob9", &DownloadOptions{From: 5, Length: 4})
+		if err != nil {
+			t.Fatalf("%q: Download: %v", tt.body, err)
+		}
+		got, err := io.ReadAll(blob)
+		blob.Close()
+		if tt.ok && (err != nil || string(got) != tt.body) {
+			t.Errorf("%q: read %q, %v, want the part", tt.body, got, err)
+		}
+		if !tt.ok && err == nil {
+			t.Errorf("%q: read %q with no error, want the length refused", tt.body, got)
+		}
+		// Longer is the server answering wrongly; shorter may be a dropped
+		// connection.
+		if len(tt.body) > 4 && !IsRangeIgnored(err) {
+			t.Errorf("%q: %v, want IsRangeIgnored for a part longer than it says", tt.body, err)
+		}
+		if len(tt.body) < 4 && !errors.Is(err, io.ErrUnexpectedEOF) {
+			t.Errorf("%q: %v, want io.ErrUnexpectedEOF for a part shorter than it says", tt.body, err)
 		}
 	}
 }
