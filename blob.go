@@ -310,9 +310,49 @@ func (c *Client) Download(ctx context.Context, accountID, blobID ID, opts *Downl
 			return nil, &rangeIgnoredError{wanted: wanted, partial: true, answered: answered}
 		}
 		blob.Range = part
+		// A body sent in chunks says how long it is only by ending, so it is
+		// held to the length of the part as it is read.
+		if resp.ContentLength < 0 {
+			blob.ReadCloser = &partReader{body: resp.Body, left: part.To - part.From + 1, part: answered}
+		}
 	}
 	return blob, nil
 }
+
+// partReader reads the body of a part whose length the server did not state
+// beforehand, failing where it ends sooner or goes on longer than the part it
+// says it is: the caller would otherwise take a short body for the whole part,
+// or read octets of the blob it did not ask for.
+type partReader struct {
+	body io.ReadCloser
+	left int64
+	part string
+}
+
+func (r *partReader) Read(p []byte) (int, error) {
+	if r.left == 0 {
+		var extra [1]byte
+		if n, _ := r.body.Read(extra[:]); n > 0 {
+			return 0, fmt.Errorf("jmapc: the part goes on past the %s its Content-Range says", r.part)
+		}
+		return 0, io.EOF
+	}
+	if int64(len(p)) > r.left {
+		p = p[:r.left]
+	}
+	n, err := r.body.Read(p)
+	r.left -= int64(n)
+	if errors.Is(err, io.EOF) && r.left > 0 {
+		return n, fmt.Errorf("jmapc: the part ended %d octets short of the %s its Content-Range says: %w",
+			r.left, r.part, io.ErrUnexpectedEOF)
+	}
+	if errors.Is(err, io.EOF) {
+		err = nil
+	}
+	return n, err
+}
+
+func (r *partReader) Close() error { return r.body.Close() }
 
 // endsWhereAsked reports whether a part ends where a download asked it to: at
 // the end of the range asked for, or sooner where the server says the blob ends

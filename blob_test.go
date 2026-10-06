@@ -85,6 +85,9 @@ type blobServer struct {
 	// endpoint answers a range with, whatever was asked for; "none" sends a
 	// part with no Content-Range at all.
 	contentRange string
+	// chunked, where set with contentRange, is the body the part is answered
+	// with, sent in chunks so that its length is not stated beforehand.
+	chunked string
 	// maxSizeUpload is advertised by the session.
 	maxSizeUpload int
 }
@@ -139,6 +142,13 @@ func newBlobServer(t *testing.T) *blobServer {
 				w.Header().Set("Content-Range", bs.contentRange)
 			}
 			w.WriteHeader(http.StatusPartialContent)
+			if bs.chunked != "" {
+				// Flushed before it is written, so the body goes in chunks
+				// with no Content-Length.
+				w.(http.Flusher).Flush()
+				fmt.Fprint(w, bs.chunked)
+				return
+			}
 			fmt.Fprint(w, blobBody[:2])
 			return
 		}
@@ -582,5 +592,32 @@ func TestADownloadToTheEndAnsweredShortFails(t *testing.T) {
 	_, err := bs.client().Download(context.Background(), "a1", "blob9", &DownloadOptions{From: 5})
 	if !IsRangeIgnored(err) {
 		t.Errorf("Download: %v, want the short part refused", err)
+	}
+}
+
+// TestAChunkedPartIsHeldToItsLength checks a part sent in chunks, whose length
+// the server states only by ending: one ending short of the part it says it is
+// fails as it is read, and so does one going on past it, while one as long as
+// it says reads as it is.
+func TestAChunkedPartIsHeldToItsLength(t *testing.T) {
+	for _, tt := range []struct {
+		body string
+		ok   bool
+	}{{"56", false}, {"5678", true}, {"567890", false}} {
+		bs := newBlobServer(t)
+		bs.contentRange = "bytes 5-8/24"
+		bs.chunked = tt.body
+		blob, err := bs.client().Download(context.Background(), "a1", "blob9", &DownloadOptions{From: 5, Length: 4})
+		if err != nil {
+			t.Fatalf("%q: Download: %v", tt.body, err)
+		}
+		got, err := io.ReadAll(blob)
+		blob.Close()
+		if tt.ok && (err != nil || string(got) != tt.body) {
+			t.Errorf("%q: read %q, %v, want the part", tt.body, got, err)
+		}
+		if !tt.ok && err == nil {
+			t.Errorf("%q: read %q with no error, want the length refused", tt.body, got)
+		}
 	}
 }
