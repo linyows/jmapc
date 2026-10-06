@@ -286,6 +286,35 @@ func TestUnknownCommand(t *testing.T) {
 	}
 }
 
+// TestEveryCommandAnswersHelp checks -h on each command that takes flags. It
+// asks for the usage, which is printed to stderr, and is not a failure.
+func TestEveryCommandAnswersHelp(t *testing.T) {
+	for _, command := range []string{"generate", "validate", "run", "schema", "guide"} {
+		_, errOut, err := capture(t, []string{command, "-h"})
+		if err != nil {
+			t.Errorf("%s -h: %v", command, err)
+		}
+		if errOut == "" {
+			t.Errorf("%s -h printed no usage", command)
+		}
+	}
+}
+
+// TestAFlagMistakeIsReportedWhereTheCommandWrites checks that a flag a command
+// does not take is reported on the command's stderr, as everything else it
+// says is, rather than straight to the process's.
+func TestAFlagMistakeIsReportedWhereTheCommandWrites(t *testing.T) {
+	for _, command := range []string{"generate", "validate"} {
+		_, errOut, err := capture(t, []string{command, "-nonesuch"})
+		if err == nil {
+			t.Errorf("%s -nonesuch succeeded", command)
+		}
+		if !strings.Contains(errOut, "flag provided but not defined: -nonesuch") {
+			t.Errorf("%s -nonesuch wrote %q, want the mistake reported", command, errOut)
+		}
+	}
+}
+
 // TestSameRequestUnderTwoNames covers two request files holding one request. They
 // differ only in what they call their parameters and their calls, so they make
 // the same request, and each brings a set of generated types along with it.
