@@ -221,3 +221,46 @@ func TestACreationIDGetsAName(t *testing.T) {
 		t.Errorf("the module does not bring in the type of the constant:\n%s", src)
 	}
 }
+
+// TestARequestNamedAfterAReservedWord checks the function a request named after
+// a word JavaScript reserves gets, which takes an underscore since the word
+// itself cannot be written as a name. The file keeps the name.
+func TestARequestNamedAfterAReservedWord(t *testing.T) {
+	var requests []*request.Request
+	for name, src := range map[string]string{
+		// A creation id of "_" has nothing to add to the request's name, so
+		// its constant would be named as the function is.
+		"Delete": `{"methodCalls": [["Mailbox/set", {"create": {"_": {"name": "x"}}}, "c0"]]}`,
+		"Eval":   `{"methodCalls": [["Mailbox/get", {"ids": null}, "c0"]]}`,
+	} {
+		q, err := request.NewParser(spec.Standard()).Parse(name+request.Extension, []byte(src))
+		if err != nil {
+			t.Fatalf("checking %s:\n%v", name, err)
+		}
+		requests = append(requests, q)
+	}
+	files, err := (&RequestGenerator{Spec: spec.Standard(), Requests: requests}).Generate()
+	if err != nil {
+		t.Fatalf("generating: %v", err)
+	}
+	for file, want := range map[string]string{
+		"delete.ts": "export async function delete_(",
+		"eval.ts":   "export async function eval_(",
+	} {
+		if !strings.Contains(string(files[file]), want) {
+			t.Errorf("%s does not contain %q:\n%s", file, want, files[file])
+		}
+	}
+	if src := string(files["delete.ts"]); strings.Contains(src, "export const delete ") ||
+		strings.Contains(src, "export const delete_ ") {
+		t.Errorf("the constant of the creation id is a reserved word or the function's name:\n%s", src)
+	}
+}
+
+// TestStringsAreWrittenAsJavaScriptWritesThem checks the strings a request
+// states. Go's quoting writes \a, which JavaScript reads as the letter a.
+func TestStringsAreWrittenAsJavaScriptWritesThem(t *testing.T) {
+	if got, want := quote("bell\a<tag>"), `"bell\u0007<tag>"`; got != want {
+		t.Errorf("quote = %s, want %s", got, want)
+	}
+}

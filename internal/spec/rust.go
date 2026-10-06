@@ -273,6 +273,8 @@ var rustKeywords = map[string]bool{
 	"abstract": true, "become": true, "box": true, "do": true, "final": true,
 	"macro": true, "override": true, "priv": true, "try": true, "typeof": true,
 	"unsized": true, "virtual": true, "yield": true,
+	// Reserved from the 2024 edition, which a crate may well be on.
+	"gen": true,
 }
 
 // rustNonRaw are the keywords that may not be written as raw identifiers.

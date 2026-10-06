@@ -93,6 +93,33 @@ func TSName(name string) string {
 	return name
 }
 
+// TSBindingName returns name as the name of a function or a constant, which a
+// word JavaScript reserves cannot be. Such a name has an underscore added, as
+// there is no way to write the word itself as a name.
+func TSBindingName(name string) string {
+	if tsReserved[name] {
+		return name + "_"
+	}
+	return name
+}
+
+// tsReserved are the words that cannot name a function or a constant in a
+// module, which is strict mode code: the reserved words of ECMAScript, those
+// strict mode adds, await, which a module reserves, and eval and arguments,
+// which strict mode does not let a binding take.
+var tsReserved = map[string]bool{
+	"await": true, "break": true, "case": true, "catch": true, "class": true,
+	"const": true, "continue": true, "debugger": true, "default": true, "delete": true,
+	"do": true, "else": true, "enum": true, "export": true, "extends": true,
+	"false": true, "finally": true, "for": true, "function": true, "if": true,
+	"import": true, "in": true, "instanceof": true, "new": true, "null": true,
+	"return": true, "super": true, "switch": true, "this": true, "throw": true,
+	"true": true, "try": true, "typeof": true, "var": true, "void": true,
+	"while": true, "with": true, "yield": true, "let": true, "static": true,
+	"implements": true, "interface": true, "package": true, "private": true,
+	"protected": true, "public": true, "eval": true, "arguments": true,
+}
+
 // TSNeedsQuoting reports whether a member name has to be quoted in a
 // TypeScript type declaration.
 func TSNeedsQuoting(name string) bool { return !isTSIdentifier(name) }

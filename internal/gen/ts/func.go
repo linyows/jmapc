@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/linyows/jmapc/internal/gen/shared"
@@ -162,7 +161,7 @@ func (g *RequestGenerator) writeCreations(buf *bytes.Buffer, p *plan) {
 		shared.WriteComment(buf, "", fmt.Sprintf(
 			"%s is the creation id %s gives a record it creates, which the response reports it under.",
 			c.Name, p.q.Name))
-		fmt.Fprintf(buf, "export const %s: Id = %s\n\n", c.Name, strconv.Quote(c.ID))
+		fmt.Fprintf(buf, "export const %s: Id = %s\n\n", c.Name, quote(c.ID))
 	}
 }
 
@@ -247,7 +246,7 @@ func (g *RequestGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 func (g *RequestGenerator) writeRecordField(buf *bytes.Buffer, dataType *spec.Object, name, nestedTo, nestedFrom string) {
 	memberName := name
 	if spec.TSNeedsQuoting(memberName) {
-		memberName = strconv.Quote(memberName)
+		memberName = quote(memberName)
 	}
 
 	field, known := dataType.Field(name)
@@ -301,7 +300,7 @@ func (g *RequestGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 			}
 			name := field.Name
 			if spec.TSNeedsQuoting(name) {
-				name = strconv.Quote(name)
+				name = quote(name)
 			}
 			fmt.Fprintf(buf, "  %s: %s\n", name, tsType)
 		}

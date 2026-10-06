@@ -7,7 +7,6 @@ package ts
 import (
 	"bytes"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/linyows/jmapc/internal/gen/shared"
@@ -87,7 +86,7 @@ func (g *TypeGenerator) writeField(buf *bytes.Buffer, o *spec.Object, f *spec.Fi
 
 	name := f.Name
 	if spec.TSNeedsQuoting(name) {
-		name = strconv.Quote(name)
+		name = quote(name)
 	}
 	optional := ""
 	if o.Kind != spec.KindResponse || f.Optional {

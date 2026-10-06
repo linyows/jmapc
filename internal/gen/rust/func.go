@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/linyows/jmapc/internal/gen/shared"
 	"github.com/linyows/jmapc/internal/request"
@@ -520,15 +521,91 @@ func writeMod(modules []string, properties bool) []byte {
 	return finish(&buf)
 }
 
-// literalExpr renders a JSON value the request stated outright. JSON is what the
-// json! macro takes, so it goes in as it is.
+// literalExpr renders a JSON value the request stated outright, for the json!
+// macro. The macro takes JSON's shape but Rust's tokens, so its strings are
+// Rust string literals: JSON's own escapes, such as \/ and \u00e9, are not
+// ones Rust reads, and each string is written again as Rust writes it.
 func literalExpr(raw json.RawMessage) string {
-	var compact bytes.Buffer
-	if err := json.Compact(&compact, raw); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var b strings.Builder
+	if err := writeLiteral(dec, &b); err != nil {
 		return "null"
 	}
-	return compact.String()
+	return b.String()
 }
 
-// quote renders a Rust string literal.
-func quote(s string) string { return strconv.Quote(s) }
+// writeLiteral writes the next JSON value dec holds, compactly and in the order
+// it was written, with its strings as Rust string literals.
+func writeLiteral(dec *json.Decoder, b *strings.Builder) error {
+	tok, err := dec.Token()
+	if err != nil {
+		return err
+	}
+	switch v := tok.(type) {
+	case json.Delim:
+		open, close := byte(v), byte(']')
+		if v == '{' {
+			close = '}'
+		}
+		b.WriteByte(open)
+		for i := 0; dec.More(); i++ {
+			if i > 0 {
+				b.WriteByte(',')
+			}
+			if v == '{' {
+				key, err := dec.Token()
+				if err != nil {
+					return err
+				}
+				b.WriteString(quote(key.(string)))
+				b.WriteByte(':')
+			}
+			if err := writeLiteral(dec, b); err != nil {
+				return err
+			}
+		}
+		if _, err := dec.Token(); err != nil {
+			return err
+		}
+		b.WriteByte(close)
+	case string:
+		b.WriteString(quote(v))
+	case json.Number:
+		b.WriteString(v.String())
+	case bool:
+		b.WriteString(strconv.FormatBool(v))
+	case nil:
+		b.WriteString("null")
+	}
+	return nil
+}
+
+// quote renders a Rust string literal. Go's quoting is not Rust's: Rust has no
+// \a or \x escapes above 0x7f, and writes a code point as \u{...}.
+func quote(s string) string {
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, r := range s {
+		switch {
+		case r == '"':
+			b.WriteString(`\"`)
+		case r == '\\':
+			b.WriteString(`\\`)
+		case r == '\n':
+			b.WriteString(`\n`)
+		case r == '\r':
+			b.WriteString(`\r`)
+		case r == '\t':
+			b.WriteString(`\t`)
+		case r == 0:
+			b.WriteString(`\0`)
+		case !unicode.IsPrint(r):
+			fmt.Fprintf(&b, `\u{%x}`, r)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
+}

@@ -99,8 +99,10 @@ func (g *RequestGenerator) Generate() (map[string][]byte, error) {
 	return out, nil
 }
 
-// FileName returns the file a request is generated into. TypeScript names a file
-// after what it exports, so this is the function's own name.
+// FileName returns the file a request is generated into: the request's name
+// with a lower-case first letter, which is the function's name too, but for a
+// name a reserved word takes, where the function takes an underscore and the
+// file keeps the name.
 func FileName(queryName string) string {
 	return lowerFirst(queryName) + ".ts"
 }
@@ -122,13 +124,21 @@ func (g *RequestGenerator) plan() ([]*plan, error) {
 		}
 		p := &plan{
 			q:        q,
-			funcName: lowerFirst(q.Name),
+			funcName: spec.TSBindingName(lowerFirst(q.Name)),
 			calls:    make(map[*request.Call]*call, len(q.Calls)),
 		}
 		if len(q.Params) > 0 {
 			p.paramsType = shared.Unique(taken, q.Name+"Params")
 		}
-		p.creations = shared.Creations(taken, p.funcName, q.Creations, spec.ExportedName)
+		// The constants of the creation ids share the module with the
+		// function, and are no more able than it is to take a reserved word.
+		taken[p.funcName] = true
+		p.creations = shared.Creations(taken, lowerFirst(q.Name), q.Creations, spec.ExportedName)
+		for i, c := range p.creations {
+			if escaped := spec.TSBindingName(c.Name); escaped != c.Name {
+				p.creations[i].Name = shared.Unique(taken, escaped)
+			}
+		}
 		same := shared.SameNarrowing(q.Calls)
 		for _, c := range q.Calls {
 			info := &call{}
