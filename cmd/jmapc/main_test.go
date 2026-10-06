@@ -300,6 +300,21 @@ func TestEveryCommandAnswersHelp(t *testing.T) {
 	}
 }
 
+// TestAFlagMistakeIsReportedWhereTheCommandWrites checks that a flag a command
+// does not take is reported on the command's stderr, as everything else it
+// says is, rather than straight to the process's.
+func TestAFlagMistakeIsReportedWhereTheCommandWrites(t *testing.T) {
+	for _, command := range []string{"generate", "validate"} {
+		_, errOut, err := capture(t, []string{command, "-nonesuch"})
+		if err == nil {
+			t.Errorf("%s -nonesuch succeeded", command)
+		}
+		if !strings.Contains(errOut, "flag provided but not defined: -nonesuch") {
+			t.Errorf("%s -nonesuch wrote %q, want the mistake reported", command, errOut)
+		}
+	}
+}
+
 // TestSameRequestUnderTwoNames covers two request files holding one request. They
 // differ only in what they call their parameters and their calls, so they make
 // the same request, and each brings a set of generated types along with it.
