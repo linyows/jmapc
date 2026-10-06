@@ -480,8 +480,10 @@ func (s *Spec) ResolvePatch(dataType string, segments []string, unknown []bool) 
 			target = nil
 
 		case cur.IsArray():
-			keyTypes[i] = &Type{Name: UnsignedInt}
-			cur = cur.Elem
+			// RFC 8620, Section 5.3: a patch does not reach inside a list,
+			// which is replaced as a whole or not at all.
+			return nil, nil, nil, nil, fmt.Errorf("a patch cannot reach inside %s, a list, to %q; "+
+				"RFC 8620 has a list replaced as a whole", cur, seg)
 
 		case cur.IsMap():
 			keyTypes[i] = cur.Key
