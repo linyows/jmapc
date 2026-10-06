@@ -338,26 +338,35 @@ func (t *Type) IsNullableSlice() bool {
 // enum, it is built from the members, so that the same union written in two
 // places names one type: a filter that may be an operator or a condition is a
 // FilterOperatorOrEmailFilterCondition wherever it appears.
-func GoUnionName(t *Type) string {
+func GoUnionName(t *Type) string { return unionName(t, ExportedName) }
+
+// GoUnionMemberName names one alternative of a union, both as the field
+// holding it and as its part of the struct's name.
+func GoUnionMemberName(t *Type) string { return unionMemberName(t, ExportedName) }
+
+// unionName names a union after its members, joined by Or, each named by
+// unionMemberName with leaf naming a type that is neither a list, a map nor a
+// union, as the language names it.
+func unionName(t *Type, leaf func(string) string) string {
 	parts := make([]string, len(t.Union))
 	for i, m := range t.Union {
-		parts[i] = GoUnionMemberName(m)
+		parts[i] = unionMemberName(m, leaf)
 	}
 	return strings.Join(parts, "Or")
 }
 
-// GoUnionMemberName names one alternative of a union, both as the field
-// holding it and as its part of the struct's name.
-func GoUnionMemberName(t *Type) string {
+// unionMemberName names one member of a union: a list or a map after what it
+// holds, and anything else by leaf. A primitive is named after the JMAP type
+// rather than after the language's, so that a member is Number rather than
+// Float64 or F64.
+func unionMemberName(t *Type, leaf func(string) string) string {
 	switch {
 	case t.IsArray():
-		return GoUnionMemberName(t.Elem) + "List"
+		return unionMemberName(t.Elem, leaf) + "List"
 	case t.IsMap():
-		return GoUnionMemberName(t.Value) + "Map"
+		return unionMemberName(t.Value, leaf) + "Map"
 	case t.IsUnion():
-		return GoUnionName(t)
+		return unionName(t, leaf)
 	}
-	// A primitive names its field after the JMAP type rather than after the Go
-	// one, so that a field is Number rather than Float64.
-	return ExportedName(t.Name)
+	return leaf(t.Name)
 }
