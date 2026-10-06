@@ -770,3 +770,20 @@ func TestAnEmptyListOfBodyPropertiesFetchesNothingOfAPart(t *testing.T) {
 		t.Errorf("the email does not hold its parts in the narrowed record:\n%s", src)
 	}
 }
+
+// TestADocumentedPackageIsNotImported checks that the imports are the packages
+// the code uses, not the names its comments hold. A request documented as
+// reading settings.json. would otherwise import encoding/json, which go vet
+// and the compiler then refuse as unused.
+func TestADocumentedPackageIsNotImported(t *testing.T) {
+	src := generateOne(t, "Settings", `{
+	  "_doc": "Settings reads what settings.json. says, and errors.Join any failures.",
+	  "methodCalls": [["Mailbox/get", {"ids": null}, "c0"]],
+	  "_returns": "c0"
+	}`)
+	for _, unused := range []string{`"encoding/json"`, `"errors"`} {
+		if strings.Contains(src, unused) {
+			t.Errorf("the request imports %s, which it does not use:\n%s", unused, src)
+		}
+	}
+}

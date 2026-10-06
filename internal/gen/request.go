@@ -5,7 +5,10 @@ package gen
 import (
 	"bytes"
 	"fmt"
+	"go/ast"
 	"go/format"
+	"go/parser"
+	"go/token"
 	"sort"
 	"strings"
 
@@ -287,16 +290,42 @@ func (g *RequestGenerator) file(p *plan) ([]byte, error) {
 	return src, nil
 }
 
+// packagesUsed returns the names of the packages body refers to, as in json.
+// for encoding/json. It reads body as Go rather than as text, so that a name
+// in a comment, which the documentation of a request may well hold, does not
+// bring in a package nothing uses. Where body does not parse, it falls back to
+// the text, and formatting the file reports what is wrong with it.
+func packagesUsed(body []byte) map[string]bool {
+	used := map[string]bool{}
+	file, err := parser.ParseFile(token.NewFileSet(), "", append([]byte("package p\n"), body...), 0)
+	if err != nil {
+		for _, name := range []string{"json", "errors", "iter"} {
+			used[name] = bytes.Contains(body, []byte(name+"."))
+		}
+		return used
+	}
+	ast.Inspect(file, func(n ast.Node) bool {
+		if sel, ok := n.(*ast.SelectorExpr); ok {
+			if x, ok := sel.X.(*ast.Ident); ok {
+				used[x.Name] = true
+			}
+		}
+		return true
+	})
+	return used
+}
+
 // writeImports writes the import block, including only what the body uses.
 func (g *RequestGenerator) writeImports(buf *bytes.Buffer, body []byte) {
+	used := packagesUsed(body)
 	imports := []string{"context"}
-	if bytes.Contains(body, []byte("json.")) {
+	if used["json"] {
 		imports = append(imports, "encoding/json")
 	}
-	if bytes.Contains(body, []byte("errors.Join")) {
+	if used["errors"] {
 		imports = append(imports, "errors")
 	}
-	if bytes.Contains(body, []byte("iter.Seq2")) {
+	if used["iter"] {
 		imports = append(imports, "iter")
 	}
 	buf.WriteString("import (\n")
