@@ -435,15 +435,17 @@ func (s *Server) ServeAPI(w http.ResponseWriter, r *http.Request) {
 			responses = append(responses, methodError(call.ID, "invalidResultReference", err.Error()))
 			continue
 		}
-		if detail := tooLarge(call, core); detail != "" {
-			responses = append(responses, methodError(call.ID, "requestTooLarge", detail))
-			continue
-		}
 
 		s.mu.Lock()
 		handler, known := s.handlers[call.Method]
 		s.calls = append(s.calls, call)
 		s.mu.Unlock()
+		// A call over a limit was still sent, and is among the calls a test
+		// reads back; it is the handler it does not reach.
+		if detail := tooLarge(call, core); detail != "" {
+			responses = append(responses, methodError(call.ID, "requestTooLarge", detail))
+			continue
+		}
 		if !known {
 			s.t.Errorf("jmaptest: nothing answers %s; add srv.Reply(%q, ...) or srv.Handle(%q, ...)",
 				call.Method, call.Method, call.Method)

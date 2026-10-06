@@ -648,3 +648,42 @@ func TestPushesMadeTogetherArriveInTheOrderOfTheirIDs(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// TestTheLimitsAreTheSessions checks that the limits held to are the ones the
+// session states, not ones of the server's own: smaller ones hold, a session
+// stating none holds requests to nothing, and a call refused for its size is
+// still among the calls the test reads back.
+func TestTheLimitsAreTheSessions(t *testing.T) {
+	limits := func(core string) Option {
+		return WithSession(func(s *jmapc.Session) {
+			s.Capabilities[jmapc.CapabilityCore] = json.RawMessage(core)
+		})
+	}
+	three := `{"using": ["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail"], "methodCalls": [
+	  ["Mailbox/get", {"ids": ["m1", "m2", "m3"]}, "a"],
+	  ["Mailbox/get", {"ids": ["m1"]}, "b"],
+	  ["Mailbox/get", {"ids": ["m1"]}, "c"]
+	]}`
+	reply := map[string]any{"accountId": AccountID, "state": "s1", "list": []any{}, "notFound": []any{}}
+
+	small := New(t, WithoutChecks(), limits(`{"maxCallsInRequest": 2, "maxObjectsInGet": 2}`))
+	small.Reply("Mailbox/get", reply)
+	if status, body := post(t, small, three); status != http.StatusBadRequest || !strings.Contains(body, "maxCallsInRequest") {
+		t.Errorf("three calls under a limit of two: %d %s, want a 400", status, body)
+	}
+
+	fewer := New(t, WithoutChecks(), limits(`{"maxCallsInRequest": 3, "maxObjectsInGet": 2}`))
+	fewer.Reply("Mailbox/get", reply)
+	if _, body := post(t, fewer, three); !strings.Contains(body, "requestTooLarge") {
+		t.Errorf("three ids under a limit of two: %s, want requestTooLarge", body)
+	}
+	if n := len(fewer.Calls()); n != 3 {
+		t.Errorf("the server records %d calls, want the 3 sent, the refused one among them", n)
+	}
+
+	none := New(t, WithoutChecks(), limits(`{}`))
+	none.Reply("Mailbox/get", reply)
+	if status, body := post(t, none, three); status != http.StatusOK || strings.Contains(body, "requestTooLarge") {
+		t.Errorf("a session stating no limits: %d %s, want every call answered", status, body)
+	}
+}
