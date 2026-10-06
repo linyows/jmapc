@@ -504,3 +504,27 @@ func (s *Spec) AppendResponse(method string, fields ...*Field) {
 	}
 	o.Fields = append(o.Fields, fields...)
 }
+
+// defineMethod adds a method whose arguments and response are spelled out,
+// with the two types they make named after the method, as every method's are:
+// Email/import takes EmailImportArguments and answers with EmailImportResponse.
+// The method is given its name, capability and the rest; its Arguments and
+// Response are filled in here.
+func (s *Spec) defineMethod(m *Method, args, resp []*Field) {
+	prefix := m.TypeNamePrefix()
+	m.Arguments = s.AddObject(&Object{
+		Name:       prefix + "Arguments",
+		Capability: m.Capability,
+		Kind:       KindArguments,
+		Doc:        prefix + "Arguments holds the arguments of the " + m.Name + " method.",
+		Fields:     args,
+	}).Name
+	m.Response = s.AddObject(&Object{
+		Name:       prefix + "Response",
+		Capability: m.Capability,
+		Kind:       KindResponse,
+		Doc:        prefix + "Response holds the response to the " + m.Name + " method.",
+		Fields:     resp,
+	}).Name
+	s.AddMethod(m)
+}

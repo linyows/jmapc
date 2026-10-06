@@ -75,22 +75,18 @@ func registerSieve(s *Spec) {
 
 	// Validation is a method of its own because a script may be worth checking
 	// without being worth storing.
-	args := s.AddObject(&Object{
-		Name:       "SieveScriptValidateArguments",
+	s.defineMethod(&Method{
+		Name:       "SieveScript/validate",
 		Capability: CapabilitySieve,
-		Kind:       KindArguments,
-		Doc:        "SieveScriptValidateArguments holds the arguments of the SieveScript/validate method.",
-		Fields: []*Field{
+		Doc: "Checks whether a script would parse and whether the server supports the extensions it requires, " +
+			"without storing it. It is how an editor tells the user about a mistake before they commit to it.",
+		DataType: "SieveScript",
+	},
+		[]*Field{
 			accountIDField(),
 			{Name: "blobId", Type: "Id", Doc: "The id of the blob holding the script to check."},
 		},
-	})
-	resp := s.AddObject(&Object{
-		Name:       "SieveScriptValidateResponse",
-		Capability: CapabilitySieve,
-		Kind:       KindResponse,
-		Doc:        "SieveScriptValidateResponse holds the response to the SieveScript/validate method.",
-		Fields: []*Field{
+		[]*Field{
 			accountIDField(),
 			{
 				Name: "error",
@@ -98,14 +94,5 @@ func registerSieve(s *Spec) {
 				Doc:  "What is wrong with the script, as an invalidSieve error, or null if it is valid.",
 			},
 		},
-	})
-	s.AddMethod(&Method{
-		Name:       "SieveScript/validate",
-		Capability: CapabilitySieve,
-		Doc: "Checks whether a script would parse and whether the server supports the extensions it requires, " +
-			"without storing it. It is how an editor tells the user about a mistake before they commit to it.",
-		Arguments: args.Name,
-		Response:  resp.Name,
-		DataType:  "SieveScript",
-	})
+	)
 }

@@ -94,12 +94,13 @@ func registerMDN(s *Spec) {
 		},
 	})
 
-	sendArgs := s.AddObject(&Object{
-		Name:       "MDNSendArguments",
+	s.defineMethod(&Method{
+		Name:       "MDN/send",
 		Capability: CapabilityMDN,
-		Kind:       KindArguments,
-		Doc:        "MDNSendArguments holds the arguments of the MDN/send method.",
-		Fields: []*Field{
+		Doc:        "Sends a receipt telling the sender of a message what became of it.",
+		DataType:   "MDN",
+	},
+		[]*Field{
 			accountIDField(),
 			{
 				Name: "identityId",
@@ -119,13 +120,7 @@ func registerMDN(s *Spec) {
 					"This is where the $mdnsent keyword is set, so that a receipt is not sent for the same message twice.",
 			},
 		},
-	})
-	sendResp := s.AddObject(&Object{
-		Name:       "MDNSendResponse",
-		Capability: CapabilityMDN,
-		Kind:       KindResponse,
-		Doc:        "MDNSendResponse holds the response to the MDN/send method.",
-		Fields: []*Field{
+		[]*Field{
 			accountIDField(),
 			{
 				Name: "sent",
@@ -138,32 +133,20 @@ func registerMDN(s *Spec) {
 				Doc:  "A map of creation id to the reason the notification could not be sent.",
 			},
 		},
-	})
-	s.AddMethod(&Method{
-		Name:       "MDN/send",
-		Capability: CapabilityMDN,
-		Doc:        "Sends a receipt telling the sender of a message what became of it.",
-		Arguments:  sendArgs.Name,
-		Response:   sendResp.Name,
-		DataType:   "MDN",
-	})
+	)
 
-	parseArgs := s.AddObject(&Object{
-		Name:       "MDNParseArguments",
+	s.defineMethod(&Method{
+		Name:       "MDN/parse",
 		Capability: CapabilityMDN,
-		Kind:       KindArguments,
-		Doc:        "MDNParseArguments holds the arguments of the MDN/parse method.",
-		Fields: []*Field{
+		Doc: "Reads a notification that arrived as a message, so that a client can tell the user what became of something they sent. " +
+			"A notification is a message like any other, and this is what turns it back into the report it carries.",
+		DataType: "MDN",
+	},
+		[]*Field{
 			accountIDField(),
 			{Name: "blobIds", Type: "Id[]", Doc: "The ids of the blobs to read as notifications."},
 		},
-	})
-	parseResp := s.AddObject(&Object{
-		Name:       "MDNParseResponse",
-		Capability: CapabilityMDN,
-		Kind:       KindResponse,
-		Doc:        "MDNParseResponse holds the response to the MDN/parse method.",
-		Fields: []*Field{
+		[]*Field{
 			accountIDField(),
 			{
 				Name: "parsed",
@@ -173,14 +156,5 @@ func registerMDN(s *Spec) {
 			{Name: "notParsable", Type: "Id[]|null", Doc: "The ids of the blobs that do not hold a notification the server could read."},
 			{Name: "notFound", Type: "Id[]|null", Doc: "The ids of the blobs that do not exist."},
 		},
-	})
-	s.AddMethod(&Method{
-		Name:       "MDN/parse",
-		Capability: CapabilityMDN,
-		Doc: "Reads a notification that arrived as a message, so that a client can tell the user what became of something they sent. " +
-			"A notification is a message like any other, and this is what turns it back into the report it carries.",
-		Arguments: parseArgs.Name,
-		Response:  parseResp.Name,
-		DataType:  "MDN",
-	})
+	)
 }
