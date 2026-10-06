@@ -260,5 +260,17 @@ func TestAnExtendingSetDoesNotRedeclareWhatItInherits(t *testing.T) {
 	if got := strings.Join(SetProperties(derived, blob), ","); got != "data:asBase64" {
 		t.Errorf("the derived set holds %s, want data:asBase64", got)
 	}
+
+	// The other way round, the base has data:asText where the server picks
+	// it, and the derived set asking for it by name declares it again, for
+	// the server to send whatever it picks.
+	base = &request.PropertySet{Name: "BlobContent", Type: "BlobData", Own: []string{"data"}}
+	derived = &request.PropertySet{Name: "BlobText", Type: "BlobData", Extends: base, Own: []string{"data:asText"}}
+	if got := strings.Join(SetProperties(derived, blob), ","); got != "data:asText" {
+		t.Errorf("the derived set holds %s, want data:asText", got)
+	}
+	if PickedByServer(blob, derived.Own, "data:asText") {
+		t.Error("the derived set leaves data:asText for the server to pick")
+	}
 }
 

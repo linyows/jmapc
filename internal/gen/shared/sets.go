@@ -13,18 +13,21 @@ import (
 // with the id first where it is the set its type starts from and the type has
 // an id, since a /get returns the id whatever it is asked for. A set extending
 // another holds the id through the one it extends, and holds no field the one
-// it extends does: a set adding data to one holding data:asText already has
-// that member, required, and declaring it again would contradict the type it
-// extends.
+// it extends does, unless it asks for by name one the server picks there: a set
+// adding data to one holding data:asText already has that member, required,
+// and a set adding data:asText to one holding data makes the member it has
+// required.
 func SetProperties(set *request.PropertySet, dataType *spec.Object) []string {
 	_, hasID := dataType.Field("id")
 	if set.Extends == nil {
 		return RecordProperties(dataType, set.Own, hasID)
 	}
-	inherited := RecordProperties(dataType, set.Extends.Properties(), hasID)
+	base := set.Extends.Properties()
+	inherited := RecordProperties(dataType, base, hasID)
 	var out []string
 	for _, name := range RecordProperties(dataType, set.Own, false) {
-		if !slices.Contains(inherited, name) {
+		strengthened := slices.Contains(set.Own, name) && PickedByServer(dataType, base, name)
+		if !slices.Contains(inherited, name) || strengthened {
 			out = append(out, name)
 		}
 	}
