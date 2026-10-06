@@ -305,6 +305,12 @@ func TestExtendErrors(t *testing.T) {
 			             "response": [{"name": "list", "type": "Note[]"}]}]}`,
 		want: `Note/summarise says it returns the id of every record, and Note has no id`,
 	}, {
+		name: "method returning records in a property that is no list or map of them",
+		src: `{"capability": "urn:x:y", "types": [{"name": "Note", "properties": []}],
+			"methods": [{"name": "Note/summarise", "dataType": "Note", "resultProperty": "list",
+			             "response": [{"name": "list", "type": "Note|String"}]}]}`,
+		want: `Note/summarise returns its records in "list", which is a Note|String rather than a list of Note or a map to them`,
+	}, {
 		name: "unknown member in the schema",
 		src:  `{"capability": "urn:x:y", "typs": []}`,
 		want: `unknown field "typs"`,

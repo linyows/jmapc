@@ -138,8 +138,12 @@ func collectTypeNames(t *spec.Type, names map[string]bool) {
 	case t.IsObject():
 		names[spec.ExportedName(t.Name)] = true
 	default:
-		// A primitive that is a named alias in TypeScript is imported too.
-		if alias := t.TSType(); alias != "" && isAliasName(alias) {
+		// A primitive that is a named alias in TypeScript is imported too. The
+		// nullability comes off first, since Date|null names the alias as
+		// much as Date does.
+		bare := *t
+		bare.Nullable = false
+		if alias := bare.TSType(); alias != "" && isAliasName(alias) {
 			names[alias] = true
 		}
 	}

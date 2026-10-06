@@ -2,7 +2,7 @@
 // Source: requests/ReadAttachedMessage.jmap.json
 
 import { type Client, type Request, type Response, MethodErrors, answered, decode } from "./client.js"
-import type { EmailAddress, EmailBodyValue, Id } from "./types.js"
+import type { Date, EmailAddress, EmailBodyValue, Id } from "./types.js"
 
 // ReadAttachedMessageParams holds the values ReadAttachedMessage leaves open.
 export interface ReadAttachedMessageParams {

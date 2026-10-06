@@ -394,6 +394,14 @@ func (s *Spec) addSchemaMethod(sc *Schema, m *SchemaMethod) error {
 			return fmt.Errorf("%s says it returns the id of every record, and %s has no id", m.Name, m.DataType)
 		}
 	}
+	if m.ResultProperty != "" && m.DataType != "" {
+		for _, f := range resp {
+			if f.Name == m.ResultProperty && !holdsRecords(f.ParsedType(), m.DataType) {
+				return fmt.Errorf("%s returns its records in %q, which is a %s rather than a list of %s or a map to them",
+					m.Name, m.ResultProperty, f.Type, m.DataType)
+			}
+		}
+	}
 	capability := capabilityOr(m.Capability, sc.Capability)
 	argsType := s.AddObject(&Object{
 		Name:       prefix + "Arguments",
@@ -560,3 +568,17 @@ func sortedArgumentKeys(m map[string][]*SchemaField) []string {
 	sort.Strings(keys)
 	return keys
 }
+
+// holdsRecords reports whether t is a list of records of dataType or a map to
+// them, at any depth, which is the shape a generator can write narrowed records
+// into.
+func holdsRecords(t *Type, dataType string) bool {
+	switch {
+	case t.IsArray():
+		return t.Elem.Name == dataType || holdsRecords(t.Elem, dataType)
+	case t.IsMap():
+		return t.Value.Name == dataType || holdsRecords(t.Value, dataType)
+	}
+	return false
+}
+
