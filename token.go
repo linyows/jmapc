@@ -100,7 +100,13 @@ func (t *tokenHolder) token(ctx context.Context) (string, error) {
 			return "", ctx.Err()
 		}
 		t.mu.Lock()
-		if t.valid() || !t.abandoned || ctx.Err() != nil {
+		if ctx.Err() != nil && !t.valid() {
+			// Both channels may have been ready, and the wait chosen: a
+			// request that has given up itself does not call the source.
+			t.mu.Unlock()
+			return "", ctx.Err()
+		}
+		if t.valid() || !t.abandoned {
 			t.mu.Unlock()
 			return t.fetched()
 		}

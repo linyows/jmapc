@@ -211,6 +211,12 @@ func (c *Client) fetchSession(ctx context.Context) (*Session, error) {
 			c.mu.Unlock()
 			return nil, err
 		}
+		// Both channels may have been ready, and the wait chosen: a caller
+		// that has given up itself does not make the fetch again.
+		if ctx.Err() != nil {
+			c.mu.Unlock()
+			return nil, ctx.Err()
+		}
 		// The caller that made the fetch gave up on it. This one has not,
 		// so it goes round again, and makes the fetch itself where no other
 		// caller has started one in the meantime.

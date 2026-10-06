@@ -396,3 +396,47 @@ func TestATimeoutOfTheHTTPClientIsShared(t *testing.T) {
 		t.Errorf("the session was fetched %d times, want the one fetch shared", n)
 	}
 }
+
+// TestAWaitingCallerThatGaveUpDoesNotFetch covers a caller whose own context
+// ended while the fetch it waited on was given up by the caller making it. Both
+// are ready when it looks, and whichever it sees first, it has given up too, so
+// it does not make the fetch again.
+func TestAWaitingCallerThatGaveUpDoesNotFetch(t *testing.T) {
+	for range 30 {
+		var hits atomic.Int64
+		arrived := make(chan struct{}, 4)
+		mux := http.NewServeMux()
+		srv := httptest.NewServer(mux)
+		mux.HandleFunc("/session", func(w http.ResponseWriter, r *http.Request) {
+			hits.Add(1)
+			arrived <- struct{}{}
+			<-r.Context().Done()
+		})
+		c := New(srv.URL + "/session")
+
+		first, cancelFirst := context.WithCancel(context.Background())
+		second, cancelSecond := context.WithCancel(context.Background())
+		firstDone := make(chan struct{})
+		go func() {
+			_, _ = c.Session(first)
+			close(firstDone)
+		}()
+		<-arrived
+		// The hook runs as the second caller starts waiting: the first one
+		// gives up and finishes, and then the second gives up as well.
+		c.sharing = func() {
+			cancelFirst()
+			<-firstDone
+			cancelSecond()
+		}
+		// Its own error, as it is, rather than that of a fetch it made with a
+		// context that had ended.
+		if _, err := c.Session(second); err != context.Canceled {
+			t.Fatalf("Session: %v, want the caller's own context.Canceled", err)
+		}
+		srv.Close()
+		if n := hits.Load(); n != 1 {
+			t.Fatalf("the session was fetched %d times, want the one: a caller that gave up fetched it again", n)
+		}
+	}
+}
