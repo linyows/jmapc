@@ -477,11 +477,17 @@ func caseOnly(dir string, files map[string][]byte) (map[string]string, error) {
 	for name := range files {
 		lower[strings.ToLower(name)] = name
 	}
+	// A name already on disk as it is spelled is its own file, whatever the
+	// file system makes of the other: a link to it is not the file renamed.
+	present := make(map[string]bool, len(entries))
+	for _, entry := range entries {
+		present[entry.Name()] = true
+	}
 	renamed := map[string]string{}
 	for _, entry := range entries {
 		name := entry.Name()
 		want, ok := lower[strings.ToLower(name)]
-		if entry.IsDir() || !ok || want == name {
+		if entry.IsDir() || !ok || want == name || present[want] {
 			continue
 		}
 		have, err := os.Stat(filepath.Join(dir, name))

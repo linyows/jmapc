@@ -583,3 +583,29 @@ func TestGenerateKeepsARequestRenamedByCase(t *testing.T) {
 		t.Errorf("generate -check rejects what generate just wrote: %v\n%s", err, errOut)
 	}
 }
+
+// TestGenerateLeavesALinkByCaseAlone covers a file system that tells names
+// apart by case, holding the file generated and a link to it whose name differs
+// only in case. The two are two entries, and the link is not the file renamed:
+// renaming it over the file would leave a link to itself.
+func TestGenerateLeavesALinkByCaseAlone(t *testing.T) {
+	dir := workspace(t, map[string]string{"requests/AttachNote.jmap.json": listMailboxes})
+	if _, err := os.Stat(filepath.Join(dir, "requests", "attachnote.jmap.json")); err == nil {
+		t.Skip("the file system ignores case, where the two names are one file")
+	}
+	args := []string{"generate", "-requests", filepath.Join(dir, "requests"),
+		"-out", filepath.Join(dir, "ts"), "-lang", "typescript"}
+	if _, errOut, err := capture(t, args); err != nil {
+		t.Fatalf("generate: %v\n%s", err, errOut)
+	}
+	link := filepath.Join(dir, "ts", "attachnote.ts")
+	if err := os.Symlink("attachNote.ts", link); err != nil {
+		t.Skipf("making a link: %v", err)
+	}
+	if _, errOut, err := capture(t, args); err != nil {
+		t.Fatalf("generate: %v\n%s", err, errOut)
+	}
+	if info, err := os.Lstat(filepath.Join(dir, "ts", "attachNote.ts")); err != nil || !info.Mode().IsRegular() {
+		t.Errorf("the generated file is not a file any more: %v, %v", info, err)
+	}
+}
