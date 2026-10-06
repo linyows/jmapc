@@ -355,6 +355,12 @@ func (r *PushReceiver) keep(ctx context.Context, id ID, expires time.Time, lifet
 		renewed, err := r.renew(ctx, id, expires, lifetime)
 		switch {
 		case err == nil:
+			if lifetime <= 0 && expires.IsZero() && !renewed.IsZero() {
+				// The server set an expiry it did not set at first. The
+				// extensions from here ask for as long as it granted, rather
+				// than for nothing, which is an expiry of now.
+				lifetime = renewed.Sub(r.now())
+			}
 			expires = renewed
 		case errors.Is(err, errSubscriptionLost):
 			return err
