@@ -312,9 +312,12 @@ func (s *Server) ServeEvents(w http.ResponseWriter, r *http.Request) {
 	// The interval is read as 64 bits whatever int is, so that one too large
 	// for an int is clamped as any other too long, rather than dropped.
 	var ping <-chan time.Time
-	var seconds uint64
+	var seconds int64
 	if asked, err := strconv.ParseUint(query.Get("ping"), 10, 64); err == nil && asked > 0 {
-		seconds = min(asked, maxPing)
+		seconds = maxPing
+		if asked < maxPing {
+			seconds = int64(asked)
+		}
 		ticker := time.NewTicker(time.Duration(seconds) * time.Second)
 		defer ticker.Stop()
 		ping = ticker.C
