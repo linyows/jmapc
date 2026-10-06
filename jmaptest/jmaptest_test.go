@@ -353,6 +353,76 @@ func TestAStreamIsPingedWhereAsked(t *testing.T) {
 	t.Errorf("the stream ended without a ping: %v", scan.Err())
 }
 
+// post sends a JMAP request as it is written, past the checks a jmapc client
+// makes before sending, and returns the status and body of the answer.
+func post(t *testing.T, srv *Server, body string) (int, string) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, srv.BaseURL()+"/api", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /api: %v", err)
+	}
+	defer resp.Body.Close()
+	out, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp.StatusCode, string(out)
+}
+
+// TestARequestOverTheCallLimitIsRefused checks maxCallsInRequest, which the
+// session states and a server holds a request to as a whole.
+func TestARequestOverTheCallLimitIsRefused(t *testing.T) {
+	srv := New(t, WithoutChecks())
+	srv.Reply("Core/echo", map[string]any{})
+	calls := make([]string, 17)
+	for i := range calls {
+		calls[i] = fmt.Sprintf(`["Core/echo", {}, "c%d"]`, i)
+	}
+	status, body := post(t, srv, `{"using": ["urn:ietf:params:jmap:core"], "methodCalls": [`+strings.Join(calls, ",")+`]}`)
+	if status != http.StatusBadRequest || !strings.Contains(body, "maxCallsInRequest") {
+		t.Errorf("answered %d %s, want a 400 naming maxCallsInRequest", status, body)
+	}
+}
+
+// TestACallOverTheObjectLimitsIsRefused checks maxObjectsInGet and
+// maxObjectsInSet, which a server holds each call to on its own: the call is
+// refused as requestTooLarge, and the others in the request are answered.
+func TestACallOverTheObjectLimitsIsRefused(t *testing.T) {
+	srv := New(t, WithoutChecks())
+	srv.Reply("Mailbox/get", map[string]any{"accountId": AccountID, "state": "s1", "list": []any{}, "notFound": []any{}})
+	srv.Reply("Mailbox/set", map[string]any{"accountId": AccountID, "newState": "s2"})
+	ids := make([]string, 501)
+	for i := range ids {
+		ids[i] = fmt.Sprintf(`"m%d"`, i)
+	}
+	destroy := strings.Join(ids, ",")
+	status, body := post(t, srv, `{"using": ["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail"], "methodCalls": [
+	  ["Mailbox/get", {"ids": [`+destroy+`]}, "get"],
+	  ["Mailbox/set", {"destroy": [`+destroy+`]}, "set"],
+	  ["Mailbox/get", {"ids": ["m1"]}, "small"]
+	]}`)
+	if status != http.StatusOK {
+		t.Fatalf("answered %d %s, want 200", status, body)
+	}
+	var resp jmapc.Response
+	if err := json.Unmarshal([]byte(body), &resp); err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range []string{"error", "error", "Mailbox/get"} {
+		if got := resp.MethodResponses[i].Name; got != want {
+			t.Errorf("response %d is %q, want %q", i, got, want)
+		}
+	}
+	if !strings.Contains(body, "requestTooLarge") {
+		t.Errorf("the refusals do not say requestTooLarge: %s", body)
+	}
+}
+
 // TestPathsOfYourOwnBesideThePathsItServes covers a client half converted to
 // jmapc: the generated half reaches the server through Client, and the half
 // still written by hand reaches paths of its own. Both have to answer in one

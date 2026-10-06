@@ -400,6 +400,18 @@ func (s *Server) ServeAPI(w http.ResponseWriter, r *http.Request) {
 		s.writeRequestError(w, err)
 		return
 	}
+	core := s.core()
+	if max := core.MaxCallsInRequest; max > 0 && jmapc.UnsignedInt(len(req.MethodCalls)) > max {
+		// RFC 8620, Section 3.6.1: a request over a limit the session states
+		// is refused whole.
+		s.writeRequestError(w, &jmapc.RequestError{
+			Status: http.StatusBadRequest,
+			Type:   jmapc.ErrTypeLimit,
+			Limit:  "maxCallsInRequest",
+			Detail: fmt.Sprintf("the request makes %d method calls, and the server takes %d", len(req.MethodCalls), max),
+		})
+		return
+	}
 
 	check := request.NewRequestCheck(spec.Standard(), req.Using)
 	responses := make([]jmapc.Invocation, 0, len(req.MethodCalls))
@@ -421,6 +433,10 @@ func (s *Server) ServeAPI(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := call.resolve(answered, names); err != nil {
 			responses = append(responses, methodError(call.ID, "invalidResultReference", err.Error()))
+			continue
+		}
+		if detail := tooLarge(call, core); detail != "" {
+			responses = append(responses, methodError(call.ID, "requestTooLarge", detail))
 			continue
 		}
 
@@ -470,6 +486,52 @@ func (s *Server) ServeAPI(w http.ResponseWriter, r *http.Request) {
 // checkUsing reports a capability the request declares and the session does
 // not advertise, which a server answers with a request-level error rather than
 // by running the calls.
+// core returns the limits the session states, which a server holds requests
+// to. A session that states none, as one a test has replaced may, holds them to
+// nothing.
+func (s *Server) core() *jmapc.CoreCapability {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	core, err := s.session.Core()
+	if err != nil {
+		return &jmapc.CoreCapability{}
+	}
+	return core
+}
+
+// tooLarge reports a /get or /set that names more records than the session
+// says the server takes in one call, which RFC 8620, Sections 5.1 and 5.3 have
+// the server refuse as requestTooLarge. It returns the reason, and nothing
+// where the call is within the limits.
+func tooLarge(call *Call, core *jmapc.CoreCapability) string {
+	count := func(arg string, keyed bool) int {
+		raw, ok := call.Args[arg]
+		if !ok {
+			return 0
+		}
+		if keyed {
+			var m map[string]json.RawMessage
+			_ = json.Unmarshal(raw, &m)
+			return len(m)
+		}
+		var list []json.RawMessage
+		_ = json.Unmarshal(raw, &list)
+		return len(list)
+	}
+	switch {
+	case strings.HasSuffix(call.Method, "/get"):
+		if n, max := count("ids", false), core.MaxObjectsInGet; max > 0 && jmapc.UnsignedInt(n) > max {
+			return fmt.Sprintf("the call asks for %d records, and the server returns %d in one /get", n, max)
+		}
+	case strings.HasSuffix(call.Method, "/set"):
+		n := count("create", true) + count("update", true) + count("destroy", false)
+		if max := core.MaxObjectsInSet; max > 0 && jmapc.UnsignedInt(n) > max {
+			return fmt.Sprintf("the call changes %d records, and the server takes %d in one /set", n, max)
+		}
+	}
+	return ""
+}
+
 func (s *Server) checkUsing(using []string) *jmapc.RequestError {
 	s.mu.Lock()
 	defer s.mu.Unlock()
