@@ -731,7 +731,8 @@ func (c *Config) check() error {
 	case LangGo:
 		// The package is named after the output directory unless it is given,
 		// and a directory may be named what a package cannot.
-		if !token.IsIdentifier(c.Package) || token.IsKeyword(c.Package) {
+		// The blank identifier is an identifier, and not a package name.
+		if !token.IsIdentifier(c.Package) || token.IsKeyword(c.Package) || c.Package == "_" {
 			return fmt.Errorf("%q cannot name a Go package; name it with -package, or package in %s",
 				c.Package, ConfigName)
 		}

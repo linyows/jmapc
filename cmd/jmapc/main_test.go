@@ -341,7 +341,7 @@ func TestASettingsFileResolvesItsPathsAgainstItself(t *testing.T) {
 // way out, rather than failing to format with the whole source printed.
 func TestAPackageNameGoCannotTakeIsRefused(t *testing.T) {
 	dir := workspace(t, map[string]string{"requests/ListMailboxes.jmap.json": listMailboxes})
-	for _, out := range []string{"out-go", "go", "."} {
+	for _, out := range []string{"out-go", "go", ".", "_"} {
 		_, _, err := capture(t, []string{"validate", "-requests", filepath.Join(dir, "requests"),
 			"-out", filepath.Join(dir, out)})
 		if err == nil || !strings.Contains(err.Error(), "-package") {
