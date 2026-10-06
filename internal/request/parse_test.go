@@ -2249,3 +2249,25 @@ func TestAHeaderFieldIsGivenOnce(t *testing.T) {
 		}
 	}
 }
+
+// TestTheContentOfABlobIsReadAsItWasAskedFor checks a back reference to the
+// content of a blob, which a /get asked for as data returns as data:asText or
+// data:asBase64: a call asking for data fetches them.
+func TestTheContentOfABlobIsReadAsItWasAskedFor(t *testing.T) {
+	ref := `["Core/echo", {"#text": {"resultOf": "g", "name": "Blob/get", "path": "/list/0/data:asText"}}, "e"]`
+	for get, ok := range map[string]bool{
+		`["Blob/get", {"ids": ["b1"], "properties": ["data"]}, "g"]`:        true,
+		`["Blob/get", {"ids": ["b1"], "properties": ["data:asText"]}, "g"]`: true,
+		`["Blob/get", {"ids": ["b1"], "properties": ["size"]}, "g"]`:        false,
+	} {
+		_, err := NewParser(spec.Standard()).Parse("Text"+Extension, []byte(`{"methodCalls": [`+get+`, `+ref+`]}`))
+		if ok != (err == nil) {
+			t.Errorf("%s: %v, want it accepted %v", get, err, ok)
+		}
+	}
+	_, err := NewParser(spec.Standard()).Parse("Part"+Extension, []byte(`{"methodCalls": [["Email/set",
+	  {"create": {"d": {"mailboxIds": {"m1": true}, "bodyStructure": {"charset": "utf-8", "header:Content-Type": " text/plain"}}}}, "c0"]]}`))
+	if err == nil {
+		t.Error("a part given charset and a Content-Type header field passed")
+	}
+}

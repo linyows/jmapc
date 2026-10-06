@@ -822,13 +822,24 @@ func (c *checker) checkFetched(from *Call, selected []spec.Selection, path, wher
 		}
 		// A /get answers with the id whether or not it was asked for, as
 		// RFC 8620, Section 5.1 has it.
-		if (sel.Property == "id" && from.Method.ReturnsID) || slices.Contains(fetched, sel.Property) {
+		if (sel.Property == "id" && from.Method.ReturnsID) || slices.Contains(fetched, sel.Property) ||
+			slices.Contains(fetched, askedAs(sel)) {
 			continue
 		}
 		c.errorf(where, fetchedHint(from, sel.Property, argument, fetched),
 			"%s selects %s from the %s call, which does not fetch it",
 			path, sel.Property, from.Method.Name)
 	}
+}
+
+// askedAs returns the name a property is asked for by where that is not its own:
+// the content of a blob is asked for as data, and comes back as data:asText or
+// data:asBase64, RFC 9404, Section 4.2. It is empty for every other property.
+func askedAs(sel spec.Selection) string {
+	if sel.Type == "BlobData" && (sel.Property == "data:asText" || sel.Property == "data:asBase64") {
+		return "data"
+	}
+	return ""
 }
 
 // isDynamic reports whether a selection reads a property a type has beyond its

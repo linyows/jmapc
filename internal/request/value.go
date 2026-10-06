@@ -994,7 +994,7 @@ var convenienceHeaders = map[string]map[string]string{
 		"messageId": "message-id", "inReplyTo": "in-reply-to", "references": "references",
 	},
 	"EmailBodyPart": {
-		"type": "content-type", "disposition": "content-disposition", "cid": "content-id",
+		"type": "content-type", "charset": "content-type", "disposition": "content-disposition", "cid": "content-id",
 		"language": "content-language", "location": "content-location",
 	},
 }
