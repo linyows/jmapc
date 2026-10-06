@@ -334,6 +334,17 @@ func TestParseErrors(t *testing.T) {
 			"mailboxIds": {"m1": true}, "header:X-Foo:asBogus": "bar"}}}, "c0"]]}`,
 		want: `asks for the asBogus form`,
 	}, {
+		// The forms are suggested wherever a header field is named.
+		name: "header field patched in a form the specification does not define",
+		src: `{"methodCalls": [["Email/set", {"update": {"e1": {
+			"bodyStructure/header:X-Foo:asBogus": "bar"}}}, "c0"]]}`,
+		want: `known names are asAddresses`,
+	}, {
+		name: "header field read back in a form the specification does not define",
+		src: `{"methodCalls": [["Email/get", {"ids": ["e1"], "properties": ["header:X-Foo:asText"]}, "g"],
+			["Core/echo", {"#x": {"resultOf": "g", "name": "Email/get", "path": "/list/0/header:X-Foo:asBogus"}}, "e"]]}`,
+		want: `known names are asAddresses`,
+	}, {
 		name: "patch key with a leading slash and a parameter in it",
 		src: `{"methodCalls": [
 			["Email/set", {"update": {"e1": {"/keywords/{{keyword}}": true}}}, "c0"]

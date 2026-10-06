@@ -175,9 +175,13 @@ func (c *checker) checkEnum(value, where string) {
 		value, strings.Join(c.enum, ", "))
 }
 
-// propertyHint suggests what an unknown property in a path may have meant, or
-// what to write in place of one a record cannot be written with.
+// propertyHint suggests what an unknown property in a path may have meant, the
+// forms a header field is asked for in where it names another, or what to
+// write in place of a property a record cannot be written with.
 func propertyHint(err error) string {
+	if hint := headerFormHint(err); hint != "" {
+		return hint
+	}
 	var unwritable *spec.UnwritableError
 	if errors.As(err, &unwritable) {
 		return unwritable.Hint
