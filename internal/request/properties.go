@@ -304,11 +304,15 @@ func objectNames(catalogue *spec.Spec) []string {
 }
 
 // headerFormHint suggests the parsed form a header property meant, where err
-// is a form the specification does not define.
+// is a form the specification does not define, or names the forms the field
+// takes, where err is one it does not.
 func headerFormHint(err error) string {
 	var badForm *spec.HeaderPropertyError
 	if !errors.As(err, &badForm) || len(badForm.Forms) == 0 {
 		return ""
+	}
+	if badForm.Field != "" {
+		return "the " + badForm.Field + " header field takes " + strings.Join(badForm.Forms, ", ")
 	}
 	if hint := hintFor(badForm.Property, badForm.Forms); hint != "" {
 		return hint
