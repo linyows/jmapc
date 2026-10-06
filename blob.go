@@ -327,23 +327,34 @@ func parseContentRange(header string) (*BlobRange, error) {
 	if !ok {
 		return nil, malformed
 	}
-	from, err := strconv.ParseInt(first, 10, 64)
-	if err != nil {
+	from, ok := octets(first)
+	if !ok {
 		return nil, malformed
 	}
-	to, err := strconv.ParseInt(last, 10, 64)
-	if err != nil {
+	to, ok := octets(last)
+	if !ok {
 		return nil, malformed
 	}
 	part := &BlobRange{From: from, To: to, Total: -1}
 	if total != "*" {
-		size, err := strconv.ParseInt(total, 10, 64)
-		if err != nil {
+		size, ok := octets(total)
+		if !ok {
 			return nil, malformed
 		}
 		part.Total = size
 	}
 	return part, nil
+}
+
+// octets reads a count of octets in a Content-Range, which RFC 9110 writes as
+// digits and nothing else: no sign, so that "-1" is not taken for the "*" a
+// server writes where it does not know the size.
+func octets(s string) (int64, bool) {
+	if s == "" || strings.TrimLeft(s, "0123456789") != "" {
+		return 0, false
+	}
+	n, err := strconv.ParseInt(s, 10, 64)
+	return n, err == nil
 }
 
 // filenameFrom extracts the filename from a Content-Disposition header, and
