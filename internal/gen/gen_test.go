@@ -783,3 +783,48 @@ func TestAnEmptyListOfBodyPropertiesFetchesNothingOfAPart(t *testing.T) {
 		t.Errorf("the email does not hold its parts in the narrowed record:\n%s", src)
 	}
 }
+
+// TestADocumentedPackageIsNotImported checks that the imports are the packages
+// the code uses, not the names its comments hold. A request documented as
+// reading settings.json. would otherwise import encoding/json, which go vet
+// and the compiler then refuse as unused.
+func TestADocumentedPackageIsNotImported(t *testing.T) {
+	src := generateOne(t, "Settings", `{
+	  "_doc": "Settings reads what settings.json. says, and errors.Join any failures.",
+	  "methodCalls": [["Mailbox/get", {"ids": null}, "c0"]],
+	  "_returns": "c0"
+	}`)
+	for _, unused := range []string{`"encoding/json"`, `"errors"`} {
+		if strings.Contains(src, unused) {
+			t.Errorf("the request imports %s, which it does not use:\n%s", unused, src)
+		}
+	}
+}
+
+// TestASetDocumentedWithPackageNamesImportsNeither checks the file of property
+// sets, whose imports are decided apart from a request's: a set whose record
+// holds strings alone, documented in words that name json. and jmapc., imports
+// neither package.
+func TestASetDocumentedWithPackageNamesImportsNeither(t *testing.T) {
+	props, err := request.ParsePropertySets(request.PropertiesName, []byte(`{
+	  "PartLabel": {
+	    "doc": "PartLabel is what settings.json. shows of a part, as jmapc.Client reads it.",
+	    "type": "EmailBodyPart",
+	    "properties": ["partId", "type"]
+	  }
+	}`), spec.Standard())
+	if err != nil {
+		t.Fatalf("parsing the sets:\n%v", err)
+	}
+	g := &RequestGenerator{Spec: spec.Standard(), Package: "client", Qualifier: "jmapc.", Properties: props}
+	files, err := g.Generate()
+	if err != nil {
+		t.Fatalf("generating: %v", err)
+	}
+	src := string(files[PropertiesFileName])
+	for _, unused := range []string{`"encoding/json"`, `"github.com/linyows/jmapc"`} {
+		if strings.Contains(src, unused) {
+			t.Errorf("the sets import %s, which they do not use:\n%s", unused, src)
+		}
+	}
+}

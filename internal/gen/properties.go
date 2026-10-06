@@ -41,11 +41,12 @@ func (g *RequestGenerator) propertiesFile() ([]byte, error) {
 // generated into, which needs less than a request does: there is no function
 // here, only the types the records take.
 func (g *RequestGenerator) writePropertyImports(buf *bytes.Buffer, body []byte) {
+	used := packagesUsed(body)
 	var imports []string
-	if bytes.Contains(body, []byte("json.")) {
+	if used["json"] {
 		imports = append(imports, "encoding/json")
 	}
-	runtime := bytes.Contains(body, []byte(g.Qualifier))
+	runtime := used[strings.TrimSuffix(g.Qualifier, ".")]
 	if len(imports) == 0 && !runtime {
 		return
 	}
