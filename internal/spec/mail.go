@@ -89,7 +89,7 @@ func registerEmailParse(s *Spec) {
 		Capability: CapabilityMail,
 		Kind:       KindArguments,
 		Doc:        "EmailParseArguments holds the arguments of the Email/parse method.",
-		Fields: []*Field{
+		Fields: append([]*Field{
 			accountIDField(),
 			{Name: "blobIds", Type: "Id[]", Doc: "The ids of the blobs to parse as messages."},
 			{
@@ -97,35 +97,7 @@ func registerEmailParse(s *Spec) {
 				Type: "String[]|null",
 				Doc:  "The properties to include in each parsed email, or null for the default set.",
 			},
-			{
-				Name: "bodyProperties",
-				Type: "String[]|null",
-				Doc:  "The properties to include for each EmailBodyPart returned.",
-			},
-			{
-				Name:    "fetchTextBodyValues",
-				Type:    "Boolean",
-				Default: "false",
-				Doc:     "Whether to populate bodyValues for the parts listed in textBody.",
-			},
-			{
-				Name:    "fetchHTMLBodyValues",
-				Type:    "Boolean",
-				Default: "false",
-				Doc:     "Whether to populate bodyValues for the parts listed in htmlBody.",
-			},
-			{
-				Name:    "fetchAllBodyValues",
-				Type:    "Boolean",
-				Default: "false",
-				Doc:     "Whether to populate bodyValues for every textual body part.",
-			},
-			{
-				Name: "maxBodyValueBytes",
-				Type: "UnsignedInt",
-				Doc:  "The maximum number of octets to return for each body value, truncating longer ones.",
-			},
-		},
+		}, bodyFetchArguments()...),
 	})
 	resp := s.AddObject(&Object{
 		Name:       "EmailParseResponse",
@@ -651,36 +623,7 @@ func registerEmail(s *Spec) {
 		m.NestedType = "EmailBodyPart"
 	}
 
-	s.AppendArguments("Email/get",
-		&Field{
-			Name: "bodyProperties",
-			Type: "String[]|null",
-			Doc:  "The properties to include for each EmailBodyPart returned.",
-		},
-		&Field{
-			Name:    "fetchTextBodyValues",
-			Type:    "Boolean",
-			Default: "false",
-			Doc:     "Whether to populate bodyValues for the parts listed in textBody.",
-		},
-		&Field{
-			Name:    "fetchHTMLBodyValues",
-			Type:    "Boolean",
-			Default: "false",
-			Doc:     "Whether to populate bodyValues for the parts listed in htmlBody.",
-		},
-		&Field{
-			Name:    "fetchAllBodyValues",
-			Type:    "Boolean",
-			Default: "false",
-			Doc:     "Whether to populate bodyValues for every textual body part.",
-		},
-		&Field{
-			Name: "maxBodyValueBytes",
-			Type: "UnsignedInt",
-			Doc:  "The maximum number of octets to return for each body value, truncating longer ones.",
-		},
-	)
+	s.AppendArguments("Email/get", bodyFetchArguments()...)
 
 	collapseThreads := func() *Field {
 		return &Field{
@@ -692,4 +635,40 @@ func registerEmail(s *Spec) {
 	}
 	s.AppendArguments("Email/query", collapseThreads())
 	s.AppendArguments("Email/queryChanges", collapseThreads())
+}
+
+// bodyFetchArguments are the arguments with which a call returning emails says
+// what of their body parts it fetches, as Email/get and Email/parse both do,
+// RFC 8621, Sections 4.2 and 4.9.
+func bodyFetchArguments() []*Field {
+	return []*Field{
+		{
+			Name: "bodyProperties",
+			Type: "String[]|null",
+			Doc:  "The properties to include for each EmailBodyPart returned.",
+		},
+		{
+			Name:    "fetchTextBodyValues",
+			Type:    "Boolean",
+			Default: "false",
+			Doc:     "Whether to populate bodyValues for the parts listed in textBody.",
+		},
+		{
+			Name:    "fetchHTMLBodyValues",
+			Type:    "Boolean",
+			Default: "false",
+			Doc:     "Whether to populate bodyValues for the parts listed in htmlBody.",
+		},
+		{
+			Name:    "fetchAllBodyValues",
+			Type:    "Boolean",
+			Default: "false",
+			Doc:     "Whether to populate bodyValues for every textual body part.",
+		},
+		{
+			Name: "maxBodyValueBytes",
+			Type: "UnsignedInt",
+			Doc:  "The maximum number of octets to return for each body value, truncating longer ones.",
+		},
+	}
 }
