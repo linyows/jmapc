@@ -200,8 +200,8 @@ func (s *Spec) reserveNames(sc *Schema) error {
 		if m.Name == "" {
 			return fmt.Errorf("a method in the schema has no name")
 		}
-		if typeName, method, ok := strings.Cut(m.Name, "/"); !ok || typeName == "" || method == "" {
-			return fmt.Errorf("%q is not a method name: a method is named as Type/method", m.Name)
+		if !methodNamePattern.MatchString(m.Name) {
+			return fmt.Errorf("%q is not a method name: a method is named as Type/method, each part letters and digits starting with a letter", m.Name)
 		}
 		if _, dup := s.Method(m.Name); dup {
 			return fmt.Errorf("the method %q already exists", m.Name)
@@ -222,6 +222,10 @@ func (s *Spec) reserveNames(sc *Schema) error {
 // begins with a capital, as the types of the specifications do, which is the
 // spelling every generator writes it in.
 var typeNamePattern = regexp.MustCompile(`^[A-Z][A-Za-z0-9]*$`)
+
+// methodNamePattern is what a method name looks like: one slash between two
+// names, each letters and digits starting with a letter.
+var methodNamePattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]*/[A-Za-z][A-Za-z0-9]*$`)
 
 // checkTypeName reports a name a schema cannot give a type of its own.
 func checkTypeName(name string) error {

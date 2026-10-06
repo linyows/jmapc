@@ -264,6 +264,14 @@ func TestExtendErrors(t *testing.T) {
 		src:  `{"capability": "urn:x:y", "types": [], "methods": [{"name": "summarise"}]}`,
 		want: `"summarise" is not a method name`,
 	}, {
+		name: "method name with two slashes",
+		src:  `{"capability": "urn:x:y", "types": [], "methods": [{"name": "Note/get/extra"}]}`,
+		want: `"Note/get/extra" is not a method name`,
+	}, {
+		name: "method name with something other than letters and digits",
+		src:  `{"capability": "urn:x:y", "types": [], "methods": [{"name": "Note/sum-up"}]}`,
+		want: `"Note/sum-up" is not a method name`,
+	}, {
 		name: "method over a type nothing defines",
 		src:  `{"capability": "urn:x:y", "types": [], "methods": [{"name": "Note/summarise", "dataType": "Note"}]}`,
 		want: `Note/summarise works on the type "Note", which nothing defines`,
