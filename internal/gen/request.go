@@ -418,7 +418,8 @@ func (g *RequestGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 			shared.WriteComment(buf, "\t", field.Doc)
 			goType := field.ParsedType().GoType(g.Qualifier)
 			if field.Name == c.Method.ResultProperty {
-				goType = "[]" + info.RecordType
+				goType = shared.ResultType(field.ParsedType(), c.Method.DataType, info.RecordType,
+					func(t *spec.Type) string { return t.GoType(g.Qualifier) })
 			}
 			fmt.Fprintf(buf, "\t%s %s `json:%q`\n", spec.ExportedName(field.Name), goType, field.Name)
 		}

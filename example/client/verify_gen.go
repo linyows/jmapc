@@ -93,6 +93,12 @@ func Verify(ctx context.Context, c *jmapc.Client) error {
 			PrimaryAccounts: []string{jmapc.CapabilityMail},
 		},
 		{
+			Name:            "ReadAttachedMessage",
+			Using:           []string{jmapc.CapabilityCore, jmapc.CapabilityMail},
+			Calls:           1,
+			PrimaryAccounts: []string{jmapc.CapabilityMail},
+		},
+		{
 			Name:            "ReadMessage",
 			Using:           []string{jmapc.CapabilityCore, jmapc.CapabilityMail},
 			Calls:           1,

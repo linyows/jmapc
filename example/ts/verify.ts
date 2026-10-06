@@ -88,6 +88,12 @@ export async function verify(client: Client): Promise<void> {
       primaryAccounts: ["urn:ietf:params:jmap:mail"],
     },
     {
+      name: "ReadAttachedMessage",
+      using: ["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail"],
+      calls: 1,
+      primaryAccounts: ["urn:ietf:params:jmap:mail"],
+    },
+    {
       name: "ReadMessage",
       using: ["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail"],
       calls: 1,

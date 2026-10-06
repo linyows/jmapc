@@ -77,6 +77,7 @@ func registerEmailParse(s *Spec) {
 		Doc:                      "Reads blobs as RFC 5322 messages without filing them in the account, which is how a message sent as an attachment is displayed.",
 		DataType:                 "Email",
 		PropertiesArgument:       "properties",
+		ResultProperty:           "parsed",
 		NestedPropertiesArgument: "bodyProperties",
 		NestedType:               "EmailBodyPart",
 	},

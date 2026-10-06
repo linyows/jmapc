@@ -262,3 +262,61 @@ func RequestsDir(paths []string) string {
 	}
 	return strings.Join(common, "/")
 }
+
+// RecordSlot stands for a generated record type inside the type of the
+// property holding a call's records, until that type is written in a language
+// and the slot replaced by the record type's name. It is no name a type of
+// JMAP or a schema would take.
+const RecordSlot = "JmapcRecordSlot"
+
+// ResultType writes t, the type of the property holding a call's records, with
+// each record of dataType in it written as recordType: a list of records is a
+// list of recordType, and the map of Email/parse a map to recordType. render
+// writes a type in the language at hand.
+func ResultType(t *spec.Type, dataType, recordType string, render func(*spec.Type) string) string {
+	return strings.ReplaceAll(render(WithRecordSlot(t, dataType)), render(&spec.Type{Name: RecordSlot}), recordType)
+}
+
+// WithRecordSlot returns a copy of t with each dataType in it replaced by
+// RecordSlot.
+func WithRecordSlot(t *spec.Type, dataType string) *spec.Type {
+	if t == nil {
+		return nil
+	}
+	if t.Name == dataType {
+		return &spec.Type{Name: RecordSlot, Nullable: t.Nullable}
+	}
+	out := *t
+	out.Elem = WithRecordSlot(t.Elem, dataType)
+	out.Key = WithRecordSlot(t.Key, dataType)
+	out.Value = WithRecordSlot(t.Value, dataType)
+	if t.Union != nil {
+		out.Union = make([]*spec.Type, len(t.Union))
+		for i, m := range t.Union {
+			out.Union[i] = WithRecordSlot(m, dataType)
+		}
+	}
+	return &out
+}
+
+// AroundRecords returns the types inside t, the type of the property holding a
+// call's records, that are not the records of dataType: the keys of the map of
+// Email/parse, which a generated file has to import where the records are a
+// type of its own.
+func AroundRecords(t *spec.Type, dataType string) []*spec.Type {
+	switch {
+	case t == nil || t.Name == dataType:
+		return nil
+	case t.IsArray():
+		return AroundRecords(t.Elem, dataType)
+	case t.IsMap():
+		return append([]*spec.Type{t.Key}, AroundRecords(t.Value, dataType)...)
+	case t.IsUnion():
+		var out []*spec.Type
+		for _, m := range t.Union {
+			out = append(out, AroundRecords(m, dataType)...)
+		}
+		return out
+	}
+	return []*spec.Type{t}
+}

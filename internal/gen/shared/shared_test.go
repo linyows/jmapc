@@ -261,3 +261,31 @@ func TestAnExtendingSetDoesNotRedeclareWhatItInherits(t *testing.T) {
 		t.Errorf("the derived set holds %s, want data:asBase64", got)
 	}
 }
+
+// TestResultTypeNamesTheRecordsWhereverTheyAre checks the type of the property
+// holding a call's records, written with the records as the generated type: a
+// list of them for a /get, and the map of a /parse, whose keys stay as they
+// are and are the only types the file has to import.
+func TestResultTypeNamesTheRecordsWhereverTheyAre(t *testing.T) {
+	tests := []struct {
+		typ, dataType, want, around string
+	}{
+		{"Mailbox[]", "Mailbox", "[]Record", ""},
+		{"Id[Email]|null", "Email", "map[jmapc.ID]Record", "Id"},
+		{"Id[CalendarEvent[]]|null", "CalendarEvent", "map[jmapc.ID][]Record", "Id"},
+	}
+	for _, tt := range tests {
+		typ := spec.MustParseType(tt.typ)
+		got := ResultType(typ, tt.dataType, "Record", func(t *spec.Type) string { return t.GoType("jmapc.") })
+		if got != tt.want {
+			t.Errorf("ResultType(%s) = %s, want %s", tt.typ, got, tt.want)
+		}
+		var around []string
+		for _, a := range AroundRecords(typ, tt.dataType) {
+			around = append(around, a.String())
+		}
+		if strings.Join(around, ",") != tt.around {
+			t.Errorf("AroundRecords(%s) = %v, want %s", tt.typ, around, tt.around)
+		}
+	}
+}

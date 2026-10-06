@@ -395,6 +395,7 @@ func registerCalendarEvent(s *Spec) {
 		Doc:                "Reads blobs as iCalendar files without filing the events in a calendar, which is how an invitation received as an attachment is displayed.",
 		DataType:           "CalendarEvent",
 		PropertiesArgument: "properties",
+		ResultProperty:     "parsed",
 	},
 		[]*Field{
 			accountIDField(),

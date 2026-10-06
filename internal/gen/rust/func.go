@@ -58,6 +58,10 @@ func (g *RequestGenerator) writeUses(buf *bytes.Buffer, p *plan, body string) {
 			for _, f := range resp.Fields {
 				if f.Name != c.Method.ResultProperty {
 					imports.collect(f.ParsedType())
+					continue
+				}
+				for _, t := range shared.AroundRecords(f.ParsedType(), c.Method.DataType) {
+					imports.collect(t)
 				}
 			}
 		}
@@ -442,9 +446,12 @@ func (g *RequestGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 			}
 			writeDoc(buf, "    ", field.Doc)
 			if field.Name == c.Method.ResultProperty {
-				ident := spec.RustFieldName(field.Name)
-				writeSerdeAttr(buf, "    ", renameAndDefault(field.Name, ident))
-				fmt.Fprintf(buf, "    pub %s: Vec<%s>,\n", ident, info.RecordType)
+				// The member is written as any other, attributes and all, and
+				// the records in it then named as the generated type.
+				var member bytes.Buffer
+				writeMember(&member, respType.Name, field.Name,
+					shared.WithRecordSlot(field.ParsedType(), c.Method.DataType), false, true)
+				buf.WriteString(strings.ReplaceAll(member.String(), spec.RustTypeName(shared.RecordSlot), info.RecordType))
 				continue
 			}
 			writeMember(buf, respType.Name, field.Name, field.ParsedType(), false, true)

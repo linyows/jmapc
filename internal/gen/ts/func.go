@@ -61,6 +61,10 @@ func (g *RequestGenerator) writeImports(buf *bytes.Buffer, p *plan) {
 			for _, f := range resp.Fields {
 				if f.Name != c.Method.ResultProperty {
 					collectTypeNames(f.ParsedType(), names)
+					continue
+				}
+				for _, t := range shared.AroundRecords(f.ParsedType(), c.Method.DataType) {
+					collectTypeNames(t, names)
 				}
 			}
 		}
@@ -299,7 +303,7 @@ func (g *RequestGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 			shared.WriteComment(buf, "  ", field.Doc)
 			tsType := field.ParsedType().TSType()
 			if field.Name == c.Method.ResultProperty {
-				tsType = info.RecordType + "[]"
+				tsType = shared.ResultType(field.ParsedType(), c.Method.DataType, info.RecordType, (*spec.Type).TSType)
 			}
 			name := field.Name
 			if spec.TSNeedsQuoting(name) {
