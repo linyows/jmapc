@@ -21,6 +21,10 @@ type ImportEmailParams struct {
 	MailboxID jmapc.ID
 }
 
+// ImportEmailImported is the creation id ImportEmail gives a record it
+// creates, which the response reports it under.
+const ImportEmailImported jmapc.ID = "imported"
+
 // ImportEmailResult holds the response to each method call ImportEmail makes.
 type ImportEmailResult struct {
 	// The response to the Email/import call, made as "import".

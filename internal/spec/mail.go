@@ -42,9 +42,10 @@ func registerEmailImport(s *Spec) {
 				Doc:  "The state the emails are expected to be in. The call fails with a stateMismatch error if the server has moved on.",
 			},
 			{
-				Name: "emails",
-				Type: "Id[EmailImport]",
-				Doc:  "The messages to import, keyed by creation id.",
+				Name:        "emails",
+				Type:        "Id[EmailImport]",
+				CreationIDs: true,
+				Doc:         "The messages to import, keyed by creation id.",
 			},
 		},
 	})
