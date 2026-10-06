@@ -233,13 +233,23 @@ func (c *Client) fetchSession(ctx context.Context) (*Session, error) {
 	// it is a deadline too: what decides it is whether ctx itself ended.
 	// And a failure of the fetch's own, a 500, is not given up for a context
 	// that ended just after: the error has to be the context's.
-	c.fetchAbandoned = err != nil && ctx.Err() != nil && errors.Is(err, ctx.Err())
+	c.fetchAbandoned = endedWith(ctx, err)
 	if err == nil {
 		c.session, c.stale = s, false
 	}
 	c.mu.Unlock()
 	close(wait)
 	return s, err
+}
+
+// endedWith reports whether err is ctx ending: its error, or the cause it was
+// cancelled with, which net/http returns in place of context.Canceled for a
+// context cancelled with WithCancelCause.
+func endedWith(ctx context.Context, err error) bool {
+	if err == nil || ctx.Err() == nil {
+		return false
+	}
+	return errors.Is(err, ctx.Err()) || errors.Is(err, context.Cause(ctx))
 }
 
 // noteSessionState records that a response reported a session other than the

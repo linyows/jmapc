@@ -2,7 +2,6 @@ package jmapc
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"sync"
@@ -129,7 +128,7 @@ func (t *tokenHolder) token(ctx context.Context) (string, error) {
 	held, err := t.src(ctx)
 	t.mu.Lock()
 	t.fetching, t.err = nil, err
-	t.abandoned = err != nil && ctx.Err() != nil && errors.Is(err, ctx.Err())
+	t.abandoned = endedWith(ctx, err)
 	if err == nil {
 		t.held = held
 	}

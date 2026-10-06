@@ -2,6 +2,7 @@ package jmapc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -438,5 +439,50 @@ func TestAWaitingCallerThatGaveUpDoesNotFetch(t *testing.T) {
 		if n := hits.Load(); n != 1 {
 			t.Fatalf("the session was fetched %d times, want the one: a caller that gave up fetched it again", n)
 		}
+	}
+}
+
+// TestAWaitingCallerOutlivesOneThatGaveUpWithACause covers a caller giving up
+// with a cause of its own, which the HTTP client may return in place of
+// context.Canceled. That is still the caller giving up, and the caller waiting
+// on its fetch makes one of its own rather than taking the cause for its own.
+func TestAWaitingCallerOutlivesOneThatGaveUpWithACause(t *testing.T) {
+	var hits atomic.Int64
+	arrived := make(chan struct{}, 2)
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	mux.HandleFunc("/session", func(w http.ResponseWriter, r *http.Request) {
+		arrived <- struct{}{}
+		if hits.Add(1) == 1 {
+			<-r.Context().Done()
+			return
+		}
+		fmt.Fprintf(w, `{"capabilities": {"urn:ietf:params:jmap:core": {}}, "accounts": {},
+		  "primaryAccounts": {}, "username": "someone", "apiUrl": %q, "state": "s1"}`, srv.URL+"/api")
+	})
+	c := New(srv.URL + "/session")
+	waiting := make(chan struct{})
+	var once sync.Once
+	c.sharing = func() { once.Do(func() { close(waiting) }) }
+
+	first, cancel := context.WithCancelCause(context.Background())
+	go func() { _, _ = c.Session(first) }()
+	<-arrived
+	second := make(chan error, 1)
+	go func() {
+		_, err := c.Session(context.Background())
+		second <- err
+	}()
+	<-waiting
+	cancel(errors.New("the user closed the window"))
+
+	select {
+	case err := <-second:
+		if err != nil {
+			t.Errorf("the waiting caller: %v, want the session", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the waiting caller never finished")
 	}
 }
