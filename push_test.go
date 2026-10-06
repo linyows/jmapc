@@ -596,6 +596,54 @@ func TestPushReceiverExtendsAnExpiryTheServerSet(t *testing.T) {
 	}
 }
 
+// TestPushReceiverExtendsAnExpiryTheServerSetLater covers a subscription made
+// without an expiry, which the server gives one afterwards. The receiver finds
+// it at a check and from then on extends it, asking for as long as the server
+// granted rather than for nothing, which would ask it to expire at once.
+func TestPushReceiverExtendsAnExpiryTheServerSetLater(t *testing.T) {
+	ps := newPushServer(t)
+	var mu sync.Mutex
+	var calls int
+	_, ev, stop := startReceiver(t, ps, PushReceiverOptions{DeviceClientID: "app-1", CheckInterval: time.Minute},
+		func(r *PushReceiver) {
+			r.wait = func(ctx context.Context, d time.Duration) error {
+				mu.Lock()
+				calls++
+				n := calls
+				mu.Unlock()
+				if n == 1 {
+					// The server sets an expiry an hour off, which the check
+					// that follows this wait finds.
+					ps.mu.Lock()
+					for _, sub := range ps.subs {
+						expires := NewUTCDate(time.Now().Add(time.Hour))
+						sub.expires = &expires
+					}
+					ps.mu.Unlock()
+				}
+				if n <= 2 {
+					return nil
+				}
+				<-ctx.Done()
+				return ctx.Err()
+			}
+		})
+	ev.waitFor(t, PushRenewed)
+	_ = stop()
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	if len(ps.asked) != 1 {
+		t.Fatalf("the receiver asked for %v, want one extension", ps.asked)
+	}
+	var asked UTCDate
+	if err := json.Unmarshal([]byte(fmt.Sprintf("%q", ps.asked[0])), &asked); err != nil {
+		t.Fatal(err)
+	}
+	if left := time.Until(asked.Time); left < 30*time.Minute {
+		t.Errorf("the extension asked for %s, %v off, want about the hour the server granted", ps.asked[0], left)
+	}
+}
+
 // TestPushReceiverReportsOnlyWhatWasDestroyed checks that a subscription the
 // server refuses to destroy is not reported as destroyed.
 func TestPushReceiverReportsOnlyWhatWasDestroyed(t *testing.T) {
