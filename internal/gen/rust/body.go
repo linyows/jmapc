@@ -68,7 +68,7 @@ func (g *RequestGenerator) writeFunc(buf *bytes.Buffer, p *plan) {
 		fmt.Fprintf(buf, "    let mut out = %s::default();\n", p.resultType)
 		for _, c := range p.q.Calls {
 			fmt.Fprintf(buf, "    match decode::<%s>(&req, &res, %s) {\n",
-				p.calls[c].responseType, quote(c.ID))
+				p.calls[c].ResponseType, quote(c.ID))
 			fmt.Fprintf(buf, "        Ok(v) => out.%s = v,\n", spec.RustFieldName(c.Field))
 			buf.WriteString("        Err(e) if failed.is_none() => return Err(e),\n")
 			buf.WriteString("        Err(_) => {}\n")
@@ -153,7 +153,7 @@ func (g *RequestGenerator) setErrorChecks(p *plan) []setErrorCheck {
 			ch.object = "out." + spec.RustFieldName(c.Field)
 		case c != p.q.Returns:
 			ch.object = fmt.Sprintf("refused%d", i)
-			ch.decode = p.calls[c].responseType
+			ch.decode = p.calls[c].ResponseType
 		}
 		checks = append(checks, ch)
 	}
@@ -289,7 +289,7 @@ func (g *RequestGenerator) writeInvocation(buf *bytes.Buffer, p *plan, c *reques
 	members := args + "    "
 	fmt.Fprintf(buf, "%s%s.to_string(),\n", args, quote(c.Method.Name))
 
-	accountID := p.calls[c].accountIDVar
+	accountID := p.calls[c].AccountIDVar
 	switch {
 	case c.HasOptionalArgs():
 		g.writeBuiltArgs(buf, c, accountID, args, members)
