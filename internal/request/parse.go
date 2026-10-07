@@ -635,6 +635,27 @@ func (c *checker) checkPropertySetUse(call *Call, where string) {
 			call.Method.Name, call.PropertySet.Name)
 		return
 	}
+	// A set is written from the data type as it is, so it cannot hold a
+	// property the method answers with differently: one returned as null,
+	// or one that may be null though the type says it is not.
+	if call.PropertySet != nil {
+		for _, name := range call.PropertySet.Properties() {
+			switch {
+			case slices.Contains(call.Method.NullProperties, name):
+				c.errorf(fmt.Sprintf("%s.%s", where, call.Method.PropertiesArgument),
+					fmt.Sprintf("ask for a set without %s, or write the properties out in this call leaving it out", name),
+					"%s returns %s as null whatever it is asked for, so the set %s, which holds it, cannot describe what it returns",
+					call.Method.Name, name, call.PropertySet.Name)
+				return
+			case slices.Contains(call.Method.NullableProperties, name):
+				c.errorf(fmt.Sprintf("%s.%s", where, call.Method.PropertiesArgument),
+					"write the properties out in this call",
+					"%s may return %s as null, though %s says it is not, so the set %s, which holds it, cannot describe what it returns",
+					call.Method.Name, name, call.PropertySet.Type, call.PropertySet.Name)
+				return
+			}
+		}
+	}
 	if call.PropertySet == nil || call.NestedProperties == nil {
 		return
 	}
@@ -792,6 +813,12 @@ func (c *checker) checkFetched(from *Call, selected []spec.Selection, path, wher
 		default:
 			continue
 		}
+		if sel.Type == from.Method.DataType && slices.Contains(from.Method.NullProperties, sel.Property) {
+			c.errorf(where, "",
+				"%s selects %s from the %s call, which returns it as null whatever it is asked for",
+				path, sel.Property, from.Method.Name)
+			continue
+		}
 		if fetched == nil {
 			// The call fetches every property of the type, or a list the
 			// caller gives, which cannot be known here. Neither is a dynamic
@@ -841,6 +868,11 @@ func (c *checker) listedLiterally(call *Call, argument string) bool {
 	if call.Args == nil || argument == "" {
 		return true
 	}
+	// A back reference gives the list from another call's answer, which is
+	// no more known here than a parameter's.
+	if _, ref := call.Args.Find("#" + argument); ref {
+		return false
+	}
 	node, given := call.Args.Find(argument)
 	if !given {
 		return true
@@ -868,7 +900,25 @@ func fetchedHint(from *Call, property, argument string, fetched []string) string
 // properties extracts the property names a /get call selects, when the request
 // states them literally, and checks each one against the data type.
 func (c *checker) properties(call *Call, where string) []string {
-	if call.Method.PropertiesArgument == "" || call.Args == nil {
+	if call.Method.PropertiesArgument == "" {
+		return nil
+	}
+	// A call that leaves the properties out or null is answered with the
+	// method's default set, which is every property for a /get and a list of
+	// its own for Email/parse.
+	if call.Method.DefaultProperties != nil && c.listedLiterally(call, call.Method.PropertiesArgument) {
+		// The defaults are asked for as surely as a list written out, and
+		// need the capabilities of their properties as one would.
+		if dataType, ok := c.spec.Object(call.Method.DataType); ok {
+			for _, name := range call.Method.DefaultProperties {
+				if selected, _, err := checkProperty(dataType, name); err == nil {
+					c.useCapability(selected)
+				}
+			}
+		}
+		return slices.Clone(call.Method.DefaultProperties)
+	}
+	if call.Args == nil {
 		return nil
 	}
 	node, ok := call.Args.Find(call.Method.PropertiesArgument)
@@ -902,6 +952,13 @@ func (c *checker) properties(call *Call, where string) []string {
 		selected, hint, err := checkProperty(dataType, name)
 		if err != nil {
 			c.errorf(fmt.Sprintf("%s.%s[%d]", where, call.Method.PropertiesArgument, i), hint, "%v", err)
+			continue
+		}
+		if slices.Contains(call.Method.NullProperties, name) {
+			c.errorf(fmt.Sprintf("%s.%s[%d]", where, call.Method.PropertiesArgument, i),
+				fmt.Sprintf("leave %s out", name),
+				"%s returns %s as null whatever it is asked for, so asking for it fetches nothing",
+				call.Method.Name, name)
 			continue
 		}
 		c.useCapability(selected)

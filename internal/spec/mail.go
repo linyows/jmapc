@@ -80,6 +80,14 @@ func registerEmailParse(s *Spec) {
 		ResultProperty:           "parsed",
 		NestedPropertiesArgument: "bodyProperties",
 		NestedType:               "EmailBodyPart",
+		// RFC 8621, Section 4.9.
+		DefaultProperties: []string{
+			"messageId", "inReplyTo", "references", "sender", "from", "to", "cc", "bcc", "replyTo",
+			"subject", "sentAt", "hasAttachment", "preview", "bodyValues", "textBody", "htmlBody",
+			"attachments",
+		},
+		NullProperties:     []string{"id", "mailboxIds", "keywords", "receivedAt"},
+		NullableProperties: []string{"threadId"},
 	},
 		append([]*Field{
 			accountIDField(),

@@ -161,7 +161,9 @@ func registerBlobGet(s *Spec) {
 		DataType:           "BlobData",
 		PropertiesArgument: "properties",
 		ResultProperty:     "list",
-		ReturnsID:          true,
+		// RFC 9404, Section 4.2.
+		DefaultProperties: []string{"data", "size"},
+		ReturnsID:         true,
 	},
 		[]*Field{
 			accountIDField(),

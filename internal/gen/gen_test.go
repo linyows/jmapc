@@ -890,3 +890,44 @@ func TestABlobAskedForItsDataHoldsBothEncodings(t *testing.T) {
 		t.Errorf("the generated code holds a member named data:\n%s", src)
 	}
 }
+
+// TestAParsedEmailHoldsWhatTheParseReturns checks the records of Email/parse:
+// left to its defaults, the call is answered with the properties RFC 8621,
+// Section 4.9 lists, so the record holds those and no id; and a threadId asked
+// for may be null, since the server gives one only where it can tell which
+// thread the message would join.
+func TestAParsedEmailHoldsWhatTheParseReturns(t *testing.T) {
+	src := generateOne(t, "ParseDefault", `{"methodCalls": [["Email/parse", {"blobIds": ["b1"]}, "p"]]}`)
+	for _, want := range []string{
+		"Parsed map[jmapc.ID]ParseDefaultPEmail `json:\"parsed\"`",
+		"Preview string `json:\"preview\"`",
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("the generated code does not hold %s:\n%s", want, src)
+		}
+	}
+	if strings.Contains(src, "`json:\"id\"`") || strings.Contains(src, "`json:\"receivedAt\"`") {
+		t.Errorf("a parsed email holds a property the parse does not return:\n%s", src)
+	}
+
+	src = generateOne(t, "ParseThread", `{"methodCalls": [["Email/parse", {"blobIds": ["b1"], "properties": ["threadId"]}, "p"]]}`)
+	if want := "ThreadID *jmapc.ID `json:\"threadId\"`"; !strings.Contains(src, want) {
+		t.Errorf("the generated code does not hold %s:\n%s", want, src)
+	}
+}
+
+// TestABlobLeftToItsDefaultsHoldsBothEncodings checks a Blob/get that leaves
+// its properties out: RFC 9404, Section 4.2 has it return data and size, so the
+// record holds both encodings for the server to pick between, and the size.
+func TestABlobLeftToItsDefaultsHoldsBothEncodings(t *testing.T) {
+	src := generateOne(t, "ReadBlob", `{"methodCalls": [["Blob/get", {"ids": ["b1"]}, "b"]]}`)
+	for _, want := range []string{
+		"DataAsText *string `json:\"data:asText\"`",
+		"whichever suits the value, so it may be absent.",
+		"Size jmapc.UnsignedInt `json:\"size\"`",
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("the generated code does not hold %s:\n%s", want, src)
+		}
+	}
+}

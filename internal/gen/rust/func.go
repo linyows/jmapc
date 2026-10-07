@@ -348,7 +348,7 @@ func (g *RequestGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 		if info.RecordType == "" || !info.WritesTypes || info.SharedRecord {
 			continue
 		}
-		dataType, ok := g.Spec.Object(c.Method.DataType)
+		dataType, ok := shared.RecordObject(g.Spec, c.Method)
 		if !ok {
 			continue
 		}
