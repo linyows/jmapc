@@ -322,6 +322,11 @@ func TestExtendErrors(t *testing.T) {
 			"methods": [{"name": "Note/summarise", "dataType": "Note", "defaultProperties": ["title"]}]}`,
 		want: `Note/summarise states defaultProperties, and selects no properties for them to be properties of`,
 	}, {
+		name: "method stating empty defaults without narrowing",
+		src: `{"capability": "urn:x:y", "types": [{"name": "Note", "properties": [{"name": "title", "type": "String"}]}],
+			"methods": [{"name": "Note/summarise", "dataType": "Note", "defaultProperties": []}]}`,
+		want: `Note/summarise states defaultProperties, and selects no properties for them to be properties of`,
+	}, {
 		name: "method naming a property its type does not have",
 		src: `{"capability": "urn:x:y", "types": [{"name": "Note", "properties": [{"name": "title", "type": "String"}]}],
 			"methods": [{"name": "Note/summarise", "dataType": "Note", "properties": "properties", "resultProperty": "list",

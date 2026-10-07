@@ -615,7 +615,10 @@ func (s *Spec) checkMethodPropertyLists(m *SchemaMethod) error {
 		{"nullableProperties", m.NullableProperties},
 	}
 	for _, l := range lists {
-		if len(l.names) == 0 {
+		// An empty list says something, as an empty defaultProperties says a
+		// call naming no properties is answered with none; only a list left
+		// out says nothing.
+		if l.names == nil {
 			continue
 		}
 		if m.Properties == "" {

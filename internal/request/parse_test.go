@@ -2374,3 +2374,57 @@ func TestTheContentOfABlobIsReadAsItWasAskedFor(t *testing.T) {
 		t.Error("a part given charset and a Content-Type header field passed")
 	}
 }
+
+// TestAParseGivenItsPropertiesByReferenceIsNotNarrowedToItsDefaults checks an
+// Email/parse whose properties come from another call's answer: the list is no
+// more known here than a parameter's, so the call is not taken to fetch the
+// default set, and its records are not generated as those.
+func TestAParseGivenItsPropertiesByReferenceIsNotNarrowedToItsDefaults(t *testing.T) {
+	q, err := NewParser(spec.Standard()).Parse("Parse"+Extension, []byte(`{"methodCalls": [
+	  ["Email/get", {"ids": ["e1"], "properties": ["messageId"]}, "g"],
+	  ["Email/parse", {"blobIds": ["b1"], "#properties": {"resultOf": "g", "name": "Email/get", "path": "/list/0/messageId"}}, "p"]
+	]}`))
+	if err != nil {
+		t.Fatalf("parsing:\n%v", err)
+	}
+	if q.Calls[1].Properties != nil {
+		t.Errorf("the parse is taken to fetch %v", q.Calls[1].Properties)
+	}
+}
+
+// TestASetCannotHoldWhatAMethodReturnsAsNull checks a named set asked for by a
+// method that may return one of its properties as null though the type says it
+// is not: the set is written from the type, so it would say the property is
+// always there.
+func TestASetCannotHoldWhatAMethodReturnsAsNull(t *testing.T) {
+	s := spec.Standard()
+	if err := s.Extend(&spec.Schema{
+		Capability: "urn:example:notes",
+		Types: []*spec.SchemaType{{Name: "Note", Methods: []string{"get"}, Properties: []*spec.SchemaField{
+			{Name: "id", Type: "Id", ServerSet: true},
+			{Name: "title", Type: "String"},
+		}}},
+		Methods: []*spec.SchemaMethod{{
+			Name:               "Note/recent",
+			DataType:           "Note",
+			Arguments:          []*spec.SchemaField{{Name: "accountId", Type: "Id"}, {Name: "properties", Type: "String[]"}},
+			Response:           []*spec.SchemaField{{Name: "accountId", Type: "Id"}, {Name: "list", Type: "Note[]"}},
+			Properties:         "properties",
+			ResultProperty:     "list",
+			ReturnsID:          true,
+			NullableProperties: []string{"title"},
+		}},
+	}); err != nil {
+		t.Fatalf("Extend: %v", err)
+	}
+	sets, err := ParsePropertySets(PropertiesName, []byte(`{"NoteTitle": {"type": "Note", "properties": ["title"]}}`), s)
+	if err != nil {
+		t.Fatalf("parsing the sets: %v", err)
+	}
+	p := NewParser(s)
+	p.Properties = sets
+	_, err = p.Parse("Recent"+Extension, []byte(`{"methodCalls": [["Note/recent", {"properties": "@NoteTitle"}, "r"]]}`))
+	if err == nil || !strings.Contains(err.Error(), "Note/recent may return title as null, though Note says it is not") {
+		t.Errorf("a set holding a property the method may return as null was not refused as such:\n%v", err)
+	}
+}

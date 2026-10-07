@@ -635,6 +635,20 @@ func (c *checker) checkPropertySetUse(call *Call, where string) {
 			call.Method.Name, call.PropertySet.Name)
 		return
 	}
+	// A set is written from the data type as it is, so it cannot hold a
+	// property the method answers with differently: one returned as null,
+	// or one that may be null though the type says it is not.
+	if call.PropertySet != nil {
+		for _, name := range call.PropertySet.Properties() {
+			if slices.Contains(call.Method.NullProperties, name) || slices.Contains(call.Method.NullableProperties, name) {
+				c.errorf(fmt.Sprintf("%s.%s", where, call.Method.PropertiesArgument),
+					"write the properties out in this call",
+					"%s may return %s as null, though %s says it is not, so the set %s, which holds it, cannot describe what it returns",
+					call.Method.Name, name, call.PropertySet.Type, call.PropertySet.Name)
+				return
+			}
+		}
+	}
 	if call.PropertySet == nil || call.NestedProperties == nil {
 		return
 	}
@@ -846,6 +860,11 @@ func (c *checker) isDynamic(sel spec.Selection) bool {
 func (c *checker) listedLiterally(call *Call, argument string) bool {
 	if call.Args == nil || argument == "" {
 		return true
+	}
+	// A back reference gives the list from another call's answer, which is
+	// no more known here than a parameter's.
+	if _, ref := call.Args.Find("#" + argument); ref {
+		return false
 	}
 	node, given := call.Args.Find(argument)
 	if !given {
