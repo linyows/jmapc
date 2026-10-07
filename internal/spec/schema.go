@@ -604,7 +604,9 @@ func holdsRecords(t *Type, dataType string) bool {
 // checkMethodPropertyLists reports a list of properties a schema method states
 // that does not hold: each names properties of the records the method narrows,
 // so it needs properties to narrow them, and a property returned as null is
-// neither returned by default nor a promised id.
+// neither returned by default nor a promised id. A property beyond the type's
+// fields that the type takes, as a header field, may be a default or returned
+// as null; one that may be null has to be a field, whose type it changes.
 func (s *Spec) checkMethodPropertyLists(m *SchemaMethod) error {
 	lists := []struct {
 		member string
@@ -626,7 +628,9 @@ func (s *Spec) checkMethodPropertyLists(m *SchemaMethod) error {
 		}
 		o, _ := s.Object(m.DataType)
 		for _, name := range l.names {
-			if _, ok := o.Field(name); !ok {
+			_, field := o.Field(name)
+			dynamic := l.member != "nullableProperties" && o.AcceptsDynamic(name)
+			if !field && !dynamic {
 				return fmt.Errorf("%s names %q in %s, which %s does not have", m.Name, name, l.member, m.DataType)
 			}
 		}
