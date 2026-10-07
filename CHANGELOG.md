@@ -4,6 +4,15 @@ What changed in each release, and what it means for the code that uses it. The r
 
 This starts at v0.12.0. What went into the releases before it is in the commit history.
 
+## v0.21.0 (2026-10-07)
+
+### Breaking changes
+
+- **A call left to its default properties answers with what the specification has it return.** An Email/get that names no properties is generated as narrowed to the list RFC 8621 gives, without `headers` or `bodyStructure`, and a CalendarEvent/get as every property but `utcStart` and `utcEnd`, which it returns only where they are named; a back reference reading one of those from such a call is refused, as it would read nothing at the server. A call that fetches body parts and leaves `bodyProperties` out holds them without `headers` or `subParts`. Each now answers with a response type generated for it, where it held the runtime's `Email`, `CalendarEvent` or `EmailBodyPart`; regenerate, and read the records through the new types. ([#183](https://github.com/linyows/jmapc/pull/183), [#184](https://github.com/linyows/jmapc/pull/184))
+- **The records of a call given its properties by a parameter may lack any of them.** Where such a call also narrowed `bodyProperties`, its record type had every member required, so Rust failed to decode any property the caller left out with ``missing field``, and an Email/parse failed on its `id`, which comes back as null, whatever was asked for. Every member but the `id` a /get always returns is now optional: `Option` in Rust and `?` in TypeScript. Go is unchanged but for the properties a parse returns as null, which the type no longer holds. ([#182](https://github.com/linyows/jmapc/pull/182))
+- **A parse that does not name its properties answers with a type of its own.** An Email/parse given its properties by a parameter or a back reference, and a CalendarEvent/parse naming none, held the runtime's `Email` or `CalendarEvent`, with an `id` the parse returns as null and, for an email, a `threadId` that could not be null. They now hold a type generated for the call, without the properties the parse returns as null and with every member optional, and a parsed email's `threadId` may be null. CalendarEvent/parse returns `id`, `baseEventId`, `calendarIds`, `isDraft` and `isOrigin` as null, so a call asking for one or a back reference reading one is now refused. ([#182](https://github.com/linyows/jmapc/pull/182), [#183](https://github.com/linyows/jmapc/pull/183))
+- **A back reference that may select null is refused where the argument does not take null.** `/list/*/parentId` of a Mailbox/get holds a null for each mailbox at the top, and the `threadId` of an Email/parse may be null, yet both passed as `ids` or an `Id`, which the server refuses with `invalidArguments`. The error says when null is the only difference. ([#181](https://github.com/linyows/jmapc/pull/181))
+
 ## v0.20.0 (2026-10-07)
 
 ### Breaking changes
