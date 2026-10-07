@@ -39,7 +39,7 @@ func TestARecordGivenItsPropertiesMayLackAny(t *testing.T) {
 		name:    "ParseAny",
 		file:    "parseAny.ts",
 		src:     `{"methodCalls": [["Email/parse", {"blobIds": ["b1"], "properties": "{{properties}}"}, "p"]]}`,
-		want:    []string{"parsed: { [key: Id]: ParseAnyPEmail } | null", "threadId?: Id | null", "subject?: string | null"},
+		want:    []string{"parsed: { [key: Id]: ParseAnyPEmail } | null", "threadId?: Id | null", "subject?: string | null", "// them may be absent."},
 		notWant: []string{"  id", "  receivedAt"},
 	}, {
 		// Only the body parts are narrowed, which gives the records a type
@@ -47,7 +47,7 @@ func TestARecordGivenItsPropertiesMayLackAny(t *testing.T) {
 		name:    "GetAny",
 		file:    "getAny.ts",
 		src:     `{"methodCalls": [["Email/get", {"ids": ["a"], "properties": "{{properties}}", "bodyProperties": ["partId"]}, "g"]]}`,
-		want:    []string{"  id: Id\n", "blobId?: Id", "textBody?: GetAnyGEmailBodyPart[]"},
+		want:    []string{"  id: Id\n", "blobId?: Id", "textBody?: GetAnyGEmailBodyPart[]", "// them but the id may be absent."},
 		notWant: []string{"id?: Id"},
 	}}
 	for _, tt := range tests {

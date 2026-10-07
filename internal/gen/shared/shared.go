@@ -147,9 +147,13 @@ func MayBeAbsent(c *request.Call, name string) bool {
 // RecordTypeDoc is the comment on the record type of c.
 func RecordTypeDoc(recordType, dataType, requestName string, c *request.Call) string {
 	if c.PropertiesUnknown {
+		absent := "any of them"
+		if c.Method.ReturnsID {
+			absent = "any of them but the id"
+		}
 		return fmt.Sprintf("%s holds the properties of %s that the %s call in %s may return. "+
-			"The call is given the properties to fetch, so any of them may be absent.",
-			recordType, dataType, c.Method.Name, requestName)
+			"The call is given the properties to fetch, so %s may be absent.",
+			recordType, dataType, c.Method.Name, requestName, absent)
 	}
 	return fmt.Sprintf("%s holds the properties of %s that the %s call in %s asks for.",
 		recordType, dataType, c.Method.Name, requestName)
