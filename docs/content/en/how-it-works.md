@@ -115,8 +115,14 @@ The data model alone does not catch everything. `/list/*/threadId` resolves on
 the response of `Email/get`, since every Email has a `threadId`, but a call
 whose `properties` asks only for the subject answers without it, and the
 reference reads nothing. So each property the path selects on the records of
-that call is held to the properties the call fetches as well; `id` always
-passes, since a `/get` returns it whether or not it was asked for. The fetched
+that call is held to the properties the call fetches as well. `id` passes
+where the method returns it whether or not it was asked for, as a `/get` does.
+A call that leaves its `properties` out fetches the method's default set: every
+field of the type for most `/get` methods, though not a property beyond the
+fields such as a header field, and a list of the method's own for `Blob/get`
+(`data` and `size`) and `Email/parse`. A
+property the method returns as null whatever it is asked for, as the id of a
+parsed email, is refused however the call asks for its properties. The fetched
 properties are known at this point, because the call the reference reads from
 came earlier and was finished first.
 
