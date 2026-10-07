@@ -49,6 +49,14 @@ func TestARecordGivenItsPropertiesMayLackAny(t *testing.T) {
 		src:     `{"methodCalls": [["Email/get", {"ids": ["a"], "properties": "{{properties}}", "bodyProperties": ["partId"]}, "g"]]}`,
 		want:    []string{"  id: Id\n", "blobId?: Id", "textBody?: GetAnyGEmailBodyPart[]", "// them but the id may be absent."},
 		notWant: []string{"id?: Id"},
+	}, {
+		// Fetching every property but the times in UTC, the events may lack
+		// any the event does not have, but the id.
+		name:    "GetEvents",
+		file:    "getEvents.ts",
+		src:     `{"methodCalls": [["CalendarEvent/get", {"ids": ["e1"]}, "g"]]}`,
+		want:    []string{"  id: Id\n", "title?: string", "any of them but the id may be absent."},
+		notWant: []string{"utcStart", "utcEnd"},
 	}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

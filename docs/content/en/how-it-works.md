@@ -125,8 +125,9 @@ A call that leaves its `properties` out fetches the method's default set: every
 field of the type for most `/get` methods, though not a property beyond the
 fields such as a header field, and a list of the method's own for `Blob/get`
 (`data` and `size`), `Email/get` (without `headers` or `bodyStructure`) and
-`Email/parse`. A call that leaves `bodyProperties` out fetches body parts
-without their `headers` or `subParts`. A property the method returns as null
+`Email/parse`. `CalendarEvent/get` fetches every field but `utcStart` and
+`utcEnd`, which it returns only where a call names them. A call that leaves
+`bodyProperties` out fetches body parts without their `headers` or `subParts`. A property the method returns as null
 whatever it is asked for, as the id of a parsed email or the calendars of a
 parsed event, is refused however the call asks for its properties. The fetched
 properties are known at this point, because the call the reference reads from
@@ -160,7 +161,9 @@ does by default, the call takes a type of its own instead: every property is
 optional, but the id a `/get` returns whatever it is asked for, and those the
 method returns as null are left out. A call to such a method that fetches every
 property takes the same type, as `CalendarEvent/parse` does, since an event read
-from a file has only the properties the file gives. Where the request asks for one, the file also carries a watch loop or a
+from a file has only the properties the file gives. So does a
+`CalendarEvent/get` that leaves its `properties` out, whose type has no
+`utcStart` or `utcEnd`. Where the request asks for one, the file also carries a watch loop or a
 pager. Beside the request files go a file for the
 [property sets](properties.md), if the project names any, and a function that
 verifies every request against a server. Rust and TypeScript are written with

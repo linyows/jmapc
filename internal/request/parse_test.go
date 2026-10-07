@@ -124,6 +124,18 @@ func TestBackReferenceCarriesNullWhereAccepted(t *testing.T) {
 			["Core/echo", {"#parts": {"resultOf": "matched", "name": "Email/get", "path": "/list/*/textBody/*/type"}}, "echo"]
 		]}`,
 	}, {
+		name: "the start in UTC of events that name it",
+		src: `{"methodCalls": [
+			["CalendarEvent/get", {"ids": ["e1"], "properties": ["utcStart"]}, "events"],
+			["Core/echo", {"#starts": {"resultOf": "events", "name": "CalendarEvent/get", "path": "/list/*/utcStart"}}, "echo"]
+		]}`,
+	}, {
+		name: "the start in UTC of events given their properties",
+		src: `{"methodCalls": [
+			["CalendarEvent/get", {"ids": ["e1"], "properties": "{{properties}}"}, "events"],
+			["Core/echo", {"#starts": {"resultOf": "events", "name": "CalendarEvent/get", "path": "/list/*/utcStart"}}, "echo"]
+		]}`,
+	}, {
 		name: "the threadId of a /get, which is never null",
 		src: `{"methodCalls": [
 			["Email/get", {"ids": ["a"], "properties": ["threadId"]}, "matched"],
@@ -376,6 +388,15 @@ func TestParseErrors(t *testing.T) {
 			["CalendarEvent/parse", {"blobIds": ["b1"], "properties": ["calendarIds", "title"]}, "parsed"]
 		]}`,
 		want: `CalendarEvent/parse returns calendarIds as null whatever it is asked for`,
+	}, {
+		// The times in UTC are computed, and come back only where a call
+		// names them.
+		name: "back reference reads the start in UTC of events left to their defaults",
+		src: `{"methodCalls": [
+			["CalendarEvent/get", {"ids": ["e1"]}, "events"],
+			["Core/echo", {"#starts": {"resultOf": "events", "name": "CalendarEvent/get", "path": "/list/*/utcStart"}}, "echo"]
+		]}`,
+		want: `/list/*/utcStart selects utcStart from the CalendarEvent/get call, which does not fetch it`,
 	}, {
 		name: "back reference reads a property the call did not fetch",
 		src: `{"methodCalls": [

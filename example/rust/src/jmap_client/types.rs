@@ -1438,8 +1438,9 @@ pub struct CalendarEventGetArguments {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ids: Option<Vec<Id>>,
 
-    /// The properties to include in each returned record, or null for all of
-    /// them. The id property is always returned.
+    /// The properties to include in each returned event, or null for all of
+    /// them but utcStart and utcEnd, which come back only where they are
+    /// named. The id property is always returned.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub properties: Option<Vec<String>>,
 

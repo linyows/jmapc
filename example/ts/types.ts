@@ -983,8 +983,9 @@ export interface CalendarEventGetArguments {
   // The ids of the records to fetch, or null to fetch all of them.
   ids?: Id[] | null
 
-  // The properties to include in each returned record, or null for all of
-  // them. The id property is always returned.
+  // The properties to include in each returned event, or null for all of them
+  // but utcStart and utcEnd, which come back only where they are named. The
+  // id property is always returned.
   properties?: string[] | null
 
   // Leave out the overrides for occurrences starting at or after this time,
