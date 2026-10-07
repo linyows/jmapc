@@ -343,6 +343,14 @@ func TestExtendErrors(t *testing.T) {
 			             "response": [{"name": "list", "type": "Note[]"}]}]}`,
 		want: `Note/summarise names "meta:colour" in nullableProperties, which Note does not have`,
 	}, {
+		name: "method naming a header field in a form that is none",
+		src: `{"capability": "urn:x:y", "types": [{"name": "Note", "dynamic": ["header:"], "properties": [{"name": "title", "type": "String"}]}],
+			"methods": [{"name": "Note/summarise", "dataType": "Note", "properties": "properties", "resultProperty": "list",
+			             "defaultProperties": ["header:Subject:asWords"],
+			             "arguments": [{"name": "properties", "type": "String[]"}],
+			             "response": [{"name": "list", "type": "Note[]"}]}]}`,
+		want: `Note/summarise names "header:Subject:asWords" in defaultProperties: header:Subject:asWords asks for the asWords form`,
+	}, {
 		name: "method making a property nullable that is already",
 		src: `{"capability": "urn:x:y", "types": [{"name": "Note", "properties": [{"name": "title", "type": "String|null"}]}],
 			"methods": [{"name": "Note/summarise", "dataType": "Note", "properties": "properties", "resultProperty": "list",

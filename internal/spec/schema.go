@@ -633,6 +633,11 @@ func (s *Spec) checkMethodPropertyLists(m *SchemaMethod) error {
 			if !field && !dynamic {
 				return fmt.Errorf("%s names %q in %s, which %s does not have", m.Name, name, l.member, m.DataType)
 			}
+			if !field {
+				if _, err := o.DynamicField(name); err != nil {
+					return fmt.Errorf("%s names %q in %s: %w", m.Name, name, l.member, err)
+				}
+			}
 		}
 	}
 	for _, name := range m.NullProperties {
