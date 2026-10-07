@@ -130,6 +130,35 @@ func TestBackReferenceCarriesNullWhereAccepted(t *testing.T) {
 	}
 }
 
+// TestPropertiesUnknown checks which calls are marked as fetching properties
+// the caller gives: a parameter or a back reference in place of the list, but
+// not a list written out, nor one left out or null, which fetch the method's
+// default set.
+func TestPropertiesUnknown(t *testing.T) {
+	tests := []struct {
+		name string
+		args string
+		want bool
+	}{
+		{"a parameter", `"properties": "{{properties}}"`, true},
+		{"a back reference", `"#properties": {"resultOf": "changes", "name": "Mailbox/changes", "path": "/updatedProperties"}`, true},
+		{"a list written out", `"properties": ["name"]`, false},
+		{"left out", `"accountId": "a"`, false},
+		{"null", `"properties": null`, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q := parse(t, "Q"+Extension, `{"methodCalls": [
+				["Mailbox/changes", {"sinceState": "s"}, "changes"],
+				["Mailbox/get", {`+tt.args+`}, "get"]
+			]}`)
+			if got := q.Calls[1].PropertiesUnknown; got != tt.want {
+				t.Errorf("PropertiesUnknown = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestParse(t *testing.T) {
 	q := parse(t, "ListInboxEmails"+Extension, listInboxEmails)
 

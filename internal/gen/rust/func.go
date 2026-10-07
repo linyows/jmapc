@@ -335,7 +335,7 @@ func (g *RequestGenerator) writeNestedTypes(buf *bytes.Buffer, p *plan) {
 			if i > 0 {
 				buf.WriteString("\n")
 			}
-			g.writeRecordField(buf, nested, c.NestedProperties, name, info.NestedType, c.Method.NestedType)
+			g.writeRecordField(buf, nested, c.NestedProperties, name, info.NestedType, c.Method.NestedType, false)
 		}
 		buf.WriteString("}\n\n")
 	}
@@ -352,20 +352,16 @@ func (g *RequestGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 		if !ok {
 			continue
 		}
-		writeDoc(buf, "", fmt.Sprintf("%s holds the properties of %s that the %s call in %s asks for.",
-			info.RecordType, dataType.Name, c.Method.Name, p.q.Name))
+		writeDoc(buf, "", shared.RecordTypeDoc(info.RecordType, dataType.Name, p.q.Name, c))
 		writeDerive(buf)
 		buf.WriteString("#[serde(rename_all = \"camelCase\")]\n")
 		fmt.Fprintf(buf, "pub struct %s {\n", info.RecordType)
-		properties := c.Properties
-		if properties == nil {
-			properties = dataType.PropertyNames()
-		}
+		properties := shared.RecordFields(dataType, c)
 		for i, name := range shared.RecordProperties(dataType, properties, c.Method.ReturnsID) {
 			if i > 0 {
 				buf.WriteString("\n")
 			}
-			g.writeRecordField(buf, dataType, properties, name, info.NestedType, c.Method.NestedType)
+			g.writeRecordField(buf, dataType, properties, name, info.NestedType, c.Method.NestedType, shared.MayBeAbsent(c, name))
 		}
 		buf.WriteString("}\n\n")
 	}
@@ -374,7 +370,8 @@ func (g *RequestGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 // writeRecordField writes one field of a generated record struct. A record
 // comes back from the server, so a property it asked for is there: what the
 // request narrowed to is not optional, only nullable where the type says so.
-func (g *RequestGenerator) writeRecordField(buf *bytes.Buffer, dataType *spec.Object, asked []string, name, nestedTo, nestedFrom string) {
+// One that may be absent, as any may where the caller gives the properties, is.
+func (g *RequestGenerator) writeRecordField(buf *bytes.Buffer, dataType *spec.Object, asked []string, name, nestedTo, nestedFrom string, absent bool) {
 	field, known := dataType.Field(name)
 	if !known {
 		if header, err := spec.ParseHeaderProperty(name); err == nil && header != nil {
@@ -387,11 +384,8 @@ func (g *RequestGenerator) writeRecordField(buf *bytes.Buffer, dataType *spec.Ob
 		return
 	}
 	writeDoc(buf, "    ", shared.RecordFieldDoc(dataType, asked, field))
-	if shared.PickedByServer(dataType, asked, name) {
-		writeMember(buf, dataType.Name, name, field.ParsedType(), true, true)
-		return
-	}
-	writeNestedMember(buf, dataType.Name, name, field.ParsedType(), nestedTo, nestedFrom)
+	optional := absent || shared.PickedByServer(dataType, asked, name)
+	writeNestedMember(buf, dataType.Name, name, field.ParsedType(), nestedTo, nestedFrom, optional)
 }
 
 // writeDynamicMember writes a property the data model does not describe, whose
@@ -413,13 +407,13 @@ func renameAndDefault(wireName, ident string) []string {
 
 // writeNestedMember writes a record's field, pointing any reference to the
 // narrowed type at the generated one.
-func writeNestedMember(buf *bytes.Buffer, owner, wireName string, t *spec.Type, nestedTo, nestedFrom string) {
+func writeNestedMember(buf *bytes.Buffer, owner, wireName string, t *spec.Type, nestedTo, nestedFrom string, optional bool) {
 	if nestedTo == "" {
-		writeMember(buf, owner, wireName, t, false, true)
+		writeMember(buf, owner, wireName, t, optional, true)
 		return
 	}
 	var swapped bytes.Buffer
-	writeMember(&swapped, owner, wireName, t, false, true)
+	writeMember(&swapped, owner, wireName, t, optional, true)
 	buf.WriteString(strings.ReplaceAll(swapped.String(), spec.RustTypeName(nestedFrom), nestedTo))
 }
 

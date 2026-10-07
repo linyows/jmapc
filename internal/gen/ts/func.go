@@ -216,7 +216,7 @@ func (g *RequestGenerator) writeNestedTypes(buf *bytes.Buffer, p *plan) {
 			if i > 0 {
 				buf.WriteString("\n")
 			}
-			g.writeRecordField(buf, nested, c.NestedProperties, name, info.NestedType, c.Method.NestedType)
+			g.writeRecordField(buf, nested, c.NestedProperties, name, info.NestedType, c.Method.NestedType, false)
 		}
 		buf.WriteString("}\n\n")
 	}
@@ -233,28 +233,28 @@ func (g *RequestGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 		if !ok {
 			continue
 		}
-		shared.WriteComment(buf, "", fmt.Sprintf("%s holds the properties of %s that the %s call in %s asks for.",
-			info.RecordType, dataType.Name, c.Method.Name, p.q.Name))
+		shared.WriteComment(buf, "", shared.RecordTypeDoc(info.RecordType, dataType.Name, p.q.Name, c))
 		fmt.Fprintf(buf, "export interface %s {\n", info.RecordType)
-		properties := c.Properties
-		if properties == nil {
-			properties = dataType.PropertyNames()
-		}
+		properties := shared.RecordFields(dataType, c)
 		for i, name := range shared.RecordProperties(dataType, properties, c.Method.ReturnsID) {
 			if i > 0 {
 				buf.WriteString("\n")
 			}
-			g.writeRecordField(buf, dataType, properties, name, info.NestedType, c.Method.NestedType)
+			g.writeRecordField(buf, dataType, properties, name, info.NestedType, c.Method.NestedType, shared.MayBeAbsent(c, name))
 		}
 		buf.WriteString("}\n\n")
 	}
 }
 
-// writeRecordField writes one member of a generated record type.
-func (g *RequestGenerator) writeRecordField(buf *bytes.Buffer, dataType *spec.Object, asked []string, name, nestedTo, nestedFrom string) {
+// writeRecordField writes one member of a generated record type. A member that
+// may be absent is optional.
+func (g *RequestGenerator) writeRecordField(buf *bytes.Buffer, dataType *spec.Object, asked []string, name, nestedTo, nestedFrom string, absent bool) {
 	memberName := name
 	if spec.TSNeedsQuoting(memberName) {
 		memberName = quote(memberName)
+	}
+	if absent {
+		memberName += "?"
 	}
 
 	field, known := dataType.Field(name)
@@ -269,7 +269,7 @@ func (g *RequestGenerator) writeRecordField(buf *bytes.Buffer, dataType *spec.Ob
 		return
 	}
 	shared.WriteComment(buf, "  ", shared.RecordFieldDoc(dataType, asked, field))
-	if shared.PickedByServer(dataType, asked, name) {
+	if !absent && shared.PickedByServer(dataType, asked, name) {
 		memberName += "?"
 	}
 	fmt.Fprintf(buf, "  %s: %s\n", memberName, g.nestedTSType(field.ParsedType(), nestedTo, nestedFrom))

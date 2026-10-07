@@ -5,6 +5,7 @@
 package shared
 
 import (
+	"fmt"
 	"io"
 	"path"
 	"slices"
@@ -116,6 +117,48 @@ func RecordProperties(dataType *spec.Object, props []string, withID bool) []stri
 	return out
 }
 
+// OpenRecord reports whether the records of c take a type of their own though
+// the caller gives the properties: the method answers some property otherwise
+// than the data type says, returning it as null, so the shared type of the
+// runtime would describe it wrongly.
+func OpenRecord(c *request.Call) bool {
+	return c.PropertiesUnknown && (len(c.Method.NullProperties) > 0 || len(c.Method.NullableProperties) > 0)
+}
+
+// RecordFields returns the properties the record type of c is written with:
+// those the call asks for, or where it names none, every property of dataType
+// but the ones the method returns as null whatever it is asked for.
+func RecordFields(dataType *spec.Object, c *request.Call) []string {
+	if c.Properties != nil {
+		return c.Properties
+	}
+	return slices.DeleteFunc(dataType.PropertyNames(), func(name string) bool {
+		return slices.Contains(c.Method.NullProperties, name)
+	})
+}
+
+// MayBeAbsent reports whether a record of c may come back without the property
+// name: any property may, where the caller gives the properties, but the id a
+// method returns whatever it is asked for.
+func MayBeAbsent(c *request.Call, name string) bool {
+	return c.PropertiesUnknown && (name != "id" || !c.Method.ReturnsID)
+}
+
+// RecordTypeDoc is the comment on the record type of c.
+func RecordTypeDoc(recordType, dataType, requestName string, c *request.Call) string {
+	if c.PropertiesUnknown {
+		absent := "any of them"
+		if c.Method.ReturnsID {
+			absent = "any of them but the id"
+		}
+		return fmt.Sprintf("%s holds the properties of %s that the %s call in %s may return. "+
+			"The call is given the properties to fetch, so %s may be absent.",
+			recordType, dataType, c.Method.Name, requestName, absent)
+	}
+	return fmt.Sprintf("%s holds the properties of %s that the %s call in %s asks for.",
+		recordType, dataType, c.Method.Name, requestName)
+}
+
 // PickedByServer reports whether a record of dataType asked for props holds
 // name only where the server picks it: a field one of props comes back as, one
 // of several, as data:asText is where data was asked for. A field asked for by
@@ -174,7 +217,7 @@ func SameNarrowing(calls []*request.Call) map[*request.Call]*request.Call {
 	first := make(map[string]*request.Call, len(calls))
 	out := make(map[*request.Call]*request.Call, len(calls))
 	for _, c := range calls {
-		if c.Properties == nil && c.NestedProperties == nil {
+		if c.Properties == nil && c.NestedProperties == nil && !OpenRecord(c) {
 			continue
 		}
 		// The method is part of the key because the response type is the
@@ -183,10 +226,10 @@ func SameNarrowing(calls []*request.Call) map[*request.Call]*request.Call {
 			c.Method.Name,
 			c.Method.DataType,
 			setName(c.PropertySet),
-			propertyList(c.Properties),
+			propertyList(c.Properties, c.PropertiesUnknown),
 			c.Method.NestedType,
 			setName(c.NestedPropertySet),
-			propertyList(c.NestedProperties),
+			propertyList(c.NestedProperties, false),
 		}, "\x01")
 		if seen, dup := first[key]; dup {
 			out[c] = seen
@@ -201,8 +244,11 @@ func SameNarrowing(calls []*request.Call) map[*request.Call]*request.Call {
 // propertyList writes a list of properties into a narrowing key, keeping apart
 // the list that is not given, which fetches every property, from the list given
 // empty, which fetches none: the id alone of a /get's records, and nothing of
-// a body part.
-func propertyList(props []string) string {
+// a body part. A list the caller gives is apart from both.
+func propertyList(props []string, unknown bool) string {
+	if unknown {
+		return "?"
+	}
 	if props == nil {
 		return "*"
 	}
