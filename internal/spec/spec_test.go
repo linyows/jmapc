@@ -113,6 +113,16 @@ func TestResolvePath(t *testing.T) {
 		{"Email/get", "/list/0/header:List-Id:asText", "String|null"},
 		{"Email/get", "/list/0/bodyStructure/header:Content-Type:asRaw", "String|null"},
 		{"Blob/get", "/list/0/digest:sha", "String"},
+		// A null item is added to the output as it is, so mapping over
+		// the records keeps it in the elements.
+		{"Mailbox/get", "/list/*/parentId", "(Id|null)[]"},
+		// An item whose array is null has nothing to flatten, and adds the
+		// null itself.
+		{"Email/get", "/list/*/inReplyTo", "(String|null)[]"},
+		// A property the method may return as null is read as nullable,
+		// though the type says it is not.
+		{"Email/parse", "/parsed/b1/threadId", "Id|null"},
+		{"Email/parse", "/parsed/b1/subject", "String|null"},
 	}
 	for _, tt := range tests {
 		got, err := s.ResolvePath(tt.method, tt.path)

@@ -784,6 +784,12 @@ func (c *checker) resultRef(call *Call, field *spec.Field, raw json.RawMessage, 
 	c.checkFetched(from, selected, ref.Path, where+".path")
 	want := field.ParsedType()
 	if !assignable(got, want) {
+		if assignable(withoutNull(got), want) {
+			c.errorf(where, "",
+				"argument %q of %s expects %s, but %s selects %s from the result of %s, which may be null where the argument does not accept it",
+				field.Name, call.Method.Name, want, ref.Path, got, from.Method.Name)
+			return nil
+		}
 		c.errorf(where, "",
 			"argument %q of %s expects %s, but %s selects %s from the result of %s",
 			field.Name, call.Method.Name, want, ref.Path, got, from.Method.Name)

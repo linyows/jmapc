@@ -109,7 +109,11 @@ object, a number selects an element of an array, and `*` applies the rest of
 the path to every element and flattens one level of the result, so that
 `/list/*/id` is a list of ids rather than a list of lists. The type at the end
 is what the reference delivers, and it has to fit the type of the argument
-it fills.
+it fills. That includes null: `/list/*/parentId` on `Mailbox/get` holds a null
+for each mailbox at the top, so it cannot fill `ids`, whose elements are never
+null. A property a method may return as null though its type says otherwise,
+as `Email/parse` returns `threadId`, is read as nullable on that method's
+response.
 
 The data model alone does not catch everything. `/list/*/threadId` resolves on
 the response of `Email/get`, since every Email has a `threadId`, but a call

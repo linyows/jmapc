@@ -337,22 +337,3 @@ func AroundRecords(t *spec.Type, dataType string) []*spec.Type {
 	}
 	return []*spec.Type{t}
 }
-
-// RecordObject returns the data type the records of a call to m are written
-// from: m's data type, with each property m may return as null made nullable,
-// as the threadId of a parsed email is.
-func RecordObject(s *spec.Spec, m *spec.Method) (*spec.Object, bool) {
-	o, ok := s.Object(m.DataType)
-	if !ok || len(m.NullableProperties) == 0 {
-		return o, ok
-	}
-	out := *o
-	out.Fields = make([]*spec.Field, len(o.Fields))
-	for i, f := range o.Fields {
-		if slices.Contains(m.NullableProperties, f.Name) {
-			f = f.AsNullable()
-		}
-		out.Fields[i] = f
-	}
-	return &out, true
-}

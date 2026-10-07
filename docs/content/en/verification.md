@@ -5,7 +5,8 @@ Everything below is a compile-time failure rather than a server round trip:
 - the method exists, and is spelled the way the specification spells it
 - every argument belongs to the method, with the type the method requires
 - a back reference points at an *earlier* call, names that call's method
-  correctly, and selects a value the target argument can accept
+  correctly, and selects a value the target argument can accept, null
+  included: a value that may be null fills only an argument that accepts null
 - a back reference reading a property of the records reads one that call
   fetches: `/list/*/threadId` against a call that narrowed its `properties` to
   the subject would resolve to nothing at the server; a call that leaves its
