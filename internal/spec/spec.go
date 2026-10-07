@@ -271,6 +271,11 @@ type Method struct {
 	// leaves its properties argument out or null. It is nil where the method
 	// then returns every property, as a /get does.
 	DefaultProperties []string
+	// DefaultNestedProperties lists the properties of the nested type the
+	// method returns where the call leaves its nested properties argument out
+	// or null, as Email/get returns body parts without their headers or
+	// sub-parts. It is nil where the method then returns every property.
+	DefaultNestedProperties []string
 	// NullProperties lists the properties the method returns as null whatever
 	// it is asked for, as Email/parse returns the id of a message that is not
 	// a record in the account.

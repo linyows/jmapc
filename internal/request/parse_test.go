@@ -116,6 +116,14 @@ func TestBackReferenceCarriesNullWhereAccepted(t *testing.T) {
 			                 "#properties": {"resultOf": "changes", "name": "Mailbox/changes", "path": "/updatedProperties"}}, "updated"]
 		]}`,
 	}, {
+		// A call fetching no body parts has none for the default set of
+		// their properties to describe.
+		name: "a get left to its defaults reads its body parts",
+		src: `{"methodCalls": [
+			["Email/get", {"ids": ["a"]}, "matched"],
+			["Core/echo", {"#parts": {"resultOf": "matched", "name": "Email/get", "path": "/list/*/textBody/*/type"}}, "echo"]
+		]}`,
+	}, {
 		name: "the threadId of a /get, which is never null",
 		src: `{"methodCalls": [
 			["Email/get", {"ids": ["a"], "properties": ["threadId"]}, "matched"],
@@ -154,6 +162,36 @@ func TestPropertiesUnknown(t *testing.T) {
 			]}`)
 			if got := q.Calls[1].PropertiesUnknown; got != tt.want {
 				t.Errorf("PropertiesUnknown = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestNestedDefaultsApplyWhereBodyPartsAreFetched checks which Email/get calls
+// take the default set of body part properties: one leaving bodyProperties out
+// that fetches body parts, but not one that fetches none, nor one naming the
+// properties itself.
+func TestNestedDefaultsApplyWhereBodyPartsAreFetched(t *testing.T) {
+	tests := []struct {
+		name string
+		args string
+		want string
+	}{
+		{"left to its defaults", `"ids": ["a"]`, "partId,blobId,size,name,type,charset,disposition,cid,language,location"},
+		{"fetching body parts", `"ids": ["a"], "properties": ["attachments"]`, "partId,blobId,size,name,type,charset,disposition,cid,language,location"},
+		{"given its properties", `"ids": ["a"], "properties": "{{properties}}"`, "partId,blobId,size,name,type,charset,disposition,cid,language,location"},
+		{"fetching no body parts", `"ids": ["a"], "properties": ["subject"]`, "<nil>"},
+		{"naming the body part properties", `"ids": ["a"], "properties": ["textBody"], "bodyProperties": ["partId", "headers"]`, "partId,headers"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q := parse(t, "Q"+Extension, `{"methodCalls": [["Email/get", {`+tt.args+`}, "get"]]}`)
+			got := "<nil>"
+			if props := q.Calls[0].NestedProperties; props != nil {
+				got = strings.Join(props, ",")
+			}
+			if got != tt.want {
+				t.Errorf("NestedProperties = %s, want %s", got, tt.want)
 			}
 		})
 	}
@@ -308,6 +346,36 @@ func TestParseErrors(t *testing.T) {
 			["Email/copy", {"#fromAccountId": {"resultOf": "parsed", "name": "Email/parse", "path": "/parsed/b1/threadId"}, "create": {}}, "copy"]
 		]}`,
 		want: `selects Id|null from the result of Email/parse, which may be null where the argument does not accept it`,
+	}, {
+		// RFC 8621, Section 4.2 has an Email/get left to its defaults
+		// return neither the body structure nor the headers.
+		name: "back reference reads the body structure of a get left to its defaults",
+		src: `{"methodCalls": [
+			["Email/get", {"ids": ["a"]}, "matched"],
+			["Email/get", {"#ids": {"resultOf": "matched", "name": "Email/get", "path": "/list/*/bodyStructure/blobId"}}, "again"]
+		]}`,
+		want: `/list/*/bodyStructure/blobId selects bodyStructure from the Email/get call, which does not fetch it`,
+	}, {
+		name: "back reference reads the headers of a get left to its defaults",
+		src: `{"methodCalls": [
+			["Email/get", {"ids": ["a"]}, "matched"],
+			["Core/echo", {"#headers": {"resultOf": "matched", "name": "Email/get", "path": "/list/*/headers"}}, "echo"]
+		]}`,
+		want: `/list/*/headers selects headers from the Email/get call, which does not fetch it`,
+	}, {
+		// Nor the sub-parts of a body part, where bodyProperties is left out.
+		name: "back reference reads the sub-parts of body parts left to their defaults",
+		src: `{"methodCalls": [
+			["Email/get", {"ids": ["a"], "properties": ["textBody"]}, "matched"],
+			["Core/echo", {"#parts": {"resultOf": "matched", "name": "Email/get", "path": "/list/*/textBody/*/subParts"}}, "echo"]
+		]}`,
+		want: `/list/*/textBody/*/subParts selects subParts from the Email/get call, which does not fetch it`,
+	}, {
+		name: "a parsed event holds no calendars",
+		src: `{"methodCalls": [
+			["CalendarEvent/parse", {"blobIds": ["b1"], "properties": ["calendarIds", "title"]}, "parsed"]
+		]}`,
+		want: `CalendarEvent/parse returns calendarIds as null whatever it is asked for`,
 	}, {
 		name: "back reference reads a property the call did not fetch",
 		src: `{"methodCalls": [

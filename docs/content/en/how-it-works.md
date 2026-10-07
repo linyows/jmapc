@@ -124,9 +124,11 @@ where the method returns it whether or not it was asked for, as a `/get` does.
 A call that leaves its `properties` out fetches the method's default set: every
 field of the type for most `/get` methods, though not a property beyond the
 fields such as a header field, and a list of the method's own for `Blob/get`
-(`data` and `size`) and `Email/parse`. A
-property the method returns as null whatever it is asked for, as the id of a
-parsed email, is refused however the call asks for its properties. The fetched
+(`data` and `size`), `Email/get` (without `headers` or `bodyStructure`) and
+`Email/parse`. A call that leaves `bodyProperties` out fetches body parts
+without their `headers` or `subParts`. A property the method returns as null
+whatever it is asked for, as the id of a parsed email or the calendars of a
+parsed event, is refused however the call asks for its properties. The fetched
 properties are known at this point, because the call the reference reads from
 came earlier and was finished first.
 
@@ -153,10 +155,12 @@ for its parameters, and a type for the response holding the properties the
 request asked for and no others. A call given its properties by a parameter
 or a back reference answers with the runtime's type, whose properties are all
 optional. Where the method answers a property otherwise than its type says, as
-`Email/parse` does, or where the call narrows `bodyProperties`, the call takes
-a type of its own instead: every property is optional, but the id a `/get`
-returns whatever it is asked for, and those the method returns as null are left
-out. Where the request asks for one, the file also carries a watch loop or a
+`Email/parse` does, or where the call narrows `bodyProperties`, as `Email/get`
+does by default, the call takes a type of its own instead: every property is
+optional, but the id a `/get` returns whatever it is asked for, and those the
+method returns as null are left out. A call to such a method that fetches every
+property takes the same type, as `CalendarEvent/parse` does, since an event read
+from a file has only the properties the file gives. Where the request asks for one, the file also carries a watch loop or a
 pager. Beside the request files go a file for the
 [property sets](properties.md), if the project names any, and a function that
 verifies every request against a server. Rust and TypeScript are written with

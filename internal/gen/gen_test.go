@@ -921,7 +921,8 @@ func TestAParsedEmailHoldsWhatTheParseReturns(t *testing.T) {
 // answers some of them otherwise than the Email type says, so the record is a
 // type of its own rather than the runtime's: no id, which the parse returns as
 // null, and a threadId that may be null. A /get given its properties answers
-// as the type says, and keeps the runtime's type.
+// as the type says, and keeps the runtime's type, but where the method narrows
+// the nested records by default, as Email/get does its body parts.
 func TestAParseGivenItsPropertiesHasItsOwnRecord(t *testing.T) {
 	src := generateOne(t, "ParseAny", `{"methodCalls": [["Email/parse", {"blobIds": ["b1"], "properties": "{{properties}}"}, "p"]]}`)
 	for _, want := range []string{
@@ -937,9 +938,59 @@ func TestAParseGivenItsPropertiesHasItsOwnRecord(t *testing.T) {
 		t.Errorf("a parsed email holds a property the parse returns as null:\n%s", src)
 	}
 
-	src = generateOne(t, "GetAny", `{"methodCalls": [["Email/get", {"ids": ["a"], "properties": "{{properties}}"}, "g"]], "_returns": "g"}`)
-	if want := "*jmapc.EmailGetResponse"; !strings.Contains(src, want) {
+	src = generateOne(t, "GetAny", `{"methodCalls": [["Mailbox/get", {"ids": ["a"], "properties": "{{properties}}"}, "g"]], "_returns": "g"}`)
+	if want := "*jmapc.MailboxGetResponse"; !strings.Contains(src, want) {
 		t.Errorf("the generated code does not answer with %s:\n%s", want, src)
+	}
+
+	src = generateOne(t, "GetAnyEmail", `{"methodCalls": [["Email/get", {"ids": ["a"], "properties": "{{properties}}"}, "g"]], "_returns": "g"}`)
+	if want := "TextBody []GetAnyEmailGEmailBodyPart `json:\"textBody\"`"; !strings.Contains(src, want) {
+		t.Errorf("the generated code does not hold %s:\n%s", want, src)
+	}
+}
+
+// TestAnEmailLeftToItsDefaultsHoldsWhatTheGetReturns checks an Email/get that
+// leaves its properties out. RFC 8621, Section 4.2 has it return a list of its
+// own, without the headers or the body structure, and body parts without their
+// headers or sub-parts, so the records and the body parts are types of their
+// own. A call that fetches no body parts has no body part type.
+func TestAnEmailLeftToItsDefaultsHoldsWhatTheGetReturns(t *testing.T) {
+	src := generateOne(t, "GetDefault", `{"methodCalls": [["Email/get", {"ids": ["a"]}, "g"]], "_returns": "g"}`)
+	for _, want := range []string{
+		"List []GetDefaultGEmail `json:\"list\"`",
+		"TextBody []GetDefaultGEmailBodyPart `json:\"textBody\"`",
+		"ThreadID jmapc.ID `json:\"threadId\"`",
+		"PartID *string `json:\"partId\"`",
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("the generated code does not hold %s:\n%s", want, src)
+		}
+	}
+	for _, notWant := range []string{"`json:\"bodyStructure\"`", "`json:\"headers\"`", "`json:\"subParts\"`"} {
+		if strings.Contains(src, notWant) {
+			t.Errorf("the generated code holds %s, which the get does not return:\n%s", notWant, src)
+		}
+	}
+
+	src = generateOne(t, "GetSubject", `{"methodCalls": [["Email/get", {"ids": ["a"], "properties": ["subject"]}, "g"]], "_returns": "g"}`)
+	if strings.Contains(src, "EmailBodyPart struct") {
+		t.Errorf("a get fetching no body parts has a body part type:\n%s", src)
+	}
+}
+
+// TestAParsedEventHoldsNoMetadata checks a CalendarEvent/parse that fetches
+// every property: an event read from a file is in no calendar, so the record
+// holds none of the metadata the parse returns as null, and only the properties
+// the file gives come back, so any may be absent.
+func TestAParsedEventHoldsNoMetadata(t *testing.T) {
+	src := generateOne(t, "ParseEvents", `{"methodCalls": [["CalendarEvent/parse", {"blobIds": ["b1"]}, "p"]]}`)
+	if want := "Parsed map[jmapc.ID][]ParseEventsPCalendarEvent `json:\"parsed\"`"; !strings.Contains(src, want) {
+		t.Errorf("the generated code does not hold %s:\n%s", want, src)
+	}
+	for _, notWant := range []string{"`json:\"id\"`", "`json:\"calendarIds\"`", "`json:\"baseEventId\"`", "`json:\"isDraft\"`", "`json:\"isOrigin\"`"} {
+		if strings.Contains(src, notWant) {
+			t.Errorf("the generated code holds %s, which the parse returns as null:\n%s", notWant, src)
+		}
 	}
 }
 

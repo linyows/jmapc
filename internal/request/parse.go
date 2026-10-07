@@ -980,7 +980,24 @@ func (c *checker) properties(call *Call, where string) []string {
 // the only such argument: it narrows the body parts of an Email rather than the
 // Email itself.
 func (c *checker) nestedProperties(call *Call, where string) []string {
-	if call.Method.NestedPropertiesArgument == "" || call.Args == nil {
+	if call.Method.NestedPropertiesArgument == "" {
+		return nil
+	}
+	// A call that leaves the nested properties out or null is answered with
+	// the method's default set for the nested records it fetches, as a call
+	// leaving out its properties is with the method's default set of those.
+	if call.Method.DefaultNestedProperties != nil &&
+		c.listedLiterally(call, call.Method.NestedPropertiesArgument) && c.fetchesNested(call) {
+		if nested, ok := c.spec.Object(call.Method.NestedType); ok {
+			for _, name := range call.Method.DefaultNestedProperties {
+				if selected, _, err := checkProperty(nested, name); err == nil {
+					c.useCapability(selected)
+				}
+			}
+		}
+		return slices.Clone(call.Method.DefaultNestedProperties)
+	}
+	if call.Args == nil {
 		return nil
 	}
 	node, ok := call.Args.Find(call.Method.NestedPropertiesArgument)
@@ -1014,6 +1031,44 @@ func (c *checker) nestedProperties(call *Call, where string) []string {
 		props = append(props, name)
 	}
 	return props
+}
+
+// fetchesNested reports whether a call may fetch a property of its records that
+// holds the nested type, as textBody holds body parts. One that cannot has no
+// nested records for the default set to describe.
+func (c *checker) fetchesNested(call *Call) bool {
+	if call.Properties == nil {
+		return true
+	}
+	dataType, ok := c.spec.Object(call.Method.DataType)
+	if !ok {
+		return false
+	}
+	for _, name := range call.Properties {
+		if f, ok := dataType.Field(name); ok && mentions(f.ParsedType(), call.Method.NestedType) {
+			return true
+		}
+	}
+	return false
+}
+
+// mentions reports whether t is the type named name or holds it.
+func mentions(t *spec.Type, name string) bool {
+	if t == nil {
+		return false
+	}
+	if t.Name == name {
+		return true
+	}
+	if mentions(t.Elem, name) || mentions(t.Key, name) || mentions(t.Value, name) {
+		return true
+	}
+	for _, m := range t.Union {
+		if mentions(m, name) {
+			return true
+		}
+	}
+	return false
 }
 
 // resolveUsing returns the capability URIs the request should declare, either

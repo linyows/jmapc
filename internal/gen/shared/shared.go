@@ -118,11 +118,12 @@ func RecordProperties(dataType *spec.Object, props []string, withID bool) []stri
 }
 
 // OpenRecord reports whether the records of c take a type of their own though
-// the caller gives the properties: the method answers some property otherwise
-// than the data type says, returning it as null, so the shared type of the
-// runtime would describe it wrongly.
+// the call names no properties, because the caller gives them or because it
+// fetches every one: the method answers some property otherwise than the data
+// type says, returning it as null, so the shared type of the runtime would
+// describe it wrongly.
 func OpenRecord(c *request.Call) bool {
-	return c.PropertiesUnknown && (len(c.Method.NullProperties) > 0 || len(c.Method.NullableProperties) > 0)
+	return c.Properties == nil && (len(c.Method.NullProperties) > 0 || len(c.Method.NullableProperties) > 0)
 }
 
 // RecordFields returns the properties the record type of c is written with:
@@ -138,22 +139,27 @@ func RecordFields(dataType *spec.Object, c *request.Call) []string {
 }
 
 // MayBeAbsent reports whether a record of c may come back without the property
-// name: any property may, where the caller gives the properties, but the id a
-// method returns whatever it is asked for.
+// name: any property may, where the call names none, but the id a method
+// returns whatever it is asked for. A call fetching every property is answered
+// with those the record has, as an event read from a file has only some.
 func MayBeAbsent(c *request.Call, name string) bool {
-	return c.PropertiesUnknown && (name != "id" || !c.Method.ReturnsID)
+	return c.Properties == nil && (name != "id" || !c.Method.ReturnsID)
 }
 
 // RecordTypeDoc is the comment on the record type of c.
 func RecordTypeDoc(recordType, dataType, requestName string, c *request.Call) string {
-	if c.PropertiesUnknown {
+	if c.Properties == nil {
 		absent := "any of them"
 		if c.Method.ReturnsID {
 			absent = "any of them but the id"
 		}
+		why := "The call fetches every property the record has"
+		if c.PropertiesUnknown {
+			why = "The call is given the properties to fetch"
+		}
 		return fmt.Sprintf("%s holds the properties of %s that the %s call in %s may return. "+
-			"The call is given the properties to fetch, so %s may be absent.",
-			recordType, dataType, c.Method.Name, requestName, absent)
+			"%s, so %s may be absent.",
+			recordType, dataType, c.Method.Name, requestName, why, absent)
 	}
 	return fmt.Sprintf("%s holds the properties of %s that the %s call in %s asks for.",
 		recordType, dataType, c.Method.Name, requestName)
