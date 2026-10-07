@@ -336,6 +336,16 @@ func registerCalendarEvent(s *Spec) {
 	s.RegisterStandard("CalendarEvent", CapabilityCalendars, StandardMethods{
 		Get: true, Changes: true, Set: true, Copy: true, Query: true, QueryChanges: true,
 	})
+	// The times in UTC are computed rather than stored, and come back only
+	// where a call asks for them by name.
+	if m, ok := s.Method("CalendarEvent/get"); ok {
+		m.OnlyWhenAsked = []string{"utcStart", "utcEnd"}
+	}
+	if args, ok := s.Object("CalendarEventGetArguments"); ok {
+		if f, ok := args.Field("properties"); ok {
+			f.Doc = "The properties to include in each returned event, or null for all of them but utcStart and utcEnd, which come back only where they are named. The id property is always returned."
+		}
+	}
 
 	s.AppendArguments("CalendarEvent/get",
 		&Field{

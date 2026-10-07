@@ -121,20 +121,25 @@ func RecordProperties(dataType *spec.Object, props []string, withID bool) []stri
 // the call names no properties, because the caller gives them or because it
 // fetches every one: the method answers some property otherwise than the data
 // type says, returning it as null, so the shared type of the runtime would
-// describe it wrongly.
+// describe it wrongly. A call fetching every property of a method that returns
+// some only where they are named takes one as well, since the runtime's type
+// holds those.
 func OpenRecord(c *request.Call) bool {
-	return c.Properties == nil && (len(c.Method.NullProperties) > 0 || len(c.Method.NullableProperties) > 0)
+	return c.Properties == nil && (len(c.Method.NullProperties) > 0 || len(c.Method.NullableProperties) > 0 ||
+		(len(c.Method.OnlyWhenAsked) > 0 && !c.PropertiesUnknown))
 }
 
 // RecordFields returns the properties the record type of c is written with:
 // those the call asks for, or where it names none, every property of dataType
-// but the ones the method returns as null whatever it is asked for.
+// but the ones the method returns as null whatever it is asked for, and where
+// the call fetches every property, those it returns only where they are named.
 func RecordFields(dataType *spec.Object, c *request.Call) []string {
 	if c.Properties != nil {
 		return c.Properties
 	}
 	return slices.DeleteFunc(dataType.PropertyNames(), func(name string) bool {
-		return slices.Contains(c.Method.NullProperties, name)
+		return slices.Contains(c.Method.NullProperties, name) ||
+			(!c.PropertiesUnknown && slices.Contains(c.Method.OnlyWhenAsked, name))
 	})
 }
 

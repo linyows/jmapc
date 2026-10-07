@@ -276,6 +276,11 @@ type Method struct {
 	// or null, as Email/get returns body parts without their headers or
 	// sub-parts. It is nil where the method then returns every property.
 	DefaultNestedProperties []string
+	// OnlyWhenAsked lists the properties the method returns only where the
+	// call names them, though it returns every other property where the call
+	// leaves its properties argument out or null, as CalendarEvent/get returns
+	// the computed utcStart and utcEnd.
+	OnlyWhenAsked []string
 	// NullProperties lists the properties the method returns as null whatever
 	// it is asked for, as Email/parse returns the id of a message that is not
 	// a record in the account.

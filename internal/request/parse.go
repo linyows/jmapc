@@ -831,8 +831,13 @@ func (c *checker) checkFetched(from *Call, selected []spec.Selection, path, wher
 			// The call fetches every property of the type, or a list the
 			// caller gives, which cannot be known here. Neither is a dynamic
 			// property, a header field or the like, which comes back only
-			// where it is named: every property is every field.
-			if !c.isDynamic(sel) || !c.listedLiterally(from, argument) {
+			// where it is named, nor one the method returns only where it is
+			// named: every property is every other field.
+			if !c.listedLiterally(from, argument) {
+				continue
+			}
+			onlyWhenAsked := sel.Type == from.Method.DataType && slices.Contains(from.Method.OnlyWhenAsked, sel.Property)
+			if !c.isDynamic(sel) && !onlyWhenAsked {
 				continue
 			}
 		}

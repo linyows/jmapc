@@ -994,6 +994,34 @@ func TestAParsedEventHoldsNoMetadata(t *testing.T) {
 	}
 }
 
+// TestEventsLeftToTheirDefaultsHoldNoTimesInUTC checks a CalendarEvent/get
+// that leaves its properties out, which returns every property but utcStart and
+// utcEnd: the record is a type of its own without those, and holds the id,
+// which a /get always returns, while any other property may be absent. Given
+// its properties, the call may ask for them, and keeps the runtime's type.
+func TestEventsLeftToTheirDefaultsHoldNoTimesInUTC(t *testing.T) {
+	src := generateOne(t, "GetEvents", `{"methodCalls": [["CalendarEvent/get", {"ids": ["e1"]}, "g"]], "_returns": "g"}`)
+	for _, want := range []string{
+		"List []GetEventsGCalendarEvent `json:\"list\"`",
+		"ID jmapc.ID `json:\"id\"`",
+		"Title string `json:\"title\"`",
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("the generated code does not hold %s:\n%s", want, src)
+		}
+	}
+	for _, notWant := range []string{"`json:\"utcStart\"`", "`json:\"utcEnd\"`"} {
+		if strings.Contains(src, notWant) {
+			t.Errorf("the generated code holds %s, which the get does not return:\n%s", notWant, src)
+		}
+	}
+
+	src = generateOne(t, "GetAnyEvents", `{"methodCalls": [["CalendarEvent/get", {"ids": ["e1"], "properties": "{{properties}}"}, "g"]], "_returns": "g"}`)
+	if want := "*jmapc.CalendarEventGetResponse"; !strings.Contains(src, want) {
+		t.Errorf("the generated code does not answer with %s:\n%s", want, src)
+	}
+}
+
 // TestABlobLeftToItsDefaultsHoldsBothEncodings checks a Blob/get that leaves
 // its properties out: RFC 9404, Section 4.2 has it return data and size, so the
 // record holds both encodings for the server to pick between, and the size.
