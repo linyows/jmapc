@@ -61,6 +61,10 @@ func (g *RequestGenerator) writeImports(buf *bytes.Buffer, p *plan) {
 			for _, f := range resp.Fields {
 				if f.Name != c.Method.ResultProperty {
 					collectTypeNames(f.ParsedType(), names)
+					continue
+				}
+				for _, t := range shared.AroundRecords(f.ParsedType(), c.Method.DataType) {
+					collectTypeNames(t, names)
 				}
 			}
 		}
@@ -134,8 +138,12 @@ func collectTypeNames(t *spec.Type, names map[string]bool) {
 	case t.IsObject():
 		names[spec.ExportedName(t.Name)] = true
 	default:
-		// A primitive that is a named alias in TypeScript is imported too.
-		if alias := t.TSType(); alias != "" && isAliasName(alias) {
+		// A primitive that is a named alias in TypeScript is imported too. The
+		// nullability comes off first, since Date|null names the alias as
+		// much as Date does.
+		bare := *t
+		bare.Nullable = false
+		if alias := bare.TSType(); alias != "" && isAliasName(alias) {
 			names[alias] = true
 		}
 	}
@@ -299,7 +307,7 @@ func (g *RequestGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 			shared.WriteComment(buf, "  ", field.Doc)
 			tsType := field.ParsedType().TSType()
 			if field.Name == c.Method.ResultProperty {
-				tsType = info.RecordType + "[]"
+				tsType = shared.ResultType(field.ParsedType(), c.Method.DataType, info.RecordType, (*spec.Type).TSType, tsShape)
 			}
 			name := field.Name
 			if spec.TSNeedsQuoting(name) {
@@ -333,4 +341,17 @@ func (g *RequestGenerator) writeResultType(buf *bytes.Buffer, p *plan) {
 		buf.WriteString("  createdIds: { [creationId: Id]: Id }\n")
 	}
 	buf.WriteString("}\n\n")
+}
+
+// tsShape writes the containers around a call's records as TypeScript writes
+// them, an element that may be null in parentheses.
+var tsShape = shared.Shape{
+	List: func(elem *spec.Type, s string) string {
+		if elem.Nullable || elem.IsUnion() {
+			return "(" + s + ")[]"
+		}
+		return s + "[]"
+	},
+	Map:  func(key *spec.Type, s string) string { return "{ [key: " + key.TSType() + "]: " + s + " }" },
+	Null: func(_ *spec.Type, s string) string { return s + " | null" },
 }

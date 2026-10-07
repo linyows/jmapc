@@ -287,6 +287,12 @@ func TestExtendErrors(t *testing.T) {
 			             "arguments": [{"name": "fields", "type": "String[]"}]}]}`,
 		want: `names no dataType for them to be properties of`,
 	}, {
+		name: "method selecting properties of records it names no place for",
+		src: `{"capability": "urn:x:y", "types": [{"name": "Note", "properties": []}],
+			"methods": [{"name": "Note/summarise", "dataType": "Note", "properties": "fields",
+			             "arguments": [{"name": "fields", "type": "String[]"}]}]}`,
+		want: `Note/summarise selects properties through "fields", and names no resultProperty for the records they narrow`,
+	}, {
 		name: "method returning records in a property its response does not have",
 		src: `{"capability": "urn:x:y", "types": [{"name": "Note", "properties": []}],
 			"methods": [{"name": "Note/summarise", "dataType": "Note", "resultProperty": "list"}]}`,
@@ -304,6 +310,12 @@ func TestExtendErrors(t *testing.T) {
 			             "arguments": [{"name": "properties", "type": "String[]"}],
 			             "response": [{"name": "list", "type": "Note[]"}]}]}`,
 		want: `Note/summarise says it returns the id of every record, and Note has no id`,
+	}, {
+		name: "method returning records in a property that is no list or map of them",
+		src: `{"capability": "urn:x:y", "types": [{"name": "Note", "properties": []}],
+			"methods": [{"name": "Note/summarise", "dataType": "Note", "resultProperty": "list",
+			             "response": [{"name": "list", "type": "Note|String"}]}]}`,
+		want: `Note/summarise returns its records in "list", which is a Note|String rather than a list of Note or a map to them`,
 	}, {
 		name: "unknown member in the schema",
 		src:  `{"capability": "urn:x:y", "typs": []}`,

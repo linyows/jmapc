@@ -58,6 +58,10 @@ func (g *RequestGenerator) writeUses(buf *bytes.Buffer, p *plan, body string) {
 			for _, f := range resp.Fields {
 				if f.Name != c.Method.ResultProperty {
 					imports.collect(f.ParsedType())
+					continue
+				}
+				for _, t := range shared.AroundRecords(f.ParsedType(), c.Method.DataType) {
+					imports.collect(t)
 				}
 			}
 		}
@@ -442,9 +446,9 @@ func (g *RequestGenerator) writeResponseTypes(buf *bytes.Buffer, p *plan) {
 			}
 			writeDoc(buf, "    ", field.Doc)
 			if field.Name == c.Method.ResultProperty {
-				ident := spec.RustFieldName(field.Name)
-				writeSerdeAttr(buf, "    ", renameAndDefault(field.Name, ident))
-				fmt.Fprintf(buf, "    pub %s: Vec<%s>,\n", ident, info.RecordType)
+				rendered := shared.ResultType(field.ParsedType(), c.Method.DataType, info.RecordType,
+					(*spec.Type).RustType, rustShape)
+				writeRenderedMember(buf, field.Name, rendered, false, true)
 				continue
 			}
 			writeMember(buf, respType.Name, field.Name, field.ParsedType(), false, true)
@@ -612,4 +616,11 @@ func quote(s string) string {
 	}
 	b.WriteByte('"')
 	return b.String()
+}
+
+// rustShape writes the containers around a call's records as Rust writes them.
+var rustShape = shared.Shape{
+	List: func(_ *spec.Type, s string) string { return "Vec<" + s + ">" },
+	Map:  func(key *spec.Type, s string) string { return "BTreeMap<" + key.RustType() + ", " + s + ">" },
+	Null: func(_ *spec.Type, s string) string { return "Option<" + s + ">" },
 }

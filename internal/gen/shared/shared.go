@@ -262,3 +262,78 @@ func RequestsDir(paths []string) string {
 	}
 	return strings.Join(common, "/")
 }
+
+// Shape writes the containers around a call's records in one language, so
+// that the records inside can be written as the type generated for them.
+type Shape struct {
+	// List writes a list of elem, written as s.
+	List func(elem *spec.Type, s string) string
+	// Map writes a map from key to values written as s.
+	Map func(key *spec.Type, s string) string
+	// Null writes t, written as s, where it may also be null.
+	Null func(t *spec.Type, s string) string
+}
+
+// ResultType writes t, the type of the property holding a call's records, with
+// each record of dataType in it written as recordType: a list of records is a
+// list of recordType, and the map of Email/parse a map to recordType. render
+// writes a type that holds no records, and shape the containers around them.
+func ResultType(t *spec.Type, dataType, recordType string, render func(*spec.Type) string, shape Shape) string {
+	if !holdsRecords(t, dataType) {
+		return render(t)
+	}
+	var out string
+	switch {
+	case t.Name == dataType:
+		out = recordType
+	case t.IsArray():
+		out = shape.List(t.Elem, ResultType(t.Elem, dataType, recordType, render, shape))
+	case t.IsMap():
+		out = shape.Map(t.Key, ResultType(t.Value, dataType, recordType, render, shape))
+	default:
+		// A union of records is no shape a method answers with.
+		return render(t)
+	}
+	if t.Nullable {
+		return shape.Null(t, out)
+	}
+	return out
+}
+
+// holdsRecords reports whether t is a record of dataType or a list or map of
+// them, at any depth.
+func holdsRecords(t *spec.Type, dataType string) bool {
+	switch {
+	case t == nil:
+		return false
+	case t.Name == dataType:
+		return true
+	case t.IsArray():
+		return holdsRecords(t.Elem, dataType)
+	case t.IsMap():
+		return holdsRecords(t.Value, dataType)
+	}
+	return false
+}
+
+// AroundRecords returns the types inside t, the type of the property holding a
+// call's records, that are not the records of dataType: the keys of the map of
+// Email/parse, which a generated file has to import where the records are a
+// type of its own.
+func AroundRecords(t *spec.Type, dataType string) []*spec.Type {
+	switch {
+	case t == nil || t.Name == dataType:
+		return nil
+	case t.IsArray():
+		return AroundRecords(t.Elem, dataType)
+	case t.IsMap():
+		return append([]*spec.Type{t.Key}, AroundRecords(t.Value, dataType)...)
+	case t.IsUnion():
+		var out []*spec.Type
+		for _, m := range t.Union {
+			out = append(out, AroundRecords(m, dataType)...)
+		}
+		return out
+	}
+	return []*spec.Type{t}
+}

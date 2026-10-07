@@ -1,0 +1,14 @@
+{
+  "_doc": "ReadAttachedMessage reads a message sent as an attachment, for display, without filing it in the account. The parsed messages come back keyed by the blob they were read from, each typed down to the properties asked for.",
+
+  "methodCalls": [
+    ["Email/parse", {
+      "blobIds": ["{{blobId}}"],
+      "properties": ["subject", "from", "sentAt", "textBody", "bodyValues"],
+      "bodyProperties": ["partId", "type", "size"],
+      "fetchTextBodyValues": true
+    }, "parse"]
+  ],
+
+  "_returns": "parse"
+}

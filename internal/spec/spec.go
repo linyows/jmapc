@@ -242,10 +242,11 @@ type Method struct {
 	// for "Email/get". It is empty for methods that are not tied to one type.
 	DataType string
 	// PropertiesArgument names the argument that selects a subset of the data
-	// type's properties, if the method has one. Only /get does.
+	// type's properties, if the method has one, as a /get and a /parse do.
 	PropertiesArgument string
 	// ResultProperty names the response property holding the records, so that
-	// a narrowed set of properties can be applied to the right field.
+	// a narrowed set of properties can be applied to the right field: a list
+	// of them for a /get, and a map from blob id for a /parse.
 	ResultProperty string
 	// NestedPropertiesArgument names an argument that narrows the properties
 	// of a type nested inside the records rather than of the records

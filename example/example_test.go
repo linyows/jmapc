@@ -1408,6 +1408,41 @@ func TestReadMessage(t *testing.T) {
 	}
 }
 
+// TestReadAttachedMessage covers an Email/parse that narrows what it reads: the
+// parsed messages are keyed by blob id, and each is the narrowed type rather
+// than the full Email.
+func TestReadAttachedMessage(t *testing.T) {
+	s := &stub{t: t, response: `{
+	  "sessionState": "session-1",
+	  "methodResponses": [
+	    ["Email/parse", {"accountId": "acct1", "notParsable": [], "notFound": [], "parsed": {
+	      "b1": {"subject": "Forwarded notes", "sentAt": "2024-05-01T09:00:00+02:00",
+	             "from": [{"name": "Ada", "email": "ada@example.com"}],
+	             "textBody": [{"partId": "1", "type": "text/plain", "size": 10}],
+	             "bodyValues": {"1": {"value": "The notes.", "isTruncated": false}}}
+	    }}, "parse"]
+	  ]
+	}`}
+
+	got, err := client.ReadAttachedMessage(context.Background(), s.client(), client.ReadAttachedMessageParams{BlobID: "b1"})
+	if err != nil {
+		t.Fatalf("ReadAttachedMessage: %v", err)
+	}
+	email, ok := got.Parsed["b1"]
+	if !ok {
+		t.Fatalf("parsed = %v, want an entry for b1", got.Parsed)
+	}
+	if email.Subject == nil || *email.Subject != "Forwarded notes" {
+		t.Errorf("subject = %v", email.Subject)
+	}
+	if len(email.TextBody) != 1 || email.TextBody[0].Size != 10 {
+		t.Errorf("text body = %+v", email.TextBody)
+	}
+	if email.BodyValues["1"].Value != "The notes." {
+		t.Errorf("body values = %+v", email.BodyValues)
+	}
+}
+
 // TestFileIntoNewMailbox covers carrying creation ids in and out. Within one
 // request "#box" resolves on the server; across requests it resolves only
 // because the ids were passed along, which is what RFC 8620 has this for.

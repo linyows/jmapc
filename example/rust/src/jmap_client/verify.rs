@@ -12,7 +12,7 @@ pub async fn verify<T: Transport>(client: &Client<T>) -> Result<(), Error> {
 }
 
 /// What each request in this directory needs of the server.
-const NEEDS: [RequestNeeds; 25] = [
+const NEEDS: [RequestNeeds; 26] = [
     RequestNeeds {
         name: "Agenda",
         using: &[
@@ -108,6 +108,12 @@ const NEEDS: [RequestNeeds; 25] = [
     },
     RequestNeeds {
         name: "MarkEmailRead",
+        using: &["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail"],
+        calls: 1,
+        primary_accounts: &["urn:ietf:params:jmap:mail"],
+    },
+    RequestNeeds {
+        name: "ReadAttachedMessage",
         using: &["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail"],
         calls: 1,
         primary_accounts: &["urn:ietf:params:jmap:mail"],

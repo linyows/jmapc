@@ -2,7 +2,7 @@
 // Source: requests/ReadMessage.jmap.json
 
 import { type Client, type Request, type Response, MethodErrors, answered, decode } from "./client.js"
-import type { EmailAddress, EmailBodyValue, Id, UTCDate } from "./types.js"
+import type { Date, EmailAddress, EmailBodyValue, Id, UTCDate } from "./types.js"
 
 // ReadMessageParams holds the values ReadMessage leaves open.
 export interface ReadMessageParams {
