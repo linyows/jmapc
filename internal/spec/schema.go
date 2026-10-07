@@ -643,5 +643,15 @@ func (s *Spec) checkMethodPropertyLists(m *SchemaMethod) error {
 			return fmt.Errorf("%s returns the id as null, and says it returns the id of every record as well", m.Name)
 		}
 	}
+	for _, name := range m.NullableProperties {
+		o, _ := s.Object(m.DataType)
+		f, _ := o.Field(name)
+		switch {
+		case f.ParsedType().Nullable:
+			return fmt.Errorf("%s names %q in nullableProperties, whose type %s may be null already", m.Name, name, f.Type)
+		case name == "id" && m.ReturnsID:
+			return fmt.Errorf("%s may return the id as null, and says it returns the id of every record as well", m.Name)
+		}
+	}
 	return nil
 }

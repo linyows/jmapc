@@ -343,6 +343,14 @@ func TestExtendErrors(t *testing.T) {
 			             "response": [{"name": "list", "type": "Note[]"}]}]}`,
 		want: `Note/summarise names "meta:colour" in nullableProperties, which Note does not have`,
 	}, {
+		name: "method making a property nullable that is already",
+		src: `{"capability": "urn:x:y", "types": [{"name": "Note", "properties": [{"name": "title", "type": "String|null"}]}],
+			"methods": [{"name": "Note/summarise", "dataType": "Note", "properties": "properties", "resultProperty": "list",
+			             "nullableProperties": ["title"],
+			             "arguments": [{"name": "properties", "type": "String[]"}],
+			             "response": [{"name": "list", "type": "Note[]"}]}]}`,
+		want: `Note/summarise names "title" in nullableProperties, whose type String|null may be null already`,
+	}, {
 		name: "method returning a default property as null",
 		src: `{"capability": "urn:x:y", "types": [{"name": "Note", "properties": [{"name": "title", "type": "String"}]}],
 			"methods": [{"name": "Note/summarise", "dataType": "Note", "properties": "properties", "resultProperty": "list",

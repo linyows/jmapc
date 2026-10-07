@@ -250,7 +250,7 @@ func TestParseErrors(t *testing.T) {
 	}, {
 		// A parse asked for no properties fetches nothing, not even an id,
 		// which only a /get returns whatever it is asked for.
-		name: "back reference reads the id of a parse that fetches none",
+		name: "back reference reads the threadId of a parse that fetches none",
 		src: `{"methodCalls": [
 			["Email/parse", {"blobIds": ["b1"], "properties": []}, "parsed"],
 			["Thread/get", {"#ids": {"resultOf": "parsed", "name": "Email/parse", "path": "/parsed/b1/threadId"}}, "fetch"]
