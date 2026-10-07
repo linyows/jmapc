@@ -80,7 +80,7 @@ func PlanCalls(s *spec.Spec, q *request.Request, taken map[string]bool, n Namer)
 			plan.ResponseType = Unique(taken, n.Prefix+n.Field(c.Field)+"Response")
 			plan.WritesTypes = true
 			plan.SharedRecord = true
-		case c.Properties != nil || c.NestedProperties != nil:
+		case c.Properties != nil || c.NestedProperties != nil || OpenRecord(c):
 			plan.RecordType = Unique(taken, n.Prefix+n.Field(c.Field)+n.Part(c.Method.DataType))
 			plan.ResponseType = Unique(taken, n.Prefix+n.Field(c.Field)+"Response")
 			plan.WritesTypes = true

@@ -76,8 +76,13 @@ type Call struct {
 	// references resolved.
 	Args *Object
 	// Properties are the property names a /get call selects, when the request
-	// states them literally. It is nil when the call fetches every property.
+	// states them literally. It is nil when the call fetches every property,
+	// and when the caller gives them, which PropertiesUnknown tells apart.
 	Properties []string
+	// PropertiesUnknown says the properties come from a parameter or a back
+	// reference, so which of them come back is not known until the request
+	// is sent.
+	PropertiesUnknown bool
 	// NestedProperties are the property names selected for a type nested
 	// inside the records, as bodyProperties selects them for the body parts of
 	// an Email. It is nil when the call narrows nothing.

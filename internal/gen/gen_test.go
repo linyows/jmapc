@@ -916,6 +916,33 @@ func TestAParsedEmailHoldsWhatTheParseReturns(t *testing.T) {
 	}
 }
 
+// TestAParseGivenItsPropertiesHasItsOwnRecord checks an Email/parse whose
+// properties the caller gives. Which come back is not known, but the parse
+// answers some of them otherwise than the Email type says, so the record is a
+// type of its own rather than the runtime's: no id, which the parse returns as
+// null, and a threadId that may be null. A /get given its properties answers
+// as the type says, and keeps the runtime's type.
+func TestAParseGivenItsPropertiesHasItsOwnRecord(t *testing.T) {
+	src := generateOne(t, "ParseAny", `{"methodCalls": [["Email/parse", {"blobIds": ["b1"], "properties": "{{properties}}"}, "p"]]}`)
+	for _, want := range []string{
+		"Parsed map[jmapc.ID]ParseAnyPEmail `json:\"parsed\"`",
+		"ThreadID *jmapc.ID `json:\"threadId\"`",
+		"Subject *string `json:\"subject\"`",
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("the generated code does not hold %s:\n%s", want, src)
+		}
+	}
+	if strings.Contains(src, "`json:\"id\"`") || strings.Contains(src, "`json:\"receivedAt\"`") {
+		t.Errorf("a parsed email holds a property the parse returns as null:\n%s", src)
+	}
+
+	src = generateOne(t, "GetAny", `{"methodCalls": [["Email/get", {"ids": ["a"], "properties": "{{properties}}"}, "g"]], "_returns": "g"}`)
+	if want := "*jmapc.EmailGetResponse"; !strings.Contains(src, want) {
+		t.Errorf("the generated code does not answer with %s:\n%s", want, src)
+	}
+}
+
 // TestABlobLeftToItsDefaultsHoldsBothEncodings checks a Blob/get that leaves
 // its properties out: RFC 9404, Section 4.2 has it return data and size, so the
 // record holds both encodings for the server to pick between, and the size.

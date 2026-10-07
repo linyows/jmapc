@@ -150,8 +150,14 @@ the same description out.
 
 Each request becomes one file, with a function named after the request, a type
 for its parameters, and a type for the response holding the properties the
-request asked for and no others. Where the request asks for one, the file also
-carries a watch loop or a pager. Beside the request files go a file for the
+request asked for and no others. A call given its properties by a parameter
+or a back reference answers with the runtime's type, whose properties are all
+optional. Where the method answers a property otherwise than its type says, as
+`Email/parse` does, or where the call narrows `bodyProperties`, the call takes
+a type of its own instead: every property is optional, but the id a `/get`
+returns whatever it is asked for, and those the method returns as null are left
+out. Where the request asks for one, the file also carries a watch loop or a
+pager. Beside the request files go a file for the
 [property sets](properties.md), if the project names any, and a function that
 verifies every request against a server. Rust and TypeScript are written with
 the data model types and the runtime as well, since they have no package of

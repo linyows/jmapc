@@ -527,6 +527,8 @@ func (c *checker) methodCall(raw json.RawMessage, where string) *Call {
 	}
 	call.Args = c.arguments(call, args, parts[1], where+".arguments")
 	call.Properties = c.properties(call, where+".arguments")
+	call.PropertiesUnknown = call.Properties == nil && call.Method.PropertiesArgument != "" &&
+		!c.listedLiterally(call, call.Method.PropertiesArgument)
 	call.NestedProperties = c.nestedProperties(call, where+".arguments")
 	c.checkPropertySetUse(call, where+".arguments")
 	return call

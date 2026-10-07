@@ -320,16 +320,12 @@ func (g *RequestGenerator) writeRecordTypes(buf *bytes.Buffer, p *plan) {
 			g.writeNestedType(buf, p, c, info)
 		}
 
-		shared.WriteComment(buf, "", fmt.Sprintf("%s holds the properties of %s that the %s call in %s asks for.",
-			info.RecordType, dataType.Name, c.Method.Name, p.q.Name))
+		shared.WriteComment(buf, "", shared.RecordTypeDoc(info.RecordType, dataType.Name, p.q.Name, c))
 		fmt.Fprintf(buf, "type %s struct {\n", info.RecordType)
-		properties := c.Properties
-		if properties == nil {
-			// Only the nested type was narrowed, so the record keeps all of
-			// its own properties and only the ones referring to the nested
-			// type change.
-			properties = dataType.PropertyNames()
-		}
+		// Where the call names no properties, the record keeps all of its
+		// own, and only the ones referring to a narrowed nested type, or
+		// answered as null, differ from the runtime's.
+		properties := shared.RecordFields(dataType, c)
 		for i, name := range shared.RecordProperties(dataType, properties, c.Method.ReturnsID) {
 			if i > 0 {
 				buf.WriteString("\n")
