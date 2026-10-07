@@ -86,8 +86,9 @@ func registerEmailParse(s *Spec) {
 			"subject", "sentAt", "hasAttachment", "preview", "bodyValues", "textBody", "htmlBody",
 			"attachments",
 		},
-		NullProperties:     []string{"id", "mailboxIds", "keywords", "receivedAt"},
-		NullableProperties: []string{"threadId"},
+		DefaultNestedProperties: defaultBodyProperties(),
+		NullProperties:          []string{"id", "mailboxIds", "keywords", "receivedAt"},
+		NullableProperties:      []string{"threadId"},
 	},
 		append([]*Field{
 			accountIDField(),
@@ -588,9 +589,23 @@ func registerEmail(s *Spec) {
 	})
 
 	// Email/get narrows the body parts as well as the records themselves.
+	// Left to its defaults, it returns neither the headers nor the body
+	// structure of a message, RFC 8621, Section 4.2.
 	if m, ok := s.Method("Email/get"); ok {
 		m.NestedPropertiesArgument = "bodyProperties"
 		m.NestedType = "EmailBodyPart"
+		m.DefaultProperties = []string{
+			"id", "blobId", "threadId", "mailboxIds", "keywords", "size", "receivedAt",
+			"messageId", "inReplyTo", "references", "sender", "from", "to", "cc", "bcc", "replyTo",
+			"subject", "sentAt", "hasAttachment", "preview", "bodyValues", "textBody", "htmlBody",
+			"attachments",
+		}
+		m.DefaultNestedProperties = defaultBodyProperties()
+	}
+	if args, ok := s.Object("EmailGetArguments"); ok {
+		if f, ok := args.Field("properties"); ok {
+			f.Doc = "The properties to include in each returned email, or null for the default set, which leaves out the headers and the body structure. The id property is always returned."
+		}
 	}
 
 	s.AppendArguments("Email/get", bodyFetchArguments()...)
@@ -607,6 +622,13 @@ func registerEmail(s *Spec) {
 	s.AppendArguments("Email/queryChanges", collapseThreads())
 }
 
+// defaultBodyProperties are the properties of the body parts Email/get and
+// Email/parse return where a call leaves bodyProperties out, RFC 8621, Sections
+// 4.2 and 4.9: neither the headers of a part nor its sub-parts.
+func defaultBodyProperties() []string {
+	return []string{"partId", "blobId", "size", "name", "type", "charset", "disposition", "cid", "language", "location"}
+}
+
 // bodyFetchArguments are the arguments with which a call returning emails says
 // what of their body parts it fetches, as Email/get and Email/parse both do,
 // RFC 8621, Sections 4.2 and 4.9.
@@ -615,7 +637,7 @@ func bodyFetchArguments() []*Field {
 		{
 			Name: "bodyProperties",
 			Type: "String[]|null",
-			Doc:  "The properties to include for each EmailBodyPart returned.",
+			Doc:  "The properties to include for each EmailBodyPart returned, or null for the default set, which leaves out the headers and the sub-parts.",
 		},
 		{
 			Name:    "fetchTextBodyValues",

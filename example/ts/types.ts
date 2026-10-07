@@ -3349,11 +3349,13 @@ export interface EmailGetArguments {
   // The ids of the records to fetch, or null to fetch all of them.
   ids?: Id[] | null
 
-  // The properties to include in each returned record, or null for all of
-  // them. The id property is always returned.
+  // The properties to include in each returned email, or null for the default
+  // set, which leaves out the headers and the body structure. The id property
+  // is always returned.
   properties?: string[] | null
 
-  // The properties to include for each EmailBodyPart returned.
+  // The properties to include for each EmailBodyPart returned, or null for
+  // the default set, which leaves out the headers and the sub-parts.
   bodyProperties?: string[] | null
 
   // Whether to populate bodyValues for the parts listed in textBody.
@@ -3475,7 +3477,8 @@ export interface EmailParseArguments {
   // set.
   properties?: string[] | null
 
-  // The properties to include for each EmailBodyPart returned.
+  // The properties to include for each EmailBodyPart returned, or null for
+  // the default set, which leaves out the headers and the sub-parts.
   bodyProperties?: string[] | null
 
   // Whether to populate bodyValues for the parts listed in textBody.

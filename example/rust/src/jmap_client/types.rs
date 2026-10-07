@@ -4482,12 +4482,14 @@ pub struct EmailGetArguments {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ids: Option<Vec<Id>>,
 
-    /// The properties to include in each returned record, or null for all of
-    /// them. The id property is always returned.
+    /// The properties to include in each returned email, or null for the
+    /// default set, which leaves out the headers and the body structure. The
+    /// id property is always returned.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub properties: Option<Vec<String>>,
 
-    /// The properties to include for each EmailBodyPart returned.
+    /// The properties to include for each EmailBodyPart returned, or null for
+    /// the default set, which leaves out the headers and the sub-parts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub body_properties: Option<Vec<String>>,
 
@@ -4647,7 +4649,8 @@ pub struct EmailParseArguments {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub properties: Option<Vec<String>>,
 
-    /// The properties to include for each EmailBodyPart returned.
+    /// The properties to include for each EmailBodyPart returned, or null for
+    /// the default set, which leaves out the headers and the sub-parts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub body_properties: Option<Vec<String>>,
 

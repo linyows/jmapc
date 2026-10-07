@@ -3731,11 +3731,13 @@ type EmailGetArguments struct {
 	// The ids of the records to fetch, or null to fetch all of them.
 	IDs []ID `json:"ids,omitzero"`
 
-	// The properties to include in each returned record, or null for all of
-	// them. The id property is always returned.
+	// The properties to include in each returned email, or null for the default
+	// set, which leaves out the headers and the body structure. The id property
+	// is always returned.
 	Properties []string `json:"properties,omitzero"`
 
-	// The properties to include for each EmailBodyPart returned.
+	// The properties to include for each EmailBodyPart returned, or null for the
+	// default set, which leaves out the headers and the sub-parts.
 	BodyProperties []string `json:"bodyProperties,omitzero"`
 
 	// Whether to populate bodyValues for the parts listed in textBody.
@@ -3857,7 +3859,8 @@ type EmailParseArguments struct {
 	// set.
 	Properties []string `json:"properties,omitzero"`
 
-	// The properties to include for each EmailBodyPart returned.
+	// The properties to include for each EmailBodyPart returned, or null for the
+	// default set, which leaves out the headers and the sub-parts.
 	BodyProperties []string `json:"bodyProperties,omitzero"`
 
 	// Whether to populate bodyValues for the parts listed in textBody.

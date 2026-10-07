@@ -396,6 +396,9 @@ func registerCalendarEvent(s *Spec) {
 		DataType:           "CalendarEvent",
 		PropertiesArgument: "properties",
 		ResultProperty:     "parsed",
+		// An event read from a file is in no calendar, so its metadata
+		// comes back as null whatever is asked for.
+		NullProperties: []string{"id", "baseEventId", "calendarIds", "isDraft", "isOrigin"},
 	},
 		[]*Field{
 			accountIDField(),
