@@ -3,6 +3,7 @@ package request
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -2426,5 +2427,38 @@ func TestASetCannotHoldWhatAMethodReturnsAsNull(t *testing.T) {
 	_, err = p.Parse("Recent"+Extension, []byte(`{"methodCalls": [["Note/recent", {"properties": "@NoteTitle"}, "r"]]}`))
 	if err == nil || !strings.Contains(err.Error(), "Note/recent may return title as null, though Note says it is not") {
 		t.Errorf("a set holding a property the method may return as null was not refused as such:\n%v", err)
+	}
+}
+
+// TestDefaultPropertiesNeedTheirCapabilities checks a call left to a method's
+// default properties: they are asked for as surely as a list written out, so
+// the request needs the capability of each, as one naming them would.
+func TestDefaultPropertiesNeedTheirCapabilities(t *testing.T) {
+	s := spec.Standard()
+	if err := s.Extend(&spec.Schema{
+		Capability: "urn:example:notes",
+		Types: []*spec.SchemaType{{Name: "Note", Methods: []string{"get"}, Properties: []*spec.SchemaField{
+			{Name: "id", Type: "Id", ServerSet: true},
+			{Name: "title", Type: "String"},
+			{Name: "secret", Type: "String", Capability: "urn:example:secrets"},
+		}}},
+		Methods: []*spec.SchemaMethod{{
+			Name:              "Note/recent",
+			DataType:          "Note",
+			Arguments:         []*spec.SchemaField{{Name: "accountId", Type: "Id"}, {Name: "properties", Type: "String[]|null"}},
+			Response:          []*spec.SchemaField{{Name: "accountId", Type: "Id"}, {Name: "list", Type: "Note[]"}},
+			Properties:        "properties",
+			ResultProperty:    "list",
+			DefaultProperties: []string{"title", "secret"},
+		}},
+	}); err != nil {
+		t.Fatalf("Extend: %v", err)
+	}
+	q, err := NewParser(s).Parse("Recent"+Extension, []byte(`{"methodCalls": [["Note/recent", {}, "r"]]}`))
+	if err != nil {
+		t.Fatalf("parsing:\n%v", err)
+	}
+	if !slices.Contains(q.Using, "urn:example:secrets") {
+		t.Errorf("using = %v, want the capability of secret, which the defaults ask for", q.Using)
 	}
 }

@@ -640,7 +640,14 @@ func (c *checker) checkPropertySetUse(call *Call, where string) {
 	// or one that may be null though the type says it is not.
 	if call.PropertySet != nil {
 		for _, name := range call.PropertySet.Properties() {
-			if slices.Contains(call.Method.NullProperties, name) || slices.Contains(call.Method.NullableProperties, name) {
+			switch {
+			case slices.Contains(call.Method.NullProperties, name):
+				c.errorf(fmt.Sprintf("%s.%s", where, call.Method.PropertiesArgument),
+					fmt.Sprintf("ask for a set without %s, or write the properties out in this call leaving it out", name),
+					"%s returns %s as null whatever it is asked for, so the set %s, which holds it, cannot describe what it returns",
+					call.Method.Name, name, call.PropertySet.Name)
+				return
+			case slices.Contains(call.Method.NullableProperties, name):
 				c.errorf(fmt.Sprintf("%s.%s", where, call.Method.PropertiesArgument),
 					"write the properties out in this call",
 					"%s may return %s as null, though %s says it is not, so the set %s, which holds it, cannot describe what it returns",
@@ -900,6 +907,15 @@ func (c *checker) properties(call *Call, where string) []string {
 	// method's default set, which is every property for a /get and a list of
 	// its own for Email/parse.
 	if call.Method.DefaultProperties != nil && c.listedLiterally(call, call.Method.PropertiesArgument) {
+		// The defaults are asked for as surely as a list written out, and
+		// need the capabilities of their properties as one would.
+		if dataType, ok := c.spec.Object(call.Method.DataType); ok {
+			for _, name := range call.Method.DefaultProperties {
+				if selected, _, err := checkProperty(dataType, name); err == nil {
+					c.useCapability(selected)
+				}
+			}
+		}
 		return slices.Clone(call.Method.DefaultProperties)
 	}
 	if call.Args == nil {
