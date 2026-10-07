@@ -915,3 +915,19 @@ func TestAParsedEmailHoldsWhatTheParseReturns(t *testing.T) {
 		t.Errorf("the generated code does not hold %s:\n%s", want, src)
 	}
 }
+
+// TestABlobLeftToItsDefaultsHoldsBothEncodings checks a Blob/get that leaves
+// its properties out: RFC 9404, Section 4.2 has it return data and size, so the
+// record holds both encodings for the server to pick between, and the size.
+func TestABlobLeftToItsDefaultsHoldsBothEncodings(t *testing.T) {
+	src := generateOne(t, "ReadBlob", `{"methodCalls": [["Blob/get", {"ids": ["b1"]}, "b"]]}`)
+	for _, want := range []string{
+		"DataAsText *string `json:\"data:asText\"`",
+		"whichever suits the value, so it may be absent.",
+		"Size jmapc.UnsignedInt `json:\"size\"`",
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("the generated code does not hold %s:\n%s", want, src)
+		}
+	}
+}
