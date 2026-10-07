@@ -8,7 +8,10 @@ Everything below is a compile-time failure rather than a server round trip:
   correctly, and selects a value the target argument can accept
 - a back reference reading a property of the records reads one that call
   fetches: `/list/*/threadId` against a call that narrowed its `properties` to
-  the subject would resolve to nothing at the server
+  the subject would resolve to nothing at the server; a call that leaves its
+  `properties` out fetches the method's defaults, which for `Email/parse` are
+  the list RFC 8621 gives, and a property the method returns as null, as the id
+  of a parsed email, is refused in `properties` and in a back reference alike
 - filter conditions are checked against the type being queried, including the
   ones nested inside `AND`, `OR`, and `NOT` operators
 - `properties` names properties the type has, and `bodyProperties` names
