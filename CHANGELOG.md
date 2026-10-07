@@ -4,6 +4,51 @@ What changed in each release, and what it means for the code that uses it. The r
 
 This starts at v0.12.0. What went into the releases before it is in the commit history.
 
+## v0.20.0 (2026-10-07)
+
+### Breaking changes
+
+- **The Rust and TypeScript `total` and `limit` of a /query response are optional.** RFC 8620 has the server leave `total` out unless `calculateTotal` was set and `limit` out unless it lowered the limit, and the generated Rust failed to decode an ordinary Email/query answer with ``missing field `limit` ``. They are now `Option<u64>` in Rust and `total?: number` in TypeScript, and so is the `total` of /queryChanges; code reading them needs to handle their absence. Go is unchanged. ([#131](https://github.com/linyows/jmapc/pull/131))
+- **A parse's records are the narrowed type, and a blob's data is two members.** The response of an Email/parse or CalendarEvent/parse that names its properties now holds the record type generated for them under `parsed`, as a /get's `list` does, where it held the full `Email` or `CalendarEvent`. An Email/parse that names none is generated as narrowed to the defaults RFC 8621 gives, so it has no `id`, and a parsed email's `threadId` may be null: `*jmapc.ID`, `Option<Id>`, `Id | null`. A Blob/get asking for `data`, or naming no properties, holds `data:asText` and `data:asBase64`, optional in Rust and TypeScript, where it held a member named `data` that never came back. Regenerate, and read the records through the new types. ([#176](https://github.com/linyows/jmapc/pull/176), [#177](https://github.com/linyows/jmapc/pull/177), [#178](https://github.com/linyows/jmapc/pull/178))
+- **Requests the server would refuse are refused before they are sent.** A patch reaching inside a list (`replyTo/0/email`), a patch setting a key a set's specification does not allow, a header field asked of a type that has none or in a form RFC 8621 does not allow for that field (`header:Subject:asDate`), a blob's `data` asked of anything but a blob, and an Email/parse asking for or referring to `id`, `mailboxIds`, `keywords` or `receivedAt`, which it returns as null, all passed and are now refused with what to write instead. ([#153](https://github.com/linyows/jmapc/pull/153), [#154](https://github.com/linyows/jmapc/pull/154), [#157](https://github.com/linyows/jmapc/pull/157), [#175](https://github.com/linyows/jmapc/pull/175), [#178](https://github.com/linyows/jmapc/pull/178))
+- **A vendor schema that cannot be used is refused when it is read.** A type named as a primitive or with characters a generator cannot write, a property or argument given twice, an argument a standard method already has, a `patchTarget` or `sortTarget` naming no type, a method selecting `properties` without a `resultProperty` or holding its records in anything but a list or a map of them, and a method whose `dataType`, `properties` or `resultProperty` names nothing are each refused with what is wrong and where. ([#142](https://github.com/linyows/jmapc/pull/142), [#174](https://github.com/linyows/jmapc/pull/174), [#177](https://github.com/linyows/jmapc/pull/177))
+- **The paths in a settings file are relative to the file.** `requests`, `out` and `schemas` in `jmapc.json`, and the defaults it leaves in place, were taken relative to where jmapc ran, so `-config project/jmapc.json` from the parent read the wrong directories. A path given as a flag is still relative to where jmapc runs, and a `jmapc.json` in that directory reads as before. ([#147](https://github.com/linyows/jmapc/pull/147))
+- **`-token` and `-user` given together are refused**, rather than one silently ignored, in `jmapc run` and `jmapc validate -session`; a flag given on the command line now wins over the other's environment variable. ([#132](https://github.com/linyows/jmapc/pull/132))
+- **jmaptest behaves as a server does.** Its push endpoint sends a client only the types it subscribed to, honours `closeafter` and `ping`, and numbers each event; it holds requests to the `maxCallsInRequest`, `maxObjectsInGet` and `maxObjectsInSet` its session states; and `RequestCheck` reads a sent request as sent, so `"{{x}}"` is a string rather than a parameter, and a property from a capability the request does not declare is refused. A test that passed by relying on the looser stub may now fail. ([#139](https://github.com/linyows/jmapc/pull/139), [#149](https://github.com/linyows/jmapc/pull/149), [#155](https://github.com/linyows/jmapc/pull/155))
+
+### Security
+
+- **A `-user` without a colon is no longer printed in an error.** Such a value may be nothing but the password, and `JMAP_USER=supersecret` printed it. ([#132](https://github.com/linyows/jmapc/pull/132))
+
+### Added
+
+- **A vendor schema's method can say what it answers with.** `returnsId` says it returns the id of every record whatever it is asked for, as a /get does; `defaultProperties` the properties it returns where a call names none; `nullProperties` those it returns as null; and `nullableProperties` those it may return as null though their type does not say so. ([#174](https://github.com/linyows/jmapc/pull/174), [#178](https://github.com/linyows/jmapc/pull/178))
+- **A header field can be named in a back reference's path, a patch and a created email**, as RFC 8621 lets one be, where only `properties` could name one; a body part's `bodyProperties` takes header fields too. ([#157](https://github.com/linyows/jmapc/pull/157), [#158](https://github.com/linyows/jmapc/pull/158))
+- **The Mailbox/changes response carries `updatedProperties`**, which RFC 8621 gives it, so a request can fetch only the counts that changed. ([#151](https://github.com/linyows/jmapc/pull/151))
+- **The emails an Email/import creates are named**, as a /set's creation ids are, so the response is read by a constant rather than by spelling the id again. ([#152](https://github.com/linyows/jmapc/pull/152))
+
+### Fixed
+
+- **A watch against a server without push returns at once with the reason**, rather than reconnecting until its context ended. ([#133](https://github.com/linyows/jmapc/pull/133))
+- **An event stream resumes from the last event read to its end.** An id was taken as soon as it was read, so a stream dropped in the middle of an event resumed after it, and the event was lost. ([#134](https://github.com/linyows/jmapc/pull/134))
+- **A download answered with a part that starts or ends where it was not asked for is refused**, as a whole blob answering a range is, and `IsRangeIgnored` reports it. ([#135](https://github.com/linyows/jmapc/pull/135))
+- **A caller waiting on a shared fetch of the session or the token outlives the caller that started it.** It was handed `context canceled` when the first caller gave up, though its own context had not ended. ([#136](https://github.com/linyows/jmapc/pull/136))
+- **Requests refused the same token together replace it once**, rather than each calling the token source, which a server accepting a refresh token only once refuses. ([#145](https://github.com/linyows/jmapc/pull/145))
+- **A push subscription the server gives an expiry to later is extended for as long as it granted**, where each extension asked for an expiry of now. ([#141](https://github.com/linyows/jmapc/pull/141))
+- **The observer is told the error `Do` returns** where the parts of a split /get could not be joined; it was told nil. ([#146](https://github.com/linyows/jmapc/pull/146))
+- **A back reference to a call asking for `properties: []` is held to the id alone**, where it was taken to fetch everything. ([#137](https://github.com/linyows/jmapc/pull/137))
+- **Rust and TypeScript compile for a request named after a keyword or stating a string with escapes.** Rust writes such a name as a raw identifier and strings with its own escapes; TypeScript appends an underscore to a reserved word. ([#143](https://github.com/linyows/jmapc/pull/143))
+- **TypeScript imports a nullable alias**, so a `Date|null` member is jmapc's `Date` string rather than the global JavaScript `Date`. ([#177](https://github.com/linyows/jmapc/pull/177))
+- **The generated Go imports what it uses**, not a package a `_doc` happens to name. ([#156](https://github.com/linyows/jmapc/pull/156))
+- **Renaming a request only in case keeps its generated file** on a file system that ignores case, where `generate` removed it. ([#138](https://github.com/linyows/jmapc/pull/138))
+- **A Go package name Go cannot take is refused before generating**, with a hint to set `-package`, rather than failing in formatting. ([#148](https://github.com/linyows/jmapc/pull/148))
+- **The editor schema agrees with the checks on dates and durations**: a duration in weeks and a date with a fraction of a second are accepted, and `P`, `PT`, `P1DT` and a duration with two signs refused, by both. ([#140](https://github.com/linyows/jmapc/pull/140))
+- **`jmapc generate -h` and `jmapc validate -h` exit 0**, as the other commands do. ([#144](https://github.com/linyows/jmapc/pull/144))
+
+### Documentation
+
+- **A chapter on how jmapc works** follows a request from checking to generated code, with diagrams of the stages and of the checks a back reference goes through. ([#130](https://github.com/linyows/jmapc/pull/130), [#179](https://github.com/linyows/jmapc/pull/179))
+
 ## v0.19.0 (2026-10-05)
 
 ### Added
