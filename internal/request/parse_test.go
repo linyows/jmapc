@@ -99,6 +99,37 @@ func TestBackReferenceReadsWhatTheCallFetches(t *testing.T) {
 	}
 }
 
+// TestBackReferenceCarriesNullWhereAccepted covers the references whose value
+// may be null and that fill an argument accepting null, which the server takes
+// as it does a null written out.
+func TestBackReferenceCarriesNullWhereAccepted(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+	}{{
+		// RFC 8621, Section 2.2 asks for the changed properties alone this
+		// way, and a null there asks for every property.
+		name: "the changed properties of a mailbox",
+		src: `{"methodCalls": [
+			["Mailbox/changes", {"sinceState": "s"}, "changes"],
+			["Mailbox/get", {"#ids": {"resultOf": "changes", "name": "Mailbox/changes", "path": "/updated"},
+			                 "#properties": {"resultOf": "changes", "name": "Mailbox/changes", "path": "/updatedProperties"}}, "updated"]
+		]}`,
+	}, {
+		name: "the threadId of a /get, which is never null",
+		src: `{"methodCalls": [
+			["Email/get", {"ids": ["a"], "properties": ["threadId"]}, "matched"],
+			["Thread/get", {"#ids": {"resultOf": "matched", "name": "Email/get", "path": "/list/*/threadId"}}, "threads"]
+		]}`,
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parse(t, "Q"+Extension, tt.src)
+		})
+	}
+}
+
 func TestParse(t *testing.T) {
 	q := parse(t, "ListInboxEmails"+Extension, listInboxEmails)
 
@@ -229,6 +260,25 @@ func TestParseErrors(t *testing.T) {
 			["Email/get", {"#ids": {"resultOf": "c0", "name": "Email/query", "path": "/queryState"}}, "c1"]
 		]}`,
 		want: `expects Id[]|null`,
+	}, {
+		// A mailbox at the top has no parent, so mapping over the list
+		// adds a null for it, which ids does not accept.
+		name: "back reference selects ids that may be null",
+		src: `{"methodCalls": [
+			["Mailbox/get", {"ids": ["a"]}, "mailboxes"],
+			["Mailbox/get", {"#ids": {"resultOf": "mailboxes", "name": "Mailbox/get", "path": "/list/*/parentId"}}, "parents"]
+		]}`,
+		want: `argument "ids" of Mailbox/get expects Id[]|null, but /list/*/parentId selects (Id|null)[] from the result of Mailbox/get, which may be null where the argument does not accept it`,
+	}, {
+		// The type says a threadId is never null, but Email/parse returns
+		// it as null where the server cannot tell which thread the message
+		// would join.
+		name: "back reference selects the threadId of a parse",
+		src: `{"methodCalls": [
+			["Email/parse", {"blobIds": ["b1"], "properties": ["threadId"]}, "parsed"],
+			["Email/copy", {"#fromAccountId": {"resultOf": "parsed", "name": "Email/parse", "path": "/parsed/b1/threadId"}, "create": {}}, "copy"]
+		]}`,
+		want: `selects Id|null from the result of Email/parse, which may be null where the argument does not accept it`,
 	}, {
 		name: "back reference reads a property the call did not fetch",
 		src: `{"methodCalls": [

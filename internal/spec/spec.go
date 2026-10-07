@@ -2,6 +2,7 @@ package spec
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -401,6 +402,25 @@ func (s *Spec) ResponseOf(method string) (*Object, error) {
 	return o, nil
 }
 
+// RecordObject returns the data type the records of a call to m are written
+// from: m's data type, with each property m may return as null made nullable,
+// as the threadId of a parsed email is.
+func (s *Spec) RecordObject(m *Method) (*Object, bool) {
+	o, ok := s.Object(m.DataType)
+	if !ok || len(m.NullableProperties) == 0 {
+		return o, ok
+	}
+	out := *o
+	out.Fields = make([]*Field, len(o.Fields))
+	for i, f := range o.Fields {
+		if slices.Contains(m.NullableProperties, f.Name) {
+			f = f.AsNullable()
+		}
+		out.Fields[i] = f
+	}
+	return &out, true
+}
+
 // UnknownPropertyError says that a path named a property its type does not
 // have. It carries the alternatives so that the caller can suggest one, which a
 // formatted string could not.
@@ -445,6 +465,7 @@ func (s *Spec) ResolvePathSelections(method, path string) (*Type, []Selection, e
 	if err != nil {
 		return nil, nil, err
 	}
+	m, _ := s.Method(method)
 	if path == "" {
 		return &Type{Name: resp.Name}, nil, nil
 	}
@@ -455,7 +476,7 @@ func (s *Spec) ResolvePathSelections(method, path string) (*Type, []Selection, e
 	for i := range tokens {
 		tokens[i] = unescapePointer(tokens[i])
 	}
-	w := &pathWalk{spec: s}
+	w := &pathWalk{spec: s, method: m}
 	t, err := w.walk(&Type{Name: resp.Name}, tokens, path)
 	if err != nil {
 		return nil, nil, err
@@ -466,7 +487,11 @@ func (s *Spec) ResolvePathSelections(method, path string) (*Type, []Selection, e
 // pathWalk carries what walking a path selected, so that the properties a
 // reference reads can be held to what the call it reads from fetched.
 type pathWalk struct {
-	spec       *Spec
+	spec *Spec
+	// method is the method whose response the path is walked over. Its
+	// records are read as RecordObject has them, so that a property it may
+	// return as null is selected as nullable.
+	method     *Method
 	selections []Selection
 }
 
@@ -490,7 +515,14 @@ func (w *pathWalk) walk(t *Type, tokens []string, path string) (*Type, error) {
 				return nil, err
 			}
 			if inner.IsArray() {
-				return inner, nil
+				if !inner.Nullable {
+					return inner, nil
+				}
+				// An item whose value is null rather than an array has
+				// nothing to flatten, and is added to the output as it is.
+				elem := *inner.Elem
+				elem.Nullable = true
+				return &Type{Elem: &elem}, nil
 			}
 			return &Type{Elem: inner}, nil
 		}
@@ -512,6 +544,9 @@ func (w *pathWalk) walk(t *Type, tokens []string, path string) (*Type, error) {
 	o, ok := s.Object(t.Name)
 	if !ok {
 		return nil, fmt.Errorf("path %q: unknown type %q", path, t.Name)
+	}
+	if o.Name == w.method.DataType {
+		o, _ = s.RecordObject(w.method)
 	}
 	f, ok := o.Field(token)
 	if !ok {

@@ -644,6 +644,17 @@ func assignable(got, want *spec.Type) bool {
 	if want.Name == spec.Any || got.Name == spec.Any {
 		return true
 	}
+	// A value that may be null fits only where null is accepted, which RFC
+	// 8620, Section 3.6.2 has the server refuse with invalidArguments
+	// otherwise. Past that, the rest of the type decides.
+	if got.Nullable {
+		if !want.Nullable {
+			return false
+		}
+		nonNull := *got
+		nonNull.Nullable = false
+		got = &nonNull
+	}
 	if want.IsUnion() {
 		for _, m := range want.Union {
 			if assignable(got, m) {
@@ -668,6 +679,20 @@ func assignable(got, want *spec.Type) bool {
 	default:
 		return got.Name == want.Name
 	}
+}
+
+// withoutNull returns t with null taken out of it and out of every type it
+// holds, which tells a value refused only for the nulls it may carry from one
+// refused for its shape.
+func withoutNull(t *spec.Type) *spec.Type {
+	if t == nil {
+		return nil
+	}
+	out := *t
+	out.Nullable = false
+	out.Elem = withoutNull(t.Elem)
+	out.Value = withoutNull(t.Value)
+	return &out
 }
 
 // objectKeys returns the member names of a JSON object in the order they were
