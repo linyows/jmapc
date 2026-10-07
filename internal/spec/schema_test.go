@@ -317,6 +317,27 @@ func TestExtendErrors(t *testing.T) {
 			             "response": [{"name": "list", "type": "Note|String"}]}]}`,
 		want: `Note/summarise returns its records in "list", which is a Note|String rather than a list of Note or a map to them`,
 	}, {
+		name: "method stating defaults without narrowing",
+		src: `{"capability": "urn:x:y", "types": [{"name": "Note", "properties": [{"name": "title", "type": "String"}]}],
+			"methods": [{"name": "Note/summarise", "dataType": "Note", "defaultProperties": ["title"]}]}`,
+		want: `Note/summarise states defaultProperties, and selects no properties for them to be properties of`,
+	}, {
+		name: "method naming a property its type does not have",
+		src: `{"capability": "urn:x:y", "types": [{"name": "Note", "properties": [{"name": "title", "type": "String"}]}],
+			"methods": [{"name": "Note/summarise", "dataType": "Note", "properties": "properties", "resultProperty": "list",
+			             "nullableProperties": ["titel"],
+			             "arguments": [{"name": "properties", "type": "String[]"}],
+			             "response": [{"name": "list", "type": "Note[]"}]}]}`,
+		want: `Note/summarise names "titel" in nullableProperties, which Note does not have`,
+	}, {
+		name: "method returning a default property as null",
+		src: `{"capability": "urn:x:y", "types": [{"name": "Note", "properties": [{"name": "title", "type": "String"}]}],
+			"methods": [{"name": "Note/summarise", "dataType": "Note", "properties": "properties", "resultProperty": "list",
+			             "defaultProperties": ["title"], "nullProperties": ["title"],
+			             "arguments": [{"name": "properties", "type": "String[]"}],
+			             "response": [{"name": "list", "type": "Note[]"}]}]}`,
+		want: `Note/summarise returns "title" as null, and names it in defaultProperties as well`,
+	}, {
 		name: "unknown member in the schema",
 		src:  `{"capability": "urn:x:y", "typs": []}`,
 		want: `unknown field "typs"`,

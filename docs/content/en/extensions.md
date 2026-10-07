@@ -40,6 +40,13 @@ back reference to the ids under that property, `/list/*/id` where it is `list`,
 holds without asking for the id. Left out, jmapc assumes the id comes back only
 where the call asks for it. A data type with no id cannot take `"returnsId"`.
 
+Three more lists say what such a method answers with, as Email/parse has them.
+`"defaultProperties"` names the properties it returns where a call names none,
+if not every property; `"nullProperties"` those it returns as null whatever it
+is asked for, which a call may not ask for or refer to; and
+`"nullableProperties"` those it may return as null though their type does not
+say so, which are generated as nullable.
+
 A type is named as the specifications name theirs, with a capital and letters
 and digits after it, and not as a type JMAP already has, however it is
 capitalised: a generator writes `email` and `Email` as one name. A schema that

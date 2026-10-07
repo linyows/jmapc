@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -88,6 +89,15 @@ type SchemaMethod struct {
 	// ReturnsID says the method returns the id of every record it returns,
 	// whatever properties it is asked for, as a standard /get does.
 	ReturnsID bool `json:"returnsId"`
+	// DefaultProperties lists the properties the method returns where a call
+	// names none, if not every property.
+	DefaultProperties []string `json:"defaultProperties"`
+	// NullProperties lists the properties the method returns as null whatever
+	// it is asked for.
+	NullProperties []string `json:"nullProperties"`
+	// NullableProperties lists the properties the method may return as null
+	// though their type does not say so.
+	NullableProperties []string `json:"nullableProperties"`
 }
 
 // LoadSchema reads a schema from a file.
@@ -397,6 +407,9 @@ func (s *Spec) addSchemaMethod(sc *Schema, m *SchemaMethod) error {
 			return fmt.Errorf("%s says it returns the id of every record, and %s has no id", m.Name, m.DataType)
 		}
 	}
+	if err := s.checkMethodPropertyLists(m); err != nil {
+		return err
+	}
 	if m.ResultProperty != "" && m.DataType != "" {
 		for _, f := range resp {
 			if f.Name == m.ResultProperty && !holdsRecords(f.ParsedType(), m.DataType) {
@@ -433,6 +446,9 @@ func (s *Spec) addSchemaMethod(sc *Schema, m *SchemaMethod) error {
 		DataType:           m.DataType,
 		PropertiesArgument: m.Properties,
 		ResultProperty:     m.ResultProperty,
+		DefaultProperties:  m.DefaultProperties,
+		NullProperties:     m.NullProperties,
+		NullableProperties: m.NullableProperties,
 		ReturnsID:          m.ReturnsID,
 	})
 	return nil
@@ -583,4 +599,42 @@ func holdsRecords(t *Type, dataType string) bool {
 		return t.Value.Name == dataType || holdsRecords(t.Value, dataType)
 	}
 	return false
+}
+
+// checkMethodPropertyLists reports a list of properties a schema method states
+// that does not hold: each names properties of the records the method narrows,
+// so it needs properties to narrow them, and a property returned as null is
+// neither returned by default nor a promised id.
+func (s *Spec) checkMethodPropertyLists(m *SchemaMethod) error {
+	lists := []struct {
+		member string
+		names  []string
+	}{
+		{"defaultProperties", m.DefaultProperties},
+		{"nullProperties", m.NullProperties},
+		{"nullableProperties", m.NullableProperties},
+	}
+	for _, l := range lists {
+		if len(l.names) == 0 {
+			continue
+		}
+		if m.Properties == "" {
+			return fmt.Errorf("%s states %s, and selects no properties for them to be properties of", m.Name, l.member)
+		}
+		o, _ := s.Object(m.DataType)
+		for _, name := range l.names {
+			if _, ok := o.Field(name); !ok {
+				return fmt.Errorf("%s names %q in %s, which %s does not have", m.Name, name, l.member, m.DataType)
+			}
+		}
+	}
+	for _, name := range m.NullProperties {
+		switch {
+		case slices.Contains(m.DefaultProperties, name):
+			return fmt.Errorf("%s returns %q as null, and names it in defaultProperties as well", m.Name, name)
+		case name == "id" && m.ReturnsID:
+			return fmt.Errorf("%s returns the id as null, and says it returns the id of every record as well", m.Name)
+		}
+	}
+	return nil
 }
