@@ -67,6 +67,12 @@ x-remote-smtp: &remote_smtp
   myhostname: mail.remote.test
   from: someone@remote.test
 
+# The action the JMAP requests are made with, named once: a step uses it as
+# *jmap, and a job's defaults are keyed by it. Probe resolves an action
+# before anything is evaluated, so it cannot come from vars, and takes one
+# only at a full commit, here the one whose action.yml names the release.
+x-jmap: &jmap github.com/mozership/probe-jmap@52000030f1bd839677830d1ab07a024183f581b7 # v0.2.0
+
 secrets:
   - E2E_RECOVERY_PASSWORD
   - E2E_ALICE_PASSWORD
@@ -142,7 +148,7 @@ jobs:
   # given.
   - name: Complete bootstrap
     id: boot
-    uses: github.com/mozership/probe-jmap@52000030f1bd839677830d1ab07a024183f581b7 # v0.2.0
+    uses: *jmap
     with:
       url: "{{vars.base}}"
       basic_auth:
@@ -187,7 +193,7 @@ jobs:
 
   - name: Find the domain bootstrap created
     id: domain
-    uses: github.com/mozership/probe-jmap@52000030f1bd839677830d1ab07a024183f581b7 # v0.2.0
+    uses: *jmap
     with:
       url: "{{vars.base}}"
       basic_auth: *admin
@@ -204,7 +210,7 @@ jobs:
   # one credential is under "0". bob and carol are alice with their own name
   # and password.
   - name: Create alice, bob and carol
-    uses: github.com/mozership/probe-jmap@52000030f1bd839677830d1ab07a024183f581b7 # v0.2.0
+    uses: *jmap
     with:
       url: "{{vars.base}}"
       basic_auth: *admin
@@ -255,7 +261,7 @@ jobs:
       basic_auth:
         username: "alice@{{vars.domain}}"
         password: "{{vars.alice_password}}"
-    github.com/mozership/probe-jmap@52000030f1bd839677830d1ab07a024183f581b7:
+    *jmap :
       url: "{{vars.base}}"
       basic_auth:
         username: "alice@{{vars.domain}}"
@@ -342,7 +348,7 @@ jobs:
       id: res.json.emails[0].id
 
   - name: Find the same email directly
-    uses: github.com/mozership/probe-jmap@52000030f1bd839677830d1ab07a024183f581b7 # v0.2.0
+    uses: *jmap
     with:
       calls:
       - method: Email/query
@@ -500,7 +506,7 @@ jobs:
       res.json.requests >= 3
 
   - name: See the server page the same changes directly
-    uses: github.com/mozership/probe-jmap@52000030f1bd839677830d1ab07a024183f581b7 # v0.2.0
+    uses: *jmap
     with:
       calls:
       - method: Email/changes
@@ -582,7 +588,7 @@ jobs:
   defaults:
     # PushSubscription is part of the core capability, which probe-jmap
     # does not infer from its name.
-    github.com/mozership/probe-jmap@52000030f1bd839677830d1ab07a024183f581b7:
+    *jmap :
       url: "{{vars.base}}"
       basic_auth:
         username: "carol@{{vars.domain}}"
@@ -616,7 +622,7 @@ jobs:
       log: res.log
 
   - name: Find the subscription directly
-    uses: github.com/mozership/probe-jmap@52000030f1bd839677830d1ab07a024183f581b7 # v0.2.0
+    uses: *jmap
     with:
       calls:
       - method: PushSubscription/get
@@ -648,7 +654,7 @@ jobs:
       res.stdout contains '"event":"destroyed"'
 
   - name: Find no subscription directly
-    uses: github.com/mozership/probe-jmap@52000030f1bd839677830d1ab07a024183f581b7 # v0.2.0
+    uses: *jmap
     with:
       calls:
       - method: PushSubscription/get
