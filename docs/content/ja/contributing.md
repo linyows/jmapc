@@ -23,13 +23,14 @@ go generate ./...    # ランタイムの型と、全言語のサンプルクラ
 ここまでのテストは、生成コードをスタブに対して動かします。
 スタブは、テストが期待するとおりにサーバとして応答するものです。
 `e2e/`は、実際のサーバであるStalwartをコンテナで動かし、それに対して実行します。
-全体が1つの[probe](https://github.com/linyows/probe)のワークフローで、リポジトリのルートで実行します。
+全体が1つの[probe](https://github.com/mozership/probe)のワークフローで、リポジトリのルートで実行します。
 
 ```
 probe e2e/workflow.yml
 ```
 
-docker、Go、openssl、probe 1.14.0以降がPATHにある必要があります。
+docker、Go、openssl、probe 1.21.0以降がPATHにある必要があります。
+ワークフロー自身が送るJMAPのリクエストには[probe-jmap](https://github.com/mozership/probe-jmap)を使い、probeはこれをワークフローの最初の実行時にダウンロードします。
 コンテナを起動し、Stalwartをbootstrap modeから抜けさせ、アカウントを3つ作り、ドライバーをビルドしてから、シナリオを実行します。
 各シナリオは、jmapcを通して何かをしたあと、jmapcを通らない経路でそれを確かめます。
 jmapcが読んだsessionを直接取得したものと比べ、SMTPで配送したメールを生成クライアントが見つけられるかを確かめます。
@@ -83,11 +84,9 @@ flowchart LR
         direction TB
         job_3_step0["Deliver to alice on port 25"]
         job_3_step1["Find it through the generated client"]
-        job_3_step2["Read alice's mail account"]
-        job_3_step3["Find the same email directly"]
+        job_3_step2["Find the same email directly"]
         job_3_step0 --> job_3_step1
         job_3_step1 --> job_3_step2
-        job_3_step2 --> job_3_step3
     end
     subgraph job_4["Mail imported through jmapc, read over IMAP"]
         direction TB
@@ -112,38 +111,32 @@ flowchart LR
         job_6_step0["Read the state through jmapc"]
         job_6_step1["Deliver three messages to alice"]
         job_6_step2["Follow the changes through the generated client"]
-        job_6_step3["Read alice's mail account for the direct request"]
-        job_6_step4["See the server page the same changes directly"]
+        job_6_step3["See the server page the same changes directly"]
         job_6_step0 --> job_6_step1
         job_6_step1 --> job_6_step2
         job_6_step2 --> job_6_step3
-        job_6_step3 --> job_6_step4
     end
     subgraph job_7["A push followed through jmapc's Watch"]
         direction TB
         job_7_step0["Read the state through jmapc"]
         job_7_step1["Start watching through the generated client"]
-        job_7_step2["Wait until the watch follows pushes"]
-        job_7_step3["Deliver to bob on port 25"]
-        job_7_step4["See the watch report it"]
+        job_7_step2["Deliver to bob on port 25"]
+        job_7_step3["See the watch report it"]
         job_7_step0 --> job_7_step1
         job_7_step1 --> job_7_step2
         job_7_step2 --> job_7_step3
-        job_7_step3 --> job_7_step4
     end
     subgraph job_8["A push to a URL, received by PushReceiver"]
         direction TB
         job_8_step0["Receive pushes through PushReceiver"]
-        job_8_step1["Wait until the subscription is verified"]
-        job_8_step2["Find the subscription directly"]
-        job_8_step3["Deliver to carol on port 25"]
-        job_8_step4["See the push received and the subscription removed"]
-        job_8_step5["Find no subscription directly"]
+        job_8_step1["Find the subscription directly"]
+        job_8_step2["Deliver to carol on port 25"]
+        job_8_step3["See the push received and the subscription removed"]
+        job_8_step4["Find no subscription directly"]
         job_8_step0 --> job_8_step1
         job_8_step1 --> job_8_step2
         job_8_step2 --> job_8_step3
         job_8_step3 --> job_8_step4
-        job_8_step4 --> job_8_step5
     end
     server --> job_2
     driver --> job_2
