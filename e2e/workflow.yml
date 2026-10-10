@@ -15,6 +15,10 @@
 # Each scenario does something through jmapc and checks it over a path that
 # does not go through jmapc, or the other way round, so that a mistake in what
 # jmapc sends cannot be hidden by the same mistake in what it reads back.
+# The other path's JMAP requests are made by probe-jmap, an action Probe
+# downloads on first use and checks against the checksum the pinned commit
+# names. It fetches the session and fills in the account as jmapc does, and
+# shares no code with it.
 #
 # Outputs are kept for the whole run and can be read by name alone, so an
 # output is not named after the id of any step: outputs.domain.id would
@@ -63,6 +67,12 @@ x-remote-smtp: &remote_smtp
   myhostname: mail.remote.test
   from: someone@remote.test
 
+# The action the JMAP requests are made with, named once: a step uses it as
+# *jmap, and a job's defaults are keyed by it. Probe resolves an action
+# before anything is evaluated, so it cannot come from vars, and takes one
+# only at a full commit, here the one whose action.yml names the release.
+x-jmap: &jmap github.com/mozership/probe-jmap@f64bf107c6fd7435c4bb3f84e2f9116da761aadf # v0.3.0
+
 secrets:
   - E2E_RECOVERY_PASSWORD
   - E2E_ALICE_PASSWORD
@@ -72,11 +82,12 @@ secrets:
 jobs:
 - name: Start and provision the server
   id: server
+  # Stalwart's own methods are under a capability probe-jmap cannot tell from
+  # their names, so it is given, to add to what the names do tell.
   defaults:
-    http:
+    *jmap :
       url: "{{vars.base}}"
-      headers:
-        content-type: application/json
+      using_also: ["urn:stalwart:jmap"]
   steps:
   # Before anything is started, so that whatever happens next, the container
   # and the work directory go when the workflow ends: Probe stops a background
@@ -127,38 +138,35 @@ jobs:
       timeout: 5m
     test: res.code == 0
 
+  # A step of probe-jmap without calls fetches the session alone.
   - name: Wait for bootstrap mode
-    uses: http
-    with:
-      get: /.well-known/jmap
+    uses: *jmap
     retry: {max_attempts: 60, interval: 1s}
-    test: res.code == 200
+    test: status == 0
 
   # Certificates and DKIM keys are left out: nothing outside the container
   # reaches it by name, and no mail leaves it.
   - name: Complete bootstrap
     id: boot
-    uses: http
+    uses: *jmap
     with:
-      post: /jmap/
       basic_auth:
         username: admin
         password: "{{vars.recovery_password}}"
-      body:
-        using: ["urn:ietf:params:jmap:core", "urn:stalwart:jmap"]
-        methodCalls:
-        - - x:Bootstrap/set
-          - update:
-              singleton:
-                serverHostname: "mail.{{vars.domain}}"
-                defaultDomain: "{{vars.domain}}"
-                requestTlsCertificate: false
-                generateDkimKeys: false
-          - boot
-    test: res.code == 200 && res.body.methodResponses[0][1].updated.singleton.secret != ""
+      calls:
+      - method: x:Bootstrap/set
+        id: boot
+        args:
+          update:
+            singleton:
+              serverHostname: "mail.{{vars.domain}}"
+              defaultDomain: "{{vars.domain}}"
+              requestTlsCertificate: false
+              generateDkimKeys: false
+    test: status == 0 && res.results.boot.updated.singleton.secret != ""
     outputs:
-      user: res.body.methodResponses[0][1].updated.singleton.username
-      secret: res.body.methodResponses[0][1].updated.singleton.secret
+      user: res.results.boot.updated.singleton.username
+      secret: res.results.boot.updated.singleton.secret
 
   # Bootstrap writes the configuration and leaves the server as it was, in
   # bootstrap mode, until it starts again.
@@ -170,79 +178,61 @@ jobs:
     test: res.code == 0
 
   - name: Wait for the server
-    uses: http
+    uses: *jmap
     with:
-      get: /.well-known/jmap
       # The administrator bootstrap made, which the steps after this one log
       # in as too.
       basic_auth: &admin
         username: "{{outputs.boot.user}}"
         password: "{{outputs.boot.secret}}"
     retry: {max_attempts: 60, interval: 1s}
-    test: res.code == 200 && res.body.username == outputs.boot.user
+    test: status == 0 && res.session.username == outputs.boot.user
 
   - name: Find the domain bootstrap created
     id: domain
-    uses: http
+    uses: *jmap
     with:
-      post: /jmap/
       basic_auth: *admin
-      body:
-        using: ["urn:ietf:params:jmap:core", "urn:stalwart:jmap"]
-        methodCalls:
-        - [x:Domain/query, {filter: {name: "{{vars.domain}}"}}, find]
-    test: res.code == 200 && len(res.body.methodResponses[0][1].ids) == 1
+      calls:
+      - method: x:Domain/query
+        id: find
+        args: {filter: {name: "{{vars.domain}}"}}
+    test: status == 0 && len(res.results.find.ids) == 1
     outputs:
-      id: res.body.methodResponses[0][1].ids[0]
+      id: res.results.find.ids[0]
 
   # Stalwart's lists are written as maps keyed by position, which is why the
   # one credential is under "0". bob and carol are alice with their own name
   # and password.
   - name: Create alice, bob and carol
-    uses: http
+    uses: *jmap
     with:
-      post: /jmap/
       basic_auth: *admin
-      body:
-        using: ["urn:ietf:params:jmap:core", "urn:stalwart:jmap"]
-        methodCalls:
-        - - x:Account/set
-          - create:
-              alice: &user
-                "@type": User
-                name: alice
-                domainId: "{{outputs.domain.id}}"
-                credentials: {"0": {"@type": Password, secret: "{{vars.alice_password}}"}}
-                roles: {"@type": User}
-                permissions: {"@type": Inherit}
-                quotas: {}
-                aliases: {}
-                memberGroupIds: {}
-                encryptionAtRest: {"@type": Disabled}
-              bob:
-                <<: *user
-                name: bob
-                credentials: {"0": {"@type": Password, secret: "{{vars.bob_password}}"}}
-              carol:
-                <<: *user
-                name: carol
-                credentials: {"0": {"@type": Password, secret: "{{vars.carol_password}}"}}
-          - accounts
-    test: res.code == 200 && len(res.body.methodResponses[0][1].created) == 3
-
-  # A request written by hand names the account, which jmapc fills in from the
-  # session where a request leaves it out.
-  - name: Read alice's mail account
-    id: alice_account
-    uses: http
-    with:
-      get: /.well-known/jmap
-      basic_auth:
-        username: "alice@{{vars.domain}}"
-        password: "{{vars.alice_password}}"
-    test: res.code == 200
-    outputs:
-      mail_account: res.body.primaryAccounts['urn:ietf:params:jmap:mail']
+      calls:
+      - method: x:Account/set
+        id: accounts
+        args:
+          create:
+            alice: &user
+              "@type": User
+              name: alice
+              domainId: "{{outputs.domain.id}}"
+              credentials: {"0": {"@type": Password, secret: "{{vars.alice_password}}"}}
+              roles: {"@type": User}
+              permissions: {"@type": Inherit}
+              quotas: {}
+              aliases: {}
+              memberGroupIds: {}
+              encryptionAtRest: {"@type": Disabled}
+            bob:
+              <<: *user
+              name: bob
+              credentials: {"0": {"@type": Password, secret: "{{vars.bob_password}}"}}
+            carol:
+              <<: *user
+              name: carol
+              credentials: {"0": {"@type": Password, secret: "{{vars.carol_password}}"}}
+    test: status == 0 && len(res.results.accounts.created) == 3
 
 - name: Build the driver
   id: driver
@@ -264,8 +254,11 @@ jobs:
       basic_auth:
         username: "alice@{{vars.domain}}"
         password: "{{vars.alice_password}}"
-      headers:
-        content-type: application/json
+    *jmap :
+      url: "{{vars.base}}"
+      basic_auth:
+        username: "alice@{{vars.domain}}"
+        password: "{{vars.alice_password}}"
     smtp: *remote_smtp
     shell:
       env:
@@ -275,24 +268,22 @@ jobs:
   steps:
   - name: Fetch the session directly
     id: raw
-    uses: http
-    with:
-      get: /.well-known/jmap
-    test: res.code == 200
+    uses: *jmap
+    test: status == 0
     # The fields the driver prints, read from the session as the server
     # wrote it, for match_json to compare whole.
     outputs:
       session: |
         {
-          username: res.body.username,
-          apiUrl: res.body.apiUrl,
-          downloadUrl: res.body.downloadUrl,
-          uploadUrl: res.body.uploadUrl,
-          eventSourceUrl: res.body.eventSourceUrl,
-          mailAccountId: res.body.primaryAccounts['urn:ietf:params:jmap:mail'],
-          capabilities: sort(keys(res.body.capabilities)),
-          maxCallsInRequest: res.body.capabilities['urn:ietf:params:jmap:core'].maxCallsInRequest,
-          maxObjectsInGet: res.body.capabilities['urn:ietf:params:jmap:core'].maxObjectsInGet,
+          username: res.session.username,
+          apiUrl: res.session.apiUrl,
+          downloadUrl: res.session.downloadUrl,
+          uploadUrl: res.session.uploadUrl,
+          eventSourceUrl: res.session.eventSourceUrl,
+          mailAccountId: res.session.primaryAccounts['urn:ietf:params:jmap:mail'],
+          capabilities: sort(keys(res.session.capabilities)),
+          maxCallsInRequest: res.session.capabilities['urn:ietf:params:jmap:core'].maxCallsInRequest,
+          maxObjectsInGet: res.session.capabilities['urn:ietf:params:jmap:core'].maxObjectsInGet,
         }
 
   - name: Fetch it through jmapc
@@ -348,14 +339,13 @@ jobs:
       id: res.json.emails[0].id
 
   - name: Find the same email directly
-    uses: http
+    uses: *jmap
     with:
-      post: /jmap/
-      body:
-        using: ["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail"]
-        methodCalls:
-        - [Email/query, {accountId: "{{outputs.alice_account.mail_account}}", filter: {subject: "inbound {{vars.run_id}}"}}, search]
-    test: res.code == 200 && res.body.methodResponses[0][1].ids == [outputs.found.id]
+      calls:
+      - method: Email/query
+        id: search
+        args: {filter: {subject: "inbound {{vars.run_id}}"}}
+    test: status == 0 && res.results.search.ids == [outputs.found.id]
 
 - name: Mail imported through jmapc, read over IMAP
   needs: [server, driver]
@@ -507,22 +497,20 @@ jobs:
       res.json.requests >= 3
 
   - name: See the server page the same changes directly
-    uses: http
+    uses: *jmap
     with:
-      post: /jmap/
-      body:
-        using: ["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail"]
-        methodCalls:
-        - [Email/changes, {accountId: "{{outputs.alice_account.mail_account}}", sinceState: "{{outputs.before_changes.since}}", maxChanges: 1}, changes]
+      calls:
+      - method: Email/changes
+        id: changes
+        args: {sinceState: "{{outputs.before_changes.since}}", maxChanges: 1}
     # One change at most, which may be an update rather than a creation: the
     # IMAP scenario marks a message read in the same inbox at the same time.
     test: |
-      res.code == 200 &&
-      res.body.methodResponses[0][0] == 'Email/changes' &&
-      res.body.methodResponses[0][1].hasMoreChanges == true &&
-      len(res.body.methodResponses[0][1].created) +
-        len(res.body.methodResponses[0][1].updated) +
-        len(res.body.methodResponses[0][1].destroyed) == 1
+      status == 0 &&
+      res.results.changes.hasMoreChanges == true &&
+      len(res.results.changes.created) +
+        len(res.results.changes.updated) +
+        len(res.results.changes.destroyed) == 1
 
 # Every other scenario works in alice's account, at the same time as this
 # one, and a push for any of their changes would run the watch again and find
@@ -589,13 +577,11 @@ jobs:
 - name: A push to a URL, received by PushReceiver
   needs: [server, driver]
   defaults:
-    http:
+    *jmap :
       url: "{{vars.base}}"
       basic_auth:
         username: "carol@{{vars.domain}}"
         password: "{{vars.carol_password}}"
-      headers:
-        content-type: application/json
     smtp: *remote_smtp
     shell:
       env:
@@ -624,17 +610,16 @@ jobs:
       log: res.log
 
   - name: Find the subscription directly
-    uses: http
+    uses: *jmap
     with:
-      post: /jmap/
-      body:
-        using: ["urn:ietf:params:jmap:core"]
-        methodCalls:
-        - [PushSubscription/get, {ids: null}, subs]
+      calls:
+      - method: PushSubscription/get
+        id: subs
+        args: {ids: null}
     test: |
-      res.code == 200 &&
-      len(res.body.methodResponses[0][1].list) == 1 &&
-      res.body.methodResponses[0][1].list[0].deviceClientId == 'jmapc-e2e'
+      status == 0 &&
+      len(res.results.subs.list) == 1 &&
+      res.results.subs.list[0].deviceClientId == 'jmapc-e2e'
 
   - name: Deliver to carol on port 25
     uses: smtp
@@ -657,11 +642,10 @@ jobs:
       res.stdout contains '"event":"destroyed"'
 
   - name: Find no subscription directly
-    uses: http
+    uses: *jmap
     with:
-      post: /jmap/
-      body:
-        using: ["urn:ietf:params:jmap:core"]
-        methodCalls:
-        - [PushSubscription/get, {ids: null}, subs]
-    test: res.code == 200 && len(res.body.methodResponses[0][1].list) == 0
+      calls:
+      - method: PushSubscription/get
+        id: subs
+        args: {ids: null}
+    test: status == 0 && len(res.results.subs.list) == 0
