@@ -71,7 +71,7 @@ x-remote-smtp: &remote_smtp
 # *jmap, and a job's defaults are keyed by it. Probe resolves an action
 # before anything is evaluated, so it cannot come from vars, and takes one
 # only at a full commit, here the one whose action.yml names the release.
-x-jmap: &jmap github.com/mozership/probe-jmap@52000030f1bd839677830d1ab07a024183f581b7 # v0.2.0
+x-jmap: &jmap github.com/mozership/probe-jmap@f64bf107c6fd7435c4bb3f84e2f9116da761aadf # v0.3.0
 
 secrets:
   - E2E_RECOVERY_PASSWORD
@@ -82,9 +82,12 @@ secrets:
 jobs:
 - name: Start and provision the server
   id: server
+  # Stalwart's own methods are under a capability probe-jmap cannot tell from
+  # their names, so it is given, to add to what the names do tell.
   defaults:
-    http:
+    *jmap :
       url: "{{vars.base}}"
+      using_also: ["urn:stalwart:jmap"]
   steps:
   # Before anything is started, so that whatever happens next, the container
   # and the work directory go when the workflow ends: Probe stops a background
@@ -135,26 +138,21 @@ jobs:
       timeout: 5m
     test: res.code == 0
 
+  # A step of probe-jmap without calls fetches the session alone.
   - name: Wait for bootstrap mode
-    uses: http
-    with:
-      get: /.well-known/jmap
+    uses: *jmap
     retry: {max_attempts: 60, interval: 1s}
-    test: res.code == 200
+    test: status == 0
 
   # Certificates and DKIM keys are left out: nothing outside the container
-  # reaches it by name, and no mail leaves it. Stalwart's own methods are
-  # under a capability probe-jmap cannot tell from their names, so using is
-  # given.
+  # reaches it by name, and no mail leaves it.
   - name: Complete bootstrap
     id: boot
     uses: *jmap
     with:
-      url: "{{vars.base}}"
       basic_auth:
         username: admin
         password: "{{vars.recovery_password}}"
-      using: ["urn:ietf:params:jmap:core", "urn:stalwart:jmap"]
       calls:
       - method: x:Bootstrap/set
         id: boot
@@ -180,24 +178,21 @@ jobs:
     test: res.code == 0
 
   - name: Wait for the server
-    uses: http
+    uses: *jmap
     with:
-      get: /.well-known/jmap
       # The administrator bootstrap made, which the steps after this one log
       # in as too.
       basic_auth: &admin
         username: "{{outputs.boot.user}}"
         password: "{{outputs.boot.secret}}"
     retry: {max_attempts: 60, interval: 1s}
-    test: res.code == 200 && res.body.username == outputs.boot.user
+    test: status == 0 && res.session.username == outputs.boot.user
 
   - name: Find the domain bootstrap created
     id: domain
     uses: *jmap
     with:
-      url: "{{vars.base}}"
       basic_auth: *admin
-      using: ["urn:ietf:params:jmap:core", "urn:stalwart:jmap"]
       calls:
       - method: x:Domain/query
         id: find
@@ -212,9 +207,7 @@ jobs:
   - name: Create alice, bob and carol
     uses: *jmap
     with:
-      url: "{{vars.base}}"
       basic_auth: *admin
-      using: ["urn:ietf:params:jmap:core", "urn:stalwart:jmap"]
       calls:
       - method: x:Account/set
         id: accounts
@@ -275,24 +268,22 @@ jobs:
   steps:
   - name: Fetch the session directly
     id: raw
-    uses: http
-    with:
-      get: /.well-known/jmap
-    test: res.code == 200
+    uses: *jmap
+    test: status == 0
     # The fields the driver prints, read from the session as the server
     # wrote it, for match_json to compare whole.
     outputs:
       session: |
         {
-          username: res.body.username,
-          apiUrl: res.body.apiUrl,
-          downloadUrl: res.body.downloadUrl,
-          uploadUrl: res.body.uploadUrl,
-          eventSourceUrl: res.body.eventSourceUrl,
-          mailAccountId: res.body.primaryAccounts['urn:ietf:params:jmap:mail'],
-          capabilities: sort(keys(res.body.capabilities)),
-          maxCallsInRequest: res.body.capabilities['urn:ietf:params:jmap:core'].maxCallsInRequest,
-          maxObjectsInGet: res.body.capabilities['urn:ietf:params:jmap:core'].maxObjectsInGet,
+          username: res.session.username,
+          apiUrl: res.session.apiUrl,
+          downloadUrl: res.session.downloadUrl,
+          uploadUrl: res.session.uploadUrl,
+          eventSourceUrl: res.session.eventSourceUrl,
+          mailAccountId: res.session.primaryAccounts['urn:ietf:params:jmap:mail'],
+          capabilities: sort(keys(res.session.capabilities)),
+          maxCallsInRequest: res.session.capabilities['urn:ietf:params:jmap:core'].maxCallsInRequest,
+          maxObjectsInGet: res.session.capabilities['urn:ietf:params:jmap:core'].maxObjectsInGet,
         }
 
   - name: Fetch it through jmapc
@@ -586,14 +577,11 @@ jobs:
 - name: A push to a URL, received by PushReceiver
   needs: [server, driver]
   defaults:
-    # PushSubscription is part of the core capability, which probe-jmap
-    # does not infer from its name.
     *jmap :
       url: "{{vars.base}}"
       basic_auth:
         username: "carol@{{vars.domain}}"
         password: "{{vars.carol_password}}"
-      using: ["urn:ietf:params:jmap:core"]
     smtp: *remote_smtp
     shell:
       env:
