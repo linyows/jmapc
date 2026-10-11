@@ -35,7 +35,7 @@ from the repository root:
 probe e2e/workflow.yml
 ```
 
-It needs docker, Go, openssl and probe 1.21.0 or later on the PATH. The JMAP
+It needs docker, Go, openssl and probe 1.24.0 or later on the PATH. The JMAP
 requests the workflow makes itself go through
 [probe-jmap](https://github.com/mozership/probe-jmap), which probe downloads
 the first time the workflow runs. It starts

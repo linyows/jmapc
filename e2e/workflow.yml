@@ -67,11 +67,11 @@ x-remote-smtp: &remote_smtp
   myhostname: mail.remote.test
   from: someone@remote.test
 
-# The action the JMAP requests are made with, named once: a step uses it as
-# *jmap, and a job's defaults are keyed by it. Probe resolves an action
-# before anything is evaluated, so it cannot come from vars, and takes one
-# only at a full commit, here the one whose action.yml names the release.
-x-jmap: &jmap github.com/mozership/probe-jmap@f64bf107c6fd7435c4bb3f84e2f9116da761aadf # v0.3.0
+# The action the JMAP requests are made with, which the steps use and the
+# jobs' defaults are keyed by as jmap. Probe takes one only at a full commit,
+# here the one whose action.yml names the release.
+actions:
+  jmap: github.com/mozership/probe-jmap@f64bf107c6fd7435c4bb3f84e2f9116da761aadf # v0.3.0
 
 secrets:
   - E2E_RECOVERY_PASSWORD
@@ -85,7 +85,7 @@ jobs:
   # Stalwart's own methods are under a capability probe-jmap cannot tell from
   # their names, so it is given, to add to what the names do tell.
   defaults:
-    *jmap :
+    jmap:
       url: "{{vars.base}}"
       using_also: ["urn:stalwart:jmap"]
   steps:
@@ -140,7 +140,7 @@ jobs:
 
   # A step of probe-jmap without calls fetches the session alone.
   - name: Wait for bootstrap mode
-    uses: *jmap
+    uses: jmap
     retry: {max_attempts: 60, interval: 1s}
     test: status == 0
 
@@ -148,7 +148,7 @@ jobs:
   # reaches it by name, and no mail leaves it.
   - name: Complete bootstrap
     id: boot
-    uses: *jmap
+    uses: jmap
     with:
       basic_auth:
         username: admin
@@ -178,7 +178,7 @@ jobs:
     test: res.code == 0
 
   - name: Wait for the server
-    uses: *jmap
+    uses: jmap
     with:
       # The administrator bootstrap made, which the steps after this one log
       # in as too.
@@ -190,7 +190,7 @@ jobs:
 
   - name: Find the domain bootstrap created
     id: domain
-    uses: *jmap
+    uses: jmap
     with:
       basic_auth: *admin
       calls:
@@ -205,7 +205,7 @@ jobs:
   # one credential is under "0". bob and carol are alice with their own name
   # and password.
   - name: Create alice, bob and carol
-    uses: *jmap
+    uses: jmap
     with:
       basic_auth: *admin
       calls:
@@ -254,7 +254,7 @@ jobs:
       basic_auth:
         username: "alice@{{vars.domain}}"
         password: "{{vars.alice_password}}"
-    *jmap :
+    jmap:
       url: "{{vars.base}}"
       basic_auth:
         username: "alice@{{vars.domain}}"
@@ -268,7 +268,7 @@ jobs:
   steps:
   - name: Fetch the session directly
     id: raw
-    uses: *jmap
+    uses: jmap
     test: status == 0
     # The fields the driver prints, read from the session as the server
     # wrote it, for match_json to compare whole.
@@ -339,7 +339,7 @@ jobs:
       id: res.json.emails[0].id
 
   - name: Find the same email directly
-    uses: *jmap
+    uses: jmap
     with:
       calls:
       - method: Email/query
@@ -497,7 +497,7 @@ jobs:
       res.json.requests >= 3
 
   - name: See the server page the same changes directly
-    uses: *jmap
+    uses: jmap
     with:
       calls:
       - method: Email/changes
@@ -577,7 +577,7 @@ jobs:
 - name: A push to a URL, received by PushReceiver
   needs: [server, driver]
   defaults:
-    *jmap :
+    jmap:
       url: "{{vars.base}}"
       basic_auth:
         username: "carol@{{vars.domain}}"
@@ -610,7 +610,7 @@ jobs:
       log: res.log
 
   - name: Find the subscription directly
-    uses: *jmap
+    uses: jmap
     with:
       calls:
       - method: PushSubscription/get
@@ -642,7 +642,7 @@ jobs:
       res.stdout contains '"event":"destroyed"'
 
   - name: Find no subscription directly
-    uses: *jmap
+    uses: jmap
     with:
       calls:
       - method: PushSubscription/get

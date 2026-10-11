@@ -117,13 +117,14 @@ jobs:
       # including one that takes the archive from its cache, before running
       # anything from it. The workflow needs a probe that stops a background
       # command when it ends, which is how it removes the container, and
-      # makes its JMAP requests with probe-jmap, an action that needs 1.21.0
-      # or later; the version is named rather than left to the latest, so
-      # that a new probe arrives as a change to this line.
+      # names probe-jmap, the action it makes its JMAP requests with, under
+      # actions, which 1.24.0 is the first to read; the version is named
+      # rather than left to the latest, so that a new probe arrives as a
+      # change to this line.
       - name: Run the scenarios against Stalwart
         uses: mozership/probe-action@b3f365eba72bd5ab6f4cf003717a388752281f6c # v1.2.2
         with:
-          version: v1.22.0
+          version: v1.25.0
           path: e2e/workflow.yml
           options: --report github-summary
 
