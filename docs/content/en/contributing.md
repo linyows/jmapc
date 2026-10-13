@@ -35,10 +35,11 @@ from the repository root:
 probe e2e/workflow.yml
 ```
 
-It needs docker, Go, openssl and probe 1.24.0 or later on the PATH. The JMAP
+It needs docker, Go, openssl and probe 1.27.0 or later on the PATH. The JMAP
 requests the workflow makes itself go through
-[probe-jmap](https://github.com/mozership/probe-jmap), which probe downloads
-the first time the workflow runs. It starts
+[probe-jmap](https://github.com/mozership/probe-jmap), and the container is
+started by [probe-container](https://github.com/mozership/probe-container);
+probe downloads both the first time the workflow runs. It starts
 the container, takes Stalwart out of bootstrap mode, creates three accounts,
 builds the driver, and runs the scenarios. Each scenario does
 something through jmapc and checks it over a path that does not go through
@@ -64,7 +65,7 @@ which are independent of one another, then run in parallel:
 flowchart LR
     subgraph server["Start and provision the server"]
         direction TB
-        server_step0["Remove the container and the work directory when the workflow ends"]
+        server_step0["Remove the work directory when the workflow ends"]
         server_step1["Make a CA and a certificate for the push receiver"]
         server_step2["Start Stalwart"]
         server_step3["Wait for bootstrap mode"]
@@ -171,11 +172,12 @@ flowchart LR
 `probe dag --mermaid e2e/workflow.yml` prints this graph; print it again after
 adding a job or a step.
 
-The first step starts a command in the background that removes the container
-and the directory the driver is built in when it is stopped, and probe stops it
-when the workflow ends, whether the scenarios passed, failed or were
-interrupted. `E2E_KEEP=1` leaves both, and the passwords, generated for each run
-otherwise, can be given as `E2E_ALICE_PASSWORD` and the like to log in
+probe-container removes the container once the run is over, and the first step
+starts a command in the background that removes the directory the driver is
+built in when it is stopped, which probe does when the workflow ends: both
+happen whether the scenarios passed, failed or were interrupted. `E2E_KEEP=1`
+leaves both, and probe-container then prints the command that removes the
+container. The passwords, generated for each run otherwise, can be given as `E2E_ALICE_PASSWORD` and the like to log in
 afterwards; the head of `e2e/workflow.yml` lists every setting. The Stalwart
 release is pinned there too; a new minor version is a change made there on
 purpose, since Stalwart moves its settings between them.
