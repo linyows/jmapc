@@ -6,19 +6,21 @@
 #
 # Every setting has a default and can be given in the environment instead:
 # E2E_HTTP_PORT, E2E_SMTP_PORT, E2E_IMAP_PORT and E2E_PUSH_PORT for the ports
-# on this side, E2E_CONTAINER for the container's name, the passwords as
-# E2E_RECOVERY_PASSWORD, E2E_ALICE_PASSWORD, E2E_BOB_PASSWORD and
-# E2E_CAROL_PASSWORD, which are generated for the run otherwise, and
-# E2E_KEEP=1 to leave the container running afterwards, to log into with the
-# passwords given.
+# on this side, the passwords as E2E_RECOVERY_PASSWORD, E2E_ALICE_PASSWORD,
+# E2E_BOB_PASSWORD and E2E_CAROL_PASSWORD, which are generated for the run
+# otherwise, and E2E_KEEP=1 to leave the container running afterwards, to log
+# into with the passwords given.
+#
+# The container is started by probe-container, which removes it once the run
+# is over, however it ends, and says how to remove one it was told to leave.
 #
 # Each scenario does something through jmapc and checks it over a path that
 # does not go through jmapc, or the other way round, so that a mistake in what
 # jmapc sends cannot be hidden by the same mistake in what it reads back.
 # The other path's JMAP requests are made by probe-jmap, an action Probe
-# downloads on first use and checks against the checksum the pinned commit
-# names. It fetches the session and fills in the account as jmapc does, and
-# shares no code with it.
+# downloads on first use, as it does probe-container, and checks against the
+# checksum the pinned commit names. It fetches the session and fills in the
+# account as jmapc does, and shares no code with it.
 #
 # Outputs are kept for the whole run and can be read by name alone, so an
 # output is not named after the id of any step: outputs.domain.id would
@@ -29,7 +31,6 @@ vars:
   # The release the tests are written against. Stalwart moves its settings
   # between minor versions, so a new one is a change to make here on purpose.
   image: stalwartlabs/stalwart:v0.16@sha256:ec011be228596e37e65f41aab17deed573859614430472f7eeb42178c50d87b7
-  container: "{{E2E_CONTAINER ?? 'jmapc-e2e'}}"
   http_port: "{{E2E_HTTP_PORT ?? '18080'}}"
   smtp_port: "{{E2E_SMTP_PORT ?? '10025'}}"
   imap_port: "{{E2E_IMAP_PORT ?? '10993'}}"
@@ -68,16 +69,18 @@ x-remote-smtp: &remote_smtp
   from: someone@remote.test
 
 # The action the JMAP requests are made with, which the steps use and the
-# jobs' defaults are keyed by as jmap. Probe takes one only at a full commit,
-# here the one whose action.yml names the release.
+# jobs' defaults are keyed by as jmap, and the one the container is started
+# with. Probe takes one only at a full commit, here the one whose action.yml
+# names the release.
 actions:
   jmap: github.com/mozership/probe-jmap@f64bf107c6fd7435c4bb3f84e2f9116da761aadf # v0.3.0
+  container: github.com/mozership/probe-container@94e2c11ba7ab0b4528302350767eb49826414b09 # v0.2.0
 
 secrets:
-  - E2E_RECOVERY_PASSWORD
-  - E2E_ALICE_PASSWORD
-  - E2E_BOB_PASSWORD
-  - E2E_CAROL_PASSWORD
+- E2E_RECOVERY_PASSWORD
+- E2E_ALICE_PASSWORD
+- E2E_BOB_PASSWORD
+- E2E_CAROL_PASSWORD
 
 jobs:
 - name: Start and provision the server
@@ -89,17 +92,17 @@ jobs:
       url: "{{vars.base}}"
       using_also: ["urn:stalwart:jmap"]
   steps:
-  # Before anything is started, so that whatever happens next, the container
-  # and the work directory go when the workflow ends: Probe stops a background
-  # command then, as it does when it is interrupted. E2E_KEEP=1 leaves both.
-  - name: Remove the container and the work directory when the workflow ends
+  # Before anything is written to it, so that whatever happens next, the work
+  # directory goes when the workflow ends: Probe stops a background command
+  # then, as it does when it is interrupted. E2E_KEEP=1 leaves it, as it does
+  # the container.
+  - name: Remove the work directory when the workflow ends
     uses: shell
     skipif: vars.keep == "1"
     with:
-      cmd: "trap 'docker rm -f {{vars.container}} >/dev/null 2>&1; rm -rf {{vars.work}}; exit 0' TERM INT; while :; do sleep 1; done"
+      cmd: "trap 'rm -rf {{vars.work}}; exit 0' TERM INT; while :; do sleep 1; done"
       background: true
     test: status == -1
-
   # STALWART_PUBLIC_URL is what the session's URLs are built from. Without it
   # they name the server's hostname, which nothing outside the container
   # resolves.
@@ -119,31 +122,38 @@ jobs:
         openssl x509 -req -in push.csr -CA ca.pem -CAkey ca.key -CAcreateserial -days 1
         -out push.pem -extfile push.ext
     test: res.code == 0
-
   # SSL_CERT_FILE is the store Stalwart checks a push receiver's certificate
-  # against, and host-gateway is the host from inside the container.
+  # against, and host-gateway is the host from inside the container. The
+  # ports are given whole rather than left to the runtime to pick, since
+  # STALWART_PUBLIC_URL has to name one before the container is started. The
+  # container has no name of its own, and the restart below finds it by the
+  # id the action gives back.
   - name: Start Stalwart
-    uses: shell
+    id: stalwart
+    uses: container
     with:
-      cmd: >-
-        docker rm -f {{vars.container}} >/dev/null 2>&1;
-        docker run -d --name {{vars.container}}
-        -p {{vars.http_port}}:8080 -p {{vars.smtp_port}}:25 -p {{vars.imap_port}}:993
-        -e STALWART_RECOVERY_ADMIN={{vars.recovery_admin}}
-        -e STALWART_PUBLIC_URL={{vars.base}}
-        --add-host {{vars.push_host}}:host-gateway
-        -v {{vars.work}}/ca.pem:/etc/jmapc-e2e-ca.pem:ro
-        -e SSL_CERT_FILE=/etc/jmapc-e2e-ca.pem
-        {{vars.image}}
-      timeout: 5m
-    test: res.code == 0
-
+      image: "{{vars.image}}"
+      env:
+        STALWART_RECOVERY_ADMIN: "{{vars.recovery_admin}}"
+        STALWART_PUBLIC_URL: "{{vars.base}}"
+        SSL_CERT_FILE: /etc/jmapc-e2e-ca.pem
+      ports:
+      - "{{vars.http_port}}:8080"
+      - "{{vars.smtp_port}}:25"
+      - "{{vars.imap_port}}:993"
+      add_hosts:
+      - "{{vars.push_host}}:host-gateway"
+      volumes:
+      - "{{vars.work}}/ca.pem:/etc/jmapc-e2e-ca.pem:ro"
+      keep: "{{vars.keep == '1'}}"
+    test: status == 0
+    outputs:
+      container: res.id
   # A step of probe-jmap without calls fetches the session alone.
   - name: Wait for bootstrap mode
     uses: jmap
     retry: {max_attempts: 60, interval: 1s}
     test: status == 0
-
   # Certificates and DKIM keys are left out: nothing outside the container
   # reaches it by name, and no mail leaves it.
   - name: Complete bootstrap
@@ -167,16 +177,14 @@ jobs:
     outputs:
       user: res.results.boot.updated.singleton.username
       secret: res.results.boot.updated.singleton.secret
-
   # Bootstrap writes the configuration and leaves the server as it was, in
   # bootstrap mode, until it starts again.
   - name: Restart out of bootstrap mode
     uses: shell
     with:
-      cmd: docker restart {{vars.container}}
+      cmd: docker restart {{outputs.stalwart.container}}
       timeout: 60s
     test: res.code == 0
-
   - name: Wait for the server
     uses: jmap
     with:
@@ -187,7 +195,6 @@ jobs:
         password: "{{outputs.boot.secret}}"
     retry: {max_attempts: 60, interval: 1s}
     test: status == 0 && res.session.username == outputs.boot.user
-
   - name: Find the domain bootstrap created
     id: domain
     uses: jmap
@@ -200,7 +207,6 @@ jobs:
     test: status == 0 && len(res.results.find.ids) == 1
     outputs:
       id: res.results.find.ids[0]
-
   # Stalwart's lists are written as maps keyed by position, which is why the
   # one credential is under "0". bob and carol are alice with their own name
   # and password.
@@ -285,13 +291,11 @@ jobs:
           maxCallsInRequest: res.session.capabilities['urn:ietf:params:jmap:core'].maxCallsInRequest,
           maxObjectsInGet: res.session.capabilities['urn:ietf:params:jmap:core'].maxObjectsInGet,
         }
-
   - name: Fetch it through jmapc
     uses: shell
     with:
       cmd: "{{vars.work}}/driver session"
     test: res.code == 0 && match_json(res.json, outputs.raw.session)
-
   # SendReadReceipt uses MDN, and the rest only what this server serves. What
   # Verify has to report follows from the session fetched directly: nothing
   # where it advertises MDN, and SendReadReceipt alone where it does not, as
@@ -322,7 +326,6 @@ jobs:
       to: "alice@{{vars.domain}}"
       subject: "inbound {{vars.run_id}}"
     test: res.code == 0 && res.sent == 1
-
   - name: Find it through the generated client
     id: found
     uses: shell
@@ -337,7 +340,6 @@ jobs:
       res.json.emails[0].mailboxes == 1
     outputs:
       id: res.json.emails[0].id
-
   - name: Find the same email directly
     uses: jmap
     with:
@@ -368,7 +370,6 @@ jobs:
     test: res.code == 0 && res.json.id != ""
     outputs:
       id: res.json.id
-
   # The keywords set through JMAP are the flags IMAP shows: $flagged is
   # \Flagged, and a message not yet read has no \Seen. The fetch acts on what
   # the search found.
@@ -391,7 +392,6 @@ jobs:
       res.data.fetch.messages[0].subject == 'imported ' + vars.run_id &&
       '\\Flagged' in res.data.fetch.messages[0].flags &&
       !('\\Seen' in res.data.fetch.messages[0].flags)
-
   # A change made over IMAP, for jmapc to see.
   - name: Mark it read over IMAP
     uses: imap
@@ -407,7 +407,6 @@ jobs:
         dataitem: +FLAGS
         value: '\Seen'
     test: status == 0 && res.data.store.count == 1
-
   - name: See it read through the generated client
     uses: shell
     with:
@@ -438,13 +437,11 @@ jobs:
       blobId: res.json.blobId
       part: res.json.part ?? ''
       rangeIgnored: res.json.rangeIgnored ?? false
-
   - name: Download the whole of it directly
     uses: http
     with:
       get: "/jmap/download/{{outputs.blob.accountId}}/{{outputs.blob.blobId}}/blob.txt?accept=text/plain"
     test: res.code == 200 && res.body == 'blob ' + vars.run_id + ' 0123456789'
-
   # JMAP leaves ranges to the server. One that honours the range answers 206,
   # and jmapc must have returned the same octets; one that ignores it, as
   # Stalwart 0.16 does, answers 200 with the whole blob, and jmapc must have
@@ -472,7 +469,6 @@ jobs:
     test: res.code == 0 && res.json.state != ""
     outputs:
       since: res.json.state
-
   - name: Deliver three messages to alice
     uses: smtp
     with:
@@ -481,7 +477,6 @@ jobs:
       session: 1
       message: 3
     test: res.code == 0 && res.sent == 3
-
   # Asking for one change at a time makes the server report more, and jmapc
   # has to follow hasMoreChanges to find all three. Other scenarios deliver
   # to the same inbox at the same time, so only the subjects of this one are
@@ -495,7 +490,6 @@ jobs:
       res.code == 0 &&
       count(res.json.created ?? [], {# startsWith 'changed ' + vars.run_id}) == 3 &&
       res.json.requests >= 3
-
   - name: See the server page the same changes directly
     uses: jmap
     with:
@@ -535,7 +529,6 @@ jobs:
     test: res.code == 0 && res.json.state != ""
     outputs:
       since: res.json.state
-
   # The watch runs in the background, and the step returns once it says its
   # event stream is open. Watch does not poll, so an email it reports reached
   # it by push. probe gives back the process and the file its output goes to.
@@ -550,14 +543,12 @@ jobs:
     test: status == -1
     outputs:
       log: res.log
-
   - name: Deliver to bob on port 25
     uses: smtp
     with:
       to: "bob@{{vars.domain}}"
       subject: "pushed {{vars.run_id}}"
     test: res.code == 0 && res.sent == 1
-
   # The first run of the request is the catch-up when the stream opens, so the
   # email has to arrive in a later one, which only a push starts. The email is
   # the last line of the log, after the one the step above waited for.
@@ -608,7 +599,6 @@ jobs:
     test: status == -1
     outputs:
       log: res.log
-
   - name: Find the subscription directly
     uses: jmap
     with:
@@ -620,14 +610,12 @@ jobs:
       status == 0 &&
       len(res.results.subs.list) == 1 &&
       res.results.subs.list[0].deviceClientId == 'jmapc-e2e'
-
   - name: Deliver to carol on port 25
     uses: smtp
     with:
       to: "carol@{{vars.domain}}"
       subject: "pushed to a URL {{vars.run_id}}"
     test: res.code == 0 && res.sent == 1
-
   # The driver writes one line of JSON for each thing it is told: each step
   # of the subscription, and each state change.
   - name: See the push received and the subscription removed
@@ -640,7 +628,6 @@ jobs:
       res.stdout contains '"event":"verified"' &&
       res.stdout contains '"Email"' &&
       res.stdout contains '"event":"destroyed"'
-
   - name: Find no subscription directly
     uses: jmap
     with:

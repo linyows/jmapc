@@ -29,8 +29,9 @@ go generate ./...    # ランタイムの型と、全言語のサンプルクラ
 probe e2e/workflow.yml
 ```
 
-docker、Go、openssl、probe 1.24.0以降がPATHにある必要があります。
-ワークフロー自身が送るJMAPのリクエストには[probe-jmap](https://github.com/mozership/probe-jmap)を使い、probeはこれをワークフローの最初の実行時にダウンロードします。
+docker、Go、openssl、probe 1.27.0以降がPATHにある必要があります。
+ワークフロー自身が送るJMAPのリクエストには[probe-jmap](https://github.com/mozership/probe-jmap)を、コンテナの起動には[probe-container](https://github.com/mozership/probe-container)を使います。
+probeはどちらもワークフローの最初の実行時にダウンロードします。
 コンテナを起動し、Stalwartをbootstrap modeから抜けさせ、アカウントを3つ作り、ドライバーをビルドしてから、シナリオを実行します。
 各シナリオは、jmapcを通して何かをしたあと、jmapcを通らない経路でそれを確かめます。
 jmapcが読んだsessionを直接取得したものと比べ、SMTPで配送したメールを生成クライアントが見つけられるかを確かめます。
@@ -50,7 +51,7 @@ jmapc側を受け持つのは`e2e/driver`で、`e2e/requests`から生成した�
 flowchart LR
     subgraph server["Start and provision the server"]
         direction TB
-        server_step0["Remove the container and the work directory when the workflow ends"]
+        server_step0["Remove the work directory when the workflow ends"]
         server_step1["Make a CA and a certificate for the push receiver"]
         server_step2["Start Stalwart"]
         server_step3["Wait for bootstrap mode"]
@@ -157,9 +158,11 @@ flowchart LR
 この図は`probe dag --mermaid e2e/workflow.yml`で出力したものです。
 ジョブやステップを足したら、出力し直してください。
 
-最初のステップは、止められるとコンテナとドライバーのビルド先のディレクトリを消すコマンドを、バックグラウンドで起動します。
-probeはワークフローの終わりにこれを止めるので、シナリオが成功しても、失敗しても、中断されても片付けが走ります。
+コンテナは、実行が終わるとprobe-containerが消します。
+最初のステップは、止められるとドライバーのビルド先のディレクトリを消すコマンドを、バックグラウンドで起動し、probeはワークフローの終わりにこれを止めます。
+どちらの片付けも、シナリオが成功しても、失敗しても、中断されても走ります。
 `E2E_KEEP=1`を指定すると、どちらも残します。
+このときprobe-containerは、コンテナを消すコマンドを表示します。
 パスワードは実行ごとに生成しますが、`E2E_ALICE_PASSWORD`などで指定すれば、あとからログインできます。
 設定の一覧は`e2e/workflow.yml`の冒頭にあります。
 Stalwartのリリースもそこで固定しています。
