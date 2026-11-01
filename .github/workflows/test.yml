@@ -121,7 +121,7 @@ jobs:
       # rather than left to the latest, so that a new probe arrives as a
       # change to this line.
       - name: Run the scenarios against Stalwart
-        uses: mozership/probe-action@b3f365eba72bd5ab6f4cf003717a388752281f6c # v1.2.2
+        uses: mozership/probe-action@831b8b6c6aa0c8a61aa75b58f36a08da5c579e83 # v1.3.0
         with:
           version: v1.27.0
           path: e2e/workflow.yml
