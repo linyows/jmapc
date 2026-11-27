@@ -131,6 +131,9 @@ jobs:
       - name: Check the workflow
         run: probe check e2e/workflow.yml
 
+      - name: Check the workflow is formatted
+        run: probe fmt --check e2e/workflow.yml
+
       - name: Run the scenarios against Stalwart
         run: probe --report github-summary e2e/workflow.yml
 
