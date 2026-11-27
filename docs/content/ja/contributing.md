@@ -29,9 +29,9 @@ go generate ./...    # ランタイムの型と、全言語のサンプルクラ
 probe e2e/workflow.yml
 ```
 
-docker、Go、openssl、probe 1.27.0以降がPATHにある必要があります。
-ワークフロー自身が送るJMAPのリクエストには[probe-jmap](https://github.com/mozership/probe-jmap)を、コンテナの起動には[probe-container](https://github.com/mozership/probe-container)を使います。
-probeはどちらもワークフローの最初の実行時にダウンロードします。
+docker、Go、openssl、probe 1.44.0以降がPATHにある必要があります。
+ワークフロー自身が送るJMAPのリクエストには[probe-jmap](https://github.com/mozership/probe-jmap)を、コンテナの起動には[probe-container](https://github.com/mozership/probe-container)を、IMAPでのメールボックスの読み書きには[probe-imap](https://github.com/mozership/probe-imap)を使います。
+probeはこの3つをワークフローの最初の実行時にダウンロードします。
 コンテナを起動し、Stalwartをbootstrap modeから抜けさせ、アカウントを3つ作り、ドライバーをビルドしてから、シナリオを実行します。
 各シナリオは、jmapcを通して何かをしたあと、jmapcを通らない経路でそれを確かめます。
 jmapcが読んだsessionを直接取得したものと比べ、SMTPで配送したメールを生成クライアントが見つけられるかを確かめます。

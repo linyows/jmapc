@@ -18,9 +18,9 @@
 # does not go through jmapc, or the other way round, so that a mistake in what
 # jmapc sends cannot be hidden by the same mistake in what it reads back.
 # The other path's JMAP requests are made by probe-jmap, an action Probe
-# downloads on first use, as it does probe-container, and checks against the
-# checksum the pinned commit names. It fetches the session and fills in the
-# account as jmapc does, and shares no code with it.
+# downloads on first use, as it does probe-container and probe-imap, and checks
+# against the checksum the pinned commit names. It fetches the session and
+# fills in the account as jmapc does, and shares no code with it.
 #
 # Outputs are kept for the whole run and can be read by name alone, so an
 # output is not named after the id of any step: outputs.domain.id would
@@ -69,12 +69,14 @@ x-remote-smtp: &remote_smtp
   from: someone@remote.test
 
 # The action the JMAP requests are made with, which the steps use and the
-# jobs' defaults are keyed by as jmap, and the one the container is started
-# with. Probe takes one only at a full commit, here the one whose action.yml
-# names the release.
+# jobs' defaults are keyed by as jmap, the one the container is started with,
+# and the one that reads the mailbox over IMAP, which was built into Probe
+# before 1.44.0. Probe takes one only at a full commit, here the one whose
+# action.yml names the release.
 actions:
-  jmap: github.com/mozership/probe-jmap@f64bf107c6fd7435c4bb3f84e2f9116da761aadf # v0.3.0
-  container: github.com/mozership/probe-container@94e2c11ba7ab0b4528302350767eb49826414b09 # v0.2.0
+  jmap: github.com/mozership/probe-jmap@d60bcab86fd27f887cb4d1e01658e0e80a4ed121 # v0.3.3
+  container: github.com/mozership/probe-container@9bcdd8ce0cccee4aeb66cfd84a94b0c85652f0d4 # v0.2.4
+  imap: github.com/mozership/probe-imap@c64e6ad9559de7a1405976fdaa11e7091bc732ee # v0.1.0
 
 secrets:
 - E2E_RECOVERY_PASSWORD
@@ -85,6 +87,7 @@ secrets:
 jobs:
 - name: Start and provision the server
   id: server
+  fail_fast: true
   # Stalwart's own methods are under a capability probe-jmap cannot tell from
   # their names, so it is given, to add to what the names do tell.
   defaults:
@@ -316,6 +319,7 @@ jobs:
 
 - name: Mail delivered over SMTP, found through jmapc
   needs: [server, driver]
+  fail_fast: true
   defaults: *alice
   steps:
   # The subject carries the run id, and probe appends a tracking id of its
@@ -351,6 +355,7 @@ jobs:
 
 - name: Mail imported through jmapc, read over IMAP
   needs: [server, driver]
+  fail_fast: true
   defaults:
     <<: *alice
     imap:
@@ -459,6 +464,7 @@ jobs:
 
 - name: Changes followed through jmapc, a few at a time
   needs: [server, driver]
+  fail_fast: true
   defaults: *alice
   steps:
   - name: Read the state through jmapc
@@ -513,6 +519,7 @@ jobs:
 # report there.
 - name: A push followed through jmapc's Watch
   needs: [server, driver]
+  fail_fast: true
   defaults:
     smtp: *remote_smtp
     shell:
@@ -551,22 +558,24 @@ jobs:
     test: res.code == 0 && res.sent == 1
   # The first run of the request is the catch-up when the stream opens, so the
   # email has to arrive in a later one, which only a push starts. The email is
-  # the last line of the log, after the one the step above waited for.
+  # the one line of JSON in the log, after the one the step above waited for.
   - name: See the watch report it
-    uses: shell
+    uses: file
     with:
-      cmd: "tail -n 1 '{{outputs.watching.log}}'"
+      path: "{{outputs.watching.log}}"
     retry: {max_attempts: 20, interval: 1s}
     test: |
-      res.code == 0 &&
-      res.json?.subject startsWith 'pushed ' + vars.run_id &&
-      res.json.runs >= 2
+      let reported = findLast(lines(res.content), # startsWith '{');
+      reported != nil &&
+      parse_json(reported).subject startsWith 'pushed ' + vars.run_id &&
+      parse_json(reported).runs >= 2
 
 # Carol's account is this scenario's alone, as bob's is the Watch's: a push
 # for any other change there would satisfy it whether or not the delivery
 # below was pushed.
 - name: A push to a URL, received by PushReceiver
   needs: [server, driver]
+  fail_fast: true
   defaults:
     jmap:
       url: "{{vars.base}}"
@@ -619,15 +628,14 @@ jobs:
   # The driver writes one line of JSON for each thing it is told: each step
   # of the subscription, and each state change.
   - name: See the push received and the subscription removed
-    uses: shell
+    uses: file
     with:
-      cmd: "cat '{{outputs.receiving.log}}'"
+      path: "{{outputs.receiving.log}}"
     retry: {max_attempts: 20, interval: 1s}
     test: |
-      res.code == 0 &&
-      res.stdout contains '"event":"verified"' &&
-      res.stdout contains '"Email"' &&
-      res.stdout contains '"event":"destroyed"'
+      res.content contains '"event":"verified"' &&
+      res.content contains '"Email"' &&
+      res.content contains '"event":"destroyed"'
   - name: Find no subscription directly
     uses: jmap
     with:

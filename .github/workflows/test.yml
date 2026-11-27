@@ -115,16 +115,21 @@ jobs:
       # The action downloads a released probe rather than building one, and
       # checks the archive against the release's checksums.txt on every run,
       # including one that takes the archive from its cache, before running
-      # anything from it. The workflow starts its container with
-      # probe-container, which removes it once the run is over, and 1.27.0
-      # is the first probe to call an action then; the version is named
-      # rather than left to the latest, so that a new probe arrives as a
-      # change to this line.
+      # anything from it. The workflow reads the mailbox with probe-imap
+      # under the name imap, and 1.44.0 is the first probe that lets a
+      # workflow give an external action the name of the imap action it had
+      # built in; the version is named rather than left to the latest, so
+      # that a new probe arrives as a change to this line.
+      #
+      # A key or an action a new probe no longer knows is ignored or fails
+      # only once the container is up; check names it with its line before
+      # the run, and fmt fails a file not laid out as probe fmt writes it.
       - name: Run the scenarios against Stalwart
-        uses: mozership/probe-action@b3f365eba72bd5ab6f4cf003717a388752281f6c # v1.2.2
+        uses: mozership/probe-action@1ccc47f70937bb6e4842fb097992d3c4834284cb # v1.5.0
         with:
-          version: v1.27.0
+          version: v1.44.0
           path: e2e/workflow.yml
+          before-run: check, fmt
           options: --report github-summary
 
   # The TypeScript jmapc generates has to compile, which Go's tests cannot say.
