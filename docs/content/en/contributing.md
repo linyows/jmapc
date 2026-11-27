@@ -35,11 +35,13 @@ from the repository root:
 probe e2e/workflow.yml
 ```
 
-It needs docker, Go, openssl and probe 1.27.0 or later on the PATH. The JMAP
+It needs docker, Go, openssl and probe 1.44.0 or later on the PATH. The JMAP
 requests the workflow makes itself go through
-[probe-jmap](https://github.com/mozership/probe-jmap), and the container is
-started by [probe-container](https://github.com/mozership/probe-container);
-probe downloads both the first time the workflow runs. It starts
+[probe-jmap](https://github.com/mozership/probe-jmap), the container is
+started by [probe-container](https://github.com/mozership/probe-container),
+and the mailbox is read over IMAP by
+[probe-imap](https://github.com/mozership/probe-imap); probe downloads all
+three the first time the workflow runs. It starts
 the container, takes Stalwart out of bootstrap mode, creates three accounts,
 builds the driver, and runs the scenarios. Each scenario does
 something through jmapc and checks it over a path that does not go through
